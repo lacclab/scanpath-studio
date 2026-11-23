@@ -2,7 +2,7 @@
 
 Inspect a recording and save the trials that need attention.
 
-Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+Before you start, switch to **Full** at the top of the **Scanpath View** ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
 
 ## 1. Open the session
 
@@ -10,7 +10,7 @@ Before you start, switch to **Full** at the top of the **Scanpath** view ([Essen
 
 ## 2. Inspect a trial
 
-In the **Scanpath** view, pick a trial in **Select trial**. Turn on **Word boxes** and check:
+In the **Scanpath View**, pick a trial in **Select trial**. Turn on **Word boxes** and check:
 
 - whether the boxes match the stimulus image, if you have one;
 - where the fixations sit relative to the words;
@@ -20,7 +20,7 @@ For a consistent offset, check [coordinate units and screen setup](https://laccl
 
 ## 3. Replay the recording
 
-Turn on **Animate** to follow the fixation order and timing. To mark short or long fixations, or fixations outside the text, open **Filters & highlights** ▾ → **Fixations** and set **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an unusual scanpath does not tell you its cause.
+Choose **Animation** to follow the fixation order and timing. To mark short or long fixations, or fixations outside the text, open **Filters & highlights** ▾ → **Fixations** and set **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an unusual scanpath does not tell you its cause.
 
 \[!\[
 
@@ -32,6 +32,8 @@ In **Annotations**, tag the trial `review` and write what you observed in **Note
 
 ## 5. Save the review
 
-Export favorites, tags and notes from **Data Management** → **Annotations** → **Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
+Export favorites, tags and notes from **Data Management** → **Current dataset → Annotations → Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
+
+To reconcile a second reviewer's notes, choose **Import**. The preview counts new, identical and differing entries. **Open disputed reading** displays both entries beside the scanpath for that reading. You can download the differences for discussion. **Apply import** adds new entries and keeps the current version of a differing note unless you select the replacement option.
 
 For exclusion decisions, follow [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md).

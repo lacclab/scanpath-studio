@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -1621,6 +1621,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#prepare-a-paper-figure-or-slide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prepare a paper figure or slide
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproduce-a-coauthors-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproduce a coauthor's results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cite" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1658,6 +1680,17 @@
     <span class="md-ellipsis">
       
         Replay export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proof-two-manuscript-panels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proof two manuscript panels
       
     </span>
   </a>
@@ -2428,6 +2461,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#prepare-a-paper-figure-or-slide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prepare a paper figure or slide
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproduce-a-coauthors-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproduce a coauthor's results
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cite" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2465,6 +2520,17 @@
     <span class="md-ellipsis">
       
         Replay export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proof-two-manuscript-panels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proof two manuscript panels
       
     </span>
   </a>
@@ -2555,6 +2621,10 @@
 <td><span class="sps-icon" data-icon="file_export" aria-hidden="true"></span> <strong>Export</strong> → <strong>Current figure</strong></td>
 </tr>
 <tr>
+<td>Prepare a figure for a paper or slide</td>
+<td><span class="sps-icon" data-icon="file_export" aria-hidden="true"></span> <strong>Export</strong> → <strong>Prepare figure for export</strong></td>
+</tr>
+<tr>
 <td>Export many trials and their tables</td>
 <td><span class="sps-icon" data-icon="file_export" aria-hidden="true"></span> <strong>Export</strong> → <strong>Export bundle</strong></td>
 </tr>
@@ -2564,23 +2634,40 @@
 </tr>
 <tr>
 <td>Reuse the figure settings</td>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong>, or <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Settings file</strong></td>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong>, or <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Settings file</strong></td>
 </tr>
 </tbody>
 </table>
 <p>To export multiple trials, switch to Full and open <strong>Export bundle</strong>.
 Essentials offers <strong>Current figure</strong> for the figure or replay on screen.</p>
 <p>For step-by-step instructions, see the <a href="../../tutorials/exporting-figures/">export tutorials</a>.</p>
+<h2 id="prepare-a-paper-figure-or-slide">Prepare a paper figure or slide<a class="headerlink" href="#prepare-a-paper-figure-or-slide" title="Permanent link">&para;</a></h2>
+<p>Open <strong>Scanpath → Export → Prepare figure for export</strong>. The preview shows the current reading, comparison or replay still. For a corpus chart, open <strong>Prepare figure for export</strong> directly beneath the chart. Choose <strong>Download PNG</strong> for a slide or document, or switch the file format to SVG, PDF or TIFF.</p>
+<ul>
+<li><strong>Crop</strong> lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under <strong>Label events</strong>, pin a fixation or saccade and drag its label into position.</li>
+<li><strong>Caption and description</strong> suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.</li>
+<li>For a replay, <strong>Replay clip</strong> lets you choose the interval, speed and poster frame. <strong>Prepare MP4 and poster</strong> produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.</li>
+<li>When a journal specifies dimensions, open <strong>Print settings</strong> to set the width, resolution or minimum text size. In Full mode on the Scanpath view, <strong>Use this size for batch export</strong> applies the width and resolution to the export bundle.</li>
+</ul>
+<p>Under <strong>Save or open</strong>, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under <strong>Data Management → Saved work → Saved figures</strong>, or via <strong>Share → Settings file</strong>. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.</p>
+<h2 id="reproduce-a-coauthors-results">Reproduce a coauthor's results<a class="headerlink" href="#reproduce-a-coauthors-results" title="Permanent link">&para;</a></h2>
+<p>The installed package includes a fictional three-reader study, its raw tables,
+recording setup, one tagged exclusion, figure settings and a cohort recipe.
+To work through it in an empty folder, copy the example and follow its README.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"from importlib.resources import files; from shutil import copytree; copytree(files('scanpath_studio') / 'sample_data' / 'coauthor', 'canal-study')"</span>
+</code></pre></div>
+<p>The commands recreate a figure and a two-word results table. A checksum from
+the original release lets the recipient verify the table byte for byte.</p>
 <h2 id="cite">Cite what you export<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p>Files saved through <strong>Export</strong> include citation information in their metadata.
-To add a visible credit to the figure, use <strong>Figure &amp; canvas</strong> → <strong>Credit</strong>.</p>
+To add a visible credit to the figure, use <strong>Figure</strong> → <strong>Title &amp; labels</strong> → <strong>Credit</strong>.</p>
 <ul>
 <li><span class="sps-icon" data-icon="format_quote" aria-hidden="true"></span> <strong>Cite</strong>, under each download and in
   <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Code</strong>, gives a one-line figure credit, the
   APA reference and BibTeX, and <code>.bib</code> and <code>.ris</code> files for Zotero, Mendeley or
   EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.</li>
 <li>Each export bundle includes <code>CITATION.bib</code> and citation instructions in <code>README.md</code>.</li>
-<li><strong>Figure &amp; canvas</strong> → <strong>Credit</strong> adds a small <em>Made with Scanpath Studio</em>
+<li><strong>Figure</strong> → <strong>Title &amp; labels</strong> → <strong>Credit</strong> adds a small <em>Made with Scanpath Studio</em>
   line under the plot, for a figure shared without its caption. In code, pass
   <code>show_credit=True</code>, or <code>--credit</code> to <code>render</code>.</li>
 <li>In code, <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="../../api/#scanpath_studio.api.cite"><code>cite</code></a> and <code>scanpath-studio cite</code> print
@@ -2614,44 +2701,74 @@ save each layer to a separate file with <code>save_figure_layers</code> or
 <h2 id="batch-pattern">Batch export<a class="headerlink" href="#batch-pattern" title="Permanent link">&para;</a></h2>
 <p>In the app, <strong>Export bundle</strong> → <strong>Trials to include</strong> picks the trials:
 <strong>This trial</strong>, <strong>All filtered trials</strong>, <strong>All trials of one participant</strong>,
-<strong>All trials of one text</strong> or <strong>All trials, ignoring filters</strong>. For a scripted
-batch, loop over the trial list:</p>
+<strong>All trials of one text</strong> or <strong>All trials, ignoring filters</strong>. Open <strong>Preview
+bundle contents</strong> to see the selected readings, their filenames and the columns
+in their tables. A word-measures CSV can contain the original stimulus words
+even when the figure masks them. When you select specific screens, the bundle
+includes notes on those screens and their parent trials.</p>
+<p>When you export all screens, rows with no Screen ID are included once in the
+trial’s tables. Selecting specific screens includes only rows assigned to those
+screens. A screen with raw gaze alone has its own sample table.</p>
+<p>If a figure fails, the download includes the files that succeeded. With the same data
+and settings still open, choose <strong>Retry failed figure files</strong>. The app retries each
+missing format or layer and keeps the successful files. If it could not split a figure
+into layers, it tries that step again. Check <code>index.csv</code> for any files that still failed.
+Stopping a retry leaves the previous download available.</p>
+<p>CSV bundles include <code>columns.json</code> and an editable <code>read_csv.R</code>. In R, set
+the working directory to the extracted bundle and run <code>source("read_csv.R")</code>
+with the jsonlite package installed. The example preserves reader IDs such as
+<code>01</code> and <code>1</code> as text. A blank measurement becomes <code>NA</code> and zero stays zero.</p>
+<p>For a scripted batch, loop over the trial list.</p>
 <details class="example">
 <summary>Python: one HTML figure per trial</summary>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">out</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"figures"</span><span class="p">)</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">out</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">for</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="ow">in</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">itertuples</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">)</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">out</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">tid</span><span class="si">}</span><span class="s2">.html"</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">out</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"figures"</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">out</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">for</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="ow">in</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">itertuples</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">out</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">tid</span><span class="si">}</span><span class="s2">.html"</span><span class="p">)</span>
 </code></pre></div>
 <p>Use the <a href="../loading-data/#load-and-inspect-in-code">data loaders</a>
 for your own files. The CLI's <code>render</code> writes one trial per run.</p>
 </details>
 <h2 id="replays-as-gif-or-mp4">Replay export<a class="headerlink" href="#replays-as-gif-or-mp4" title="Permanent link">&para;</a></h2>
-<p>With <span class="sps-icon" data-icon="movie" aria-hidden="true"></span> <strong>Animate</strong> on, <strong>Export</strong> → <strong>Current figure</strong> saves the
-replay as HTML, GIF or MP4. The CLI's <code>render --animate</code> saves interactive HTML
-only. For a GIF or MP4 in Python:</p>
+<p>With <span class="sps-icon" data-icon="movie" aria-hidden="true"></span> <strong>Animation</strong> selected, <strong>Export</strong> → <strong>Current figure</strong> saves the
+replay as HTML, GIF or MP4. In a saved HTML replay, <strong>Previous fixation</strong> and
+<strong>Next fixation</strong> move to individual onsets and show the fixation’s duration and
+assigned word when available. The time slider scrubs through the whole reading.
+A GIF or MP4 with a low frame cap shows the state reached at each frame’s start.
+A fixation after the last frame starts can be absent from the clip.</p>
+<p>The CLI’s <code>render --animate</code> saves interactive HTML. For a GIF or MP4 in Python:</p>
 <details class="example">
 <summary>Python: save a GIF or MP4</summary>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">replay</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_1129"</span><span class="p">,</span> <span class="s2">"l37_1129_2_1_1_Ele"</span><span class="p">)</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">export_animation</span><span class="p">(</span><span class="n">replay</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">replay</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_273"</span><span class="p">,</span> <span class="s2">"l37_273_2_1_1_Ele"</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">export_animation</span><span class="p">(</span><span class="n">replay</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">))</span>
 </code></pre></div>
 <p>Use <code>fmt="gif"</code> and a <code>.gif</code> filename for GIF output.</p>
 </details>
 <p><a href="../../faq/#export-fails">Export setup and troubleshooting</a> ·
 <a href="../../api/#save">Python save options</a> · <a href="../../cli/#common-tasks">CLI options</a></p>
+<h2 id="proof-two-manuscript-panels">Proof two manuscript panels<a class="headerlink" href="#proof-two-manuscript-panels" title="Permanent link">&para;</a></h2>
+<p>In <strong>Compare</strong>, choose two readings with the same screen dimensions and a
+side-by-side or stacked layout. In <strong>Export → Current figure → Manuscript
+panel proof</strong>, enter the total print width. The proof shows the resulting
+label sizes in points and the numeric color limits shared by the two panels.
+Use the Fixations or Heatmap controls to choose your own limits.</p>
+<p><strong>Prepare manuscript SVG</strong> provides the lettered vector panels at that
+physical width. <strong>Save panel settings</strong> preserves their order, styles, width
+and selected limits. Open the settings file in <strong>Share → File</strong>, replace
+one reading and prepare the revised SVG.</p>
 
 
 

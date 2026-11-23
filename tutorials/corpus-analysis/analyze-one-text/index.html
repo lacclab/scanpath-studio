@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2405,19 +2405,30 @@
 
 
 <h1 id="analyze-one-text">Analyze one text<a class="headerlink" href="#analyze-one-text" title="Permanent link">&para;</a></h1>
-<p>Compare how participants read the words of one text.</p>
 <ol>
 <li><a href="../#before-you-start">Select the trials</a>, then open
-   <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> → <strong>Per text</strong>.</li>
-<li>Pick a text and a reading measure your data provides.</li>
-<li>In <strong>View</strong>, choose <strong>Measure on the stimulus</strong>. To plot the measure against
-   a word feature such as surprisal, choose <strong>Measure vs feature</strong> and pick the
-   <strong>Feature</strong>. Your Words table must have that column.</li>
-<li>In <strong>Aggregate</strong>, choose how to combine the values. <strong>Cohort profile</strong>
-   also shows a shaded <strong>Spread</strong> band. Use <strong>Min participants per word</strong>
-   to leave out words with too few participants contributing a value.</li>
+   <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> and choose a <strong>Reading measure</strong>.
+   In the bundled demo, try <strong>Total fixation duration — <abbr title="Total fixation duration: every fixation on a word, rereadings included">TFD</abbr></strong>.</li>
+<li>In <strong>Texts</strong>, select a dot or use <strong>Find a text</strong>, then choose <strong>Open
+   word profile</strong>. The <strong>Cohort profile</strong> shows a point for each word with
+   enough observations. Hover over a point to read the word and its value.</li>
+<li>Open <strong>Readings behind a word</strong> to check which participants supplied a
+   value. A blank cell means that reading had no recorded value for the
+   selected measure. In <strong>Chart settings</strong>, <strong>Aggregate</strong> sets how the
+   profile combines values, <strong>Spread</strong> controls the shaded band, and <strong>Min
+   participants per word</strong> sets how many readers must contribute.</li>
+<li>In <strong>Chart settings</strong>, use <strong>View</strong> to explore the same text. <strong>Measure on the stimulus</strong> colors
+   the words in their original positions. <strong>Measure vs feature</strong> compares the
+   reading measure with a feature in the Words table, such as surprisal.</li>
 <li><a href="../#keep-the-result">Download the table and recipe</a>.</li>
 </ol>
+<p>If your data has no mapped <strong>Text ID</strong>, open <strong>Texts</strong> to inspect a
+single reading by its trial ID. To compare several readings, map the Words
+column that identifies the same passage across participants. If the page
+asks for reading measures, <strong>Map reading measures</strong> opens the column
+mapping for an editable dataset. For an upload that contains only fixations
+or gaze samples, <strong>Add a Words table</strong> opens the editor where you can attach
+the report.</p>
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/corpus-analysis_poster.webp" data-autoplay
        aria-label="Corpus Analysis: a measure on the stimulus, against surprisal, and between two groups">

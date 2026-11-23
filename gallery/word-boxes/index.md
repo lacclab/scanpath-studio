@@ -2,7 +2,7 @@
 
 Fixation time within each word box.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. Turn on **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Word boxes**. Keep **Color** → **By** at **Duration (ms)**.
 1. Turn off **Fixations** and **Saccades**, and keep **Stimulus** on.
 
@@ -10,7 +10,7 @@ Fixation time within each word box.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele \
   --heatmap --heatmap-style word-boxes --no-fixations --no-saccades \
   --highlight-column '' \
   -o word-boxes.html
@@ -20,7 +20,7 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+pid, tid = "l37_273", "l37_273_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,

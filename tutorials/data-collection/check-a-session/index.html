@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2562,13 +2562,13 @@
 <h1 id="check-a-session">Check a session<a class="headerlink" href="#check-a-session" title="Permanent link">&para;</a></h1>
 <p>Inspect a recording and save the trials that need attention.</p>
 <p>Before you start, switch to <strong>Full</strong> at the top of the <span class="sps-icon" data-icon="route" aria-hidden="true"></span>
-<strong>Scanpath</strong> view (<a href="../../../guides/scanpath-visualization/#essentials-and-full">Essentials and Full</a>).</p>
+<strong>Scanpath View</strong> (<a href="../../../guides/scanpath-visualization/#essentials-and-full">Essentials and Full</a>).</p>
 <h2 id="1-load-the-session">1. Open the session<a class="headerlink" href="#1-load-the-session" title="Permanent link">&para;</a></h2>
 <p><a href="../../../guides/loading-data/#add-your-own-data">Import your tables</a>, or
 select a loaded dataset. Check that its <strong>Recording setup</strong> matches the screen
 used in the experiment.</p>
 <h2 id="2-inspect-a-trial">2. Inspect a trial<a class="headerlink" href="#2-inspect-a-trial" title="Permanent link">&para;</a></h2>
-<p>In the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view, pick a trial in <strong>Select trial</strong>.
+<p>In the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath View</strong>, pick a trial in <strong>Select trial</strong>.
 Turn on <span class="sps-icon" data-icon="crop_square" aria-hidden="true"></span> <strong>Word boxes</strong> and check:</p>
 <ul>
 <li>whether the boxes match the stimulus image, if you have one;</li>
@@ -2577,7 +2577,7 @@ Turn on <span class="sps-icon" data-icon="crop_square" aria-hidden="true"></span
 </ul>
 <p>For a consistent offset, check <a href="../../../faq/#the-fixations-dont-line-up-with-the-text">coordinate units and screen setup</a>.</p>
 <h2 id="3-replay-the-recording">3. Replay the recording<a class="headerlink" href="#3-replay-the-recording" title="Permanent link">&para;</a></h2>
-<p>Turn on <span class="sps-icon" data-icon="movie" aria-hidden="true"></span> <strong>Animate</strong> to follow the fixation order and timing.
+<p>Choose <span class="sps-icon" data-icon="movie" aria-hidden="true"></span> <strong>Animation</strong> to follow the fixation order and timing.
 To mark short or long fixations, or fixations outside the text, open
 <span class="sps-icon" data-icon="filter_list" aria-hidden="true"></span> <strong>Filters &amp; highlights</strong> ▾ → <strong>Fixations</strong> and set
 <strong>Short</strong>, <strong>Long</strong> or <strong>Outside the text</strong> to <strong>Highlight</strong>. A gap or an
@@ -2594,8 +2594,13 @@ you observed in <strong>Notes</strong>. Use ◀ ▶ beside <strong>Select trial<
 session.</p>
 <h2 id="5-save-the-review">5. Save the review<a class="headerlink" href="#5-save-the-review" title="Permanent link">&para;</a></h2>
 <p>Export favorites, tags and notes from <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong>
-→ <strong>Annotations</strong> → <strong>Export</strong>. The file includes participant and trial IDs.
+→ <strong>Current dataset → Annotations → Export</strong>. The file includes participant and trial IDs.
 <strong>Open</strong> on an annotation row returns to that trial.</p>
+<p>To reconcile a second reviewer's notes, choose <strong>Import</strong>. The preview counts
+new, identical and differing entries. <strong>Open disputed reading</strong> displays both
+entries beside the scanpath for that reading. You can download the differences
+for discussion. <strong>Apply import</strong> adds new entries and keeps the current version
+of a differing note unless you select the replacement option.</p>
 <p>For exclusion decisions, follow <a href="../../data-filtering/exclude-unsuitable-trials/">Exclude unsuitable trials</a>.</p>
 
 

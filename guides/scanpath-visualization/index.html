@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2336,6 +2336,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Choose a trial">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#keyboard-shortcuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyboard shortcuts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2481,7 +2498,7 @@
 <li>Plot controls.</li>
 <li>The tabs: Annotations, Stimulus &amp; context, Comparisons, Export and Share.</li>
 </ol>
-<p>The <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view draws one reading at a time, at the size of
+<p>The <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath View</strong> draws one reading at a time, at the size of
 the screen it was recorded on.</p>
 <div class="admonition tip">
 <p class="admonition-title">Looking for a specific button?</p>
@@ -2497,12 +2514,12 @@ The app remembers your choice in this browser.</p>
 <ul>
 <li>the dataset and trial pickers with <strong>◀ ▶</strong>;</li>
 <li>the plot, which starts with a replay on a new visit;</li>
-<li>four view tiles (<strong>Animation</strong>, <strong>Scanpath</strong>, <strong>Heatmap</strong> and
-  <strong>Illustration</strong>) and the <strong>Palette</strong>;</li>
+<li>the <strong>Animation</strong> tile, five static views and the <strong>Palette</strong> tiles;</li>
 <li>the <strong>Export</strong> tab, for the figure on screen, and <strong>Share</strong>.</li>
 </ul>
 <p>The <span class="sps-icon" data-icon="add" aria-hidden="true"></span> <strong>More</strong> buttons show which additional controls are available
-in Full and offer <strong>Switch to Full</strong>. Settings you chose in Full, such as trial
+in Full and offer <strong>Switch to Full</strong>. Both modes keep the selected view and palette.
+An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial
 filters, remain active in Essentials; a short note tells you when they apply.
 Starting a tutorial from <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> switches to Full for the
 current visit. <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> and
@@ -2520,10 +2537,62 @@ participants have the same trial ID, the list shows each reading with its
 participant in brackets, such as <code>3 [p2]</code>.</p>
 <p><a href="controls/#trial-control-bar">All controls → Trial control bar</a> describes
 each control.</p>
+<h3 id="keyboard-shortcuts">Keyboard shortcuts<a class="headerlink" href="#keyboard-shortcuts" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>With focus on</th>
+<th>Keys</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The page, plot background or trial arrow buttons</td>
+<td><span class="keys"><kbd class="key-arrow-left">Left</kbd></span> / <span class="keys"><kbd class="key-arrow-right">Right</kbd></span></td>
+<td>Previous or next trial in the current list (A in Compare)</td>
+</tr>
+<tr>
+<td>The page, plot background or trial arrow buttons</td>
+<td><span class="keys"><kbd class="key-shift">Shift</kbd><span>+</span><kbd class="key-arrow-left">Left</kbd></span> / <span class="keys"><kbd class="key-shift">Shift</kbd><span>+</span><kbd class="key-arrow-right">Right</kbd></span></td>
+<td>Previous or next trial for B in Compare</td>
+</tr>
+<tr>
+<td>The page or plot background</td>
+<td><span class="keys"><kbd class="key-space">Space</kbd></span></td>
+<td>Play or pause the replay</td>
+</tr>
+<tr>
+<td>The <strong>Replay time</strong> slider</td>
+<td><span class="keys"><kbd class="key-arrow-left">Left</kbd></span> / <span class="keys"><kbd class="key-arrow-right">Right</kbd></span></td>
+<td>Pause and step one frame</td>
+</tr>
+<tr>
+<td>The <strong>Replay time</strong> slider</td>
+<td><span class="keys"><kbd class="key-home">Home</kbd></span> / <span class="keys"><kbd class="key-end">End</kbd></span></td>
+<td>Jump to the first or last frame</td>
+</tr>
+<tr>
+<td>The <strong>Replay time</strong> slider</td>
+<td><span class="keys"><kbd class="key-space">Space</kbd></span></td>
+<td>Play or pause from the current frame</td>
+</tr>
+</tbody>
+</table>
+<p>With <strong>A and B together</strong> on, either pair of trial shortcuts steps both
+readings. Use <span class="keys"><kbd class="key-tab">Tab</kbd></span> and <span class="keys"><kbd class="key-shift">Shift</kbd><span>+</span><kbd class="key-tab">Tab</kbd></span> to reach the replay controls. The slider keys
+also work in downloaded HTML replays.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
-<p>The <span class="sps-icon" data-icon="tune" aria-hidden="true"></span> <strong>Plot controls</strong> column, on the right of the plot, holds
-the figure's settings. Each layer has a row with a switch that turns it on or
-off and a <strong>▾</strong> that opens its settings.</p>
+<p>Both modes start with the same <strong>View</strong> tiles and <strong>Palette</strong>. In Full, use
+<strong>Find a setting</strong> to jump to a control by name, or open <strong>Layers</strong> to change what appears in the plot. Click a layer’s name to edit
+its settings or its switch to show or hide it. Choose <strong>Axes</strong> to chart the
+reading by fixation order or time. <strong>Figure</strong> holds the settings for the whole
+plot, including framing, titles and legends.</p>
+<p><strong>Gaze over time</strong> plots elapsed seconds along the horizontal axis and horizontal
+screen position in pixels on the vertical axis. The length of each horizontal
+bar shows how long the fixation lasted. Turn <strong>Animation</strong> on to replay the
+reading on the text, then off to return to the same chart. <strong>Custom</strong> brings
+back your last hand-edited figure.</p>
 <table>
 <thead>
 <tr>
@@ -2533,24 +2602,24 @@ off and a <strong>▾</strong> that opens its settings.</p>
 </thead>
 <tbody>
 <tr>
-<td><span class="sps-icon" data-icon="movie" aria-hidden="true"></span> <strong>Animate</strong></td>
-<td>replay the fixations in the order they happened, at a speed you choose</td>
+<td><strong>View</strong></td>
+<td>switch <strong>Animation</strong> on or off, or choose <strong>Scanpath</strong>, <strong>Heatmap</strong>, <strong>Illustration</strong>, <strong>Gaze over time</strong> or <strong>Custom</strong></td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="compare" aria-hidden="true"></span> <strong>Compare</strong></td>
-<td>draw a second reading over this one, beside it or below it</td>
-</tr>
-<tr>
-<td><strong>Design presets</strong></td>
-<td>restyle the whole figure in one click: <strong>Scanpath</strong>, <strong>Heatmap</strong>, <strong>Illustration</strong>, or <strong>Custom</strong> for your most recent settings</td>
-</tr>
-<tr>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong></td>
-<td>save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer</td>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong></td>
+<td>save a named view, apply it to another reading, or share it</td>
 </tr>
 <tr>
 <td><strong>Palette</strong></td>
-<td>one color scheme for the whole figure: <strong>Default (colorblind-safe)</strong>, <strong>Print / grayscale</strong> or <strong>High contrast</strong></td>
+<td>choose <strong>Colorblind-safe</strong>, <strong>Grayscale</strong>, or <strong>High contrast</strong></td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="compare" aria-hidden="true"></span> <strong>Compare readings</strong></td>
+<td>add a second reading over this one, beside it, or below it</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="movie" aria-hidden="true"></span> <strong>Animation settings</strong></td>
+<td>set playback speed, autoplay, and frame quality</td>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> <strong>Fixations</strong></td>
@@ -2581,8 +2650,12 @@ off and a <strong>▾</strong> that opens its settings.</p>
 <td>which fixations and saccades are drawn, and which stand out</td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="aspect_ratio" aria-hidden="true"></span> <strong>Figure &amp; canvas</strong></td>
-<td>screen framing, axes and grid, title and labels, hover fields and legends</td>
+<td><strong>Axes</strong></td>
+<td>chart presets, X and Y fields, and the coordinate grid</td>
+</tr>
+<tr>
+<td><strong>Figure</strong></td>
+<td>screen framing, title and labels, hover fields and legends</td>
 </tr>
 </tbody>
 </table>
@@ -2647,13 +2720,13 @@ file paths with your own.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_1129"</span><span class="p">,</span> <span class="s2">"l37_1129_2_1_1_Ele"</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_273"</span><span class="p">,</span> <span class="s2">"l37_273_2_1_1_Ele"</span><span class="p">)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="s2">"scanpath.html"</span><span class="p">)</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>scanpath.html
 </code></pre></div>
 </div>
 </div>
@@ -2682,7 +2755,7 @@ GIF or MP4 replays, see <a href="../exporting/">Export and share</a>.</p>
 </tr>
 <tr>
 <td>favorites, tags and notes</td>
-<td><span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <strong>Annotations</strong> → <strong>Export</strong></td>
+<td><span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <strong>Current dataset</strong> → <strong>Annotations</strong> → <strong>Export</strong></td>
 </tr>
 <tr>
 <td>column mapping and recording setup</td>
@@ -2690,14 +2763,14 @@ GIF or MP4 replays, see <a href="../exporting/">Export and share</a>.</p>
 </tr>
 <tr>
 <td>saved figure designs</td>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong> → <strong>Export</strong></td>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong> → <strong>Export</strong></td>
 </tr>
 </tbody>
 </table>
 <p>Keep your source data alongside these files, and load the same dataset before
 restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data
-Management</strong> → <span class="sps-icon" data-icon="history" aria-hidden="true"></span> <strong>Saved on this computer</strong>.</p>
+Management</strong> → <strong>Saved work → Your session</strong>.</p>
 
 
 

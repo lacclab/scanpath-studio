@@ -16,8 +16,8 @@
  * A replay's JSON also carries `player`, the app's own wall-clock player
  * (`plots.animation_player_post_script`) — Plotly's frame queue runs a
  * replay slow — which is run against the drawn plot, as the app runs it. A
- * replay's JSON has no `frames`: the start of `player` rebuilds them from a
- * packed copy and adds them before the player starts (`plots.replay_page`).
+ * replay's JSON carries packed data from which the player reads each frame
+ * when it is displayed (`plots.replay_page`).
  */
 (() => {
   const PLOTLY_SRC = new URL("plotly.min.js", document.currentScript.src).href;
@@ -78,7 +78,8 @@
         if (!stage.isConnected) visibility.disconnect();
       });
       stage.on("plotly_animatingframe", (event) => {
-        if (Number(event.name) !== last || !visible) return;
+        // Plotly puts the name of an inline frame on the frame object.
+        if (Number(event.name ?? event.frame?.name) !== last || !visible) return;
         clearTimeout(restartTimer);
         restartTimer = setTimeout(play, 800);
       });

@@ -3,9 +3,9 @@
 A hand-drawn two-line text, with one fixation per word in reading order: The → cat → sat → on → the → mat. Fixations sit on the lines and saccades are arcs.
 
 1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/gallery/illustration/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/illustration/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 340 px.
-1. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
-1. In **Fixations** ▾, tick **Snap** → **To line** and **Fixation index** → **Show**. In **Saccades** ▾ → **Shape**, choose **Arc**.
-1. In **Figure & canvas** ▾ → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**.
+1. Open the dataset in the **Scanpath View** and pick a trial in **Select trial**.
+1. In **Fixations** ▾, open **Position on the text** and tick **Snap to line** and **Fixation index** → **Show**. In **Saccades** → **Line and arrow appearance** → **Shape**, choose **Arc**.
+1. In **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
 
@@ -15,7 +15,7 @@ Download the example [words](https://lacclab.github.io/scanpath-studio/gallery/i
 scanpath-studio render --words words.csv --fixations fixations.csv \
   -p synthetic -t synthetic_2line_demo \
   --canvas 450x340 --snap-fixations --saccade-arcs --fixation-index \
-  --illustration-text "Illustration · hand-drawn" --no-duration-size-legend \
+  --illustration-text "Illustration · hand-drawn" \
   --highlight-column '' -o illustration.html
 ```
 

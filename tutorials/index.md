@@ -26,4 +26,4 @@ Choose a task below. If you're new to the app, start with [Get started](https://
   - [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)
   - [Track changes over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
 
-In the app, open **Help** → **Tutorials** for guided tours of the controls. Starting a tutorial switches the app to Full for the current visit.
+In the app, **Help** → **Task guides** has short steps you can read offline. Open a task to follow it with your current data. If it needs controls in Full, choose **Open in Full**. Leaving the guide returns you to your previous view and mode.

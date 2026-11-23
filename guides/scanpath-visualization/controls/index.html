@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -1506,7 +1506,7 @@
   <a href="#animate-play-the-reading-as-a-video" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Animate: play the reading as a video
+        Animation settings
       
     </span>
   </a>
@@ -1528,7 +1528,7 @@
   <a href="#design-presets-and-palette" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Design presets and palette
+        Views, palette and saved designs
       
     </span>
   </a>
@@ -1613,10 +1613,21 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#axes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Axes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#figure-canvas" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Figure &amp; canvas
+        Figure
       
     </span>
   </a>
@@ -2572,7 +2583,7 @@
   <a href="#animate-play-the-reading-as-a-video" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Animate: play the reading as a video
+        Animation settings
       
     </span>
   </a>
@@ -2594,7 +2605,7 @@
   <a href="#design-presets-and-palette" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Design presets and palette
+        Views, palette and saved designs
       
     </span>
   </a>
@@ -2679,10 +2690,21 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#axes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Axes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#figure-canvas" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Figure &amp; canvas
+        Figure
       
     </span>
   </a>
@@ -2814,7 +2836,7 @@
 
 
 <h1 id="all-controls">All controls<a class="headerlink" href="#all-controls" title="Permanent link">&para;</a></h1>
-<p>Find every control in the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view, in the order it
+<p>Find every control in the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath View</strong>, in the order it
 appears on screen. Search this page (<span class="keys"><kbd class="key-control">Ctrl</kbd><span>+</span><kbd class="key-f">F</kbd></span>, or
 <span class="keys"><kbd class="key-command">Cmd</kbd><span>+</span><kbd class="key-f">F</kbd></span> on a Mac) for what you want to change, such as <em>colors</em>,
 <em>legends</em> or <em>axes</em>.</p>
@@ -2867,7 +2889,7 @@ pencil (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span>), whi
 </tr>
 <tr>
 <td><strong>◀ ▶</strong></td>
-<td>The previous or next trial.</td>
+<td>The previous or next trial. You can also use <span class="keys"><kbd class="key-arrow-left">Left</kbd></span> and <span class="keys"><kbd class="key-arrow-right">Right</kbd></span> from the page or plot background.</td>
 </tr>
 <tr>
 <td><strong>⇅</strong> → <strong>Sort trials by</strong></td>
@@ -2929,19 +2951,22 @@ pencil (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span>), whi
 </table>
 <h2 id="plot-controls">Plot controls<a class="headerlink" href="#plot-controls" title="Permanent link">&para;</a></h2>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a></p>
-<p>The column on the right of the plot. At the top, the modes and designs change
-the whole figure at once. Under them, each layer of the figure has a row: the
-switch turns the layer on or off, and the <strong>▾</strong> beside it opens that layer's
-settings, described below one menu at a time. The last two rows,
-<strong>Filters &amp; highlights</strong> and <strong>Figure &amp; canvas</strong>, cover the figure as a whole.
-A grayed-out control says why when you hover over it. Essentials shows only the
-view tiles and <strong>Palette</strong>; the rest of this section is in Full.</p>
-<h3 id="animate-play-the-reading-as-a-video"><span class="sps-icon" data-icon="movie" aria-hidden="true"></span> Animate: play the reading as a video<a class="headerlink" href="#animate-play-the-reading-as-a-video" title="Permanent link">&para;</a></h3>
-<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="The Animate menu" loading="lazy"></a></p>
-<p>The <strong>Animate</strong> switch turns the figure into an animation, a video of the
-reading played back fixation by fixation, with play and pause buttons and a
-time slider above the plot. While it is on, the <strong>Fixations</strong>, <strong>Heatmap</strong> and
-<strong>Raw gaze</strong> switches are grayed. Its <strong>▾</strong> holds:</p>
+<p>The <strong>View</strong> and <strong>Palette</strong> tiles appear in both modes. In Full, <strong>My views</strong> sits below the view tiles. The switches below the palette open comparison and replay, and the arrow beside each switch opens its settings.</p>
+<ul>
+<li><strong>Layers</strong> lists what the plot can draw. Click a layer’s name to edit its settings. The switch on the right shows or hides it. <strong>Filters &amp; highlights</strong> applies to the current reading.</li>
+<li><strong>Axes</strong> chooses the X and Y fields and configures the coordinate grid.</li>
+<li><strong>Figure</strong> holds framing, titles, hover fields and legends.</li>
+</ul>
+<p>Use <strong>Find a setting</strong> in Full when you know what you want to change. Type a word such as <em>arrow</em>, <em>font</em> or <em>margin</em> and choose a result to open its controls. You can also browse <strong>Layers</strong>, <strong>Axes</strong> and <strong>Figure</strong>. Each menu shows the common adjustments first. Open a named section for finer changes.</p>
+<p>If you switch to Essentials while comparing readings, the comparison switch stays available.</p>
+<h3 id="animate-play-the-reading-as-a-video"><span class="sps-icon" data-icon="movie" aria-hidden="true"></span> Animation settings<a class="headerlink" href="#animate-play-the-reading-as-a-video" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="Animation settings" loading="lazy"></a></p>
+<p>Turn <strong>Animation</strong> on to replay the reading. Use the play and pause buttons and
+the time slider above the plot. Switch <strong>Animation</strong> off to return to your figure.
+For a saccades-only replay, open <strong>Full</strong>, leave <strong>Saccades</strong> on, and turn
+<strong>Fixations</strong> off. Each line appears when the reading reaches its next fixation.
+<strong>Heatmap</strong> and <strong>Raw gaze</strong> are available in static views. For playback and frame stepping from the
+keyboard, see <a href="../#keyboard-shortcuts">Keyboard shortcuts</a>. Open <strong>Animation settings</strong> in Full for these controls:</p>
 <table>
 <thead>
 <tr>
@@ -2951,38 +2976,39 @@ time slider above the plot. While it is on, the <strong>Fixations</strong>, <str
 </thead>
 <tbody>
 <tr>
-<td><strong>Replay</strong> → <strong>Speed</strong></td>
+<td><strong>Speed</strong></td>
 <td>How fast the video plays, from ×0.25 to ×8: ×1 is the participant's recorded pace, ×2 twice as fast, ×0.5 half as fast.</td>
 </tr>
 <tr>
-<td><strong>Replay</strong> → <strong>Autoplay</strong> → <strong>On load</strong></td>
+<td><strong>Autoplay</strong></td>
 <td>Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play.</td>
 </tr>
 <tr>
-<td><strong>Replay</strong> → <strong>Duration</strong></td>
+<td><strong>Duration</strong></td>
 <td>For information only: the trial's reading time, and how long the video runs at this speed.</td>
 </tr>
 <tr>
-<td><strong>Frames</strong> → <strong>Quality</strong></td>
+<td><strong>Smoothness</strong></td>
 <td>How smooth the video is: <strong>Coarse</strong>, <strong>Standard</strong> or <strong>Fine</strong>. More frames play more smoothly but take longer to build. Moving either slider below makes it <strong>Custom</strong>.</td>
 </tr>
 <tr>
-<td><strong>Frames</strong> → <strong>Every</strong></td>
+<td><strong>Frame timing</strong> → <strong>Frame interval</strong></td>
 <td>Reading time between frames, in ms.</td>
 </tr>
 <tr>
-<td><strong>Frames</strong> → <strong>Limit</strong></td>
+<td><strong>Frame timing</strong> → <strong>Frame limit</strong></td>
 <td>The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit.</td>
 </tr>
 <tr>
-<td><strong>Frames</strong> → <strong>Result</strong></td>
+<td>Frame count</td>
 <td>Shows the number of frames in this replay and the reading time between them.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="compare"><span class="sps-icon" data-icon="compare" aria-hidden="true"></span> Compare<a class="headerlink" href="#compare" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a></p>
-<p>The <strong>Compare</strong> switch shows a second scanpath, B, beside or over this one.
+<p><strong>Compare readings</strong> shows a second scanpath, B, beside or over this one.
+To find everyone who read the same text, open the <strong>Comparisons</strong> tab and match on text.
 Pick B in the <a href="#trial-control-bar">trial control bar</a>, above the plot. Its
 <strong>▾</strong> holds:</p>
 <table>
@@ -2994,29 +3020,29 @@ Pick B in the <a href="#trial-control-bar">trial control bar</a>, above the plot
 </thead>
 <tbody>
 <tr>
-<td><strong>View</strong></td>
-<td><strong>Overlay</strong> both scanpaths, or give each a panel, <strong>Side by side</strong> or <strong>Top &amp; bottom</strong>. With <strong>Animate</strong> on, the comparison is an overlay.</td>
+<td><strong>Layout</strong></td>
+<td><strong>Overlay</strong> both scanpaths, or give each a panel, <strong>Side by side</strong> or <strong>Top &amp; bottom</strong>. In <strong>Animation</strong>, the comparison is an overlay.</td>
 </tr>
 <tr>
-<td><strong>Stimulus from</strong></td>
+<td><strong>Overlay text</strong></td>
 <td>In an overlay, whose word boxes and text are drawn: <strong>Both</strong>, <strong>A</strong> or <strong>B</strong>.</td>
 </tr>
 <tr>
-<td><strong>Label A</strong> / <strong>Label B</strong></td>
-<td>Each scanpath's name in the Compare (A/B) legend, written with fields such as <code>{participant_id}</code>. Empty uses the automatic label. Shown while that legend is on.</td>
+<td><strong>Reading labels</strong> → <strong>Label A</strong> / <strong>Label B</strong></td>
+<td>Each reading’s name in the comparison legend and above its panel in a split view, written with fields such as <code>{participant_id}</code>. Empty uses the automatic label.</td>
 </tr>
 <tr>
-<td><strong>Available fields</strong></td>
+<td><strong>Reading labels</strong> → <strong>Available fields</strong></td>
 <td>The fields a label can use.</td>
 </tr>
 <tr>
-<td><strong>Step</strong> → <strong>A and B together</strong></td>
+<td><strong>Trial arrows</strong></td>
 <td>◀ ▶ move both scanpaths at once.</td>
 </tr>
 </tbody>
 </table>
-<h3 id="design-presets-and-palette"><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> Design presets and palette<a class="headerlink" href="#design-presets-and-palette" title="Permanent link">&para;</a></h3>
-<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/designs.webp" alt="Design presets, My designs open on two saved designs, and the palette" loading="lazy"></a></p>
+<h3 id="design-presets-and-palette"><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> Views, palette and saved designs<a class="headerlink" href="#design-presets-and-palette" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/designs.webp" alt="The view tiles, palette and two saved designs" loading="lazy"></a></p>
 <p>Restyle the whole figure in one click, with a ready-made design or one you
 saved:</p>
 <table>
@@ -3032,30 +3058,34 @@ saved:</p>
 <td>Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.</td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="build" aria-hidden="true"></span> <strong>Custom</strong></td>
-<td>Your most recent custom settings.</td>
+<td><span class="sps-icon" data-icon="show_chart" aria-hidden="true"></span> <strong>Gaze over time</strong></td>
+<td>Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation.</td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong></td>
+<td><span class="sps-icon" data-icon="build" aria-hidden="true"></span> <strong>Custom</strong></td>
+<td>Restore your last hand-edited figure, including its axes and palette. On first use, start with the figure on screen.</td>
+</tr>
+<tr>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong></td>
 <td>Your saved designs. Click one to apply it. <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> renames it and <span class="sps-icon" data-icon="delete" aria-hidden="true"></span> deletes it.</td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong> → <span class="sps-icon" data-icon="save" aria-hidden="true"></span></td>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong> → <span class="sps-icon" data-icon="save" aria-hidden="true"></span></td>
 <td>Save the settings on screen as a named design, to apply again later in one click.</td>
 </tr>
 <tr>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong> → <strong>Export</strong> / <strong>Import</strong></td>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong> → <strong>Export</strong> / <strong>Import</strong></td>
 <td>Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name.</td>
 </tr>
 <tr>
 <td><strong>Palette</strong></td>
-<td>A color scheme for the whole figure: <strong>Default (colorblind-safe)</strong>, <strong>Print / grayscale</strong> or <strong>High contrast</strong>. It reads <strong>Custom</strong> once you change one of its colors.</td>
+<td>Choose <strong>Colorblind-safe</strong>, <strong>Grayscale</strong> for print, or <strong>High contrast</strong>. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="fixations"><span class="sps-icon" data-icon="blur_on" aria-hidden="true"></span> Fixations<a class="headerlink" href="#fixations" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/fixations.webp" title="Open full size"><img src="../../../assets/screenshots/controls/fixations.webp" alt="The Fixations menu" loading="lazy"></a></p>
-<p>The <strong>Fixations</strong> switch draws the fixation markers. Its <strong>▾</strong> holds:</p>
+<p>Click <strong>Fixations</strong> to edit the markers. The switch shows or hides them.</p>
 <table>
 <thead>
 <tr>
@@ -3065,47 +3095,47 @@ saved:</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>Marker</strong> → <strong>Color</strong></td>
-<td>What decides each marker's color. <strong>One color</strong>, the default, paints them all alike. Pick a number column of the fixations, such as duration or time, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as <strong>Text line</strong> or a part-of-speech column, and each value gets a color, with a legend.</td>
+<td><strong>Color</strong></td>
+<td><strong>One color</strong> paints all fixations alike. A number such as duration uses a continuous scale. A category such as condition or part of speech keeps the same color across trials, even when filtering removes other categories. The legend identifies missing values separately.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → color box</td>
+<td>color box</td>
 <td>With <strong>One color</strong>: the fixation marker color. With a number column: the color scale.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Range</strong></td>
+<td><strong>Color range and color bar</strong> → <strong>Range</strong></td>
 <td>When markers are colored by a number: the values at the two ends of the color scale. <strong>Auto</strong> fits each trial.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Shape</strong></td>
+<td><strong>Marker appearance</strong> → <strong>Shape</strong></td>
 <td>Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Size</strong></td>
+<td><strong>Size</strong></td>
 <td>Set the marker size range: the smallest and largest marker diameter, in px.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Scale</strong></td>
+<td><strong>Size by duration</strong> → <strong>Scale</strong></td>
 <td>Choose how duration sets marker size: square root (the default), linear, log, or relative to this figure (its shortest to its longest fixation).</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Durations</strong></td>
+<td><strong>Size by duration</strong> → <strong>Durations</strong></td>
 <td>Set the durations (ms) that get the smallest and the largest marker. Not used on the relative scale.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Opacity</strong></td>
+<td><strong>Opacity</strong></td>
 <td>Set the fixation marker opacity. Lower it to see overlapping fixations.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Outline</strong></td>
+<td><strong>Marker appearance</strong> → <strong>Outline</strong></td>
 <td>Set the width (px) and color of the ring around each marker. A width of 0 draws none.</td>
 </tr>
 <tr>
-<td><strong>Color bar</strong> → <strong>Show</strong></td>
+<td><strong>Color range and color bar</strong> → <strong>Show</strong></td>
 <td>Show the color scale's bar, when markers are colored by a number.</td>
 </tr>
 <tr>
-<td><strong>Color bar</strong> → <strong>Vertical</strong> / <strong>Horizontal</strong>, <strong>Angle</strong>, <strong>Size</strong>, <strong>Thickness</strong>, <strong>Length</strong></td>
+<td><strong>Color range and color bar</strong> → <strong>Vertical</strong> / <strong>Horizontal</strong>, <strong>Angle</strong>, <strong>Size</strong>, <strong>Thickness</strong>, <strong>Length</strong></td>
 <td>Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length.</td>
 </tr>
 <tr>
@@ -3117,22 +3147,22 @@ saved:</p>
 <td>Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay.</td>
 </tr>
 <tr>
-<td><strong>Fixation index</strong> → <strong>Position</strong></td>
+<td><strong>Marker appearance</strong> → <strong>Number position</strong></td>
 <td>Put each number above its fixation, inside it, or below it.</td>
 </tr>
 <tr>
-<td><strong>Snap</strong> → <strong>To line</strong></td>
-<td>Move each fixation up or down onto its line of text. This makes a schematic, labeled <em>Illustration</em>.</td>
+<td><strong>Position on the text</strong> → <strong>Snap to line</strong></td>
+<td>Move each fixation up or down onto its line of text. Choose <strong>Show positions before snapping</strong> above the figure to see the original trial coordinates beside the illustration, on the same axes. Downloads use the illustration.</td>
 </tr>
 <tr>
-<td><strong>Snap</strong> → <strong>Position</strong></td>
+<td><strong>Position on the text</strong> → <strong>Position</strong></td>
 <td>Choose where on its line a snapped fixation sits.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="saccades"><span class="sps-icon" data-icon="arrow_outward" aria-hidden="true"></span> Saccades<a class="headerlink" href="#saccades" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/saccades.webp" title="Open full size"><img src="../../../assets/screenshots/controls/saccades.webp" alt="The Saccades menu" loading="lazy"></a></p>
-<p>The <strong>Saccades</strong> switch draws the lines between fixations. Its <strong>▾</strong> holds:</p>
+<p>Click <strong>Saccades</strong> to edit the lines between fixations. The switch shows or hides the lines.</p>
 <table>
 <thead>
 <tr>
@@ -3142,31 +3172,31 @@ saved:</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>Line</strong> → <strong>Color</strong></td>
+<td><strong>Color</strong></td>
 <td>Choose what decides the saccade color: <strong>One color</strong> for all; <strong>Forward / regression</strong>, two colors; or <strong>By type</strong>, a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. <strong>Forward / regression</strong> and <strong>By type</strong> need a word ID for each fixation, the word it landed on, mapped as the Fixations table's <strong>Word ID</strong> (such as EyeLink's <code>CURRENT_FIX_INTEREST_AREA_ID</code>). Without one, every saccade is drawn as <em>Off the text</em>.</td>
 </tr>
 <tr>
-<td><strong>Line</strong> → color box</td>
+<td>color box</td>
 <td>With <strong>One color</strong>: the saccade line color.</td>
 </tr>
 <tr>
-<td><strong>Line</strong> → <strong>Types</strong></td>
+<td><strong>Types</strong></td>
 <td>With <strong>Forward / regression</strong> or <strong>By type</strong>: the color of each group, such as regressions or return sweeps.</td>
 </tr>
 <tr>
-<td><strong>Line</strong> → <strong>Style</strong></td>
+<td><strong>Line and arrow appearance</strong> → <strong>Style</strong></td>
 <td>Choose the saccade line style: solid, dashed, dotted or dash-dot.</td>
 </tr>
 <tr>
-<td><strong>Line</strong> → <strong>Width</strong></td>
+<td><strong>Width</strong></td>
 <td>Set the saccade line width (thickness), in px.</td>
 </tr>
 <tr>
-<td><strong>Line</strong> → <strong>Opacity</strong></td>
+<td><strong>Line and arrow appearance</strong> → <strong>Opacity</strong></td>
 <td>Set the saccade line and arrow opacity. Lower it to bring the fixations forward.</td>
 </tr>
 <tr>
-<td><strong>Shape</strong></td>
+<td><strong>Line and arrow appearance</strong> → <strong>Shape</strong></td>
 <td>Choose the saccade shape. <strong>Straight</strong> draws lines. <strong>Arc</strong> draws arcs over the text, a schematic labeled <em>Illustration</em>.</td>
 </tr>
 <tr>
@@ -3174,7 +3204,7 @@ saved:</p>
 <td>Show saccade direction arrows: an arrowhead on each saccade, pointing where the eye went.</td>
 </tr>
 <tr>
-<td><strong>Direction arrows</strong> → <strong>Arrow size</strong></td>
+<td><strong>Line and arrow appearance</strong> → <strong>Arrow size</strong></td>
 <td>Set the saccade arrowhead size.</td>
 </tr>
 </tbody>
@@ -3182,7 +3212,7 @@ saved:</p>
 <h3 id="stimulus"><span class="sps-icon" data-icon="article" aria-hidden="true"></span> Stimulus<a class="headerlink" href="#stimulus" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/stimulus.webp" title="Open full size"><img src="../../../assets/screenshots/controls/stimulus.webp" alt="The Stimulus menu" loading="lazy"></a></p>
 <p>The <strong>Stimulus</strong> switch draws the text and the stimulus image. The text rows start from the dataset's
-Recording setup, and changes here apply to the figure only. Its <strong>▾</strong> holds:</p>
+Recording setup. Click <strong>Stimulus</strong> to adjust the text or image for this figure.</p>
 <table>
 <thead>
 <tr>
@@ -3197,69 +3227,65 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </tr>
 <tr>
 <td><strong>Text</strong> → <strong>Redact</strong></td>
-<td>Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words.</td>
+<td>Mask stimulus words and their text IDs. Other columns selected under <strong>Figure → Hover fields</strong> still travel with the HTML figure. Review those selections and the separate <strong>Stimulus image</strong> switch before sharing.</td>
 </tr>
 <tr>
-<td><strong>Fit</strong> → <strong>Fit to word boxes</strong></td>
+<td><strong>Text appearance</strong> → <strong>Fit</strong> → <strong>Fit to word boxes</strong></td>
 <td>Size the stimulus text from its word boxes, instead of a fixed font size.</td>
 </tr>
 <tr>
-<td><strong>Fit</strong> → <strong>Spacing</strong></td>
+<td><strong>Text appearance</strong> → <strong>Fit</strong> → <strong>Spacing</strong></td>
 <td>With <strong>Fit to word boxes</strong> on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below.</td>
 </tr>
 <tr>
-<td><strong>Size</strong></td>
+<td><strong>Text appearance</strong> → <strong>Size</strong></td>
 <td>With <strong>Fit to word boxes</strong> on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt.</td>
 </tr>
 <tr>
-<td><strong>Font</strong></td>
+<td><strong>Text appearance</strong> → <strong>Font</strong></td>
 <td>Choose the stimulus text font (typeface). <em>Other font…</em> takes any font name.</td>
 </tr>
 <tr>
-<td><strong>Color</strong> → text color</td>
+<td><strong>Text appearance</strong> → <strong>Color</strong> → text color</td>
 <td>Choose the stimulus text color.</td>
 </tr>
 <tr>
-<td><strong>Color</strong> → <strong>Background</strong></td>
-<td>Choose the plot background color: a preset, or any color in the box beside it.</td>
-</tr>
-<tr>
-<td><strong>Highlight words</strong> → <strong>Show</strong></td>
+<td><strong>Word highlights</strong> → <strong>Show</strong></td>
 <td>Highlight words in the stimulus text, such as the answer span.</td>
 </tr>
 <tr>
-<td><strong>Highlight words</strong> → word column</td>
+<td><strong>Word highlights</strong> → word column</td>
 <td>Choose which words to highlight: a true/false word column, such as the critical span.</td>
 </tr>
 <tr>
-<td><strong>Style</strong></td>
-<td>Choose the word highlight style, <strong>Mark text</strong> (colored text) or <strong>Mark border</strong> (a border around the words), and the highlight color.</td>
+<td><strong>Word highlights</strong> → <strong>Style</strong></td>
+<td><strong>Mark text</strong> changes the color of the selected words. <strong>Mark border</strong> outlines the span. Both have a color picker. <strong>Underline</strong> draws a line beneath each selected word in the current text color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus.</td>
 </tr>
 <tr>
-<td><strong>Image</strong> → <strong>Show</strong></td>
+<td><strong>Stimulus image</strong> → <strong>Show</strong></td>
 <td>Show the stimulus image, the screen as shown in the experiment, under the scanpath.</td>
 </tr>
 <tr>
-<td><strong>File</strong></td>
+<td><strong>Stimulus image</strong> → <strong>File</strong></td>
 <td>Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. It replaces the dataset's image and is not included in Share links.</td>
 </tr>
 <tr>
-<td><strong>Opacity</strong></td>
+<td><strong>Stimulus image</strong> → <strong>Opacity</strong></td>
 <td>Set the stimulus image opacity. Lower it so the scanpath reads over it.</td>
 </tr>
 <tr>
-<td><strong>Offset</strong> → <strong>X</strong> / <strong>Y</strong></td>
+<td><strong>Stimulus image</strong> → <strong>Offset</strong> → <strong>X</strong> / <strong>Y</strong></td>
 <td>Move (nudge) the stimulus image left, right, up or down, in px, to line it up with the word boxes.</td>
 </tr>
 <tr>
-<td><strong>Scale</strong></td>
+<td><strong>Stimulus image</strong> → <strong>Scale</strong></td>
 <td>Resize (scale) the stimulus image so its text matches the word boxes.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="word-boxes"><span class="sps-icon" data-icon="crop_square" aria-hidden="true"></span> Word boxes<a class="headerlink" href="#word-boxes" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/word-boxes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/word-boxes.webp" alt="The Word boxes menu" loading="lazy"></a></p>
-<p>The <strong>Word boxes</strong> switch draws each word's box (its interest area). Its <strong>▾</strong> holds:</p>
+<p>The <strong>Word boxes</strong> switch draws each word’s interest area. Click <strong>Word boxes</strong> to set its outline and fill.</p>
 <table>
 <thead>
 <tr>
@@ -3269,26 +3295,26 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </thead>
 <tbody>
 <tr>
-<td><strong>Box</strong> → <strong>Line</strong> color</td>
+<td><strong>Outline</strong> color</td>
 <td>Choose the word box outline (border) color.</td>
 </tr>
 <tr>
-<td><strong>Box</strong> → <strong>Line</strong> opacity</td>
+<td><strong>Outline</strong> opacity</td>
 <td>Set the word box outline opacity. 0 hides the outlines.</td>
 </tr>
 <tr>
-<td><strong>Box</strong> → <strong>Fill</strong> color</td>
+<td><strong>Fill</strong> color</td>
 <td>Choose the word box fill color, inside each box.</td>
 </tr>
 <tr>
-<td><strong>Box</strong> → <strong>Fill</strong> opacity</td>
+<td><strong>Fill</strong> opacity</td>
 <td>Set the word box fill opacity. 0 draws outlines only.</td>
 </tr>
 </tbody>
 </table>
 <h3 id="heatmap"><span class="sps-icon" data-icon="local_fire_department" aria-hidden="true"></span> Heatmap<a class="headerlink" href="#heatmap" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/heatmap.webp" title="Open full size"><img src="../../../assets/screenshots/controls/heatmap.webp" alt="The Heatmap menu" loading="lazy"></a></p>
-<p>The <strong>Heatmap</strong> switch shows where reading concentrated. Its <strong>▾</strong> holds:</p>
+<p>The <strong>Heatmap</strong> switch shows where reading concentrated. Click <strong>Heatmap</strong> to choose the measure, colors and scale.</p>
 <table>
 <thead>
 <tr>
@@ -3298,28 +3324,28 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </thead>
 <tbody>
 <tr>
-<td><strong>Style</strong></td>
+<td><strong>Draw as</strong></td>
 <td>Choose the heatmap style: <strong>Word boxes</strong> colors each word box, <strong>Smoothed</strong> blurs the fixations with a Gaussian. Compare always uses word boxes.</td>
 </tr>
 <tr>
-<td><strong>Blur</strong></td>
+<td><strong>Smoothing and scale</strong> → <strong>Blur</strong></td>
 <td>For <strong>Smoothed</strong>: how far each fixation spreads, in px. <strong>Auto</strong> picks it from the size of the data.</td>
 </tr>
 <tr>
-<td><strong>Color</strong> → <strong>By</strong></td>
+<td><strong>Measure</strong></td>
 <td>Choose what the heatmap measures: total fixation duration (dwell time), or <strong>Fixation count</strong>.</td>
 </tr>
 <tr>
-<td><strong>Color</strong> → <strong>Colors</strong></td>
+<td><strong>Colors</strong></td>
 <td>Choose the heatmap colors (color scale).</td>
 </tr>
 <tr>
-<td><strong>Scale</strong></td>
+<td><strong>Smoothing and scale</strong> → <strong>Scale</strong></td>
 <td>Choose a linear or log heatmap scale.</td>
 </tr>
 <tr>
-<td><strong>Range</strong></td>
-<td>For word-box heatmaps, fix the color range across trials. <strong>Auto</strong> runs from 0 to the trial's highest value. Smoothed heatmaps are scaled to each figure's peak.</td>
+<td><strong>Smoothing and scale</strong> → <strong>Range</strong></td>
+<td>A word-box legend gives the reading’s dwell-time or count limits. Choose <strong>Use this heatmap range for other trials</strong> above the plot to keep those limits. Smoothed heatmaps scale to each figure’s peak.</td>
 </tr>
 <tr>
 <td><strong>Opacity</strong></td>
@@ -3333,7 +3359,7 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </table>
 <h3 id="raw-gaze"><span class="sps-icon" data-icon="grain" aria-hidden="true"></span> Raw gaze<a class="headerlink" href="#raw-gaze" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/raw-gaze.webp" title="Open full size"><img src="../../../assets/screenshots/controls/raw-gaze.webp" alt="The Raw gaze menu" loading="lazy"></a></p>
-<p>The <strong>Raw gaze</strong> switch draws the gaze samples as recorded. Its <strong>▾</strong> holds:</p>
+<p>The <strong>Raw gaze</strong> switch draws the recorded gaze samples. Click <strong>Raw gaze</strong> to set their appearance.</p>
 <table>
 <thead>
 <tr>
@@ -3343,22 +3369,24 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </thead>
 <tbody>
 <tr>
-<td><strong>Marker</strong> → <strong>Color</strong></td>
-<td>Not used outside Compare: the samples are colored by their time, or by their order when they have no timestamps.</td>
+<td><strong>Sample color</strong></td>
+<td>A single reading uses sample time, or sample order when timestamps are missing. Choose the fallback color here. In Compare, each reading has its own color.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Size</strong></td>
+<td><strong>Dot size</strong></td>
 <td>Set the raw gaze sample marker size.</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> → <strong>Opacity</strong></td>
+<td><strong>Opacity</strong></td>
 <td>Set the raw gaze sample opacity.</td>
 </tr>
 </tbody>
 </table>
+<p>To inspect samples from one reading, open <strong>Axes → Axis preset</strong>. Choose <strong>Horizontal gaze position over recorded time</strong>, <strong>Vertical gaze position over recorded time</strong>, or a recorded pupil measurement. These presets turn on <strong>Raw gaze</strong>. A recording without timestamps offers sample number on the horizontal axis.</p>
+<p>In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A pupil area of zero accompanies missing gaze coordinates. The raw table and its exports keep those samples.</p>
 <h3 id="filters-highlights"><span class="sps-icon" data-icon="filter_list" aria-hidden="true"></span> Filters &amp; highlights<a class="headerlink" href="#filters-highlights" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a></p>
-<p>Which fixations and saccades are drawn, and which stand out:</p>
+<p>An <strong>Active</strong> label appears beside <strong>Filters &amp; highlights</strong> when either reading has a fixation window, highlight or filter in effect. The trial-list filter selects whole readings.</p>
 <table>
 <thead>
 <tr>
@@ -3372,12 +3400,12 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 <td>Show only some fixations: a range of the reading order, such as fixations 10 to 40.</td>
 </tr>
 <tr>
-<td><strong>Fixations</strong> → <strong>All trials</strong></td>
+<td><strong>Keep this range across trials</strong></td>
 <td>Keep that fixation range when you move to another trial. Off, it applies to this trial only, and the next trial shows all its fixations.</td>
 </tr>
 <tr>
 <td><strong>Short</strong> / <strong>Long</strong></td>
-<td>Find fixations shorter or longer than a duration threshold (80 ms and 800 ms by default). Each row's <strong>Mode</strong> is <strong>Off</strong>, <strong>Highlight</strong> or <strong>Hide</strong>. <strong>Highlight</strong> marks the fixations. <strong>Hide</strong> hides their markers, but saccades and the heatmap still use them.</td>
+<td>Find fixations shorter or longer than the cutoff (80 ms and 800 ms by default). <strong>Show</strong> keeps the usual marker and <strong>Highlight</strong> changes its appearance. <strong>Hide</strong> removes the marker and skips the fixation in replay and fixation-index sequences. Replay lines connect the remaining fixations. Spatial saccade lines and heatmaps on static plots still use the hidden fixation.</td>
 </tr>
 <tr>
 <td><strong>Outside the text</strong></td>
@@ -3388,7 +3416,7 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 <td>Highlight or hide fixations at or next to a blink (needs a blink column).</td>
 </tr>
 <tr>
-<td><strong>Marker</strong> and <strong>Color</strong></td>
+<td><strong>Highlight markers</strong> → shape and color</td>
 <td>Choose the marker shape and color of each highlighted fixation kind.</td>
 </tr>
 <tr>
@@ -3397,9 +3425,9 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </tr>
 </tbody>
 </table>
-<h3 id="figure-canvas"><span class="sps-icon" data-icon="aspect_ratio" aria-hidden="true"></span> Figure &amp; canvas<a class="headerlink" href="#figure-canvas" title="Permanent link">&para;</a></h3>
-<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure & canvas menu" loading="lazy"></a></p>
-<p>The figure as a whole:</p>
+<h3 id="axes">Axes<a class="headerlink" href="#axes" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-axes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-axes.webp" alt="Axes tab with chart presets and custom axis fields" loading="lazy"></a></p>
+<p>Choose a chart preset, or set the X and Y fields individually. Open <strong>Coordinate grid</strong> to style the screen grid.</p>
 <table>
 <thead>
 <tr>
@@ -3409,51 +3437,70 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </thead>
 <tbody>
 <tr>
-<td><strong>Frame</strong> → <strong>Crop to data</strong></td>
-<td>Crop (zoom) the figure to the part of the screen with data, instead of the whole screen.</td>
+<td><strong>Axis preset</strong></td>
+<td>Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. <strong>Connect fixations</strong> traces the windowed index sequence, including with fixation markers hidden. <strong>Hide</strong> filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
 </tr>
 <tr>
-<td><strong>Margin</strong></td>
-<td>Set the crop margin: the space around the data when cropping. <strong>Auto</strong> uses 5% of the data's width and height, at least 20 px.</td>
-</tr>
-<tr>
-<td><strong>Border</strong> → <strong>Show</strong>, color</td>
-<td>Show a 1 px border around the plot area, and choose its color. It marks the edge of the screen, or, with <strong>Crop to data</strong>, the edge of the cropped area.</td>
+<td><strong>Choose axis fields</strong> → horizontal / vertical</td>
+<td>Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. <strong>Screen X and Y</strong> restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates.</td>
 </tr>
 <tr>
 <td><strong>Grid</strong> → <strong>Show</strong></td>
 <td>Show a grid of screen coordinates, in px.</td>
 </tr>
 <tr>
-<td><strong>Grid</strong> → <strong>Auto</strong>, interval</td>
+<td><strong>Grid spacing and labels</strong> → interval</td>
 <td>Set the grid spacing (interval), in px, or let <strong>Auto</strong> choose it.</td>
 </tr>
 <tr>
-<td><strong>Labels</strong></td>
+<td><strong>Grid spacing and labels</strong> → label size</td>
 <td>Set the grid label (tick label) font size.</td>
 </tr>
+</tbody>
+</table>
+<p><img alt="Vertical screen position by elapsed time for a bundled demo reading" src="../../../assets/screenshots/elapsed-reading-chart.jpg" /></p>
+<p>Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.</p>
+<h3 id="figure-canvas">Figure<a class="headerlink" href="#figure-canvas" title="Permanent link">&para;</a></h3>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure tab and its four settings menus" loading="lazy"></a></p>
+<p>Open <strong>Screen &amp; framing</strong>, <strong>Title &amp; labels</strong>, <strong>Hover fields</strong>, or <strong>Legends</strong>.</p>
+<table>
+<thead>
 <tr>
-<td><strong>Axis preset</strong></td>
-<td>Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. <strong>Connect fixations</strong> traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
+<th>Control</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Screen &amp; framing</strong> → <strong>Background</strong></td>
+<td>Choose the figure background color.</td>
 </tr>
 <tr>
-<td><strong>Axes</strong> → <strong>X</strong> / <strong>Y</strong></td>
-<td>Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. <strong>Screen X and Y</strong> restores the stimulus view. Animate and Compare use screen coordinates.</td>
+<td><strong>Crop to data</strong></td>
+<td>Crop (zoom) the figure to the part of the screen with data, instead of the whole screen.</td>
 </tr>
 <tr>
-<td><strong>Illustration</strong> → <strong>Label</strong></td>
+<td><strong>Margins and border color</strong> → crop margin</td>
+<td>Set the crop margin: the space around the data when cropping. <strong>Auto</strong> uses 5% of the data's width and height, at least 20 px.</td>
+</tr>
+<tr>
+<td><strong>Show plot border</strong>, <strong>Margins and border color</strong></td>
+<td>Show a 1 px border around the plot area, and choose its color. It marks the edge of the screen, or, with <strong>Crop to data</strong>, the edge of the cropped area.</td>
+</tr>
+<tr>
+<td><strong>Illustration label</strong> → <strong>When to show the label</strong></td>
 <td>Choose when the figure carries an <em>Illustration</em> note, saying it does not show the recorded positions. <strong>Auto</strong> adds it when a setting changes the geometry or the data (such as snapping fixations to a line or drawing saccades as arcs), <strong>Show</strong> always, <strong>Hide</strong> never.</td>
 </tr>
 <tr>
-<td><strong>Illustration</strong> → <strong>Text</strong></td>
+<td><strong>Illustration label</strong> → <strong>Label text</strong></td>
 <td>Write the <em>Illustration</em> label's text. Empty writes "Illustration ·" followed by the reasons.</td>
 </tr>
 <tr>
-<td><strong>Title</strong> → <strong>Show</strong>, text, <strong>Size</strong></td>
+<td><strong>Show title</strong>, title text and <strong>Text size and color</strong></td>
 <td>Add a figure title above the plot, and set its font size. <code>{field}</code> inserts a value of the trial.</td>
 </tr>
 <tr>
-<td><strong>Caption</strong> → <strong>Show</strong>, text, <strong>Size</strong>, color</td>
+<td><strong>Show caption</strong>, caption text and <strong>Text size and color</strong></td>
 <td>Add a figure caption below the plot, and set its font size and color. <code>{field}</code> works here too.</td>
 </tr>
 <tr>
@@ -3461,29 +3508,27 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 <td>Add a small <em>Made with Scanpath Studio</em> line under the plot.</td>
 </tr>
 <tr>
-<td><strong>Hover</strong> → <strong>Words</strong> / <strong>Fixations</strong></td>
+<td><strong>Hover fields</strong> → <strong>Fields on a word</strong> / <strong>Fields on a fixation</strong></td>
 <td>Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation.</td>
 </tr>
 <tr>
-<td><strong>Legends</strong> → <strong>Show</strong></td>
-<td>Show or hide each legend the figure draws: <strong>Compare (A/B)</strong>, <strong>Saccade types</strong>, <strong>Fixation colors</strong>, <strong>Fixation sizes</strong> or <strong>Text highlight</strong>. Each has a row.</td>
+<td><strong>Legends</strong> → <strong>Show on the figure</strong></td>
+<td>Show or hide each legend the figure draws: <strong>Compare (A/B)</strong>, <strong>Saccade types</strong>, <strong>Fixation colors</strong>, <strong>Fixation sizes</strong> or <strong>Text highlight</strong>. The fixation size legend starts hidden. Select <strong>Fixation sizes</strong> to include it in a saved figure.</td>
 </tr>
 <tr>
-<td><strong>Legends</strong> → <strong>Position</strong></td>
+<td><strong>Legend position and style</strong> → <strong>Position</strong></td>
 <td>Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot.</td>
 </tr>
 <tr>
-<td><strong>Legends</strong> → <strong>Arrangement</strong></td>
+<td><strong>Legend position and style</strong> → <strong>Arrangement</strong></td>
 <td>Choose the legend arrangement: <strong>Stacked</strong> or <strong>Side by side</strong>.</td>
 </tr>
 <tr>
-<td><strong>Legends</strong> → <strong>Text size</strong></td>
+<td><strong>Legend position and style</strong> → <strong>Text size</strong></td>
 <td>Set the legend text (font) size, in px. Empty uses the figure's text size.</td>
 </tr>
 </tbody>
 </table>
-<p><img alt="Vertical screen position by elapsed time for a bundled demo reading" src="../../../assets/screenshots/elapsed-reading-chart.jpg" /></p>
-<p>Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.</p>
 <h3 id="reset-visualization"><span class="sps-icon" data-icon="restart_alt" aria-hidden="true"></span> Reset visualization<a class="headerlink" href="#reset-visualization" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="Undo and Redo arrows beside Reset visualization" loading="lazy"></a></p>
 <p>At the foot of <strong>Full</strong> plot controls, use the arrows beside <strong>Reset visualization</strong> to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.</p>
@@ -3543,27 +3588,27 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 <td>Filter scanpath B's trials, apart from A's.</td>
 </tr>
 <tr>
-<td><strong>Fixations ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong>, <strong>Size</strong>, <strong>Opacity</strong></td>
+<td><strong>Layers</strong> → <strong>Fixations</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong>, <strong>Size</strong>, <strong>Opacity</strong></td>
 <td>Choose each scanpath's fixation marker color, size range and opacity. When the markers are colored by a column, <strong>Color</strong> becomes <strong>Outline</strong>.</td>
 </tr>
 <tr>
-<td><strong>Saccades ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong>, <strong>Style</strong>, <strong>Width</strong></td>
+<td><strong>Layers</strong> → <strong>Saccades</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong>, <strong>Style</strong>, <strong>Width</strong></td>
 <td>Choose each scanpath's saccade line color, style and width.</td>
 </tr>
 <tr>
-<td><strong>Word boxes ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Line</strong>, <strong>Fill</strong></td>
+<td><strong>Layers</strong> → <strong>Word boxes</strong> → <strong>Scanpath A / B</strong> → <strong>Line</strong>, <strong>Fill</strong></td>
 <td>Choose each scanpath's word box outline and fill colors and opacities.</td>
 </tr>
 <tr>
-<td><strong>Heatmap ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Colors</strong></td>
+<td><strong>Layers</strong> → <strong>Heatmap</strong> → <strong>Scanpath A / B</strong> → <strong>Colors</strong></td>
 <td>Choose each scanpath's heatmap colors (color scale).</td>
 </tr>
 <tr>
-<td><strong>Raw gaze ▾</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong></td>
+<td><strong>Layers</strong> → <strong>Raw gaze</strong> → <strong>Scanpath A / B</strong> → <strong>Color</strong></td>
 <td>Choose each scanpath's raw gaze sample color.</td>
 </tr>
 <tr>
-<td><strong>Filters &amp; highlights ▾</strong> → <strong>Fixations · B</strong> / <strong>Saccades · B</strong></td>
+<td><strong>Layers</strong> → <strong>Filters &amp; highlights</strong> → <strong>Reading B</strong></td>
 <td>Set scanpath B's fixation range, fixation highlights and saccade types.</td>
 </tr>
 </tbody>
@@ -3644,7 +3689,7 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 <tr>
 <td></td>
 <td><strong>Annotations (JSON)</strong> / <strong>Settings file (JSON)</strong></td>
-<td><strong>Settings file</strong>: beside each trial's figure, a <code>plot_config.json</code> recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. <strong>Annotations</strong>: one <code>annotations.json</code> with the exported trials' favorites, tags and notes, which <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <strong>Annotations</strong> can import again.</td>
+<td><strong>Settings file</strong>: beside each trial's figure, a <code>plot_config.json</code> recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. <strong>Annotations</strong>: one <code>annotations.json</code> with the exported trials' favorites, tags and notes, which <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <strong>Current dataset → Annotations</strong> can import again.</td>
 </tr>
 <tr>
 <td></td>
@@ -3659,7 +3704,7 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 <tr>
 <td><span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong></td>
 <td><strong>Link</strong></td>
-<td>Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> → <strong>Download setup file</strong>) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A <code>localhost</code> link opens where the app runs at the same address.</td>
+<td>Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (<strong>Current dataset</strong> → <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> → <strong>Download setup file</strong>) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A <code>localhost</code> link opens where the app runs at the same address.</td>
 </tr>
 <tr>
 <td></td>

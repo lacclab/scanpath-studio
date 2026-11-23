@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2266,6 +2266,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#publication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#launch-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2491,7 +2502,18 @@
   <a href="#flags-figure-canvas" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Figure &amp; canvas
+        Screen &amp; framing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-axes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Axes
       
     </span>
   </a>
@@ -2513,7 +2535,7 @@
   <a href="#flags-hover" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hover
+        Hover fields
       
     </span>
   </a>
@@ -2732,6 +2754,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#publication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#launch-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2957,7 +2990,18 @@
   <a href="#flags-figure-canvas" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Figure &amp; canvas
+        Screen &amp; framing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-axes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Axes
       
     </span>
   </a>
@@ -2979,7 +3023,7 @@
   <a href="#flags-hover" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hover
+        Hover fields
       
     </span>
   </a>
@@ -3189,6 +3233,10 @@ check data and manage saved work without opening the app:</p>
 <td>Write one trial's scanpath, heatmap or replay to a file</td>
 </tr>
 <tr>
+<td><a href="#publication"><code>publication</code></a></td>
+<td>Export a saved figure recipe or open it as an offline editor</td>
+</tr>
+<tr>
 <td><a href="#corpus"><code>corpus</code></a></td>
 <td>Render a corpus figure from a tidy CSV you already have</td>
 </tr>
@@ -3216,11 +3264,18 @@ check data and manage saved work without opening the app:</p>
 </table>
 <p>Each command takes <code>--help</code>, and <code>scanpath-studio --version</code> prints the version.
 If you mistype a command, the CLI suggests the closest match.</p>
+<h2 id="publication">Publication<a class="headerlink" href="#publication" title="Permanent link">&para;</a></h2>
+<p>Download the editable file under <strong>Save or open</strong> to reproduce the figure with its crop, labels, caption and print settings.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--width-mm<span class="w"> </span><span class="m">85</span><span class="w"> </span>-o<span class="w"> </span>reading.publication.json
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>publication<span class="w"> </span>reading.publication.json<span class="w"> </span>-o<span class="w"> </span>reading.html
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>publication<span class="w"> </span>figure-2.json<span class="w"> </span>-o<span class="w"> </span>figure-2.pdf
+</code></pre></div>
+<p>Choose SVG, PDF, PNG or TIFF for artwork, or MP4 for a selected replay clip. Rendering these files requires a Chromium browser. The HTML editor is self-contained and can be used offline.</p>
 <h2 id="launch-the-app">Launch the app<a class="headerlink" href="#launch-the-app" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don't cache the session on this computer</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>scanpath-studio<span class="w"> </span>--download-dir<span class="w"> </span>D:<span class="se">\c</span>orpora<span class="w">  </span><span class="c1"># where ⬇ Download saves public datasets</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don't cache the session on this computer</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>scanpath-studio<span class="w"> </span>--download-dir<span class="w"> </span>D:<span class="se">\c</span>orpora<span class="w">  </span><span class="c1"># where ⬇ Download saves public datasets</span>
 </code></pre></div>
 <p><code>scanpath-studio run …</code> is the same. Any other launch flag is passed on to
 <code>streamlit run</code>.</p>
@@ -3228,7 +3283,7 @@ If you mistype a command, the CLI suggests the closest match.</p>
 serve it to other machines on a network you trust, pass
 <code>--server.address 0.0.0.0</code>, or set <code>server.address</code> in a Streamlit
 <code>config.toml</code> or <code>STREAMLIT_SERVER_ADDRESS</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="w"> </span><span class="m">0</span>.0.0.0
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="w"> </span><span class="m">0</span>.0.0.0
 </code></pre></div>
 <p>Served on a network, the app turns off the controls that read or write the
 server's folders, because any visitor could use them. These are the <em>Data
@@ -3243,24 +3298,24 @@ sets the format: <code>.html</code> opens as an interactive figure in your brows
 once; see the <a href="../faq/#export-fails">FAQ</a>). The figure is the app's Scanpath
 design unless a flag changes it, and every <a href="../api/#figure-options">figure option</a>
 has a flag.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># List the trials to pick from</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># The bundled demo</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your own data (replace p1 / t3 with IDs from --list-trials)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># A draft file saved from the app's Draw a scanpath screen</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># A public dataset, loaded as the app loads it (downloaded on first use)</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>--list-trials
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># List the trials to pick from</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># The bundled demo</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Your own data (replace p1 / t3 with IDs from --list-trials)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># A draft file saved from the app's Draw a scanpath screen</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># A public dataset, loaded as the app loads it (downloaded on first use)</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>--list-trials
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
 </code></pre></div>
 <p>The Python API loads the same datasets with
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_potec&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_potec"><code>load_potec</code></a> and
@@ -3296,7 +3351,7 @@ has a flag.</p>
 </tr>
 <tr>
 <td>size fixations by duration</td>
-<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--no-duration-size-legend</code></td>
+<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--duration-size-legend</code> (show the optional size key)</td>
 </tr>
 <tr>
 <td>draw only part of a trial</td>
@@ -3332,36 +3387,43 @@ has a flag.</p>
 </tr>
 </tbody>
 </table>
+<p>Hover fields appear in the order you list them. For a column named
+<code>pupil, left</code>, preserve the comma with
+<code>--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'</code>.
+Use <code>--fixation-hover-fields-json '[]'</code> to clear that selection. The Words
+layer accepts <code>--word-hover-fields-json</code> in the same way.</p>
 <h3 id="compare-two-scanpaths">Compare two scanpaths<a class="headerlink" href="#compare-two-scanpaths" title="Permanent link">&para;</a></h3>
-<p><code>--compare-with PARTICIPANT:TRIAL</code> draws a second trial, B, beside or over the
-first. It does what the app's <span class="sps-icon" data-icon="compare" aria-hidden="true"></span> <strong>Compare</strong> does.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>compare.html
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Side by side: each panel draws its trial's stimulus</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># A style for each scanpath</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># B from a second dataset</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
+<p><code>--compare-participant ID --compare-trial ID</code> selects the second reading, B.
+For example, <code>--compare-participant B --compare-trial 'round:2'</code> preserves the
+colon in the trial ID. The shorthand <code>--compare-with PARTICIPANT:TRIAL</code> splits
+at the last colon.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>compare.html
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Side by side: each panel draws its trial's stimulus</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1"># A style for each scanpath</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="c1"># B from a second dataset</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
 </code></pre></div>
 <table>
 <thead>
@@ -3373,7 +3435,7 @@ first. It does what the app's <span class="sps-icon" data-icon="compare" aria-hi
 <tbody>
 <tr>
 <td>pick B</td>
-<td><code>--compare-with PARTICIPANT:TRIAL</code></td>
+<td><code>--compare-participant ID --compare-trial ID</code></td>
 </tr>
 <tr>
 <td>pick each screen of a multipart trial</td>
@@ -3485,7 +3547,7 @@ scanpath's default.</p>
 </tr>
 <tr>
 <td><code>opacity</code></td>
-<td>0.1–1</td>
+<td>0–1</td>
 <td>that scanpath's default</td>
 </tr>
 <tr>
@@ -3522,16 +3584,21 @@ ignores the <code>box_*</code> keys and <code>raw_gaze_color</code>.</p>
 <code>--fixations</code>, and draws the plotted trial's samples under the fixations. With
 <code>--compare-with</code> it covers both scanpaths, each in its scanpath's color.
 <code>--compare-raw-gaze PATH…</code> gives B's samples when B comes from another
-dataset. <code>--animate</code> ignores raw gaze with a warning.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
+dataset. With the bundled demo, <code>--sample-raw-gaze</code> draws the recorded samples
+for the selected reading. <code>--animate</code> ignores raw gaze with a warning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_2_2_Adv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
 </code></pre></div>
+<p>To plot the same reading's pupil area over its recorded clock, use
+<code>--x-field timestamp_ms --y-field pupil_area</code> with <code>--sample-raw-gaze</code>.
+<code>scanpath-studio check --sample</code> includes the raw table and reports how many
+samples have missing positions.</p>
 <p>When <code>--raw-gaze</code> is the only input, it is the dataset. <code>--list-trials</code> lists
 its trials, and <code>render</code> draws the chosen trial's samples as recorded. No
 fixations are detected from them, so <code>--animate</code> and <code>--compare-with</code> exit
 with an error that says so.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--list-trials
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>-o<span class="w"> </span>samples.png
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--list-trials
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>-o<span class="w"> </span>samples.png
 </code></pre></div>
 <h3 id="multipart-trials-and-many-trials">Multipart trials and many trials<a class="headerlink" href="#multipart-trials-and-many-trials" title="Permanent link">&para;</a></h3>
 <p><code>render</code> writes one trial per run. For many figures, use the
@@ -3542,12 +3609,12 @@ with an error that says so.</p>
 <code>--screens Title,Paragraph</code> writes only the screens named, each still numbered
 by its place in the trial. When your tables have no screen column,
 <code>--trial-parts-manifest manifest.json</code> assigns source rows to screens.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
 </code></pre></div>
 <h3 id="when-a-column-isnt-recognized">When a column isn't recognized<a class="headerlink" href="#when-a-column-isnt-recognized" title="Permanent link">&para;</a></h3>
 <p>Column names are auto-detected (EyeLink, Tobii, SMI, Pupil Labs, Gazepoint and
@@ -3556,10 +3623,10 @@ could not find, the names it looked for, the columns your table has, and a
 mapping to start from. Pass that mapping back as JSON, inline or as a path to
 a <code>.json</code> file, with <code>--word-schema</code> (the <code>--words</code> table) and/or
 <code>--fix-schema</code> (the <code>--fixations</code> table). <code>check</code> takes the same two flags.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--word-schema<span class="w"> </span><span class="s1">'{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="s1">                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--fix-schema<span class="w"> </span>fix_schema.json<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--word-schema<span class="w"> </span><span class="s1">'{"trial": "TRIAL_LABEL", "word_id": "IA_ID", "text": "IA_LABEL",</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="s1">                  "left": "IA_LEFT", "right": "IA_RIGHT", "top": "IA_TOP", "bottom": "IA_BOTTOM"}'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--fix-schema<span class="w"> </span>fix_schema.json<span class="w"> </span>-o<span class="w"> </span>scanpath.html
 </code></pre></div>
 <p>A mapping replaces auto-detection for that table, so it has to name every
 required field, not only the one that failed. It is the same dict
@@ -3638,7 +3705,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--animate</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Render the animated replay instead of the static figure (HTML only).</td>
+<td>Create a replay as interactive HTML or an editable publication project.</td>
 </tr>
 </tbody>
 </table>
@@ -3866,7 +3933,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--fixation-opacity</code></td>
 <td><code>O</code></td>
 <td>—</td>
-<td>Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).</td>
+<td>Opacity of fixation markers, 0–1 (default: 0.7).</td>
 </tr>
 <tr>
 <td><code>--fixation-outline-width</code></td>
@@ -3998,12 +4065,6 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Saccade line width in px, 0.5–10 (default: 2).</td>
 </tr>
 <tr>
-<td><code>--saccade-opacity</code></td>
-<td><code>O</code></td>
-<td>—</td>
-<td>Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). In a comparison, both scanpaths share it.</td>
-</tr>
-<tr>
 <td><code>--saccade-arrow-size</code></td>
 <td><code>PX</code></td>
 <td>—</td>
@@ -4032,6 +4093,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>switch</td>
 <td>—</td>
 <td>Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc).</td>
+</tr>
+<tr>
+<td><code>--saccade-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Opacity of saccade lines and arrows, 0–1 (default: 1).</td>
 </tr>
 </tbody>
 </table>
@@ -4062,9 +4129,9 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </tr>
 <tr>
 <td><code>--critical-span-style</code></td>
-<td><code>mark-text</code>, <code>mark-border</code>, <code>none</code></td>
+<td><code>mark-text</code>, <code>mark-border</code>, <code>underline</code>, <code>none</code></td>
 <td>—</td>
-<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither (default: mark-text).</td>
+<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, underline underlines each word, none hides the marks (default: mark-text).</td>
 </tr>
 <tr>
 <td><code>--stimulus-image</code></td>
@@ -4119,12 +4186,6 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>COLOR</code></td>
 <td>—</td>
 <td>Box color under <code>--critical-span-style</code> mark-border (default: #000000).</td>
-</tr>
-<tr>
-<td><code>--background-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Plot background color (default: #ffffff).</td>
 </tr>
 <tr>
 <td><code>--line-spacing</code></td>
@@ -4349,7 +4410,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--sample-raw-gaze</code></td>
 <td>switch</td>
 <td>—</td>
-<td>With <code>--sample</code>: draw the bundled demo's raw gaze. It is synthesized, and covers one trial only.</td>
+<td>With <code>--sample</code>, draw the recorded EyeLink gaze samples for the selected reading.</td>
 </tr>
 <tr>
 <td><code>--raw-gaze-schema</code></td>
@@ -4411,7 +4472,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </tbody>
 </table>
 </div>
-<h3 id="flags-figure-canvas">Figure &amp; canvas<a class="headerlink" href="#flags-figure-canvas" title="Permanent link">&para;</a></h3>
+<h3 id="flags-figure-canvas">Screen &amp; framing<a class="headerlink" href="#flags-figure-canvas" title="Permanent link">&para;</a></h3>
 <div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
@@ -4429,6 +4490,51 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>—</td>
 <td>Screen size in px, e.g. 2560x1440 (default: 2560x1440 for <code>--sample</code> and <code>--onestop</code>, 1680x1050 for <code>--potec</code>, 1200x800 for <code>--authoring</code>, otherwise estimated from the data).</td>
 </tr>
+<tr>
+<td><code>--background-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Plot background color (default: #ffffff).</td>
+</tr>
+<tr>
+<td><code>--no-plot-frame</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Leave out the border around the plot area.</td>
+</tr>
+<tr>
+<td><code>--plot-frame-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of the border around the plot area (default: #000000).</td>
+</tr>
+<tr>
+<td><code>--crop-to-data</code><br><code>--no-full-monitor</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Frame the plot on the data instead of the whole <code>--canvas</code> screen (the app's Crop to data).</td>
+</tr>
+<tr>
+<td><code>--crop-margin</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-axes">Axes<a class="headerlink" href="#flags-axes" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
 <tr>
 <td><code>--coordinate-grid</code></td>
 <td>switch</td>
@@ -4448,40 +4554,16 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Size of the coordinate grid's labels, 6–36 px (default: 18).</td>
 </tr>
 <tr>
-<td><code>--no-plot-frame</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Leave out the border around the plot area.</td>
-</tr>
-<tr>
-<td><code>--plot-frame-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Color of the border around the plot area (default: #000000).</td>
-</tr>
-<tr>
 <td><code>--x-field</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
-<td>Horizontal axis of the static chart (default: x). Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.</td>
+<td>Horizontal axis of the static chart (default: x). Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter.</td>
 </tr>
 <tr>
 <td><code>--y-field</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
 <td>Vertical axis of the static chart (default: y). Takes the same fields as <code>--x-field</code>.</td>
-</tr>
-<tr>
-<td><code>--crop-to-data</code><br><code>--no-full-monitor</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Frame the plot on the data instead of the whole <code>--canvas</code> screen (the app's Crop to data).</td>
-</tr>
-<tr>
-<td><code>--crop-margin</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -4555,7 +4637,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </tbody>
 </table>
 </div>
-<h3 id="flags-hover">Hover<a class="headerlink" href="#flags-hover" title="Permanent link">&para;</a></h3>
+<h3 id="flags-hover">Hover fields<a class="headerlink" href="#flags-hover" title="Permanent link">&para;</a></h3>
 <div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
@@ -4571,13 +4653,25 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--word-hover-fields</code></td>
 <td><code>FIELDS</code></td>
 <td>—</td>
-<td>Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).</td>
+<td>Comma-separated word columns to show on hover, in order.</td>
+</tr>
+<tr>
+<td><code>--word-hover-fields-json</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Ordered JSON array of word column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty.</td>
 </tr>
 <tr>
 <td><code>--fixation-hover-fields</code></td>
 <td><code>FIELDS</code></td>
 <td>—</td>
-<td>Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye).</td>
+<td>Comma-separated fixation columns to show on hover, in order.</td>
+</tr>
+<tr>
+<td><code>--fixation-hover-fields-json</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Ordered JSON array of fixation column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty.</td>
 </tr>
 <tr>
 <td><code>--word-hover-measure</code></td>
@@ -4625,10 +4719,10 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Place one legend. Repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE]. KIND is compare (Compare (A/B)), saccades (Saccade types), colors (Fixation colors), size-key (Fixation sizes) or highlight (Text highlight). POSITION is auto, or SPOT-outside or SPOT-inside, with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right. Outside grows the figure, and left and right run down the side. ARRANGEMENT is stacked or side-by-side, and SIZE the text size in px. E.g. <code>--legend</code> saccades=right-outside,stacked,14. Each legend's switch still decides whether it is drawn.</td>
 </tr>
 <tr>
-<td><code>--no-duration-size-legend</code></td>
+<td><code>--duration-size-legend</code><br><code>--no-duration-size-legend</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Hide the Fixation sizes legend, reference circles labeled in ms. It is drawn when <code>--marker-size-scale</code> is sqrt, linear or log.</td>
+<td>Show reference circles labeled in milliseconds for the sqrt, linear or log fixation size scale (off by default).</td>
 </tr>
 </tbody>
 </table>
@@ -4706,13 +4800,19 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--width-mm</code></td>
 <td><code>MM</code></td>
 <td>—</td>
-<td>Print width of a PNG in mm, drawn at <code>--dpi</code> (replaces <code>--scale</code>).</td>
+<td>Width in mm for a PNG or a publication project.</td>
 </tr>
 <tr>
 <td><code>--width-in</code></td>
 <td><code>IN</code></td>
 <td>—</td>
-<td>Print width of a PNG in inches, drawn at <code>--dpi</code>.</td>
+<td>Width in inches for a PNG or a publication project.</td>
+</tr>
+<tr>
+<td><code>--proof-width-mm</code></td>
+<td><code>MM</code></td>
+<td>—</td>
+<td>Total manuscript width of a side-by-side or stacked comparison SVG in mm.</td>
 </tr>
 <tr>
 <td><code>--dpi</code></td>
@@ -4757,7 +4857,19 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--compare-with</code></td>
 <td><code>PARTICIPANT:TRIAL</code></td>
 <td>—</td>
-<td>The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the loaded dataset unless <code>--compare-words</code> / <code>--compare-fixations</code> load a second one.</td>
+<td>The second scanpath, B, as PARTICIPANT:TRIAL. The last colon separates the IDs. Use <code>--compare-participant</code> and <code>--compare-trial</code> when the trial ID contains a colon. B comes from the loaded dataset unless <code>--compare-words</code> / <code>--compare-fixations</code> load a second one.</td>
+</tr>
+<tr>
+<td><code>--compare-participant</code></td>
+<td><code>ID</code></td>
+<td>—</td>
+<td>B's participant ID, paired with <code>--compare-trial</code>.</td>
+</tr>
+<tr>
+<td><code>--compare-trial</code></td>
+<td><code>ID</code></td>
+<td>—</td>
+<td>B's trial ID, paired with <code>--compare-participant</code>.</td>
 </tr>
 <tr>
 <td><code>--compare-screen</code></td>
@@ -4799,13 +4911,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--style-a</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
+<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
 </tr>
 <tr>
 <td><code>--style-b</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
+<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
 </tr>
 <tr>
 <td><code>--compare-fixation-flag</code></td>
@@ -4881,7 +4993,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <p><code>corpus</code> renders a styled corpus figure from a tidy CSV you already have, as
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_corpus_figure&lt;/span&gt;" href="../api/#scanpath_studio.api.plot_corpus_figure"><code>plot_corpus_figure</code></a> does. For
 <code>--kind profile</code> the CSV needs <code>word_id</code> and <code>value</code> columns.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
+</code></pre></div>
+<p>To draw an overview CSV, pass its grouping column with <code>--series-col</code>. For
+example, this draws participant means and their observed ranges from a summary
+whose ID column is named <code>reader</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>overview.csv<span class="w"> </span>--kind<span class="w"> </span>overview<span class="w"> </span>--series-col<span class="w"> </span>reader<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span>--measure-label<span class="w"> </span><span class="s2">"Total fixation duration (ms)"</span><span class="w"> </span>-o<span class="w"> </span>overview.html
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -4898,13 +5016,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--input</code></td>
 <td><code>PATH</code></td>
 <td>required</td>
-<td>The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff.</td>
+<td>The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. Overview reads the group column (<code>--series-col</code>), the mean (<code>--value-col</code>), lo and hi.</td>
 </tr>
 <tr>
 <td><code>--kind</code></td>
-<td><code>profile</code>, <code>distribution</code>, <code>difference</code></td>
+<td><code>overview</code>, <code>profile</code>, <code>distribution</code>, <code>difference</code></td>
 <td>required</td>
-<td>A per-word profile, a distribution, or a difference profile.</td>
+<td>A corpus overview, per-word profile, distribution or difference profile.</td>
 </tr>
 <tr>
 <td><code>-o</code><br><code>--output</code></td>
@@ -4922,7 +5040,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--series-col</code></td>
 <td><code>SERIES_COL</code></td>
 <td><code>series</code></td>
-<td>Column naming the overlaid series, when present (default: series).</td>
+<td>Group ID for an overview, or column naming the overlaid series (default: series).</td>
 </tr>
 <tr>
 <td><code>--value-col</code></td>
@@ -4931,10 +5049,16 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>The value column (default: value).</td>
 </tr>
 <tr>
+<td><code>--percent</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Show overview values and bounds stored as proportions (0–1) as percentages.</td>
+</tr>
+<tr>
 <td><code>--primary-color</code></td>
 <td><code>PRIMARY_COLOR</code></td>
-<td><code>#1f77b4</code></td>
-<td>First series color (default: #1f77b4).</td>
+<td>—</td>
+<td>First series color (overview: #0072B2, other figures: #1f77b4).</td>
 </tr>
 <tr>
 <td><code>--secondary-color</code></td>
@@ -4946,12 +5070,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </table>
 </div>
 <h2 id="recipe">recipe<a class="headerlink" href="#recipe" title="Permanent link">&para;</a></h2>
-<p>Recreate a <strong>Per text → Cohort profile</strong> CSV from its downloaded JSON recipe
-and source tables. Recipes include the original column mappings. If raw gaze
+<p>Recreate an <strong>Overview</strong>, <strong>Cohort profile</strong> or <strong>Difference word profile</strong> CSV
+from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze
 supplied the text IDs used by a metadata filter, pass its files with <code>--raw-gaze</code>.
 The command identifies any missing metadata or annotation input and verifies
 the regenerated CSV against the checksum in the recipe when available.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv
 </code></pre></div>
 <p><strong>Positional arguments</strong></p>
 <div class="sps-reference-table sps-flag-table">
@@ -4969,7 +5093,7 @@ the regenerated CSV against the checksum in the recipe when available.</p>
 <td></td>
 <td><code>RECIPE.json</code></td>
 <td>required</td>
-<td>Cohort profile recipe from Corpus Analysis.</td>
+<td>Analysis recipe downloaded from Corpus Analysis.</td>
 </tr>
 </tbody>
 </table>
@@ -5083,9 +5207,13 @@ the app does with them. <code>check</code> changes nothing and exits 0 whatever 
 <code>--json</code> prints the table
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_data_health&lt;/span&gt;" href="../api/#scanpath_studio.api.check_data_health"><code>check_data_health</code></a> returns. In example rows,
 missing values are <code>null</code> and infinite values are the strings <code>"Infinity"</code> or
-<code>"-Infinity"</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
+<code>"-Infinity"</code>. To save a QC record, use <code>--json-report</code>. Its <code>tables</code> object
+counts the source rows read, the rows with usable identifiers, and the
+normalized rows checked. Stimulus words shared across readings can expand into
+more checked rows. The report distinguishes empty tables, blank rows and rows
+with missing participant or trial IDs. Its <code>findings</code> list matches <code>--json</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5141,6 +5269,12 @@ missing values are <code>null</code> and infinite values are the strings <code>"
 <td>Print the findings as JSON (the rows api.check_data_health returns).</td>
 </tr>
 <tr>
+<td><code>--json-report</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Include input, eligible and checked row counts beside the findings as JSON.</td>
+</tr>
+<tr>
 <td><code>--word-schema</code></td>
 <td><code>JSON</code></td>
 <td>—</td>
@@ -5166,10 +5300,10 @@ missing values are <code>null</code> and infinite values are the strings <code>"
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5203,8 +5337,7 @@ mappings, view settings, saved designs, metadata tables and annotations.
 </tbody>
 </table>
 </div>
-<p>The same information is at the foot of the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data
-Management</strong> page, under <strong><span class="sps-icon" data-icon="history" aria-hidden="true"></span> Saved on this computer</strong>. A
+<p>Open <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management → Saved work → Your session</strong> to see the same information. A
 running app writes a new copy at its next change, so clear the cache with the
 app closed.</p>
 <table>
@@ -5234,8 +5367,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5264,16 +5397,16 @@ Only <code>--check</code> uses the network.</p>
 </table>
 </div>
 <p>Between releases the version names the build: <code>0.35.0.post3+g8f18219</code> is three
-commits after 0.35.0, at commit <code>8f18219</code>. The same check is
-<strong><span class="sps-icon" data-icon="help" aria-hidden="true"></span> Help → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> About → <span class="sps-icon" data-icon="update" aria-hidden="true"></span> Check for
-updates</strong> in the app, and
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_for_updates&lt;/span&gt;" href="../api/#scanpath_studio.api.check_for_updates"><code>check_for_updates</code></a> in Python.</p>
+commits after 0.35.0, at commit <code>8f18219</code>. In a local install or the desktop
+app, open <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></span> Help → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> About &amp; citation → App details →
+:material:update: Check for updates</strong>. In Python, call
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_for_updates&lt;/span&gt;" href="../api/#scanpath_studio.api.check_for_updates"><code>check_for_updates</code></a>.</p>
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>

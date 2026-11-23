@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.47.0</strong>
+      <strong>Stable documentation &middot; v0.48.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2405,21 +2405,33 @@
 
 
 <h1 id="compare-groups-or-conditions">Compare groups or conditions<a class="headerlink" href="#compare-groups-or-conditions" title="Permanent link">&para;</a></h1>
-<p>Compare a reading measure between two groups of participants or two conditions.</p>
+<p>To compare two reading conditions in the bundled demo, use the advanced
+(<strong>Adv</strong>) and elementary (<strong>Ele</strong>) versions of its texts.</p>
 <ol>
 <li><a href="../#before-you-start">Select the trials</a>, then open
-   <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> → <strong>Groups</strong>.</li>
-<li>Turn on <strong>Compare a second group</strong>.</li>
-<li>Choose <strong>Split a field</strong> to form the groups from the values of one column,
-   or <strong>Independent filter sets</strong> to define each group by a separate set of filters.</li>
-<li>In <strong>View</strong>, choose <strong>Group means &amp; difference</strong> and a measure. Check the
-   number of participants in each group and whether any participant is in
-   both. The <strong>Standardized difference</strong> (Cohen's d) is shown only when the
-   groups share no participant.</li>
+   <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> and select <strong>Groups</strong>. Choose a measure.</li>
+<li>In <strong>Edit groups</strong>, use <strong>Split a field</strong> and choose <code>difficulty_level</code>. Select <strong>Adv</strong> for
+   Group A and <strong>Ele</strong> for Group B. Each group needs at least one value.
+   To choose participants, texts or conditions separately for each group,
+   use <strong>Independent filter sets</strong>. A group with no filters includes all
+   selected trials.</li>
+<li>Read <strong>Difference (A − B)</strong>. For total fixation duration, a difference of
+   20 ms means that Group A spent 20 ms longer per word on average. The
+   counts show how many participants contributed a value to each mean.
+   For a rate, a change from 30% in B to 40% in A is a difference of
+   10 percentage points.</li>
 <li><a href="../#keep-the-result">Download the table and recipe</a>.</li>
 </ol>
-<p>The comparison provides a descriptive summary; it does not run significance tests.
-For a recorded example, see <a href="../analyze-one-text/">Analyze one text</a>.</p>
+<p>For a different comparison, open <strong>Chart settings</strong> and choose a <strong>View</strong>. To
+explore Group A on its own, turn off <strong>Compare two groups</strong>.</p>
+<p>For each participant, <strong>Group means &amp; difference</strong> averages the words with a
+recorded value across all their selected trials. A trial with more measured
+words has more weight in that participant's mean. The group mean then gives
+each participant equal weight. In <strong>Participants</strong>, each reading contributes one
+mean to the summary, so the two views can give different values.</p>
+<p>A participant who read both conditions contributes to both group means. The
+<strong>Standardized difference</strong> (Cohen's d) is available only for groups with no
+participants in common.</p>
 
 
 

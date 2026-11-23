@@ -2,8 +2,8 @@
 
 Mean total fixation duration per word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
 
-1. Open your data in the **Corpus Analysis** view, on the **Per participant** tab.
-1. Choose a participant, and in **View** choose **Per-trial trend**.
+1. Open your data in the **Corpus Analysis** view and select **Participants**.
+1. Choose a participant and select **Open participant profile**. In **Chart settings**, set **View** to **Per-trial trend**.
 1. Choose a reading measure your data provides, and **Mean** in **Aggregate**. The horizontal axis is the trial order from the data’s `trial_index` or `TRIAL_INDEX` column. Without one, the app orders the trials by fixation time, or as listed.
 
 [Follow the progression tutorial](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
@@ -24,7 +24,7 @@ from scanpath_studio.data import derive_trial_index
 from scanpath_studio.plots import make_trend_figure
 
 words, fixations = sps.load_sample_data(names="canonical")
-reader = words[words["participant_id"] == "l37_1129"].copy()
+reader = words[words["participant_id"] == "l37_273"].copy()
 reader["trial_index"] = derive_trial_index(reader)
 trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
 fig = make_trend_figure(

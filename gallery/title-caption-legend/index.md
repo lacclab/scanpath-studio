@@ -2,21 +2,21 @@
 
 A figure ready for a slide or a paper. It has a title above the plot, a caption below it, the **Saccade types** legend down the right side and the **Fixation sizes** legend below the plot.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
-1. In **Saccades** ▾ → **Line** → **Color**, choose **By type**.
-1. In **Figure & canvas** ▾ → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Set each one's **Size**, here 34 px and 20 px.
-1. Under **Legends**, set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
-1. Under **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 60 px.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
+1. In **Saccades** → **Color**, choose **By type**.
+1. In **Figure** → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Under **Text size and color**, set each size, here 34 px and 20 px.
+1. Under **Legends**, tick **Show** for **Fixation sizes**. Open **Legend position and style** and set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
+1. Under **Screen & framing**, tick **Crop to data**. Under **Margins and border color**, untick the automatic margin and enter 60 px.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele \
   --saccade-color-by-type \
   --title "One participant, one article" --title-size 34 \
   --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
-  --legend saccades=right-outside,,18 --legend size-key=bottom-right-outside,,18 \
+  --duration-size-legend --legend saccades=right-outside,,18 --legend size-key=bottom-right-outside,,18 \
   --crop-to-data --crop-margin 60 \
   --highlight-column '' \
   -o title-caption-legend.html
@@ -26,7 +26,7 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+pid, tid = "l37_273", "l37_273_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
@@ -37,6 +37,7 @@ fig = sps.plot_scanpath(
     title_font_size=34,
     caption="Marker size: fixation duration. Line color: saccade type.",
     caption_font_size=20,
+    duration_size_legend=True,
     legend_layout={
         "saccades": {"position": "right-outside", "size": 18},
         "size_key": {"position": "bottom-right-outside", "size": 18},

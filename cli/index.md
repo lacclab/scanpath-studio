@@ -2,18 +2,31 @@
 
 `scanpath-studio` launches the app. Use these commands to create figures, check data and manage saved work without opening the app:
 
-| Command                                     | What it does                                            |
-| ------------------------------------------- | ------------------------------------------------------- |
-| [`scanpath-studio`](#launch-the-app), `run` | Launch the app                                          |
-| [`render`](#render)                         | Write one trial's scanpath, heatmap or replay to a file |
-| [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have |
-| [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe     |
-| [`check`](#check)                           | Run the Data checks on your tables                      |
-| [`cache`](#cache)                           | Show or clear the recovery cache                        |
-| [`version`](#version)                       | Show the build, and whether a newer release is out      |
-| [`cite`](#cite)                             | Print how to cite Scanpath Studio                       |
+| Command                                     | What it does                                                 |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| [`scanpath-studio`](#launch-the-app), `run` | Launch the app                                               |
+| [`render`](#render)                         | Write one trial's scanpath, heatmap or replay to a file      |
+| [`publication`](#publication)               | Export a saved figure recipe or open it as an offline editor |
+| [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
+| [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
+| [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`cache`](#cache)                           | Show or clear the recovery cache                             |
+| [`version`](#version)                       | Show the build, and whether a newer release is out           |
+| [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version. If you mistype a command, the CLI suggests the closest match.
+
+## Publication
+
+Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
+
+```
+scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio publication reading.publication.json -o reading.html
+scanpath-studio publication figure-2.json -o figure-2.pdf
+```
+
+Choose SVG, PDF, PNG or TIFF for artwork, or MP4 for a selected replay clip. Rendering these files requires a Chromium browser. The HTML editor is self-contained and can be used offline.
 
 ## Launch the app
 
@@ -70,7 +83,7 @@ The Python API loads the same datasets with load_potec and load_onestop.
 | animate                          | `--animate`, optionally `--playback-speed X`. The replay uses every styling flag it can draw and names the rest in a warning                                                                                                                          |
 | set the screen size              | `--canvas WIDTHxHEIGHT`. `--crop-to-data` frames the data instead of the whole screen, with `--crop-margin PX` around it (default: 5% of the data's extent, at least 20 px)                                                                           |
 | color fixations                  | `--color-by FIELD`, including a column of your own once `--keep-columns COLUMN…` carries it through loading                                                                                                                                           |
-| size fixations by duration       | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend`                                                           |
+| size fixations by duration       | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--duration-size-legend` (show the optional size key)                                 |
 | draw only part of a trial        | `--fix-index-range START:END` (1-based, both inclusive; `--animate` and `--compare-with` honor it too)                                                                                                                                                |
 | draw the stimulus                | `--stimulus-image PATH` for one image. `--show-stimulus-image` draws each trial's stimulus image, named in the `image_path` column (`--sample` ships its images). `--image-root DIR --image-pattern '{text_id}.png'` fills `image_path` from a folder |
 | smooth the heatmap               | `--heatmap-style smoothed --heatmap-sigma 20` (σ in px; leave it out for an automatic σ)                                                                                                                                                              |
@@ -80,28 +93,30 @@ The Python API loads the same datasets with load_potec and load_onestop.
 | write each layer to its own file | `--separable-layers`                                                                                                                                                                                                                                  |
 | print the equivalent code        | `--print-code python` (or `cli` / `both`), plus `--print-code-explicit`                                                                                                                                                                               |
 
+Hover fields appear in the order you list them. For a column named `pupil, left`, preserve the comma with `--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'`. Use `--fixation-hover-fields-json '[]'` to clear that selection. The Words layer accepts `--word-hover-fields-json` in the same way.
+
 ### Compare two scanpaths
 
-`--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the first. It does what the app's **Compare** does.
+`--compare-participant ID --compare-trial ID` selects the second reading, B. For example, `--compare-participant B --compare-trial 'round:2'` preserves the colon in the trial ID. The shorthand `--compare-with PARTICIPANT:TRIAL` splits at the last colon.
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -116,7 +131,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 | Goal                                                       | Flags                                                                                                                |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| pick B                                                     | `--compare-with PARTICIPANT:TRIAL`                                                                                   |
+| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                        |
 | pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                              |
 | arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                |
 | choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                     |
@@ -146,7 +161,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | `saccade_style`                        | `solid`, `dash`, `dot` or `dashdot`                                                         | that scanpath's default                              |
 | `saccade_width`                        | px                                                                                          | that scanpath's default                              |
 | `marker_size_range`                    | `MIN:MAX`                                                                                   | that scanpath's default                              |
-| `opacity`                              | 0.1–1                                                                                       | that scanpath's default                              |
+| `opacity`                              | 0–1                                                                                         | that scanpath's default                              |
 | `hollow`                               | `true` or `false`                                                                           | that scanpath's default                              |
 
 The `--animate` replay draws one set of word boxes and no raw gaze, so it ignores the `box_*` keys and `raw_gaze_color`.
@@ -160,12 +175,14 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 
 ### Raw gaze
 
-`--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. `--animate` ignores raw gaze with a warning.
+`--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
+
+To plot the same reading's pupil area over its recorded clock, use `--x-field timestamp_ms --y-field pupil_area` with `--sample-raw-gaze`. `scanpath-studio check --sample` includes the raw table and reports how many samples have missing positions.
 
 When `--raw-gaze` is the only input, it is the dataset. `--list-trials` lists its trials, and `render` draws the chosen trial's samples as recorded. No fixations are detected from them, so `--animate` and `--compare-with` exit with an error that says so.
 
@@ -219,7 +236,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--screens`           | `ID[,ID...]`          | —         | Like `--all-screens`, for only these screens: comma-separated screen IDs, e.g. Title,Paragraph. See `--list-parts`.                                    |
 | `--screen-transition` | `instant`, `recorded` | `instant` | With `--all-screens` `--animate`: record no delay between screens (instant) or the recorded one (recorded) in each file's metadata (default: instant). |
 | `-o` `--output`       | `PATH`                | —         | Output file. Its extension sets the format: .html, .png, .svg or .pdf.                                                                                 |
-| `--animate`           | switch                | —         | Render the animated replay instead of the static figure (HTML only).                                                                                   |
+| `--animate`           | switch                | —         | Create a replay as interactive HTML or an editable publication project.                                                                                |
 
 ### Input
 
@@ -262,7 +279,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--marker-size-range`               | `MIN MAX`                                                                              | —       | Smallest and largest fixation marker size in px, e.g. 4 12 (default: 8 24). A smaller range suits thumbnails.                                                                                                                                                                                                               |
 | `--marker-size-scale`               | `sqrt`, `linear`, `log`, `relative`                                                    | —       | How duration sets marker size (default: sqrt). sqrt, linear and log map `--marker-duration-range` onto `--marker-size-range`, so a duration gets the same size in every trial, comparison and replay. With sqrt, marker area grows with duration. relative stretches each figure from its shortest to its longest fixation. |
 | `--marker-duration-range`           | `LO HI`                                                                                | —       | The durations in ms that get the smallest and largest marker (default: 50 600). Shorter and longer fixations are clamped to them. Not used by `--marker-size-scale` relative.                                                                                                                                               |
-| `--fixation-opacity`                | `O`                                                                                    | —       | Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).                                                                                                                                                                                                                                     |
+| `--fixation-opacity`                | `O`                                                                                    | —       | Opacity of fixation markers, 0–1 (default: 0.7).                                                                                                                                                                                                                                                                            |
 | `--fixation-outline-width`          | `PX`                                                                                   | —       | Outline width around each filled fixation marker, 0–5 px; 0 draws none (default: 0.5).                                                                                                                                                                                                                                      |
 | `--fixation-outline-color`          | `COLOR`                                                                                | —       | Color of that outline (default: #111111).                                                                                                                                                                                                                                                                                   |
 | `--hollow-fixations`                | switch                                                                                 | —       | Draw the fixations as outlines instead of filled markers.                                                                                                                                                                                                                                                                   |
@@ -287,34 +304,33 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--saccade-color`              | `COLOR`                           | —       | Saccade line and arrow color, as hex or a CSS name (default: #CC79A7).                                                                                                                                                                                                           |
 | `--saccade-style`              | `solid`, `dash`, `dot`, `dashdot` | —       | Saccade line dash style (default: solid).                                                                                                                                                                                                                                        |
 | `--saccade-width`              | `PX`                              | —       | Saccade line width in px, 0.5–10 (default: 2).                                                                                                                                                                                                                                   |
-| `--saccade-opacity`            | `O`                               | —       | Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). In a comparison, both scanpaths share it.                                                                                                                                                                         |
 | `--saccade-arrow-size`         | `PX`                              | —       | Size of the `--saccade-arrows` arrowheads, 4–40 px (default: 12).                                                                                                                                                                                                                |
 | `--saccade-color-by-type`      | switch                            | —       | Color each saccade by its type: forward, skip, refixation, return sweep or regression (the app's By type).                                                                                                                                                                       |
 | `--saccade-color-by-direction` | switch                            | —       | Color each saccade as forward or regression (the app's Forward / regression).                                                                                                                                                                                                    |
 | `--saccade-type-color`         | `CLASS=COLOR`                     | —       | Set one saccade type's color, e.g. `--saccade-type-color` regression=#000000. Repeatable. Types: forward, skip, refixation, return_sweep, regression. Implies `--saccade-color-by-type`. With `--saccade-color-by-direction`, it sets the forward and regression colors instead. |
 | `--saccade-arcs`               | switch                            | —       | Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc).                                                                                                                                                                                                   |
+| `--saccade-opacity`            | `O`                               | —       | Opacity of saccade lines and arrows, 0–1 (default: 1).                                                                                                                                                                                                                           |
 
 ### Stimulus
 
-| Option                     | Value                              | Default | Description                                                                                                                                                                                                                         |
-| -------------------------- | ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--no-text` `--no-labels`  | switch                             | —       | Hide the stimulus text.                                                                                                                                                                                                             |
-| `--highlight-column`       | `COLUMN`                           | —       | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
-| `--critical-span-style`    | `mark-text`, `mark-border`, `none` | —       | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither (default: mark-text).                                                                                  |
-| `--stimulus-image`         | `PATH`                             | —       | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
-| `--stimulus-image-size`    | `WxH`                              | —       | Stimulus image size in px, e.g. 1310x991 (default: the PNG's pixel size, else the canvas). Use with `--stimulus-image`.                                                                                                             |
-| `--stimulus-image-origin`  | `X,Y`                              | —       | Top-left corner of the stimulus image in screen px, e.g. 305,44 (default: 0,0). Use with `--stimulus-image` to line a centered crop up with the fixations.                                                                          |
-| `--stimulus-image-opacity` | `O`                                | —       | Stimulus image opacity, 0.1–1.0 (default: 1.0 = opaque). Lower it so the fixations, saccades and word boxes stand out on a busy image.                                                                                              |
-| `--show-stimulus-image`    | switch                             | —       | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
-| `--text-color`             | `COLOR`                            | —       | Stimulus text color (default: #000000).                                                                                                                                                                                             |
-| `--redact-text`            | switch                             | —       | Replace each word with a rounded block in the text color and hide its text in tooltips. Preserves the text layout while concealing the words (the app's Text → Redact).                                                             |
-| `--highlight-text-color`   | `COLOR`                            | —       | Color of the `--highlight-column` words under `--critical-span-style` mark-text (default: #D55E00).                                                                                                                                 |
-| `--span-border-color`      | `COLOR`                            | —       | Box color under `--critical-span-style` mark-border (default: #000000).                                                                                                                                                             |
-| `--background-color`       | `COLOR`                            | —       | Plot background color (default: #ffffff).                                                                                                                                                                                           |
-| `--line-spacing`           | `N`                                | —       | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N (default: 3, a blank line above and below).                                                                                                     |
-| `--no-scale-text-to-boxes` | switch                             | —       | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
-| `--font-size`              | `PX`                               | `16`    | Base figure font size (default: 16).                                                                                                                                                                                                |
-| `--font-family`            | `NAME`                             | —       | Font for all figure text (default: monospace).                                                                                                                                                                                      |
+| Option                     | Value                                           | Default | Description                                                                                                                                                                                                                         |
+| -------------------------- | ----------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--no-text` `--no-labels`  | switch                                          | —       | Hide the stimulus text.                                                                                                                                                                                                             |
+| `--highlight-column`       | `COLUMN`                                        | —       | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
+| `--critical-span-style`    | `mark-text`, `mark-border`, `underline`, `none` | —       | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, underline underlines each word, none hides the marks (default: mark-text).                                                |
+| `--stimulus-image`         | `PATH`                                          | —       | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
+| `--stimulus-image-size`    | `WxH`                                           | —       | Stimulus image size in px, e.g. 1310x991 (default: the PNG's pixel size, else the canvas). Use with `--stimulus-image`.                                                                                                             |
+| `--stimulus-image-origin`  | `X,Y`                                           | —       | Top-left corner of the stimulus image in screen px, e.g. 305,44 (default: 0,0). Use with `--stimulus-image` to line a centered crop up with the fixations.                                                                          |
+| `--stimulus-image-opacity` | `O`                                             | —       | Stimulus image opacity, 0.1–1.0 (default: 1.0 = opaque). Lower it so the fixations, saccades and word boxes stand out on a busy image.                                                                                              |
+| `--show-stimulus-image`    | switch                                          | —       | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
+| `--text-color`             | `COLOR`                                         | —       | Stimulus text color (default: #000000).                                                                                                                                                                                             |
+| `--redact-text`            | switch                                          | —       | Replace each word with a rounded block in the text color and hide its text in tooltips. Preserves the text layout while concealing the words (the app's Text → Redact).                                                             |
+| `--highlight-text-color`   | `COLOR`                                         | —       | Color of the `--highlight-column` words under `--critical-span-style` mark-text (default: #D55E00).                                                                                                                                 |
+| `--span-border-color`      | `COLOR`                                         | —       | Box color under `--critical-span-style` mark-border (default: #000000).                                                                                                                                                             |
+| `--line-spacing`           | `N`                                             | —       | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N (default: 3, a blank line above and below).                                                                                                     |
+| `--no-scale-text-to-boxes` | switch                                          | —       | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
+| `--font-size`              | `PX`                                            | `16`    | Base figure font size (default: 16).                                                                                                                                                                                                |
+| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: monospace).                                                                                                                                                                                      |
 
 ### Word boxes
 
@@ -355,7 +371,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | ------------------------ | ----------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--raw-gaze`             | `PATH [PATH ...]` | —       | The Raw gaze table to draw under the fixations, in the formats `--fixations` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table. Drawn on static figures and `--compare-with` comparisons, where each scanpath's samples take its color, but not with `--animate`. As the only input it is the dataset: its trials are listed and drawn as recorded, and no fixations are detected from the samples. |
 | `--no-raw-gaze`          | switch            | —       | Load the `--raw-gaze` table but hide its layer, like turning off the app's Raw gaze switch. With raw gaze as the only input, the figure then shows no gaze.                                                                                                                                                                                                                                                                                         |
-| `--sample-raw-gaze`      | switch            | —       | With `--sample`: draw the bundled demo's raw gaze. It is synthesized, and covers one trial only.                                                                                                                                                                                                                                                                                                                                                    |
+| `--sample-raw-gaze`      | switch            | —       | With `--sample`, draw the recorded EyeLink gaze samples for the selected reading.                                                                                                                                                                                                                                                                                                                                                                   |
 | `--raw-gaze-schema`      | `JSON`            | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes. Needed only when a column isn't recognized.                                                                                                                                                                                                                                                                                                  |
 | `--raw-gaze-color`       | `COLOR`           | —       | Raw gaze sample color (default: #888888). In a comparison, each scanpath's samples are drawn in its color instead.                                                                                                                                                                                                                                                                                                                                  |
 | `--raw-gaze-marker-size` | `PX`              | —       | Raw gaze sample size, 1–12 px (default: 4).                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -369,20 +385,26 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--fixation-flag`   | `SPEC`      | —       | Highlight or hide one kind of fixation, like the app's Filters & highlights. Repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]. CATEGORY is short, long, oob (outside every word box) or blink. MODE is off, highlight or hide. threshold_ms applies to short and long only. hide removes the fixations from the figure only; measures and exports keep them. E.g. `--fixation-flag` short=hide,threshold_ms=80. |
 | `--saccade-classes` | `CLASSES`   | —       | Draw only these saccade types, comma-separated, e.g. `--saccade-classes` regression,return_sweep. Types: forward, skip, refixation, return_sweep, regression, other (off the text). A hidden type loses its line and its arrow. Default: all.                                                                                                                                                                                                |
 
-### Figure & canvas
+### Screen & framing
 
-| Option                               | Value   | Default | Description                                                                                                                                                                            |
-| ------------------------------------ | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--canvas`                           | `WxH`   | —       | Screen size in px, e.g. 2560x1440 (default: 2560x1440 for `--sample` and `--onestop`, 1680x1050 for `--potec`, 1200x800 for `--authoring`, otherwise estimated from the data).         |
-| `--coordinate-grid`                  | switch  | —       | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                         |
-| `--coordinate-grid-spacing`          | `PX`    | —       | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                              |
-| `--coordinate-grid-font-size`        | `PX`    | —       | Size of the coordinate grid's labels, 6–36 px (default: 18).                                                                                                                           |
-| `--no-plot-frame`                    | switch  | —       | Leave out the border around the plot area.                                                                                                                                             |
-| `--plot-frame-color`                 | `COLOR` | —       | Color of the border around the plot area (default: #000000).                                                                                                                           |
-| `--x-field`                          | `FIELD` | —       | Horizontal axis of the static chart (default: x). Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation. |
-| `--y-field`                          | `FIELD` | —       | Vertical axis of the static chart (default: y). Takes the same fields as `--x-field`.                                                                                                  |
-| `--crop-to-data` `--no-full-monitor` | switch  | —       | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                            |
-| `--crop-margin`                      | `PX`    | —       | The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies `--crop-to-data`.                                            |
+| Option                               | Value   | Default | Description                                                                                                                                                                    |
+| ------------------------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--canvas`                           | `WxH`   | —       | Screen size in px, e.g. 2560x1440 (default: 2560x1440 for `--sample` and `--onestop`, 1680x1050 for `--potec`, 1200x800 for `--authoring`, otherwise estimated from the data). |
+| `--background-color`                 | `COLOR` | —       | Plot background color (default: #ffffff).                                                                                                                                      |
+| `--no-plot-frame`                    | switch  | —       | Leave out the border around the plot area.                                                                                                                                     |
+| `--plot-frame-color`                 | `COLOR` | —       | Color of the border around the plot area (default: #000000).                                                                                                                   |
+| `--crop-to-data` `--no-full-monitor` | switch  | —       | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                    |
+| `--crop-margin`                      | `PX`    | —       | The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies `--crop-to-data`.                                    |
+
+### Axes
+
+| Option                        | Value   | Default | Description                                                                                                                                                                                                                   |
+| ----------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--coordinate-grid`           | switch  | —       | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                                                                |
+| `--coordinate-grid-spacing`   | `PX`    | —       | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                                                     |
+| `--coordinate-grid-font-size` | `PX`    | —       | Size of the coordinate grid's labels, 6–36 px (default: 18).                                                                                                                                                                  |
+| `--x-field`                   | `FIELD` | —       | Horizontal axis of the static chart (default: x). Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. |
+| `--y-field`                   | `FIELD` | —       | Vertical axis of the static chart (default: y). Takes the same fields as `--x-field`.                                                                                                                                         |
 
 ### Title & labels
 
@@ -398,23 +420,25 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--caption-color`      | `COLOR`                | —       | Color of the `--caption` text (default: #555555).                                                                                                                                            |
 | `--credit`             | switch                 | —       | A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.                                                                                                         |
 
-### Hover
+### Hover fields
 
-| Option                    | Value    | Default | Description                                                                                   |
-| ------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
-| `--word-hover-fields`     | `FIELDS` | —       | Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).        |
-| `--fixation-hover-fields` | `FIELDS` | —       | Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye). |
-| `--word-hover-measure`    | `FIELD`  | —       | The reading measure a word's hover shows (default: total_fixation_duration_ms; '' for none).  |
+| Option                         | Value    | Default | Description                                                                                                                 |
+| ------------------------------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `--word-hover-fields`          | `FIELDS` | —       | Comma-separated word columns to show on hover, in order.                                                                    |
+| `--word-hover-fields-json`     | `JSON`   | —       | Ordered JSON array of word column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty.     |
+| `--fixation-hover-fields`      | `FIELDS` | —       | Comma-separated fixation columns to show on hover, in order.                                                                |
+| `--fixation-hover-fields-json` | `JSON`   | —       | Ordered JSON array of fixation column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty. |
+| `--word-hover-measure`         | `FIELD`  | —       | The reading measure a word's hover shows (default: total_fixation_duration_ms; '' for none).                                |
 
 ### Legends
 
-| Option                      | Value  | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --------------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--no-highlight-legend`     | switch | —       | Hide the Text highlight legend, which names the highlighted words. The words stay marked. `--legend` highlight=SPEC places it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `--no-color-legend`         | switch | —       | Hide the Fixation colors legend, which lists the categories of a categorical `--color-by` and the highlighted fixations. The markers still draw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `--no-saccade-type-legend`  | switch | —       | With `--saccade-color-by-type`: hide the Saccade types legend. The colored lines still draw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `--legend`                  | `SPEC` | —       | Place one legend. Repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE]. KIND is compare (Compare (A/B)), saccades (Saccade types), colors (Fixation colors), size-key (Fixation sizes) or highlight (Text highlight). POSITION is auto, or SPOT-outside or SPOT-inside, with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right. Outside grows the figure, and left and right run down the side. ARRANGEMENT is stacked or side-by-side, and SIZE the text size in px. E.g. `--legend` saccades=right-outside,stacked,14. Each legend's switch still decides whether it is drawn. |
-| `--no-duration-size-legend` | switch | —       | Hide the Fixation sizes legend, reference circles labeled in ms. It is drawn when `--marker-size-scale` is sqrt, linear or log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Option                                               | Value  | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--no-highlight-legend`                              | switch | —       | Hide the Text highlight legend, which names the highlighted words. The words stay marked. `--legend` highlight=SPEC places it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `--no-color-legend`                                  | switch | —       | Hide the Fixation colors legend, which lists the categories of a categorical `--color-by` and the highlighted fixations. The markers still draw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `--no-saccade-type-legend`                           | switch | —       | With `--saccade-color-by-type`: hide the Saccade types legend. The colored lines still draw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `--legend`                                           | `SPEC` | —       | Place one legend. Repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE]. KIND is compare (Compare (A/B)), saccades (Saccade types), colors (Fixation colors), size-key (Fixation sizes) or highlight (Text highlight). POSITION is auto, or SPOT-outside or SPOT-inside, with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right. Outside grows the figure, and left and right run down the side. ARRANGEMENT is stacked or side-by-side, and SIZE the text size in px. E.g. `--legend` saccades=right-outside,stacked,14. Each legend's switch still decides whether it is drawn. |
+| `--duration-size-legend` `--no-duration-size-legend` | switch | —       | Show reference circles labeled in milliseconds for the sqrt, linear or log fixation size scale (off by default).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Animate
 
@@ -432,8 +456,9 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--width`               | `PX`                    | —       | Image width in px for PNG, SVG and PDF (default: the figure's size). Use with `--height` for fixed-size thumbnails.                                                                                                                                               |
 | `--height`              | `PX`                    | —       | Image height in px for PNG, SVG and PDF (default: the figure's size).                                                                                                                                                                                             |
 | `--scale`               | `X`                     | `2.0`   | Pixel-density multiplier for PNG, SVG and PDF (default: 2.0).                                                                                                                                                                                                     |
-| `--width-mm`            | `MM`                    | —       | Print width of a PNG in mm, drawn at `--dpi` (replaces `--scale`).                                                                                                                                                                                                |
-| `--width-in`            | `IN`                    | —       | Print width of a PNG in inches, drawn at `--dpi`.                                                                                                                                                                                                                 |
+| `--width-mm`            | `MM`                    | —       | Width in mm for a PNG or a publication project.                                                                                                                                                                                                                   |
+| `--width-in`            | `IN`                    | —       | Width in inches for a PNG or a publication project.                                                                                                                                                                                                               |
+| `--proof-width-mm`      | `MM`                    | —       | Total manuscript width of a side-by-side or stacked comparison SVG in mm.                                                                                                                                                                                         |
 | `--dpi`                 | `N`                     | —       | Resolution of `--width-mm` / `--width-in` (default: 300).                                                                                                                                                                                                         |
 | `--separable-layers`    | switch                  | —       | Also write one file per layer (word boxes, fixations, saccades, heatmap, labels, stimulus image) to a `&lt;output&gt;_layers/` folder, to restyle each in Illustrator or Inkscape. The layers line up when stacked. Static image output only: .svg, .pdf or .png. |
 | `--print-code`          | `python`, `cli`, `both` | —       | Print the Python or CLI code that reproduces this figure (python, cli or both), then render as usual. The code sets only the options that differ from the defaults.                                                                                               |
@@ -443,7 +468,9 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 | Option                                   | Value                                | Default     | Description                                                                                                                                                                                                                                                                                                                               |
 | ---------------------------------------- | ------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--compare-with`                         | `PARTICIPANT:TRIAL`                  | —           | The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the loaded dataset unless `--compare-words` / `--compare-fixations` load a second one.                                                                                                                                                                                        |
+| `--compare-with`                         | `PARTICIPANT:TRIAL`                  | —           | The second scanpath, B, as PARTICIPANT:TRIAL. The last colon separates the IDs. Use `--compare-participant` and `--compare-trial` when the trial ID contains a colon. B comes from the loaded dataset unless `--compare-words` / `--compare-fixations` load a second one.                                                                 |
+| `--compare-participant`                  | `ID`                                 | —           | B's participant ID, paired with `--compare-trial`.                                                                                                                                                                                                                                                                                        |
+| `--compare-trial`                        | `ID`                                 | —           | B's trial ID, paired with `--compare-participant`.                                                                                                                                                                                                                                                                                        |
 | `--compare-screen`                       | `SCREEN_ID`                          | —           | B's screen in a multipart trial, looked up in B's trial (default: its first screen). `--screen` picks A's. Each scanpath is drawn from one screen.                                                                                                                                                                                        |
 | `--compare-layout`                       | `overlay`, `side-by-side`, `stacked` | `overlay`   | How A and B are arranged (default: overlay). Across two datasets, overlay needs canvases of the same size. Different canvases are refused, so use side-by-side or stacked for them. Matching canvases that a dataset did not record still overlay, with a warning.                                                                        |
 | `--compare-stimulus`                     | `both`, `a`, `b`                     | `both`      | On an overlay, whose word boxes and text to draw (default: both). Two datasets' word boxes line up only when the text is the same. A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.                                                                                                                           |
@@ -472,20 +499,28 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 ```
 
-| Option              | Value                                   | Default   | Description                                                                                                                                           |
-| ------------------- | --------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--input`           | `PATH`                                  | required  | The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. |
-| `--kind`            | `profile`, `distribution`, `difference` | required  | A per-word profile, a distribution, or a difference profile.                                                                                          |
-| `-o` `--output`     | `PATH`                                  | required  | Output file; any extension save_figure writes (.html, .png, .svg, .pdf).                                                                              |
-| `--measure-label`   | `MEASURE_LABEL`                         | `Value`   | Axis and legend label for the value (default: Value).                                                                                                 |
-| `--series-col`      | `SERIES_COL`                            | `series`  | Column naming the overlaid series, when present (default: series).                                                                                    |
-| `--value-col`       | `VALUE_COL`                             | `value`   | The value column (default: value).                                                                                                                    |
-| `--primary-color`   | `PRIMARY_COLOR`                         | `#1f77b4` | First series color (default: #1f77b4).                                                                                                                |
-| `--secondary-color` | `SECONDARY_COLOR`                       | `#e45756` | Second series color (default: #e45756).                                                                                                               |
+To draw an overview CSV, pass its grouping column with `--series-col`. For example, this draws participant means and their observed ranges from a summary whose ID column is named `reader`.
+
+```
+scanpath-studio corpus --input overview.csv --kind overview --series-col reader \
+  --measure-label "Total fixation duration (ms)" -o overview.html
+```
+
+| Option              | Value                                               | Default   | Description                                                                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--input`           | `PATH`                                              | required  | The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. Overview reads the group column (`--series-col`), the mean (`--value-col`), lo and hi. |
+| `--kind`            | `overview`, `profile`, `distribution`, `difference` | required  | A corpus overview, per-word profile, distribution or difference profile.                                                                                                                                                                     |
+| `-o` `--output`     | `PATH`                                              | required  | Output file; any extension save_figure writes (.html, .png, .svg, .pdf).                                                                                                                                                                     |
+| `--measure-label`   | `MEASURE_LABEL`                                     | `Value`   | Axis and legend label for the value (default: Value).                                                                                                                                                                                        |
+| `--series-col`      | `SERIES_COL`                                        | `series`  | Group ID for an overview, or column naming the overlaid series (default: series).                                                                                                                                                            |
+| `--value-col`       | `VALUE_COL`                                         | `value`   | The value column (default: value).                                                                                                                                                                                                           |
+| `--percent`         | switch                                              | —         | Show overview values and bounds stored as proportions (0–1) as percentages.                                                                                                                                                                  |
+| `--primary-color`   | `PRIMARY_COLOR`                                     | —         | First series color (overview: #0072B2, other figures: #1f77b4).                                                                                                                                                                              |
+| `--secondary-color` | `SECONDARY_COLOR`                                   | `#e45756` | Second series color (default: #e45756).                                                                                                                                                                                                      |
 
 ## recipe
 
-Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`. The command identifies any missing metadata or annotation input and verifies the regenerated CSV against the checksum in the recipe when available.
+Recreate an **Overview**, **Cohort profile** or **Difference word profile** CSV from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`. The command identifies any missing metadata or annotation input and verifies the regenerated CSV against the checksum in the recipe when available.
 
 ```
 scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
@@ -493,9 +528,9 @@ scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixatio
 
 **Positional arguments**
 
-| Option | Value         | Default  | Description                                 |
-| ------ | ------------- | -------- | ------------------------------------------- |
-|        | `RECIPE.json` | required | Cohort profile recipe from Corpus Analysis. |
+| Option | Value         | Default  | Description                                      |
+| ------ | ------------- | -------- | ------------------------------------------------ |
+|        | `RECIPE.json` | required | Analysis recipe downloaded from Corpus Analysis. |
 
 **Options**
 
@@ -524,7 +559,7 @@ scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixatio
 - word boxes with no area, or no finite position or size within a million pixels;
 - screen sizes that are not finite and positive.
 
-Each finding gives the rows and trials affected, a few example rows, and what the app does with them. `check` changes nothing and exits 0 whatever it finds. `--json` prints the table check_data_health returns. In example rows, missing values are `null` and infinite values are the strings `"Infinity"` or `"-Infinity"`.
+Each finding gives the rows and trials affected, a few example rows, and what the app does with them. `check` changes nothing and exits 0 whatever it finds. `--json` prints the table check_data_health returns. In example rows, missing values are `null` and infinite values are the strings `"Infinity"` or `"-Infinity"`. To save a QC record, use `--json-report`. Its `tables` object counts the source rows read, the rows with usable identifiers, and the normalized rows checked. Stimulus words shared across readings can expand into more checked rows. The report distinguishes empty tables, blank rows and rows with missing participant or trial IDs. Its `findings` list matches `--json`.
 
 ```
 scanpath-studio check --words ia.csv --fixations fixations.csv
@@ -540,6 +575,7 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 | `--raw-gaze-schema`      | `JSON`                | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes.                                                                                                                                                                                                                                                              |
 | `--trial-parts-manifest` | `PATH`                | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                             |
 | `--json`                 | switch                | —       | Print the findings as JSON (the rows api.check_data_health returns).                                                                                                                                                                                                                                                                                                |
+| `--json-report`          | switch                | —       | Include input, eligible and checked row counts beside the findings as JSON.                                                                                                                                                                                                                                                                                         |
 | `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
 | `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
 | `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
@@ -561,7 +597,7 @@ scanpath-studio cache --clear    # delete the recovery cache
 | `--json`  | switch | —       | Print the status as JSON.        |
 | `--clear` | switch | —       | Delete the recovery cache.       |
 
-The same information is at the foot of the **Data Management** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear the cache with the app closed.
+Open **Data Management → Saved work → Your session** to see the same information. A running app writes a new copy at its next change, so clear the cache with the app closed.
 
 | To                                       | Use                            |
 | ---------------------------------------- | ------------------------------ |
@@ -585,7 +621,7 @@ scanpath-studio version --check   # …and whether a newer release is out
 | `--check`   | switch    | —       | Ask GitHub for the latest release and say how to update this install. |
 | `--timeout` | `SECONDS` | `5.0`   | How long to wait for GitHub, in seconds (default: 5).                 |
 
-Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. The same check is **Help → About → Check for updates** in the app, and check_for_updates in Python.
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. In a local install or the desktop app, open **Help → About & citation → App details → :material:update: Check for updates**. In Python, call check_for_updates.
 
 ## cite
 

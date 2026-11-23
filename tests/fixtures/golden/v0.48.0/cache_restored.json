@@ -1,4 +1,15 @@
 {
+ "annotations": [
+  {
+   "note": "regression?",
+   "participant_id": "p1",
+   "star": true,
+   "tags": [
+    "Review"
+   ],
+   "trial_id": "t1"
+  }
+ ],
  "frames": {
   "Golden corpus/fixations": {
    "duration_ms": [
@@ -103,82 +114,8 @@
   }
  },
  "state": {
-  "_annotations_by_dataset": {
-   "Golden corpus": {
-    "('p1', 't1')": {
-     "note": "regression?",
-     "star": true,
-     "tags": [
-      "Review"
-     ]
-    }
-   }
-  },
-  "_annotations_store_revision": 1,
   "_dataset_descriptions": {
    "Golden corpus": "A three-word pilot."
-  },
-  "_datasets": {
-   "Golden corpus": {
-    "composite_trial_columns": [],
-    "filter_fields": [],
-    "schemas": {
-     "words": {
-      "trial": "trial_id"
-     }
-    }
-   }
-  },
-  "_local_annotation_base": {
-   "datasets": {},
-   "unassigned": [
-    {
-     "note": "regression?",
-     "participant_id": "p1",
-     "star": true,
-     "tags": [
-      "Review"
-     ],
-     "trial_id": "t1"
-    }
-   ]
-  },
-  "_local_persistence_dataset_entries": {
-   "Golden corpus": {
-    "frames": {
-     "fixations": "datasets/164437d4f5224e4c-fixations.parquet",
-     "raw_gaze": "datasets/164437d4f5224e4c-raw_gaze.parquet",
-     "words": "datasets/164437d4f5224e4c-words.parquet"
-    },
-    "metadata": {
-     "composite_trial_columns": [],
-     "filter_fields": [],
-     "schemas": {
-      "words": {
-       "trial": "trial_id"
-      }
-     }
-    },
-    "rows": {
-     "fixations": 4,
-     "raw_gaze": 3,
-     "words": 3
-    }
-   }
-  },
-  "_local_persistence_manifest_base": "b87747c1fd86ea234eb65fc836738d660ef4d21761e19b037775433e94ef593e",
-  "_local_persistence_manifest_revision": "807b659b971016b8686f9e875c894d139fe283657cfe06a554cc8dc0cfe1fb1d",
-  "_local_persistence_referenced": [
-   "datasets/164437d4f5224e4c-fixations.parquet",
-   "datasets/164437d4f5224e4c-raw_gaze.parquet",
-   "datasets/164437d4f5224e4c-words.parquet"
-  ],
-  "_local_persistence_restored": true,
-  "_local_persistence_restored_payload": {
-   "annotations": 1,
-   "datasets": 1,
-   "designs": 0,
-   "metadata": 0
   },
   "cmp0_hollow": true,
   "cmp1_hollow": true,
@@ -336,7 +273,6 @@
   "global_word_box_fill_opacity": 0.37,
   "global_word_box_line_opacity": 0.37,
   "global_x_field": "x",
-  "global_y_field": "y",
-  "trial_annotations": {}
+  "global_y_field": "y"
  }
 }

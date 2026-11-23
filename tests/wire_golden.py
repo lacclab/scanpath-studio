@@ -19,7 +19,11 @@ import numpy as np
 import pandas as pd
 
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "golden"
-DEMO_SELECTION = {"participant_id": "l42_458", "trial_id": "1_Adv_1"}
+#: A reading of the bundled demo, and a second one for comparisons.
+TRIAL = ("l37_273", "l37_273_2_2_2_Adv")
+OTHER = ("l7_183", "l7_183_2_2_2_Adv")
+#: What opening a link selects, besides the settings `read_link` covers.
+SELECTION_KEYS = ("data_source_choice", "single_participant", "single_trial_id")
 
 
 class FakeSt:
@@ -160,9 +164,23 @@ def write_link(state: Mapping[str, Any], data_choice: str | None = None) -> str:
 
     with fake_streamlit() as fake:
         fake.session_state.update(state)
-        fake.session_state["_share_selection"] = dict(DEMO_SELECTION)
+        fake.session_state["_share_selection"] = {
+            "participant_id": TRIAL[0],
+            "trial_id": TRIAL[1],
+        }
         query, _ = url_state._build_share_query(data_choice or DEMO_CHOICE)
     return query
+
+
+def open_link_in_app(query: str) -> dict[str, Any]:
+    """The dataset, reading and settings the app shows after opening `query`."""
+    at = _app(query)
+    at.run()  # the rerun the next click would cause
+    assert not at.exception, at.exception
+    keys = (*SELECTION_KEYS, *settings_keys())
+    return snapshot(
+        {key: at.session_state[key] for key in keys if key in at.session_state}
+    )
 
 
 def read_link(query: str) -> dict[str, Any]:
@@ -300,10 +318,12 @@ def cache_session() -> dict[str, Any]:
             "y": [31.0, 32.0, None],
         }
     )
-    return {
+    import scanpath_studio.annotations as annotations_mod
+
+    session = {
         **maximal_link_state(),
         "_datasets": {
-            "Golden corpus": {
+            CACHE_DATASET: {
                 "words": words,
                 "fixations": fixations,
                 "raw_gaze": raw_gaze,
@@ -312,17 +332,25 @@ def cache_session() -> dict[str, Any]:
                 "schemas": {"words": {"trial": "trial_id"}},
             }
         },
-        "data_source_choice": "Golden corpus",
-        "trial_annotations": {
-            ("p1", "t1"): {"star": True, "tags": ["Review"], "note": "regression?"}
-        },
-        "_dataset_descriptions": {"Golden corpus": "A three-word pilot."},
+        "data_source_choice": CACHE_DATASET,
+        "_dataset_descriptions": {CACHE_DATASET: "A three-word pilot."},
     }
+    # As every app run does: the annotations belong to the open dataset.
+    annotations_mod.activate_dataset(session, CACHE_DATASET)
+    session["trial_annotations"] = {
+        ("p1", "t1"): {"star": True, "tags": ["Review"], "note": "regression?"}
+    }
+    return session
+
+
+CACHE_DATASET = "Golden corpus"
 
 
 def read_cache(root: Path) -> dict[str, Any]:
-    """What a fresh session restores from the cache at `root`, frames as records."""
-    from scanpath_studio.persistence import restore_state
+    """What a fresh session restores from the cache at `root`: the keys the
+    cache saves for the user, the dataset's annotations, and its frames."""
+    import scanpath_studio.annotations as annotations_mod
+    from scanpath_studio.persistence import _SESSION_KEYS, restore_state
 
     restored: dict[str, Any] = {}
     assert restore_state(restored, root), f"nothing restored from {root}"
@@ -334,13 +362,42 @@ def read_cache(root: Path) -> dict[str, Any]:
         for table, frame in entry.items()
         if isinstance(frame, pd.DataFrame) and not frame.empty
     }
-    return {"state": snapshot(restored), "frames": frames}
+    annotations_mod.activate_dataset(restored, CACHE_DATASET)
+    notes = sorted(
+        (
+            {"participant_id": key[0], "trial_id": key[1], **jsonable(value)}
+            for key, value in (restored.get("trial_annotations") or {}).items()
+        ),
+        key=lambda row: (row["participant_id"], row["trial_id"]),
+    )
+    state = snapshot({k: v for k, v in restored.items() if k in _SESSION_KEYS})
+    return {"state": state, "annotations": notes, "frames": frames}
 
 
 # ---------------------------------------------------------------------------
 # Figures: the API's output, normalized so only our own drawing counts
 # ---------------------------------------------------------------------------
+def _typed_array(value: Mapping) -> np.ndarray | None:
+    """Plotly's `{"dtype", "bdata"[, "shape"]}` encoding of an array, decoded."""
+    import base64
+
+    if set(value) - {"dtype", "bdata", "shape"} or not {"dtype", "bdata"} <= set(value):
+        return None
+    array = np.frombuffer(
+        base64.b64decode(value["bdata"]), dtype=np.dtype(value["dtype"])
+    )
+    shape = value.get("shape")
+    if shape:
+        dims = (
+            [int(d) for d in str(shape).split(",")] if isinstance(shape, str) else shape
+        )
+        array = array.reshape(dims)
+    return array
+
+
 def _normal(value: Any) -> Any:
+    if isinstance(value, Mapping) and (array := _typed_array(value)) is not None:
+        value = array
     if isinstance(value, np.ndarray):
         value = value.tolist()
     if isinstance(value, np.generic):
@@ -357,8 +414,10 @@ def _normal(value: Any) -> Any:
 
 
 def figure_digest(fig) -> str:
-    """A hash of the figure as our code built it — Plotly's template left out,
-    arrays as lists, floats rounded — so a Plotly upgrade alone changes nothing."""
+    """A hash of the figure as our code built it. Plotly's template is left
+    out, and every array (Plotly's typed-array encoding included) is decoded to
+    a list of floats rounded to six places, so neither a Plotly upgrade nor a
+    last-bit difference in the arithmetic changes it."""
     import hashlib
 
     data = fig.to_dict()
@@ -367,18 +426,48 @@ def figure_digest(fig) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def golden_figures() -> dict[str, Any]:
-    """The figures the golden digests pin, built through the public API."""
+#: The pinned figures: which builder, and the options it is given. The options
+#: are stored beside the digest, so adding a figure option changes neither.
+#: "Maximal" turns every spatial layer on and moves colour, size and opacity
+#: off their defaults.
+FIGURE_CASES: dict[str, tuple[str, dict[str, Any]]] = {
+    "static-default": ("static", {}),
+    "static-maximal": (
+        "static",
+        {
+            "show_words": True,
+            "show_word_labels": True,
+            "show_fixations": True,
+            "show_order": True,
+            "show_saccades": True,
+            "show_saccade_arrows": True,
+            "show_heatmap": True,
+            "show_raw_gaze": True,
+            "heatmap_style": "Smoothed",
+            "heatmap_colorscale": "Greens",
+            "heatmap_opacity": 0.8,
+            "color_by": "duration_ms",
+            "fixation_colorscale": "Viridis",
+            "fixation_opacity": 0.5,
+            "marker_size_range": [5, 20],
+            "marker_size_scale": "log",
+            "saccade_color": "#123456",
+            "saccade_opacity": 0.5,
+            "fixation_outline_color": "#336699",
+        },
+    ),
+    "animation-default": ("animation", {}),
+    "comparison-default": ("comparison", {}),
+}
+
+
+def build_figure(kind: str, options: Mapping[str, Any]):
+    """One pinned figure, through the public API on the bundled demo."""
     from scanpath_studio import api
-    from tests.test_render_every_option import OTHER, TRIAL, _maximal_state
 
     words, fixations = api.load_sample_data()
-    static = _maximal_state("static").settings
-    return {
-        "static-default": lambda: api.plot_scanpath(words, fixations, *TRIAL),
-        "static-maximal": lambda: api.plot_scanpath(words, fixations, *TRIAL, **static),
-        "animation-default": lambda: api.animate_scanpath(words, fixations, *TRIAL),
-        "comparison-default": lambda: api.compare_scanpaths(
-            words, fixations, TRIAL, OTHER
-        ),
-    }
+    if kind == "static":
+        return api.plot_scanpath(words, fixations, *TRIAL, **options)
+    if kind == "animation":
+        return api.animate_scanpath(words, fixations, *TRIAL, **options)
+    return api.compare_scanpaths(words, fixations, TRIAL, OTHER, **options)

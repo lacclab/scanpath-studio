@@ -11,8 +11,8 @@ failure means a value users hold now restores differently. Fix the reader
 (an alias, a migration), or, for a deliberate break, delete the affected keys
 from the capture and name the break in a `changed`/`removed` changelog fragment.
 
-The figure digests pin the latest release's drawing through the public API.
-When a change is meant to alter a figure, re-capture them with
+`figures.json` pins how the public API draws a few figures on the bundled demo.
+When a change is meant to alter a figure, re-capture it with
 `scripts/capture_golden.py --figures`.
 """
 
@@ -25,20 +25,27 @@ import pytest
 
 from tests import wire_golden as g
 
-RELEASES = sorted(p for p in g.GOLDEN.glob("v*") if p.is_dir())
-LATEST = RELEASES[-1]
+pytestmark = pytest.mark.usefixtures("experimental_off")
+
+
+def _version(path) -> tuple[int, ...]:
+    return tuple(int(part) for part in path.name.removeprefix("v").split("."))
+
+
+RELEASES = sorted((p for p in g.GOLDEN.glob("v*") if p.is_dir()), key=_version)
 
 
 def _load(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _cases(filename):
+def _cases(filename, *, need=None):
     return [
         pytest.param(release, name, case, id=f"{release.name}-{name}")
         for release in RELEASES
         if (release / filename).exists()
         for name, case in _load(release / filename).items()
+        if need is None or need in case
     ]
 
 
@@ -55,7 +62,6 @@ def test_there_is_a_capture():
     assert RELEASES, f"no golden captures under {g.GOLDEN}"
 
 
-@pytest.mark.usefixtures("experimental_off")
 @pytest.mark.parametrize(("release", "name", "case"), _cases("links.json"))
 def test_a_share_link_restores_as_captured(release, name, case):
     problems = g.differences(case["state"], g.read_link(case["query"]))
@@ -63,7 +69,18 @@ def test_a_share_link_restores_as_captured(release, name, case):
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.usefixtures("experimental_off")
+@pytest.mark.parametrize(
+    ("release", "name", "case"), _cases("links.json", need="app_state")
+)
+def test_a_share_link_opens_the_captured_view(release, name, case):
+    """The whole app, not just the settings: the dataset and reading too."""
+    problems = g.differences(case["app_state"], g.open_link_in_app(case["query"]))
+    assert not problems, _report(
+        f"The {release.name} link '{name}' in the app", problems
+    )
+
+
+@pytest.mark.timeout(300)
 @pytest.mark.parametrize(
     ("release", "name", "expected"), _cases("settings_restored.json")
 )
@@ -84,17 +101,23 @@ def test_a_recovery_cache_restores_as_captured(release, tmp_path):
     restored = g.read_cache(root)
     problems = g.differences(expected["state"], restored["state"])
     assert not problems, _report(f"The {release.name} recovery cache", problems)
+    assert restored["annotations"] == expected["annotations"], (
+        f"The {release.name} recovery cache restores different annotations"
+    )
     assert restored["frames"] == expected["frames"], (
         f"The {release.name} recovery cache restores different data"
     )
 
 
-@pytest.mark.parametrize("name", sorted(_load(LATEST / "figures.json")))
+FIGURES = _load(g.GOLDEN / "figures.json")
+
+
+@pytest.mark.parametrize("name", sorted(FIGURES))
 def test_the_api_draws_the_captured_figure(name):
-    expected = _load(LATEST / "figures.json")[name]
-    actual = g.figure_digest(g.golden_figures()[name]())
-    assert actual == expected, (
-        f"'{name}' is drawn differently from the {LATEST.name} capture. If the "
-        "change is meant to alter the figure, re-capture with "
-        "`scripts/capture_golden.py --figures`; otherwise it is a regression."
+    case = FIGURES[name]
+    actual = g.figure_digest(g.build_figure(case["kind"], case["options"]))
+    assert actual == case["digest"], (
+        f"'{name}' is drawn differently from its capture. If the change is meant "
+        "to alter the figure, re-capture with `scripts/capture_golden.py "
+        "--figures`; otherwise it is a regression."
     )

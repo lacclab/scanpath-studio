@@ -204,13 +204,13 @@
   "single_compare_toggle": false,
   "single_fix_range": [
    1,
-   73
+   92
   ],
   "single_fix_range_all_trials": true,
   "single_fix_range_user_set": false,
   "single_playback_speed": 1.0,
   "single_select_trial_mode": "Trial",
-  "single_trial_id": "l37_273\u001fl37_273_2_2_1_Adv"
+  "single_trial_id": "l37_273\u001fl37_273_2_2_2_Adv"
  },
  "palette-print-grayscale": {
   "cmp1_fixclass_blink_mode": "Off",
@@ -417,12 +417,12 @@
   "single_compare_toggle": false,
   "single_fix_range": [
    1,
-   73
+   92
   ],
   "single_fix_range_all_trials": false,
   "single_fix_range_user_set": false,
   "single_playback_speed": 1.0,
   "single_select_trial_mode": "Trial",
-  "single_trial_id": "l37_273\u001fl37_273_2_2_1_Adv"
+  "single_trial_id": "l37_273\u001fl37_273_2_2_2_Adv"
  }
 }

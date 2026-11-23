@@ -56,9 +56,9 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    `scanpath_studio/constants.py` to it as well.
 5. **Verify parity** — run `pytest tests/test_citation.py` (it enforces
    version and release-year parity between the package and `CITATION.cff`).
-6. **Golden captures** — `SCANPATH_STUDIO_PERSIST=0 uv run --extra test python
-   scripts/capture_golden.py` writes `tests/fixtures/golden/v<version>/`: this
-   release's share links, settings files, recovery cache and figure digests.
+6. **Golden captures** — `uv run --extra test python scripts/capture_golden.py`
+   writes `tests/fixtures/golden/v<version>/` (this release's share links,
+   settings files and recovery cache) and refreshes the figure digests.
    `tests/test_wire_golden.py` then keeps every release's captures restoring,
    which is how a later refactor learns it broke a link users hold.
 7. **Full test run** — `pytest -n auto`. Stop and report failures; do not

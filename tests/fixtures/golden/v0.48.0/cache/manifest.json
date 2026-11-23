@@ -1,24 +1,25 @@
 {
   "annotations": {
-    "datasets": {},
-    "unassigned": [
-      {
-        "note": "regression?",
-        "participant_id": "p1",
-        "star": true,
-        "tags": [
-          "Review"
-        ],
-        "trial_id": "t1"
-      }
-    ]
+    "datasets": {
+      "Golden corpus": [
+        {
+          "note": "regression?",
+          "participant_id": "p1",
+          "star": true,
+          "tags": [
+            "Review"
+          ],
+          "trial_id": "t1"
+        }
+      ]
+    }
   },
   "datasets": {
     "Golden corpus": {
       "frames": {
-        "fixations": "datasets/164437d4f5224e4c-fixations.parquet",
-        "raw_gaze": "datasets/164437d4f5224e4c-raw_gaze.parquet",
-        "words": "datasets/164437d4f5224e4c-words.parquet"
+        "fixations": "datasets/f74dd466865b3272-fixations.parquet",
+        "raw_gaze": "datasets/f74dd466865b3272-raw_gaze.parquet",
+        "words": "datasets/f74dd466865b3272-words.parquet"
       },
       "metadata": {
         "composite_trial_columns": [],

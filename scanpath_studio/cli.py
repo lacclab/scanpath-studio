@@ -4133,7 +4133,7 @@ def _count(n: int, noun: str) -> str:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache.
 
-    The terminal counterpart of the app's 🗂️ Data Management → *Saved on this computer*
+    The terminal counterpart of the app's 🗂️ Data Management → *Saved work*
     section, so the storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """

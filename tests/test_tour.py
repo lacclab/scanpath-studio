@@ -499,6 +499,7 @@ def _surface_open_probe_app():
     data_step = next(
         s for tutorial in TUTORIALS for s in tutorial.steps if s.view == _VIEW_DATA
     )
+    st.session_state["data_workspace"] = data_step.data_section
     verdicts = []
     for view in (_VIEW_DATA, _VIEW_CORPUS, _VIEW_SCANPATH):
         st.session_state["main_nav"] = view

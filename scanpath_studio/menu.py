@@ -105,7 +105,7 @@ def _unused_page_body() -> None:  # pragma: no cover - never executed
     entry is selected — we never call ``.run()``, because ``app.main`` owns
     the dispatch (it has to: the view bodies close over frames the long prelude
     computes, and the epilogue — ``save_local_state``, then the Data page's
-    *Saved on this computer* — has to run *after* the body). So these never execute.
+    *Saved work* — has to run *after* the body). So these never execute.
     """
     raise AssertionError("page body should never run — app.main owns dispatch")
 

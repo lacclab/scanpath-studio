@@ -8,13 +8,13 @@ description: "Load your own eye-tracking data from EyeLink, Tobii, Gazepoint, SM
 Load your own data, open a public dataset, or try the bundled demo.
 
 <figure class="sps-screenshot" markdown>
-![Data Management: datasets and the tables of the selected dataset](../../assets/screenshots/data-page.webp)
+![The bundled demo in Data Management, with participant and trial counts, averages and the number of trials containing each type of data](../../assets/screenshots/data-page.webp)
 </figure>
 
 ## Choose a dataset
 
-Pick a dataset in **Select dataset** above the plot, or in the dataset list on
-the :material/database: **Data Management** page:
+Pick a dataset in **Select dataset** above the plot or open **Dataset library**
+on the :material/database: **Data Management** page.
 
 - **Bundled demo**: 24 trials from OneStop, with two participants and 12 texts.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text,
@@ -39,7 +39,7 @@ keyboard edits. Leaving both coordinates empty places the fixation at the
 center of its target word.
 
 **Save dataset** opens the figure. To revise it, go to **Data Management** and
-click **Edit** on its row. **Save changes** updates the drawing, and **Save as
+click **Edit drawing** beside its name. **Save changes** updates the drawing, and **Save as
 copy** keeps a separate version. For another computer, download the editable
 draft from **Share** and open it with **Load a saved draft** in the drawing editor.
 
@@ -122,8 +122,8 @@ EyeLink's `IA_*` columns are detected.
 4. Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.
 5. Click :material/check: **Add dataset**, then :material/route: **Open in
-   Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside
-   **Add dataset** on the Data page does the same for the selected dataset.
+   Scanpath view** to see its first trial. You can also open the figure from
+   **Data Management → Current dataset**.
 
 To import similar files again, click :material/download: **Download setup file**
 before **Add dataset**. Next time, choose **Start from** → **A setup file** and
@@ -164,10 +164,24 @@ the app does.
 
 ## Manage datasets
 
-Click a dataset in the dataset list to open it. Below the list,
-:material/search: **What's in *‹dataset›*** shows its tables, annotations and
-**Data checks**. When a check flags more than half of a table, such as every
-duration read as 0 ms, the Scanpath view says so above the plot.
+**Current dataset** opens on **Overview**. It shows how many participants, trials
+and texts are in your selection and the average number of trials per participant.
+Fixation and word averages count trials that contain those rows. **Eye-tracking
+data** shows the row and trial counts for each table. Scanpath trial filters
+apply to these counts.
+
+Click a table name to jump to its rows. **Tables** shows fixations, words, raw
+gaze samples, participants, trials and texts on one page. When you attach a
+participant, trial or text metadata file, that table shows the complete file.
+
+**Data checks** looks for unusable values in the whole dataset, including trials
+outside the filters. **Annotations** lets you review, import and export the
+dataset’s favorites, tags and notes.
+
+To switch datasets, open **Dataset library**. Search by name or filter by
+source, then click a dataset to open its overview. **Saved work** shows what
+will reopen next time. On a local install, **Dataset downloads** lists the
+public datasets on disk and lets you choose where future downloads go.
 
 Use :material/edit: **Edit dataset** to change its name, column mapping,
 recording setup or metadata, then click :material/check: **Save changes**.
@@ -178,7 +192,7 @@ The editor offers only the columns kept when the dataset was added. To use a
 column that isn't listed, remove the dataset and add it again from its files,
 mapping the column or keeping it under **Extra fields to keep**.
 
-Under **Data checks**, **Compare with the experiment run sheet** accepts a
+Under **Data checks**, **Compare with planned trials (optional)** accepts a
 CSV with `participant_id` and `trial_id`. Add `screen_id` to check an
 individual screen. Enter a reason in `planned_omission` for readings you
 intended to omit and leave it blank for the rest. The report distinguishes

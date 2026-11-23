@@ -1,11 +1,4 @@
-"""The example import pair, and *Available with this dataset*.
-
-The synthetic trial as a Words table and a fixation table (`synthetic.py`) that
-import with no manual mapping — the auto-detection's own end-to-end check. Once
-a dataset is added, the *What's in…* section opens with four lines saying what
-it supports: scanpaths, supplied reading measures, raw gaze coverage and
-multipart screens.
-"""
+"""Import the example tables and inspect the resulting dataset coverage."""
 
 from __future__ import annotations
 
@@ -15,7 +8,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import data, synthetic
-from scanpath_studio.tabs import dataset_capabilities
+from scanpath_studio.tabs import _dataset_statistics
 
 
 def _example_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -55,32 +48,30 @@ class TestTheExampleMapsItself:
 
 
 class TestAvailableWithThisDataset:
-    def test_the_example_lists_its_measures(self):
-        words, fixations = _example_frames()
-        lines = dataset_capabilities(
-            data.normalize_words(words, data.infer_word_schema(words)),
-            data.normalize_fixations(fixations, data.infer_fix_schema(fixations)),
-            None,
+    def test_gaze_only_trials_have_their_own_average(self):
+        gaze = pd.DataFrame({"participant_id": ["p", "p"], "trial_id": ["t", "t"]})
+        stats = _dataset_statistics(
+            pd.DataFrame(), pd.DataFrame(), gaze, ("gaze-only",)
         )
-        assert len(lines) == 4
-        assert "over the text, for 1 trial" in lines[0]
-        assert "TFD, First fixation duration — FFD" in lines[1]
-        assert lines[2].endswith("**Raw gaze:** none")
-        assert lines[3].endswith("one per trial")
+        assert stats["recordings"] == {
+            "fixations": (0, 0),
+            "words": (0, 0),
+            "raw_gaze": (2, 1),
+        }
+        means = stats["stats_df"].set_index("Metric")["Mean"].to_dict()
+        assert means == {"Trials per participant": 1, "Gaze samples per trial": 2}
 
-    def test_no_measures_and_raw_gaze_only(self):
-        gaze = pd.DataFrame(
-            {"participant_id": ["p", "p"], "trial_id": ["t", "t"], "x": [1, 2]}
-        )
-        lines = dataset_capabilities(None, None, gaze)
-        assert "no fixations; raw gaze is drawn instead, for 1 trial" in lines[0]
-        assert "none supplied" in lines[1]
-        assert "1 of 1 trial" in lines[2]
-
-    def test_multipart_screens_are_counted(self):
+    def test_coverage_counts_each_trial_once_and_averages_only_recorded_rows(self):
         words, fixations = synthetic.make_multipart_synthetic_data()
-        lines = dataset_capabilities(words, fixations, None)
-        assert lines[3].endswith("2 screens across 1 trial")
+        gaze = pd.concat([fixations, fixations.assign(trial_id="samples-only")])
+        stats = _dataset_statistics(words, fixations, gaze, ("mixed-coverage",))
+        assert stats["n_trials"] == 2
+        assert stats["recordings"]["fixations"] == (len(fixations), 1)
+        assert stats["recordings"]["raw_gaze"] == (len(gaze), 2)
+        assert len(stats["parts"]) == 4
+        assert stats["stats_df"].set_index("Metric").at[
+            "Fixations per trial", "Mean"
+        ] == len(fixations)
 
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -130,9 +121,7 @@ class TestTheWizard:
 
         open_data_view(at, timeout=90)
         assert not at.exception, at.exception
-        text = " ".join(c.value for c in at.caption)
-        assert "Available with this dataset" in text
-        assert (
-            "**Reading measures:** Total fixation duration — TFD, First fixation duration — FFD"
-            in text
-        )
+        text = "\n".join(m.value for m in at.markdown)
+        assert "Eye-tracking data" in text
+        assert "- Total fixation duration — TFD" in text
+        assert "- First fixation duration — FFD" in text

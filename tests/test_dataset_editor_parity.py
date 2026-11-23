@@ -15,7 +15,7 @@ import inspect
 
 import pytest
 
-from tests.conftest import APP_SCRIPT, pin_view
+from tests.conftest import APP_SCRIPT, open_dataset_editor
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -114,11 +114,8 @@ class TestThePageItDraws:
 
     @staticmethod
     def _data_page():
-        from scanpath_studio.constants import _VIEW_DATA
-
         at = AppTest.from_file(APP_SCRIPT, default_timeout=600)
-        pin_view(at, _VIEW_DATA)
-        at.run()
+        open_dataset_editor(at)
         assert not at.exception, at.exception
         assert [e.value for e in at.error] == []
         return at
@@ -168,13 +165,9 @@ class TestThePageItDraws:
         ] == []
 
     def test_the_recording_setup_body_still_renders(self):
-        """Re-hosting it must not drop it: the provenance summary is the read-only
-        mode's whole content."""
+        """The demo editor offers the recording setup controls under its heading."""
         at = self._data_page()
-        cells = [
-            m.value for m in at.markdown if "sps-readonly-map-label" in str(m.value)
-        ]
-        assert len(cells) >= 3
+        assert any(w.key.endswith("_setup_screen_mode") for w in at.segmented_control)
 
 
 class TestTheSlotOrder:

@@ -162,6 +162,54 @@ def test_inclusion_reports_overlapping_failures_once():
     )
 
 
+def test_the_open_inclusion_report_is_reused_until_what_it_reads_changes(
+    monkeypatch,
+):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import api, app
+
+    app._c_inclusion_report.clear()
+    reports = []
+    original = study_checks.inclusion_report
+
+    def counted(*args, **kwargs):
+        reports.append(original(*args, **kwargs))
+        return reports[-1]
+
+    monkeypatch.setattr(study_checks, "inclusion_report", counted)
+    _, fixations = api.load_sample_data(names="canonical")
+    first, other = (
+        (p, str(fixations.loc[fixations["participant_id"].eq(p), "trial_id"].iloc[0]))
+        for p in ("l7_183", "l37_273")
+    )
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    at.session_state["filter_participants"] = [first[0]]
+    at.run()
+    pin_view(at, "Corpus Analysis")
+    at.session_state["corpus_pool_popover"] = True
+    at.session_state["study_inclusion"] = True
+    at.run()
+    assert not at.exception
+    assert len(reports) == 1
+    assert reports[-1][0]["readings"].tolist() == [24, 12, 12]
+    at.run()
+    assert len(reports) == 1  # A rerun reads the cached report.
+
+    # An annotation filter reads the stars: starring a reading that another
+    # filter excludes changes its reasons but not the kept readings.
+    star = {"star": True, "tags": [], "note": ""}
+    at.session_state["trial_annotations"] = {first: star}
+    at.checkbox(key="filter_favorites").check().run()
+    assert reports[-1][0]["readings"].tolist() == [24, 1, 23]
+    at.session_state["trial_annotations"] = {first: star, other: star}
+    at.run()
+    assert not at.exception
+    reasons = reports[-1][1].set_index(["participant_id", "trial_id"])
+    assert reports[-1][0]["readings"].tolist() == [24, 1, 23]
+    assert reasons.loc[other, "exclusion_reasons"] == "Participant (1 selected)"
+
+
 def test_repeated_readings_missing_values_and_a_changed_observation():
     frame = pd.DataFrame(
         [

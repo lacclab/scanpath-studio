@@ -77,6 +77,7 @@ from scanpath_studio import (
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
+    ANNOTATIONS_STATE_KEY,
     filter_keys,
     render_dataset_annotations,
 )
@@ -973,35 +974,95 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
     return steps
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_inclusion_report(_words, _fixes, _samples, _kept, _steps, cache_key):
+    """`study_checks.inclusion_report` once per pool, filter set and kept readings.
+
+    ``cache_key`` (:func:`_inclusion_cache_key`) names everything the report
+    reads; the frames, the kept readings and the step closures are not hashed.
+    """
+    from .study_checks import inclusion_report
+
+    w, f = pool_filter_frames(_words, _fixes, _samples)
+    # Samples-only readings beside the main tables have unknown conditions.
+    # Supply their IDs to the same predicates that decide the normal pool.
+    samples = (
+        set()
+        if _samples is None or _samples.empty
+        else raw_gaze_trial_keys(_samples, cache_key=cache_key[0][2])
+    )
+    extra = samples - trial_keys(w) - trial_keys(f)
+    if extra:
+        extra_ids = pd.DataFrame(sorted(extra), columns=["participant_id", "trial_id"])
+        w = pd.concat([w, extra_ids], ignore_index=True)
+    return inclusion_report(w, f, _kept, _steps)
+
+
+def _inclusion_cache_key(frames, kept: set, filters: dict, steps: list) -> tuple:
+    """What the inclusion report depends on, cheap enough to build every rerun.
+
+    The tables by fingerprint; each step by its label and the filter values it
+    decides on (an annotation filter also by the stars and tags it reads); and
+    the kept readings. The two reading sets go in as set hashes, which do not
+    depend on order and avoid sorting thousands of keys on every rerun.
+    """
+    annotations = None
+    if (
+        filters.get("favorites_only")
+        or filters.get("required_tags")
+        or filters.get("excluded_tags")
+    ):
+        store = st.session_state.get(ANNOTATIONS_STATE_KEY) or {}
+        annotations = hash(
+            frozenset(
+                (key, bool(entry.get("star")), frozenset(entry.get("tags") or ()))
+                for key, entry in store.items()
+            )
+        )
+    allowed = filters.get("trial_keys")
+    return (
+        tuple(frame_fingerprint(df) for df in frames),
+        tuple(label for label, _, _ in steps),
+        hashable_key(trial_filter_params(filters)),
+        None if allowed is None else hash(frozenset(allowed)),
+        (
+            bool(filters.get("favorites_only")),
+            tuple(filters.get("required_tags") or ()),
+            tuple(filters.get("excluded_tags") or ()),
+        ),
+        annotations,
+        hash(frozenset(kept)),
+    )
+
+
 def _render_inclusion_report(words, fixes, samples, selected_readings, filters) -> None:
     panel = st.expander(
         "Study inclusion and exclusions", key="study_inclusion", on_change="rerun"
     )
     if not panel.open:
         return
-    from .study_checks import inclusion_report
-
-    w, f = pool_filter_frames(words, fixes, samples)
-    # Samples-only readings beside the main tables have unknown conditions.
-    # Supply their IDs to the same predicates that decide the normal pool.
-    extra = trial_keys(samples) - trial_keys(w) - trial_keys(f)
-    if extra:
-        extra_ids = pd.DataFrame(sorted(extra), columns=["participant_id", "trial_id"])
-        w = pd.concat([w, extra_ids], ignore_index=True)
-    summary, detail = inclusion_report(
-        w, f, trial_keys(selected_readings), _filter_diagnosis_steps(filters)
+    kept = trial_keys(selected_readings)
+    steps = _filter_diagnosis_steps(filters)
+    summary, detail = _c_inclusion_report(
+        words,
+        fixes,
+        samples,
+        kept,
+        steps,
+        _inclusion_cache_key((words, fixes, samples), kept, filters, steps),
     )
     panel.dataframe(summary, hide_index=True)
+    # The CSVs are written when a download is clicked, not on every rerun.
     panel.download_button(
         "Download inclusion counts",
-        data=summary.to_csv(index=False),
+        data=lambda: summary.to_csv(index=False),
         file_name="inclusion_counts.csv",
         mime="text/csv",
         on_click="ignore",
     )
     panel.download_button(
         "Download readings and exclusion reasons",
-        data=detail.to_csv(index=False),
+        data=lambda: detail.to_csv(index=False),
         file_name="reading_exclusions.csv",
         mime="text/csv",
         on_click="ignore",

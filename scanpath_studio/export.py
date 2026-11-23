@@ -74,9 +74,9 @@ from .measures import assign_fixations_to_words, enrich_fixations
 from .multipart import (
     SCREEN_ID,
     SCREEN_INDEX,
-    extract_part,
     part_catalog,
     screen_canvas_size,
+    screen_rows,
 )
 from .plot_config import render_plot_config
 from .plots import (
@@ -1474,8 +1474,27 @@ def _screen_folder(row: dict) -> str:
     return f"screen-{int(row[SCREEN_INDEX]):03d}-{_safe_id(screen)}"
 
 
+_UNASSIGNED = "_unassigned_screen_rows"
+
+
+def _unassigned_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Rows whose recorded screen is unknown, kept once in the trial's tables."""
+    if SCREEN_ID not in frame:
+        return frame
+    ids = frame[SCREEN_ID]
+    return frame.loc[ids.isna() | ids.astype("string").str.strip().eq("")]
+
+
 def _unit_frames(
-    participant, trial, screen, words, fixations, raw_gaze, *, elapsed_axis=False
+    participant,
+    trial,
+    screen,
+    words,
+    fixations,
+    raw_gaze,
+    *,
+    elapsed_axis=False,
+    unassigned=False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """The single-screen tables shared by the filename example and bundle writer."""
     trial_words = extract_trial(words, participant, trial)
@@ -1488,14 +1507,16 @@ def _unit_frames(
         if raw_gaze is not None and not raw_gaze.empty
         else pd.DataFrame()
     )
-    if pd.notna(screen):
-        trial_words = extract_part(trial_words, participant, trial, str(screen))
-        trial_fix = extract_part(trial_fix, participant, trial, str(screen))
-        trial_gaze = (
-            extract_part(trial_gaze, participant, trial, str(screen))
-            if SCREEN_ID in trial_gaze
-            else pd.DataFrame()
+    if unassigned:
+        return (
+            _unassigned_rows(trial_words),
+            _unassigned_rows(trial_fix),
+            _unassigned_rows(trial_gaze),
         )
+    if pd.notna(screen):
+        trial_words = screen_rows(trial_words, str(screen))
+        trial_fix = screen_rows(trial_fix, str(screen))
+        trial_gaze = screen_rows(trial_gaze, str(screen))
     return trial_words, trial_fix, trial_gaze
 
 
@@ -1552,7 +1573,7 @@ def _plan_unit(
         {
             **settings,
             "show_raw_gaze": bool(settings.get("show_raw_gaze"))
-            and chart_axes.drawable_raw_samples(axes, raw_gaze),
+            and chart_axes.drawable_raw_samples(axes, raw_gaze, fixations),
         },
         combo_row=row,
         dataset_name=options.dataset_name,
@@ -1564,8 +1585,12 @@ def _plan_unit(
     if paths is not None:
         # Retry keeps names already assigned by the original full-scope plan.
         return UnitFiles(fields, paths)
-    requests = [("figure", fmt) for fmt in options.figure_formats()]
-    if options.include_plot_config:
+    requests = (
+        []
+        if row.get(_UNASSIGNED)
+        else [("figure", fmt) for fmt in options.figure_formats()]
+    )
+    if options.include_plot_config and not row.get(_UNASSIGNED):
         requests.append(("plot_config", "json"))
     if not options.combine_trials:
         tables = _plain_tables(options, *frames)
@@ -1611,6 +1636,7 @@ def _readings_with_files(
             fixations,
             raw_gaze,
             elapsed_axis=chart_axes.ELAPSED in axes,
+            unassigned=row.get(_UNASSIGNED, False),
         )
         unit = (
             None
@@ -1646,12 +1672,20 @@ def naming_example(
             fixations,
             raw_gaze,
             options.screens,
+            include_unassigned=options.any_table(),
         )
         for row in units.to_dict("records"):
             pid, tid = row["participant_id"], row["trial_id"]
             screen_folder = _screen_folder(row)
             trial_words, trial_fix, trial_gaze = _unit_frames(
-                pid, tid, row.get(SCREEN_ID), words, fixations, raw_gaze
+                pid,
+                tid,
+                row.get(SCREEN_ID),
+                words,
+                fixations,
+                raw_gaze,
+                elapsed_axis=chart_axes.ELAPSED in axes,
+                unassigned=row.get(_UNASSIGNED, False),
             )
             if (
                 have_frames
@@ -2343,7 +2377,8 @@ def screen_choices(*frames: pd.DataFrame | None) -> list[str]:
     if not parts:
         return []
     pairs = pd.concat(parts, ignore_index=True).dropna(subset=[SCREEN_ID])
-    pairs[SCREEN_ID] = pairs[SCREEN_ID].astype(str)
+    pairs[SCREEN_ID] = pairs[SCREEN_ID].astype(str).str.strip()
+    pairs = pairs.loc[pairs[SCREEN_ID].ne("")]
     if SCREEN_INDEX not in pairs.columns:
         pairs[SCREEN_INDEX] = float("nan")
     pairs[SCREEN_INDEX] = pd.to_numeric(pairs[SCREEN_INDEX], errors="coerce")
@@ -2358,6 +2393,8 @@ def export_units(
     fixations: pd.DataFrame,
     raw_gaze: pd.DataFrame | None = None,
     screens: tuple[str, ...] | None = None,
+    *,
+    include_unassigned: bool = False,
 ) -> pd.DataFrame:
     """One row per **screen export unit**: each trial in ``combos``, or each of
     its screens when it is a multipart reading. ``combos`` is already scoped.
@@ -2375,24 +2412,29 @@ def export_units(
         participant, trial = combo["participant_id"], combo["trial_id"]
         parent_words = extract_trial(words, participant, trial)
         parent_fixations = extract_trial(fixations, participant, trial)
-        catalog = part_catalog(parent_words, parent_fixations)
-        if (
-            catalog.empty
-            and parent_words.empty
-            and parent_fixations.empty
-            and raw_gaze is not None
-            and SCREEN_ID in raw_gaze.columns
-        ):
-            # As `api._select_part` decides it: a trial recorded as raw
-            # gaze alone takes its screens from its samples, so each screen's
-            # coordinate space is exported on its own instead of pooled.
-            catalog = part_catalog(extract_trial(raw_gaze, participant, trial))
+        parent_samples = (
+            extract_trial(raw_gaze, participant, trial)
+            if raw_gaze is not None and (SCREEN_ID in raw_gaze or include_unassigned)
+            else None
+        )
+        catalog = part_catalog(parent_words, parent_fixations, parent_samples)
         if catalog.empty:
             rows.append(combo)
         else:
             for screen in catalog.to_dict("records"):
                 rows.append({**combo, **screen})
+            if (
+                include_unassigned
+                and screens is None
+                and any(
+                    frame is not None and not _unassigned_rows(frame).empty
+                    for frame in (parent_words, parent_fixations, parent_samples)
+                )
+            ):
+                rows.append({**combo, SCREEN_ID: None, _UNASSIGNED: True})
     units = pd.DataFrame(rows)
+    if _UNASSIGNED in units:
+        units[_UNASSIGNED] = units[_UNASSIGNED].eq(True)
     if screens is None:
         return units
     if units.empty or SCREEN_ID not in units.columns:
@@ -2591,7 +2633,14 @@ def bundle_contents(
 ) -> BundleContents:
     """Plan known files and columns without rendering a figure or creating a ZIP."""
     scope = _apply_scope(combos, options)
-    units = export_units(scope, words, fixations, raw_gaze, options.screens)
+    units = export_units(
+        scope,
+        words,
+        fixations,
+        raw_gaze,
+        options.screens,
+        include_unassigned=options.any_table(),
+    )
     maps = column_names or {}
     members = ArchiveNames(bundle_member_names(options))
     contents = BundleContents()
@@ -2813,7 +2862,14 @@ def bulk_export(
     if pattern_problem:
         raise ValueError(pattern_problem)
     combos = _apply_scope(combos, options)
-    units = export_units(combos, words, fixations, raw_gaze, options.screens)
+    units = export_units(
+        combos,
+        words,
+        fixations,
+        raw_gaze,
+        options.screens,
+        include_unassigned=options.any_table(),
+    )
     if options.screens is not None:
         # Only the trials that show a chosen screen are exported — for the
         # annotations, the README and every per-trial table alike.
@@ -3147,6 +3203,7 @@ def bulk_export(
                 fixations,
                 raw_gaze,
                 elapsed_axis=chart_axes.ELAPSED in (x_field, y_field),
+                unassigned=combo.get(_UNASSIGNED, False),
             )
 
             # Skip only a genuinely empty trial (nothing to draw). The figure
@@ -3217,11 +3274,13 @@ def bulk_export(
             figure_formats = [
                 fmt
                 for fmt in options.figure_formats()
-                if retry_unit is None or retry_unit.wants("figure", fmt)
+                if not combo.get(_UNASSIGNED)
+                and (retry_unit is None or retry_unit.wants("figure", fmt))
             ]
             layer_formats = (
                 options.layer_formats()
-                if retry_unit is None or retry_unit.layer_failures
+                if not combo.get(_UNASSIGNED)
+                and (retry_unit is None or retry_unit.layer_failures)
                 else []
             )
             if layout is None:
@@ -3412,7 +3471,7 @@ def bulk_export(
                                 progress.bytes_written += len(data)
                                 progress.figures_written += 1
 
-            if options.include_plot_config:
+            if options.include_plot_config and not combo.get(_UNASSIGNED):
                 # Same guard as _drift_corrected_for_figure: correction runs
                 # when an algorithm is set and the trial has both frames.
                 algorithm = settings.get("align_algorithm")
@@ -3438,9 +3497,6 @@ def bulk_export(
                 # The title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
                 cfg["figure_text"] = {"title": title, "caption": caption}
-                # The trial's samples, and whether they were recorded —
-                # the bundled demo's are synthesized, which its figure and its
-                # raw-gaze table cannot say for themselves.
                 if not trial_raw_gaze.empty:
                     cfg["raw_gaze"].update(
                         available=True,
@@ -3462,7 +3518,7 @@ def bulk_export(
                 else None
             )
             family = {}
-            if options.include_analysis_family:
+            if options.include_analysis_family and not combo.get(_UNASSIGNED):
                 measured = trial_words
                 analysis_fix = (
                     enrich_fixations(
@@ -3519,7 +3575,7 @@ def bulk_export(
                             table=_ARTIFACT_TABLE.get(artifact, "derived"),
                         )
                         _inventory(path, artifact, "written", unit_ids, fmt=fmt)
-            if options.include_analysis_family:
+            if family:
                 family_words.append(measured)
                 family_fixations.append(family["fixations"])
 

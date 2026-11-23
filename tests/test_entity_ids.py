@@ -86,10 +86,10 @@ def test_gaze_only_readings_supply_participants_trials_and_texts() -> None:
 
     participant = ids("participant").set_index("Participant ID").loc["p3"]
     assert participant[
-        ["# Trials", "# Texts", "# Fixations", "# Gaze points"]
+        ["# Trials", "# Texts", "# Fixations", "# Gaze samples"]
     ].tolist() == [1, 1, 0, 2]
     trial = ids("trial").set_index("Trial ID").loc["t3"]
-    assert trial[["Text ID", "# Words", "# Fixations", "# Gaze points"]].tolist() == [
+    assert trial[["Text ID", "# Words", "# Fixations", "# Gaze samples"]].tolist() == [
         "c",
         0,
         0,

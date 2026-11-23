@@ -73,7 +73,7 @@ def _assign_word_ids_single(
 #
 # **The boxes are used exactly as the experiment defined them.** Pulling every
 # tiling boundary back half a space, to the middle of the whitespace,
-# reassigns 7.4% of the demo's fixations relative to EyeLink's own
+# reassigns fixations relative to EyeLink's own
 # interest-area assignment, which is the one the corpus' IA_* measures were
 # computed from: a reading measure has to be computed against the interest
 # areas the study reported.
@@ -199,9 +199,7 @@ def word_box_contains(
     Half-open — ``x0 <= x < x1`` and ``y0 <= y < y1`` — so a box ``width`` px
     wide holds exactly ``width`` pixel columns, and a point on the edge two
     tiling boxes share belongs to the box that *starts* there: the word to the
-    right, the line below. That is how EyeLink assigned every such fixation in
-    the bundled demo (30 of them, all integer coordinates on a shared edge),
-    where a closed test would hand each to the earlier box instead.
+    right, the line below.
     Assignment, the out-of-text flag and the word heatmap all test with this,
     so a fixation is counted towards exactly one word.
     """
@@ -1006,7 +1004,7 @@ def compute_per_word_measures(
 
     # A word nobody fixated has no first fixation, first pass or go-past
     # time — but an imported IA report may say `0` rather than leave the cell
-    # empty (the bundled OneStop one does, for every such word), and a 0 wins the
+    # empty, and a 0 wins the
     # precedence above, so every mean would count skipped words as 0-ms
     # fixations.
     # Total time stays 0 on purpose: the word was read past and got no time.

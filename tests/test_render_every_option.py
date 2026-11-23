@@ -35,10 +35,9 @@ _PNG_1x1 = bytes.fromhex(
     "426082"
 )
 
-#: The one demo trial the bundled raw gaze covers, and a second reading of a
-#: different reader to compare it with.
-TRIAL = ("l37_1129", "l37_1129_2_2_2_Adv")
-OTHER = ("l7_1090", "l7_1090_2_2_2_Adv")
+#: Two recorded readings of the same paragraph.
+TRIAL = ("l37_273", "l37_273_2_2_2_Adv")
+OTHER = ("l7_183", "l7_183_2_2_2_Adv")
 
 #: Every figure option at a value that is *not* its default. The guard below
 #: asserts this covers `api.figure_options(kind)` for every kind, so adding an
@@ -404,23 +403,26 @@ def test_the_sample_raw_gaze_reaches_the_builder(monkeypatch):
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--sample-raw-gaze"])
     frame = seen["raw_gaze"]
-    assert set(frame["trial_id"]) == {TRIAL[1]}
+    assert {TRIAL[1], OTHER[1]} <= set(frame["trial_id"])
 
 
 def test_a_raw_gaze_file_reaches_the_builder(monkeypatch, tmp_path):
     path = tmp_path / "gaze.csv"
-    api.load_sample_raw_gaze(names="canonical").to_csv(path, index=False)
+    samples = api.load_sample_raw_gaze(names="canonical").head(100)
+    samples.to_csv(path, index=False)
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--raw-gaze", str(path)])
-    assert len(seen["raw_gaze"]) == len(api.load_sample_raw_gaze(names="canonical"))
+    assert len(seen["raw_gaze"]) == len(samples)
 
 
 def test_a_raw_gaze_mapping_names_the_columns(monkeypatch, tmp_path):
     """`--raw-gaze-schema` is `--fix-schema`'s twin: a table whose columns
     auto-detection can't read is mapped by hand."""
     path = tmp_path / "gaze.csv"
-    frame = api.load_sample_raw_gaze(names="canonical").rename(
-        columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"}
+    frame = (
+        api.load_sample_raw_gaze(names="canonical")
+        .head(100)
+        .rename(columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"})
     )
     frame.drop(columns=["unique_trial_id", "text_id"]).to_csv(path, index=False)
     with pytest.raises(SystemExit, match="--raw-gaze-schema"):

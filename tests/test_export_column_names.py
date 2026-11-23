@@ -312,15 +312,14 @@ class TestRewrites:
             (table, column) for table, column, _how in rewrites
         }
 
-    def test_the_demo_names_its_shifted_word_id_honestly(self):
-        """The demo's fixation word ids are shifted (`− 1`) on every load."""
+    def test_the_demo_preserves_the_recorded_word_id_header(self):
         from scanpath_studio.compare_source import _builtin_column_names
         from scanpath_studio.constants import DEMO_CHOICE
 
         payload = _builtin_column_names(DEMO_CHOICE)["fixations"]
         names = ColumnNames.from_payload(payload)
-        assert names.kind_of("word_id") == cn.CONVERTED
-        assert names.label("word_id").endswith(" − 1")
+        assert names.kind_of("word_id") == cn.MAPPED
+        assert names.label("word_id") == "CURRENT_FIX_INTEREST_AREA_ID"
 
 
 def test_csv_dictionary_uses_the_written_types_units_and_missing_convention(tmp_path):

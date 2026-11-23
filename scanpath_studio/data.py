@@ -1830,12 +1830,17 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
         trial=pick_column(raw_gaze, TRIAL_CANDIDATES),
         screen_id=pick_column(raw_gaze, SCREEN_ID_CANDIDATES),
         screen_index=pick_column(raw_gaze, SCREEN_INDEX_CANDIDATES),
+        canvas_width=pick_column(raw_gaze, CANVAS_WIDTH_CANDIDATES),
+        canvas_height=pick_column(raw_gaze, CANVAS_HEIGHT_CANDIDATES),
         text_id=pick_column(raw_gaze, TEXT_ID_CANDIDATES),
         word_id=pick_column(raw_gaze, FIX_WORD_ID_CANDIDATES),
         text=pick_column(raw_gaze, TEXT_CANDIDATES),
         x=pick_column(raw_gaze, RAW_GAZE_X_CANDIDATES),
         y=pick_column(raw_gaze, RAW_GAZE_Y_CANDIDATES),
         timestamp=pick_column(raw_gaze, RAW_GAZE_TIMESTAMP_CANDIDATES),
+        eye=pick_column(raw_gaze, ["eye", "EYE_TRACKED", "EYE_USED"]),
+        pupil_area=pick_column(raw_gaze, ["pupil_area"]),
+        pupil_diameter=pick_column(raw_gaze, ["pupil_diameter"]),
     )
 
 
@@ -2561,6 +2566,8 @@ NUMERIC_SCHEMA_FIELDS = frozenset(
         "height",
         "left",
         "line",
+        "pupil_area",
+        "pupil_diameter",
         "right",
         "screen_index",
         "screen_timestamp",
@@ -4904,11 +4911,26 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def read_sample_raw_gaze() -> pd.DataFrame:
-    """Read the bundled raw gaze sample (millisecond-level x,y)."""
+    """Read the demo's 1 kHz EyeLink positions, timestamps, pupil area and eye."""
     return _load_bundled("raw_gaze")
 
 
 load_sample_raw_gaze = st.cache_data(read_sample_raw_gaze)
+
+
+def normalized_sample_raw_gaze() -> tuple[pd.DataFrame, dict | None, tuple[str, ...]]:
+    """The demo samples, mapping and original headers shared by both scanpaths."""
+
+    def build():
+        sample = read_sample_raw_gaze()
+        if sample.empty:
+            return sample, None, ()
+        schema = propose_raw_gaze_schema(sample)
+        if validate_raw_gaze_schema(schema):
+            return pd.DataFrame(), None, tuple(sample.columns)
+        return normalize_raw_gaze(sample, schema), schema, tuple(sample.columns)
+
+    return frame_cache("demo_raw_gaze", (), build)
 
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
@@ -4930,13 +4952,9 @@ def normalize_raw_gaze(
 ) -> pd.DataFrame:
     """Normalize raw gaze data to canonical column names.
 
-    ``keep_columns`` carries user-chosen extra source columns through
-    verbatim, the same "Extra fields to keep" mechanism
-    :func:`normalize_words`/:func:`normalize_fixations` have — raw
-    gaze has no optional-fields *registry* of its own (no semantic field
-    here is common enough across exports to earn a canonical name the way
-    ``saccade_amplitude`` does for fixations), so this only ever carries
-    unclaimed columns, via :func:`_carry_extra_columns`.
+    Keep every identified sample, including tracking loss. Pupil measurements
+    retain their recorded units. ``keep_columns`` carries additional source
+    columns through verbatim, as it does for words and fixations.
     """
     # Samples with no participant or trial id belong to no trial (the rule
     # the other two tables follow).
@@ -4990,6 +5008,11 @@ def normalize_raw_gaze(
         df["word_id"] = raw_gaze[schema["word_id"]]
     df["x"] = _to_number(raw_gaze[schema["x"]])
     df["y"] = _to_number(raw_gaze[schema["y"]])
+    if schema.get("eye"):
+        df["eye"] = raw_gaze[schema["eye"]]
+    for measurement in ("pupil_area", "pupil_diameter"):
+        if schema.get(measurement):
+            df[measurement] = _to_number(raw_gaze[schema[measurement]])
     skip = _schema_source_columns(schema)
     if schema.get("timestamp"):
         onset = schema["timestamp"]
@@ -6005,8 +6028,8 @@ def _key_frame(frame: pd.DataFrame, ids: pd.Series) -> pd.DataFrame:
 def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
     """Detect a 1-based fixation ``word_id`` against 0-based word boxes.
 
-    Some exports (the bundled OneStop demo among them) number the fixation
-    report's word column ``1..N`` while the Words table numbers its rows
+    Some exports number the fixation report's word column ``1..N``
+    while the Words table numbers its rows
     ``0..N-1``, so every fixation's pre-assigned ``word_id`` points at the *next*
     word. ``measures.assign_fixations_to_words`` keeps existing ids, so the
     computed reading measures then attach to the wrong words.
@@ -8254,18 +8277,8 @@ def dataset_part_catalog(
     fixations: pd.DataFrame | None,
     raw_gaze: pd.DataFrame | None,
 ) -> pd.DataFrame:
-    """List screens from words and fixations, using samples for gaze-only trials."""
-    catalog = part_catalog(words, fixations)
-    if raw_gaze is None or SCREEN_ID not in raw_gaze or raw_gaze.empty:
-        return catalog
-    covered = trial_keys(words) | trial_keys(fixations)
-    if not covered:
-        return part_catalog(raw_gaze)
-    samples_only = trial_keys(raw_gaze) - covered
-    if not samples_only:
-        return catalog
-    extra = part_catalog(filter_frame_to_keys(raw_gaze, samples_only))
-    return pd.concat([catalog, extra], ignore_index=True)
+    """List the screens recorded in any of the dataset's three tables."""
+    return part_catalog(words, fixations, raw_gaze)
 
 
 def filter_to_keys(
@@ -8343,7 +8356,7 @@ def raw_gaze_in_pool(
         # Per raw-gaze table, not per filter change: `frame_cache` keeps one
         # entry per slot, so toggling a filter back rebuilds this — and the
         # samples' own keys are the one full pass worth not repeating.
-        present = _raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
+        present = raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
         pooled = trial_keys(words_pool) | trial_keys(fixations_pool)
         keep = {k for k in present if k in pooled or (keep_unknown and k not in known)}
         return raw_gaze if keep == present else filter_frame_to_keys(raw_gaze, keep)
@@ -8352,7 +8365,7 @@ def raw_gaze_in_pool(
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
-def _raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
+def raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
     """`trial_keys` of one (narrowed) raw-gaze table, cached on its fingerprint."""
     progress.report()
     return trial_keys(_raw_gaze)

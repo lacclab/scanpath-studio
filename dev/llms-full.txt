@@ -144,21 +144,23 @@ In the app, **Help** → **Task guides** has short steps you can read offline. O
 
 Open a dataset and set the trial filters for your question. Word-level views need [reading measures in the Words table](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#reading-measures); the bundled demo includes them. To compare participants on one text, their trials of that text must share one text ID.
 
+Choose **Texts** to compare passages or **Participants** to compare readers. Select a dot to see its mean, range and how many readings contributed. **Open word profile** shows where in a text the values change. **Open participant profile** compares one reader’s word values with the others.
+
 ## Keep the result
 
-**⬇ Download this table (CSV)** saves the values. **⬇ Download the recipe (JSON)** saves the dataset name, the trial filters, the analysis choices and the counts. Keep the source data as well: the recipe records the dataset name, but does not include the data itself.
+Open **Table and downloads** under a text or participant comparison. In a detailed analysis that produces a table, use **Download results**. The CSV saves the values. **Download recipe (JSON)** saves the dataset name, the trial filters, the analysis choices and the counts. Keep the source data alongside the recipe so you can reproduce the result.
 
 To draw a summary with Python or the CLI, see [Plot a summary in code](https://lacclab.github.io/scanpath-studio/dev/guides/corpus-workspace/#plot-a-summary-in-code).
 
 # Analyze one text
 
-Compare how participants read the words of one text.
-
-1. [Select the trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#before-you-start), then open **Corpus Analysis** → **Per text**.
-1. Pick a text and a reading measure your data provides.
-1. In **View**, choose **Measure on the stimulus**. To plot the measure against a word feature such as surprisal, choose **Measure vs feature** and pick the **Feature**. Your Words table must have that column.
-1. In **Aggregate**, choose how to combine the values. **Cohort profile** also shows a shaded **Spread** band. Use **Min participants per word** to leave out words with too few participants contributing a value.
+1. [Select the trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#before-you-start), then open **Corpus Analysis** and choose a **Reading measure**. In the bundled demo, try **Total fixation duration — TFD**.
+1. In **Texts**, select a dot or use **Find a text**, then choose **Open word profile**. The **Cohort profile** shows a point for each word with enough observations. Hover over a point to read the word and its value.
+1. Open **Readings behind a word** to check which participants supplied a value. A blank cell means that reading had no recorded value for the selected measure. In **Chart settings**, **Aggregate** sets how the profile combines values, **Spread** controls the shaded band, and **Min participants per word** sets how many readers must contribute.
+1. In **Chart settings**, use **View** to explore the same text. **Measure on the stimulus** colors the words in their original positions. **Measure vs feature** compares the reading measure with a feature in the Words table, such as surprisal.
 1. [Download the table and recipe](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#keep-the-result).
+
+If your data has no mapped **Text ID**, open **Texts** to inspect a single reading by its trial ID. To compare several readings, map the Words column that identifies the same passage across participants. If the page asks for reading measures, **Map reading measures** opens the column mapping for an editable dataset. For an upload that contains only fixations or gaze samples, **Add a Words table** opens the editor where you can attach the report.
 
 \[!\[
 
@@ -168,15 +170,18 @@ Compare how participants read the words of one text.
 
 # Compare groups or conditions
 
-Compare a reading measure between two groups of participants or two conditions.
+To compare two reading conditions in the bundled demo, use the advanced (**Adv**) and elementary (**Ele**) versions of its texts.
 
-1. [Select the trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#before-you-start), then open **Corpus Analysis** → **Groups**.
-1. Turn on **Compare a second group**.
-1. Choose **Split a field** to form the groups from the values of one column, or **Independent filter sets** to define each group by a separate set of filters.
-1. In **View**, choose **Group means & difference** and a measure. Check the number of participants in each group and whether any participant is in both. The **Standardized difference** (Cohen's d) is shown only when the groups share no participant.
+1. [Select the trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#before-you-start), then open **Corpus Analysis** and select **Groups**. Choose a measure.
+1. In **Edit groups**, use **Split a field** and choose `difficulty_level`. Select **Adv** for Group A and **Ele** for Group B. Each group needs at least one value. To choose participants, texts or conditions separately for each group, use **Independent filter sets**. A group with no filters includes all selected trials.
+1. Read **Difference (A − B)**. For total fixation duration, a difference of 20 ms means that Group A spent 20 ms longer per word on average. The counts show how many participants contributed a value to each mean. For a rate, a change from 30% in B to 40% in A is a difference of 10 percentage points.
 1. [Download the table and recipe](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#keep-the-result).
 
-The comparison provides a descriptive summary; it does not run significance tests. For a recorded example, see [Analyze one text](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/analyze-one-text/index.md).
+For a different comparison, open **Chart settings** and choose a **View**. To explore Group A on its own, turn off **Compare two groups**.
+
+For each participant, **Group means & difference** averages the words with a recorded value across all their selected trials. A trial with more measured words has more weight in that participant's mean. The group mean then gives each participant equal weight. In **Participants**, each reading contributes one mean to the summary, so the two views can give different values.
+
+A participant who read both conditions contributes to both group means. The **Standardized difference** (Cohen's d) is available only for groups with no participants in common.
 
 # Track changes over time
 
@@ -184,13 +189,13 @@ Inspect a measure within trials or across a session.
 
 1. [Select the trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/#before-you-start) and open **Corpus Analysis**.
 
-1. Choose the view for the question:
+1. To follow one reader, choose **Participants**, select a reader and open their profile. To follow a group, choose **Groups** and turn off **Compare two groups**. In **Chart settings**, choose the **View** you need.
 
-   | Scope                                                       | View                                                  |
-   | ----------------------------------------------------------- | ----------------------------------------------------- |
-   | One participant across trials                               | **Per participant** → **Per-trial trend**             |
-   | Fixation duration within trials, pooled for one participant | **Per participant** → **Fixation duration over time** |
-   | A group across trials                                       | **Groups** → **Group trend**                          |
+   | Scope                                                       | View                            |
+   | ----------------------------------------------------------- | ------------------------------- |
+   | One participant across trials                               | **Per-trial trend**             |
+   | Fixation duration within trials, pooled for one participant | **Fixation duration over time** |
+   | A group across trials                                       | **Group trend**                 |
 
 1. Choose a measure, and an **Aggregate** where the view offers one. Across-trial trends order each participant's trials by a `trial_index` or `TRIAL_INDEX` column. Without one, the app orders them by fixation time, or as listed, and this may differ from the order the trials were shown. For the within-trial view, set **X axis** to **Fixation order**, or to **Time (ms)** when the data records fixation onsets.
 
@@ -486,19 +491,30 @@ Each guide explains one part of the app, with Python and CLI examples where they
 
 # Corpus Analysis
 
-The **Corpus Analysis** view summarizes reading measures by text, participant or group. It uses the selected dataset and the trials that match your filters.
+Open **Corpus Analysis** to compare a reading measure across the trials in your current selection. The pool beside the dataset picker shows how many trials and participants your filters include.
+
+## Compare the corpus
+
+Choose **Texts** to compare passages or **Participants** to compare readers. The chart opens with a reading measure from your Words table. Use **Reading measure** to change it.
+
+| Destination      | Dot                                        | Line                               |
+| ---------------- | ------------------------------------------ | ---------------------------------- |
+| **Texts**        | Mean across participants who read the text | Lowest to highest participant mean |
+| **Participants** | Mean across that participant’s readings    | Lowest to highest reading mean     |
+
+Each reading contributes the mean of its finite word values across all its screens. When a participant reads a text more than once, their reading means are averaged before they contribute to the text mean.
+
+The chart starts with the 12 highest means. Select a dot to see the exact mean, range and number of observations. Use **Find a text** or **Find a participant** to inspect any ID, including one outside the first 12. **Table and downloads** includes every group with the required IDs, even those with no recorded values. Rates appear as percentages on screen and as proportions from 0 to 1 in the CSV.
+
+Text summaries use the Text ID mapped in the Words table. Without one, **Participants** opens first and **Texts** lets you inspect a single reading. The summary excludes shared stimulus values copied across readers. Older saved datasets that predate this mapping information use their stored text IDs.
 
 ## Choose a view
 
-Open a tab, then pick a figure in its **View** menu.
+After selecting a text, choose **Open word profile** to see where in the passage the measure changes. For a participant, **Open participant profile** compares their word values with the rest of the selected participants. The profile opens with the measure you were using. Use **Back to texts** or **Back to participants** to return to the comparison.
 
-| Tab                 | Use it to                                                        |
-| ------------------- | ---------------------------------------------------------------- |
-| **Per text**        | Compare word-by-word reading across participants                 |
-| **Per participant** | Inspect one participant across trials                            |
-| **Groups**          | Summarize a group of trials, or compare two groups or conditions |
+In a participant profile, the wider parts of a violin show where more duration observations fall. A skip or regression rate has a percentage and the word counts behind it. Each measured word counts equally here, so longer readings can carry more weight than in the participant summary.
 
-Choose a **Measure** and use **Aggregate** to choose how values are combined. For views with a shaded band, **Spread** controls what the band shows. For word profiles, **Min participants per word** sets how many participants must have a value for a word to be included.
+Open **Chart settings** to change the **View**. In a word profile, **Aggregate** sets how values are combined, **Spread** controls the shaded band, and **Min participants per word** sets how many readers must contribute.
 
 **Readings behind a word** shows the source measurements and the value each participant contributes after combining repeated readings. A blank or infinite measurement contributes no value. The profile leaves a gap at a word below the participant threshold. When two readings of a text differ in their wording or layout, **Measure on the stimulus** lets you choose which version to tint.
 
@@ -508,21 +524,21 @@ Word-level views use the [reading measures in your data](https://lacclab.github.
 
 ## Compare groups
 
-Under **Define groups by**, choose **Split a field** to group trials by the values of a column, or **Independent filter sets** to define a group using filters. Turn on **Compare a second group** to define group B. You can then compare the groups side by side, including their means and the difference between them. These views provide descriptive summaries; they do not run significance tests.
+Choose **Groups** to see the two group means and their difference. Open **Edit groups** to change which readings belong to A and B. **Split a field** uses the values of a column. **Independent filter sets** lets you choose participants, texts or conditions separately for each group. To examine the first group on its own, turn off **Compare two groups**. For skip and regression rates, **Group means & difference** shows each mean as a percentage and their difference in percentage points. A word-by-word comparison across readings needs a shared Text ID in the Words table.
 
 For a repeated-measures design, **Within-participant contrast** shows each participant's mean in A and B and the difference A − B. The summary averages only complete pairs. The CSV keeps readers who are missing either condition.
 
-**Study inclusion and exclusions** downloads participant and reading counts for the active pool. The separate per-reading file names all matching exclusion reasons, so a reading that fails two rules counts only once.
+In **Edit filters**, **Study inclusion and exclusions** downloads participant and reading counts for the active pool. The separate per-reading file names all matching exclusion reasons, so a reading that fails two rules counts only once.
 
 ## Save results
 
-Under each result, **⬇ Download this table (CSV)** saves the table and **⬇ Download the recipe (JSON)** saves a record of the analysis: the dataset name, trial filters, analysis choices and counts. Keep your source data separately; the recipe contains neither the data nor the figure settings. To inspect individual trials, return to the Scanpath view.
+In **Texts** or **Participants**, open **Table and downloads** below the comparison. Detailed analyses that produce a table have a **Download results** menu. The CSV saves the values. **Download recipe (JSON)** records the dataset, trial filters, analysis choices and counts. Keep the source files with the recipe to rerun the analysis.
 
 A cohort profile's **Methods draft** records its measure, grouping, normalization, spread, reader threshold, trial filters and software version. **Compare profile revisions** saves a separate snapshot with individual reader IDs and measurements. After correcting a source file, open an earlier snapshot there to see which readings or word values changed.
 
-### Rerun a cohort or group difference profile
+### Rerun an overview or word profile
 
-Save the recipe alongside the CSV from **Per text → Cohort profile** or **Groups → Difference word profile**. Keep the source tables. For a difference profile, the recipe records each group’s constraints and which group was subtracted. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
+Save the recipe alongside the CSV from a text or participant summary, a **Cohort profile**, or **Groups → Difference word profile**. For a difference profile, the recipe records each group’s constraints and which group was subtracted. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
 
 ```
 scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
@@ -532,7 +548,7 @@ For the bundled demo, use `--sample` in place of the table paths. If you filtere
 
 ## Plot a summary in code
 
-Start from a tidy summary table, such as a **Cohort profile** table downloaded from Corpus Analysis. A word profile needs `word_id` and `value` columns, with optional `lo` and `hi` for a band. The downloaded table names the word ID column as your data does, so rename it to `word_id` if needed. For a trend over trial order, see [Across the experiment](https://lacclab.github.io/scanpath-studio/dev/gallery/across-experiment/index.md).
+Start from a tidy summary table, such as a **Cohort profile** table downloaded from Corpus Analysis. A word profile needs `word_id` and `value` columns, with optional `lo` and `hi` for a band. The downloaded table names the word ID column as your data does, so rename it to `word_id` if needed. For a text or participant summary CSV of skip or regression rates, use `kind="overview"` with `as_percent=True` in Python, or `--kind overview --percent` with the CLI. Set `series_col` or `--series-col` to the CSV’s text or participant ID column. For a trend over trial order, see [Across the experiment](https://lacclab.github.io/scanpath-studio/dev/gallery/across-experiment/index.md).
 
 Python and CLI: word profile
 
@@ -1328,52 +1344,52 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 
 ## At a glance
 
-| Function                                      | What it does                                                                      |
-| --------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Load your data**                            |                                                                                   |
-| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                     |
-| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.   |
-| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                 |
-| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.     |
-| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.               |
-| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                 |
-| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                             |
-| load_text_metadata                            | Load a text-level metadata table: one row per text.                               |
-| **Load the bundled demo and public datasets** |                                                                                   |
-| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                              |
-| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo. |
-| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.              |
-| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.            |
-| **Draw a scanpath**                           |                                                                                   |
-| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.           |
-| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                       |
-| **Inspect**                                   |                                                                                   |
-| list_trials                                   | List every plottable trial: one row per participant and trial.                    |
-| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.             |
-| check_data_health                             | Check durations, positions and word boxes for data problems.                      |
-| run_analysis_recipe                           | Recreate a per-word cohort profile or a two-group difference profile.             |
-| **Plot**                                      |                                                                                   |
-| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.       |
-| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.        |
-| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.               |
-| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.          |
-| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.       |
-| **Figure options**                            |                                                                                   |
-| figure_options                                | List figure options and their default values.                                     |
-| **Reproduce a figure in code**                |                                                                                   |
-| figure_code                                   | Write the API or CLI code that reproduces a figure.                               |
-| **Save**                                      |                                                                                   |
-| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                           |
-| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.       |
-| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                        |
-| **Recovery cache**                            |                                                                                   |
-| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.         |
-| clear_cache                                   | Delete the recovery cache.                                                        |
-| **Version and updates**                       |                                                                                   |
-| version_info                                  | Return version and installation details without a network request.                |
-| check_for_updates                             | Check GitHub for a newer release.                                                 |
-| **Citation**                                  |                                                                                   |
-| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.           |
+| Function                                      | What it does                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Load your data**                            |                                                                                      |
+| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                        |
+| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.      |
+| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                    |
+| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.        |
+| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.                  |
+| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                    |
+| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                                |
+| load_text_metadata                            | Load a text-level metadata table: one row per text.                                  |
+| **Load the bundled demo and public datasets** |                                                                                      |
+| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                                 |
+| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.    |
+| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.                 |
+| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.               |
+| **Draw a scanpath**                           |                                                                                      |
+| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.              |
+| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                          |
+| **Inspect**                                   |                                                                                      |
+| list_trials                                   | List every plottable trial: one row per participant and trial.                       |
+| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.                |
+| check_data_health                             | Check durations, positions and word boxes for data problems.                         |
+| run_analysis_recipe                           | Recreate a corpus overview, per-word cohort profile or two-group difference profile. |
+| **Plot**                                      |                                                                                      |
+| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.          |
+| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.           |
+| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.                  |
+| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.             |
+| plot_corpus_figure                            | Plot a corpus overview, profile, distribution or difference from a tidy table.       |
+| **Figure options**                            |                                                                                      |
+| figure_options                                | List figure options and their default values.                                        |
+| **Reproduce a figure in code**                |                                                                                      |
+| figure_code                                   | Write the API or CLI code that reproduces a figure.                                  |
+| **Save**                                      |                                                                                      |
+| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                              |
+| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.          |
+| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                           |
+| **Recovery cache**                            |                                                                                      |
+| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.            |
+| clear_cache                                   | Delete the recovery cache.                                                           |
+| **Version and updates**                       |                                                                                      |
+| version_info                                  | Return version and installation details without a network request.                   |
+| check_for_updates                             | Check GitHub for a newer release.                                                    |
+| **Citation**                                  |                                                                                      |
+| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.              |
 
 ## Column names
 
@@ -1923,7 +1939,7 @@ run_analysis_recipe(
 )
 ```
 
-Recreate a per-word cohort profile or a two-group difference profile.
+Recreate a corpus overview, per-word cohort profile or two-group difference profile.
 
 Parameters:
 
@@ -2239,6 +2255,7 @@ plot_corpus_figure(
     measure_label="Value",
     series_col="series",
     value_col="value",
+    as_percent=False,
     colors=None,
     canvas_width=1000,
     base_font_size=14,
@@ -2246,17 +2263,18 @@ plot_corpus_figure(
 )
 ```
 
-Plot a corpus profile, distribution or difference figure from a tidy table.
+Plot a corpus overview, profile, distribution or difference from a tidy table.
 
 The headless form of Corpus Analysis's figures, in the same colors.
 
 Parameters:
 
-- **`data`** (`DataFrame`) – The tidy table. kind="profile" reads word_id and value_col (and optional lo / hi), "distribution" reads value_col, and "difference" reads word_id and diff.
-- **`kind`** (`str`) – "profile", "distribution" or "difference".
+- **`data`** (`DataFrame`) – The tidy table. kind="profile" reads word_id and value_col (and optional lo / hi), "distribution" reads value_col, and "difference" reads word_id and diff. An "overview" reads the group ID in series_col, the mean in value_col, and its observed minimum and maximum in lo and hi. It plots the 12 highest means.
+- **`kind`** (`str`) – "overview", "profile", "distribution" or "difference".
 - **`measure_label`** (`str`, default: `'Value'` ) – The measure's label, and the series' name when the table has no series_col.
-- **`series_col`** (`str`, default: `'series'` ) – The column naming each overlaid profile or distribution series, when the table has it.
+- **`series_col`** (`str`, default: `'series'` ) – The group ID for an overview, or the column naming each overlaid series.
 - **`value_col`** (`str`, default: `'value'` ) – The column holding the values.
+- **`as_percent`** (`bool`, default: `False` ) – Display overview proportions as percentages on the axis and in hover labels. Supply values and bounds on the 0–1 scale.
 - **`colors`** (`tuple[str, ...] | None`, default: `None` ) – The series' colors, in order. Left out, the app's palette.
 - **`canvas_width`** (`int`, default: `1000` ) – The figure's width in px.
 - **`base_font_size`** (`int`, default: `14` ) – The base font size in px.
@@ -3318,20 +3336,28 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 ```
 
-| Option              | Value                                   | Default   | Description                                                                                                                                           |
-| ------------------- | --------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--input`           | `PATH`                                  | required  | The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. |
-| `--kind`            | `profile`, `distribution`, `difference` | required  | A per-word profile, a distribution, or a difference profile.                                                                                          |
-| `-o` `--output`     | `PATH`                                  | required  | Output file; any extension save_figure writes (.html, .png, .svg, .pdf).                                                                              |
-| `--measure-label`   | `MEASURE_LABEL`                         | `Value`   | Axis and legend label for the value (default: Value).                                                                                                 |
-| `--series-col`      | `SERIES_COL`                            | `series`  | Column naming the overlaid series, when present (default: series).                                                                                    |
-| `--value-col`       | `VALUE_COL`                             | `value`   | The value column (default: value).                                                                                                                    |
-| `--primary-color`   | `PRIMARY_COLOR`                         | `#1f77b4` | First series color (default: #1f77b4).                                                                                                                |
-| `--secondary-color` | `SECONDARY_COLOR`                       | `#e45756` | Second series color (default: #e45756).                                                                                                               |
+To draw an overview CSV, pass its grouping column with `--series-col`. For example, this draws participant means and their observed ranges from a summary whose ID column is named `reader`.
+
+```
+scanpath-studio corpus --input overview.csv --kind overview --series-col reader \
+  --measure-label "Total fixation duration (ms)" -o overview.html
+```
+
+| Option              | Value                                               | Default   | Description                                                                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--input`           | `PATH`                                              | required  | The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. Overview reads the group column (`--series-col`), the mean (`--value-col`), lo and hi. |
+| `--kind`            | `overview`, `profile`, `distribution`, `difference` | required  | A corpus overview, per-word profile, distribution or difference profile.                                                                                                                                                                     |
+| `-o` `--output`     | `PATH`                                              | required  | Output file; any extension save_figure writes (.html, .png, .svg, .pdf).                                                                                                                                                                     |
+| `--measure-label`   | `MEASURE_LABEL`                                     | `Value`   | Axis and legend label for the value (default: Value).                                                                                                                                                                                        |
+| `--series-col`      | `SERIES_COL`                                        | `series`  | Group ID for an overview, or column naming the overlaid series (default: series).                                                                                                                                                            |
+| `--value-col`       | `VALUE_COL`                                         | `value`   | The value column (default: value).                                                                                                                                                                                                           |
+| `--percent`         | switch                                              | —         | Show overview values and bounds stored as proportions (0–1) as percentages.                                                                                                                                                                  |
+| `--primary-color`   | `PRIMARY_COLOR`                                     | —         | First series color (overview: #0072B2, other figures: #1f77b4).                                                                                                                                                                              |
+| `--secondary-color` | `SECONDARY_COLOR`                                   | `#e45756` | Second series color (default: #e45756).                                                                                                                                                                                                      |
 
 ## recipe
 
-Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`. The command identifies any missing metadata or annotation input and verifies the regenerated CSV against the checksum in the recipe when available.
+Recreate an **Overview**, **Cohort profile** or **Difference word profile** CSV from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`. The command identifies any missing metadata or annotation input and verifies the regenerated CSV against the checksum in the recipe when available.
 
 ```
 scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
@@ -3339,9 +3365,9 @@ scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixatio
 
 **Positional arguments**
 
-| Option | Value         | Default  | Description                                 |
-| ------ | ------------- | -------- | ------------------------------------------- |
-|        | `RECIPE.json` | required | Cohort profile recipe from Corpus Analysis. |
+| Option | Value         | Default  | Description                                      |
+| ------ | ------------- | -------- | ------------------------------------------------ |
+|        | `RECIPE.json` | required | Analysis recipe downloaded from Corpus Analysis. |
 
 **Options**
 
@@ -3455,8 +3481,8 @@ You don't have to add the citation to your files by hand: every figure `render` 
 
 Mean total fixation duration per word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
 
-1. Open your data in the **Corpus Analysis** view, on the **Per participant** tab.
-1. Choose a participant, and in **View** choose **Per-trial trend**.
+1. Open your data in the **Corpus Analysis** view and select **Participants**.
+1. Choose a participant and select **Open participant profile**. In **Chart settings**, set **View** to **Per-trial trend**.
 1. Choose a reading measure your data provides, and **Mean** in **Aggregate**. The horizontal axis is the trial order from the data’s `trial_index` or `TRIAL_INDEX` column. Without one, the app orders the trials by fixation time, or as listed.
 
 [Follow the progression tutorial](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/progression-over-time/index.md)
@@ -4152,6 +4178,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - The bundled demo now uses two readers from the published OneStop L1 cohort and includes recorded EyeLink gaze samples for all 24 readings. Demo participant and trial IDs have changed.
 - Bulk PNG, SVG and PDF exports reuse the browser page across trials and prepare the next figure during rendering. Large bundles download from temporary disk in small pieces as one ZIP.
 - Bulk exports run faster on large datasets whose rows are grouped by trial.
+- Corpus Analysis opens with a chart of texts or participants. Select a dot for its readings, open a word or participant profile, or choose Groups to compare two conditions. Chart settings, tables and downloads open on demand.
 
 ### Removed
 

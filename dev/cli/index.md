@@ -486,20 +486,28 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 ```
 
-| Option              | Value                                   | Default   | Description                                                                                                                                           |
-| ------------------- | --------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--input`           | `PATH`                                  | required  | The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. |
-| `--kind`            | `profile`, `distribution`, `difference` | required  | A per-word profile, a distribution, or a difference profile.                                                                                          |
-| `-o` `--output`     | `PATH`                                  | required  | Output file; any extension save_figure writes (.html, .png, .svg, .pdf).                                                                              |
-| `--measure-label`   | `MEASURE_LABEL`                         | `Value`   | Axis and legend label for the value (default: Value).                                                                                                 |
-| `--series-col`      | `SERIES_COL`                            | `series`  | Column naming the overlaid series, when present (default: series).                                                                                    |
-| `--value-col`       | `VALUE_COL`                             | `value`   | The value column (default: value).                                                                                                                    |
-| `--primary-color`   | `PRIMARY_COLOR`                         | `#1f77b4` | First series color (default: #1f77b4).                                                                                                                |
-| `--secondary-color` | `SECONDARY_COLOR`                       | `#e45756` | Second series color (default: #e45756).                                                                                                               |
+To draw an overview CSV, pass its grouping column with `--series-col`. For example, this draws participant means and their observed ranges from a summary whose ID column is named `reader`.
+
+```
+scanpath-studio corpus --input overview.csv --kind overview --series-col reader \
+  --measure-label "Total fixation duration (ms)" -o overview.html
+```
+
+| Option              | Value                                               | Default   | Description                                                                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--input`           | `PATH`                                              | required  | The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. Overview reads the group column (`--series-col`), the mean (`--value-col`), lo and hi. |
+| `--kind`            | `overview`, `profile`, `distribution`, `difference` | required  | A corpus overview, per-word profile, distribution or difference profile.                                                                                                                                                                     |
+| `-o` `--output`     | `PATH`                                              | required  | Output file; any extension save_figure writes (.html, .png, .svg, .pdf).                                                                                                                                                                     |
+| `--measure-label`   | `MEASURE_LABEL`                                     | `Value`   | Axis and legend label for the value (default: Value).                                                                                                                                                                                        |
+| `--series-col`      | `SERIES_COL`                                        | `series`  | Group ID for an overview, or column naming the overlaid series (default: series).                                                                                                                                                            |
+| `--value-col`       | `VALUE_COL`                                         | `value`   | The value column (default: value).                                                                                                                                                                                                           |
+| `--percent`         | switch                                              | —         | Show overview values and bounds stored as proportions (0–1) as percentages.                                                                                                                                                                  |
+| `--primary-color`   | `PRIMARY_COLOR`                                     | —         | First series color (overview: #0072B2, other figures: #1f77b4).                                                                                                                                                                              |
+| `--secondary-color` | `SECONDARY_COLOR`                                   | `#e45756` | Second series color (default: #e45756).                                                                                                                                                                                                      |
 
 ## recipe
 
-Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`. The command identifies any missing metadata or annotation input and verifies the regenerated CSV against the checksum in the recipe when available.
+Recreate an **Overview**, **Cohort profile** or **Difference word profile** CSV from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`. The command identifies any missing metadata or annotation input and verifies the regenerated CSV against the checksum in the recipe when available.
 
 ```
 scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
@@ -507,9 +515,9 @@ scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixatio
 
 **Positional arguments**
 
-| Option | Value         | Default  | Description                                 |
-| ------ | ------------- | -------- | ------------------------------------------- |
-|        | `RECIPE.json` | required | Cohort profile recipe from Corpus Analysis. |
+| Option | Value         | Default  | Description                                      |
+| ------ | ------------- | -------- | ------------------------------------------------ |
+|        | `RECIPE.json` | required | Analysis recipe downloaded from Corpus Analysis. |
 
 **Options**
 

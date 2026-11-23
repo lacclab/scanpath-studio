@@ -4038,7 +4038,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;run_analysis_recipe&lt;/span&gt;" href="#scanpath_studio.api.run_analysis_recipe"><code>run_analysis_recipe</code></a></td>
-<td>Recreate a per-word cohort profile or a two-group difference profile.</td>
+<td>Recreate a corpus overview, per-word cohort profile or two-group difference profile.</td>
 </tr>
 <tr>
 <td><strong>Plot</strong></td>
@@ -4062,7 +4062,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_corpus_figure&lt;/span&gt;" href="#scanpath_studio.api.plot_corpus_figure"><code>plot_corpus_figure</code></a></td>
-<td>Plot a corpus profile, distribution or difference figure from a tidy table.</td>
+<td>Plot a corpus overview, profile, distribution or difference from a tidy table.</td>
 </tr>
 <tr>
 <td><strong>Figure options</strong></td>
@@ -5748,7 +5748,7 @@ finite and positive. Nothing is changed or dropped.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Recreate a per-word cohort profile or a two-group difference profile.</p>
+        <p>Recreate a corpus overview, per-word cohort profile or two-group difference profile.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7201,16 +7201,17 @@ no screens to choose from.</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">measure_label</span><span class="o">=</span><span class="s2">"Value"</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">series_col</span><span class="o">=</span><span class="s2">"series"</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">value_col</span><span class="o">=</span><span class="s2">"value"</span><span class="p">,</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">colors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">canvas_width</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">as_percent</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">colors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">canvas_width</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
-        <p>Plot a corpus profile, distribution or difference figure from a tidy table.</p>
+        <p>Plot a corpus overview, profile, distribution or difference from a tidy table.</p>
 <p>The headless form of Corpus Analysis's figures, in the same colors.</p>
 
 
@@ -7223,7 +7224,9 @@ no screens to choose from.</p>
           <div class="doc-md-description">
             <p>The tidy table. <code>kind="profile"</code> reads <code>word_id</code> and <code>value_col</code>
 (and optional <code>lo</code> / <code>hi</code>), <code>"distribution"</code> reads <code>value_col</code>, and
-<code>"difference"</code> reads <code>word_id</code> and <code>diff</code>.</p>
+<code>"difference"</code> reads <code>word_id</code> and <code>diff</code>. An <code>"overview"</code> reads the
+group ID in <code>series_col</code>, the mean in <code>value_col</code>, and its observed
+minimum and maximum in <code>lo</code> and <code>hi</code>. It plots the 12 highest means.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -7231,7 +7234,7 @@ no screens to choose from.</p>
               (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
           –
           <div class="doc-md-description">
-            <p><code>"profile"</code>, <code>"distribution"</code> or <code>"difference"</code>.</p>
+            <p><code>"overview"</code>, <code>"profile"</code>, <code>"distribution"</code> or <code>"difference"</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -7252,8 +7255,7 @@ no screens to choose from.</p>
 )
           –
           <div class="doc-md-description">
-            <p>The column naming each overlaid profile or distribution series, when
-the table has it.</p>
+            <p>The group ID for an overview, or the column naming each overlaid series.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -7264,6 +7266,17 @@ the table has it.</p>
           –
           <div class="doc-md-description">
             <p>The column holding the values.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>as_percent</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Display overview proportions as percentages on the axis and in
+hover labels. Supply values and bounds on the 0–1 scale.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">

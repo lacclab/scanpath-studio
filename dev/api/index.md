@@ -18,52 +18,52 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 
 ## At a glance
 
-| Function                                      | What it does                                                                      |
-| --------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Load your data**                            |                                                                                   |
-| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                     |
-| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.   |
-| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                 |
-| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.     |
-| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.               |
-| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                 |
-| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                             |
-| load_text_metadata                            | Load a text-level metadata table: one row per text.                               |
-| **Load the bundled demo and public datasets** |                                                                                   |
-| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                              |
-| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo. |
-| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.              |
-| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.            |
-| **Draw a scanpath**                           |                                                                                   |
-| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.           |
-| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                       |
-| **Inspect**                                   |                                                                                   |
-| list_trials                                   | List every plottable trial: one row per participant and trial.                    |
-| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.             |
-| check_data_health                             | Check durations, positions and word boxes for data problems.                      |
-| run_analysis_recipe                           | Recreate a per-word cohort profile or a two-group difference profile.             |
-| **Plot**                                      |                                                                                   |
-| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.       |
-| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.        |
-| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.               |
-| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.          |
-| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.       |
-| **Figure options**                            |                                                                                   |
-| figure_options                                | List figure options and their default values.                                     |
-| **Reproduce a figure in code**                |                                                                                   |
-| figure_code                                   | Write the API or CLI code that reproduces a figure.                               |
-| **Save**                                      |                                                                                   |
-| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                           |
-| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.       |
-| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                        |
-| **Recovery cache**                            |                                                                                   |
-| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.         |
-| clear_cache                                   | Delete the recovery cache.                                                        |
-| **Version and updates**                       |                                                                                   |
-| version_info                                  | Return version and installation details without a network request.                |
-| check_for_updates                             | Check GitHub for a newer release.                                                 |
-| **Citation**                                  |                                                                                   |
-| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.           |
+| Function                                      | What it does                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Load your data**                            |                                                                                      |
+| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                        |
+| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.      |
+| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                    |
+| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.        |
+| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.                  |
+| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                    |
+| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                                |
+| load_text_metadata                            | Load a text-level metadata table: one row per text.                                  |
+| **Load the bundled demo and public datasets** |                                                                                      |
+| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                                 |
+| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.    |
+| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.                 |
+| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.               |
+| **Draw a scanpath**                           |                                                                                      |
+| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.              |
+| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                          |
+| **Inspect**                                   |                                                                                      |
+| list_trials                                   | List every plottable trial: one row per participant and trial.                       |
+| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.                |
+| check_data_health                             | Check durations, positions and word boxes for data problems.                         |
+| run_analysis_recipe                           | Recreate a corpus overview, per-word cohort profile or two-group difference profile. |
+| **Plot**                                      |                                                                                      |
+| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.          |
+| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.           |
+| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.                  |
+| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.             |
+| plot_corpus_figure                            | Plot a corpus overview, profile, distribution or difference from a tidy table.       |
+| **Figure options**                            |                                                                                      |
+| figure_options                                | List figure options and their default values.                                        |
+| **Reproduce a figure in code**                |                                                                                      |
+| figure_code                                   | Write the API or CLI code that reproduces a figure.                                  |
+| **Save**                                      |                                                                                      |
+| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                              |
+| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.          |
+| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                           |
+| **Recovery cache**                            |                                                                                      |
+| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.            |
+| clear_cache                                   | Delete the recovery cache.                                                           |
+| **Version and updates**                       |                                                                                      |
+| version_info                                  | Return version and installation details without a network request.                   |
+| check_for_updates                             | Check GitHub for a newer release.                                                    |
+| **Citation**                                  |                                                                                      |
+| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.              |
 
 ## Column names
 
@@ -613,7 +613,7 @@ run_analysis_recipe(
 )
 ```
 
-Recreate a per-word cohort profile or a two-group difference profile.
+Recreate a corpus overview, per-word cohort profile or two-group difference profile.
 
 Parameters:
 
@@ -929,6 +929,7 @@ plot_corpus_figure(
     measure_label="Value",
     series_col="series",
     value_col="value",
+    as_percent=False,
     colors=None,
     canvas_width=1000,
     base_font_size=14,
@@ -936,17 +937,18 @@ plot_corpus_figure(
 )
 ```
 
-Plot a corpus profile, distribution or difference figure from a tidy table.
+Plot a corpus overview, profile, distribution or difference from a tidy table.
 
 The headless form of Corpus Analysis's figures, in the same colors.
 
 Parameters:
 
-- **`data`** (`DataFrame`) – The tidy table. kind="profile" reads word_id and value_col (and optional lo / hi), "distribution" reads value_col, and "difference" reads word_id and diff.
-- **`kind`** (`str`) – "profile", "distribution" or "difference".
+- **`data`** (`DataFrame`) – The tidy table. kind="profile" reads word_id and value_col (and optional lo / hi), "distribution" reads value_col, and "difference" reads word_id and diff. An "overview" reads the group ID in series_col, the mean in value_col, and its observed minimum and maximum in lo and hi. It plots the 12 highest means.
+- **`kind`** (`str`) – "overview", "profile", "distribution" or "difference".
 - **`measure_label`** (`str`, default: `'Value'` ) – The measure's label, and the series' name when the table has no series_col.
-- **`series_col`** (`str`, default: `'series'` ) – The column naming each overlaid profile or distribution series, when the table has it.
+- **`series_col`** (`str`, default: `'series'` ) – The group ID for an overview, or the column naming each overlaid series.
 - **`value_col`** (`str`, default: `'value'` ) – The column holding the values.
+- **`as_percent`** (`bool`, default: `False` ) – Display overview proportions as percentages on the axis and in hover labels. Supply values and bounds on the 0–1 scale.
 - **`colors`** (`tuple[str, ...] | None`, default: `None` ) – The series' colors, in order. Left out, the app's palette.
 - **`canvas_width`** (`int`, default: `1000` ) – The figure's width in px.
 - **`base_font_size`** (`int`, default: `14` ) – The base font size in px.

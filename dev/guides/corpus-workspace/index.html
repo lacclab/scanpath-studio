@@ -2310,6 +2310,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#compare-the-corpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare the corpus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#choose-a-view" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2358,7 +2369,7 @@
   <a href="#rerun-a-cohort-or-group-difference-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rerun a cohort or group difference profile
+        Rerun an overview or word profile
       
     </span>
   </a>
@@ -2468,40 +2479,62 @@
 
 
 <h1 id="corpus-analysis">Corpus Analysis<a class="headerlink" href="#corpus-analysis" title="Permanent link">&para;</a></h1>
-<p>The <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> view summarizes reading measures
-by text, participant or group. It uses the selected dataset and the trials
-that match your filters.</p>
+<p>Open <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> to compare a reading measure across
+the trials in your current selection. The pool beside the dataset picker shows
+how many trials and participants your filters include.</p>
 <figure class="sps-screenshot">
-<p><img alt="Corpus Analysis: total fixation duration by word and participant" src="../../assets/screenshots/corpus-analysis.webp" /></p>
+<p><img alt="Total fixation duration across 12 texts, ranked by mean with a line showing the participant range" src="../../assets/screenshots/corpus-analysis.webp" /></p>
 </figure>
-<h2 id="choose-a-view">Choose a view<a class="headerlink" href="#choose-a-view" title="Permanent link">&para;</a></h2>
-<p>Open a tab, then pick a figure in its <strong>View</strong> menu.</p>
+<h2 id="compare-the-corpus">Compare the corpus<a class="headerlink" href="#compare-the-corpus" title="Permanent link">&para;</a></h2>
+<p>Choose <strong>Texts</strong> to compare passages or <strong>Participants</strong> to compare readers.
+The chart opens with a reading measure from your Words table. Use <strong>Reading
+measure</strong> to change it.</p>
 <table>
 <thead>
 <tr>
-<th>Tab</th>
-<th>Use it to</th>
+<th>Destination</th>
+<th>Dot</th>
+<th>Line</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><strong>Per text</strong></td>
-<td>Compare word-by-word reading across participants</td>
+<td><strong>Texts</strong></td>
+<td>Mean across participants who read the text</td>
+<td>Lowest to highest participant mean</td>
 </tr>
 <tr>
-<td><strong>Per participant</strong></td>
-<td>Inspect one participant across trials</td>
-</tr>
-<tr>
-<td><strong>Groups</strong></td>
-<td>Summarize a group of trials, or compare two groups or conditions</td>
+<td><strong>Participants</strong></td>
+<td>Mean across that participant’s readings</td>
+<td>Lowest to highest reading mean</td>
 </tr>
 </tbody>
 </table>
-<p>Choose a <strong>Measure</strong> and use <strong>Aggregate</strong> to choose how values are combined.
-For views with a shaded band, <strong>Spread</strong> controls what the band shows.
-For word profiles, <strong>Min participants per word</strong> sets how many participants
-must have a value for a word to be included.</p>
+<p>Each reading contributes the mean of its finite word values across all its
+screens. When a participant reads a text more than once, their reading means
+are averaged before they contribute to the text mean.</p>
+<p>The chart starts with the 12 highest means. Select a dot to see the exact mean,
+range and number of observations. Use <strong>Find a text</strong> or <strong>Find a participant</strong>
+to inspect any ID, including one outside the first 12. <strong>Table and downloads</strong>
+includes every group with the required IDs, even those with no recorded values.
+Rates appear as percentages on screen and as proportions from 0 to 1 in the CSV.</p>
+<p>Text summaries use the Text ID mapped in the Words table. Without one,
+<strong>Participants</strong> opens first and <strong>Texts</strong> lets you inspect a single reading.
+The summary excludes shared stimulus values copied across readers. Older saved
+datasets that predate this mapping information use their stored text IDs.</p>
+<h2 id="choose-a-view">Choose a view<a class="headerlink" href="#choose-a-view" title="Permanent link">&para;</a></h2>
+<p>After selecting a text, choose <strong>Open word profile</strong> to see where in the
+passage the measure changes. For a participant, <strong>Open participant profile</strong>
+compares their word values with the rest of the selected participants.
+The profile opens with the measure you were using. Use <strong>Back to texts</strong> or
+<strong>Back to participants</strong> to return to the comparison.</p>
+<p>In a participant profile, the wider parts of a violin show where more duration
+observations fall. A skip or regression rate has a percentage and the word
+counts behind it. Each measured word counts equally here, so longer readings
+can carry more weight than in the participant summary.</p>
+<p>Open <strong>Chart settings</strong> to change the <strong>View</strong>. In a word profile,
+<strong>Aggregate</strong> sets how values are combined, <strong>Spread</strong> controls the shaded band,
+and <strong>Min participants per word</strong> sets how many readers must contribute.</p>
 <p><strong>Readings behind a word</strong> shows the source measurements and the value each
 participant contributes after combining repeated readings. A blank or infinite
 measurement contributes no value. The profile leaves a gap at a word below
@@ -2513,30 +2546,35 @@ such as first fixation duration or total fixation duration. Map those columns
 when you import. Views of single fixations, such as <strong>Fixation duration over
 time</strong>, use the Fixations table.</p>
 <h2 id="compare-groups">Compare groups<a class="headerlink" href="#compare-groups" title="Permanent link">&para;</a></h2>
-<p>Under <strong>Define groups by</strong>, choose <strong>Split a field</strong> to group trials by the
-values of a column, or <strong>Independent filter sets</strong> to define a group using filters.
-Turn on <strong>Compare a second group</strong> to define group B. You can then compare
-the groups side by side, including their means and the difference between them.
-These views provide descriptive summaries; they do not run significance tests.</p>
+<p>Choose <strong>Groups</strong> to see the two group means and their difference. Open
+<strong>Edit groups</strong> to change which readings belong to A and B. <strong>Split a field</strong>
+uses the values of a column. <strong>Independent filter sets</strong> lets you choose
+participants, texts or conditions separately for each group. To examine the
+first group on its own, turn off <strong>Compare two groups</strong>.
+For skip and regression rates, <strong>Group means &amp; difference</strong> shows each mean
+as a percentage and their difference in percentage points. A word-by-word
+comparison across readings needs a shared Text ID in the Words table.</p>
 <p>For a repeated-measures design, <strong>Within-participant contrast</strong> shows each
 participant's mean in A and B and the difference A − B. The summary averages
 only complete pairs. The CSV keeps readers who are missing either condition.</p>
-<p><strong>Study inclusion and exclusions</strong> downloads participant and reading counts
+<p>In <strong>Edit filters</strong>, <strong>Study inclusion and exclusions</strong> downloads participant and reading counts
 for the active pool. The separate per-reading file names all matching
 exclusion reasons, so a reading that fails two rules counts only once.</p>
 <h2 id="save-results">Save results<a class="headerlink" href="#save-results" title="Permanent link">&para;</a></h2>
-<p>Under each result, <strong>⬇ Download this table (CSV)</strong> saves the table and
-<strong>⬇ Download the recipe (JSON)</strong> saves a record of the analysis: the dataset name,
-trial filters, analysis choices and counts. Keep your source data separately;
-the recipe contains neither the data nor the figure settings. To inspect
-individual trials, return to the Scanpath view.</p>
+<p>In <strong>Texts</strong> or <strong>Participants</strong>, open <strong>Table and downloads</strong> below the comparison.
+Detailed analyses that produce a table have a <strong>Download results</strong> menu.
+The CSV saves the values.
+<strong>Download recipe (JSON)</strong> records the dataset, trial filters, analysis choices
+and counts. Keep the source files with the recipe to rerun the analysis.</p>
 <p>A cohort profile's <strong>Methods draft</strong> records its measure, grouping,
 normalization, spread, reader threshold, trial filters and software version.
 <strong>Compare profile revisions</strong> saves a separate snapshot with individual reader
 IDs and measurements. After correcting a source file, open an earlier
 snapshot there to see which readings or word values changed.</p>
-<h3 id="rerun-a-cohort-or-group-difference-profile">Rerun a cohort or group difference profile<a class="headerlink" href="#rerun-a-cohort-or-group-difference-profile" title="Permanent link">&para;</a></h3>
-<p>Save the recipe alongside the CSV from <strong>Per text → Cohort profile</strong> or <strong>Groups → Difference word profile</strong>. Keep the source tables. For a difference profile, the recipe records each group’s constraints and which group was subtracted.
+<h3 id="rerun-a-cohort-or-group-difference-profile">Rerun an overview or word profile<a class="headerlink" href="#rerun-a-cohort-or-group-difference-profile" title="Permanent link">&para;</a></h3>
+<p>Save the recipe alongside the CSV from a text or participant summary, a <strong>Cohort profile</strong>,
+or <strong>Groups → Difference word profile</strong>. For a difference profile, the recipe
+records each group’s constraints and which group was subtracted.
 New recipes save the column mappings, filename-derived columns and character-box
 merges used at import. Supply the original files to reproduce the CSV.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv
@@ -2556,6 +2594,9 @@ the decoded recipe or its path and the normalized frames to
 from Corpus Analysis. A word profile needs <code>word_id</code> and <code>value</code> columns, with
 optional <code>lo</code> and <code>hi</code> for a band. The downloaded table names the word ID column
 as your data does, so rename it to <code>word_id</code> if needed.
+For a text or participant summary CSV of skip or regression rates, use <code>kind="overview"</code> with
+<code>as_percent=True</code> in Python, or <code>--kind overview --percent</code> with the CLI.
+Set <code>series_col</code> or <code>--series-col</code> to the CSV’s text or participant ID column.
 For a trend over trial order, see <a href="../../gallery/across-experiment/">Across the experiment</a>.</p>
 <details class="example">
 <summary>Python and CLI: word profile</summary>

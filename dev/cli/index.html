@@ -4955,6 +4955,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <code>--kind profile</code> the CSV needs <code>word_id</code> and <code>value</code> columns.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>profile.csv<span class="w"> </span>--kind<span class="w"> </span>profile<span class="w"> </span>--output<span class="w"> </span>profile.svg
 </code></pre></div>
+<p>To draw an overview CSV, pass its grouping column with <code>--series-col</code>. For
+example, this draws participant means and their observed ranges from a summary
+whose ID column is named <code>reader</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>corpus<span class="w"> </span>--input<span class="w"> </span>overview.csv<span class="w"> </span>--kind<span class="w"> </span>overview<span class="w"> </span>--series-col<span class="w"> </span>reader<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--measure-label<span class="w"> </span><span class="s2">"Total fixation duration (ms)"</span><span class="w"> </span>-o<span class="w"> </span>overview.html
+</code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
@@ -4970,13 +4976,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--input</code></td>
 <td><code>PATH</code></td>
 <td>required</td>
-<td>The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff.</td>
+<td>The CSV. profile reads word_id and the value column, plus optional lo and hi; distribution reads the value column; difference reads word_id and diff. Overview reads the group column (<code>--series-col</code>), the mean (<code>--value-col</code>), lo and hi.</td>
 </tr>
 <tr>
 <td><code>--kind</code></td>
-<td><code>profile</code>, <code>distribution</code>, <code>difference</code></td>
+<td><code>overview</code>, <code>profile</code>, <code>distribution</code>, <code>difference</code></td>
 <td>required</td>
-<td>A per-word profile, a distribution, or a difference profile.</td>
+<td>A corpus overview, per-word profile, distribution or difference profile.</td>
 </tr>
 <tr>
 <td><code>-o</code><br><code>--output</code></td>
@@ -4994,7 +5000,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--series-col</code></td>
 <td><code>SERIES_COL</code></td>
 <td><code>series</code></td>
-<td>Column naming the overlaid series, when present (default: series).</td>
+<td>Group ID for an overview, or column naming the overlaid series (default: series).</td>
 </tr>
 <tr>
 <td><code>--value-col</code></td>
@@ -5003,10 +5009,16 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>The value column (default: value).</td>
 </tr>
 <tr>
+<td><code>--percent</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Show overview values and bounds stored as proportions (0–1) as percentages.</td>
+</tr>
+<tr>
 <td><code>--primary-color</code></td>
 <td><code>PRIMARY_COLOR</code></td>
-<td><code>#1f77b4</code></td>
-<td>First series color (default: #1f77b4).</td>
+<td>—</td>
+<td>First series color (overview: #0072B2, other figures: #1f77b4).</td>
 </tr>
 <tr>
 <td><code>--secondary-color</code></td>
@@ -5018,12 +5030,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </table>
 </div>
 <h2 id="recipe">recipe<a class="headerlink" href="#recipe" title="Permanent link">&para;</a></h2>
-<p>Recreate a <strong>Per text → Cohort profile</strong> CSV from its downloaded JSON recipe
-and source tables. Recipes include the original column mappings. If raw gaze
+<p>Recreate an <strong>Overview</strong>, <strong>Cohort profile</strong> or <strong>Difference word profile</strong> CSV
+from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze
 supplied the text IDs used by a metadata filter, pass its files with <code>--raw-gaze</code>.
 The command identifies any missing metadata or annotation input and verifies
 the regenerated CSV against the checksum in the recipe when available.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv
 </code></pre></div>
 <p><strong>Positional arguments</strong></p>
 <div class="sps-reference-table sps-flag-table">
@@ -5041,7 +5053,7 @@ the regenerated CSV against the checksum in the recipe when available.</p>
 <td></td>
 <td><code>RECIPE.json</code></td>
 <td>required</td>
-<td>Cohort profile recipe from Corpus Analysis.</td>
+<td>Analysis recipe downloaded from Corpus Analysis.</td>
 </tr>
 </tbody>
 </table>
@@ -5160,8 +5172,8 @@ counts the source rows read, the rows with usable identifiers, and the
 normalized rows checked. Stimulus words shared across readings can expand into
 more checked rows. The report distinguishes empty tables, blank rows and rows
 with missing participant or trial IDs. Its <code>findings</code> list matches <code>--json</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5248,10 +5260,10 @@ with missing participant or trial IDs. Its <code>findings</code> list matches <c
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5315,8 +5327,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5352,9 +5364,9 @@ app, open <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></s
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>

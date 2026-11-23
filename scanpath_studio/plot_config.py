@@ -355,7 +355,7 @@ def build_plot_config(
             },
             "base_font_size": int(base_font_size),
         },
-        # Figure & canvas → Legends: every legend, Auto included, so a file
+        # Figure → Legends: every legend, Auto included, so a file
         # restores the placement it was saved with rather than leaving a
         # moved legend where the receiving session had it.
         "legends": normalize_legend_layout(figure_settings.get("legend_layout")),

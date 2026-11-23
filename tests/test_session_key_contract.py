@@ -544,7 +544,7 @@ def _restore_config_app():
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
-        # Figure & canvas → Legends: every legend, as the writer saves them.
+        # Figure → Legends: every legend, as the writer saves them.
         "legends": {
             "compare": {"position": "left", "arrangement": "stacked", "size": 14},
             "saccades": {"position": "right", "arrangement": "auto", "size": None},

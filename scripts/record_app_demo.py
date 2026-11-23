@@ -399,10 +399,10 @@ class Session:
         self.park()
         self.idle()
 
-    def pick(self, key: str, option: str, nth: int = 0) -> None:
-        """In the rail popover ``key``, pick ``option`` in its ``nth`` selectbox."""
+    def pick(self, key: str, field: str, option: str) -> None:
+        """In the rail popover ``key``, pick ``option`` in the named selectbox."""
         body = self.popover(key)
-        self.glide(body.locator("[role=combobox]").nth(nth))
+        self.glide(body.get_by_role("combobox", name=field, exact=True))
         self.wait(400)
         self.glide(self.page.locator("[role=option]", has_text=option))
         self.idle()
@@ -438,7 +438,7 @@ def story(s: Session) -> None:
     s.wait(400)
 
     s.caption("Replay the reading, fixation by fixation")
-    s.glide(page.get_by_role("button", name="Animation", exact=True))
+    s.glide(page.locator(".st-key-single_animate label"))
     s.park()
     s.idle()
     s.wait(5200)
@@ -453,12 +453,14 @@ def story(s: Session) -> None:
     s.caption("Build your figure layer by layer")
     # A popover setting comes first: the first layer switch flipped right
     # after a preset is put back, while one after any other change holds.
-    s.pick("split_mode_rail_heatmap_popover", "Oranges", nth=2)
+    s.pick("plot_menu_heatmap", "Colors", "Oranges")
     s.wait(600)
     s.toggle("global_show_fix", True)
-    s.pick("split_mode_rail_fix_popover", "Duration (ms)")
+    s.pick("plot_menu_fix", "Color fixations by", "Duration (ms)")
     s.toggle("global_show_saccades", True)
-    arrows = s.popover("split_mode_rail_sac_popover").locator("label", has_text="Show")
+    arrows = s.popover("plot_menu_sac").locator(
+        ".st-key-global_show_saccade_arrows label"
+    )
     s.glide(arrows)
     s.idle()
     s.wait(900)
@@ -471,7 +473,7 @@ def story(s: Session) -> None:
     s.wait(1200)
 
     s.caption("Filter saccades by type")
-    body = s.popover("split_mode_rail_filter_popover")
+    body = s.popover("plot_menu_filter")
     s.glide(body.locator('button[aria-label="Remove Forward"]'))
     s.idle()
     s.close_popover()
@@ -479,7 +481,7 @@ def story(s: Session) -> None:
 
     s.caption("Redact the text in one click")
     for hold in (1900, 0):
-        body = s.popover("split_mode_rail_stim_popover")
+        body = s.popover("plot_menu_stim")
         s.glide(body.locator("label", has_text="Redact"))
         s.idle()
         s.close_popover()

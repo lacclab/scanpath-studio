@@ -23,20 +23,22 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | --- | --- | --- | --- |
 | Pick a reading | Above the plot | `single_participant`, `single_trial_id` | The plot, title and chips follow; a share link reopens the same reading |
 | Keyboard shortcuts | Scanpath page, trial arrows, replay timeline | Left / Right, Shift + Left / Right, Space, Home / End | Page arrows step trials, Shift + arrows step B, and the replay timeline steps frames and toggles playback. Typing in the picker leaves the trial alone. |
-| Fixation charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |
+| Fixation charts | Full → Axes → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |
 | The spatial plot | Centre | — (drawn by `tabs._render_true_scale_chart`) | Word labels keep their px size at any column width; never `st.plotly_chart` |
-| Fixations | Rail → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
-| Saccades | Rail → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |
-| Stimulus image | Rail → **Stimulus** | `global_show_stimulus` | Page image behind the words at its offset / scale / opacity |
-| Word boxes | Rail → **Word boxes** | `global_show_words` | Boxes exactly as the data gave them (`x .. x + width`) |
-| Heatmap | Rail → **Heatmap** | `global_show_heatmap` | Word-level shading on its own colour bar |
-| Raw gaze | Rail → **Raw gaze** | `global_show_raw_gaze` | Samples drawn; on by default when raw gaze is the only table |
-| Sample charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field`, `global_show_raw_gaze` | Pupil and position presets draw samples against the recorded clock or sample number. A screen covered only by samples is selectable and exportable. |
-| Filters & highlights | Rail → **Filters & highlights** | its popover's keys | The badge counts active filters; the fixation range slices the trail |
-| Figure & canvas | Rail → **Figure & canvas** | its popover's keys (legends: `global_legend_<kind>_*`) | Canvas size, fonts, title / caption, legends, credit |
+| Fixations | Full → Layers → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
+| Saccades | Full → Layers → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |
+| Stimulus image | Full → Layers → **Stimulus** | `global_show_stimulus` | Page image behind the words at its offset / scale / opacity |
+| Word boxes | Full → Layers → **Word boxes** | `global_show_words` | Boxes exactly as the data gave them (`x .. x + width`) |
+| Heatmap | Full → Layers → **Heatmap** | `global_show_heatmap` | Word-level shading on its own colour bar |
+| Raw gaze | Full → Layers → **Raw gaze** | `global_show_raw_gaze` | Samples drawn; on by default when raw gaze is the only table |
+| Filters & highlights | Full → Layers → **Filters & highlights** | its popover's keys | Active marks a filtered or highlighted reading; the fixation range slices the trail |
+| Figure | Full → Figure | `global_legend_<kind>_*`, title and framing keys | Open each named menu. A title, framing change and legend position reach the plot. |
+| Sample charts | Full → Axes → Axis preset | `global_x_field`, `global_y_field`, `global_show_raw_gaze` | Pupil and position presets draw samples against the recorded clock or sample number. A screen covered only by samples is selectable and exportable. |
 | Saccades-only replay | Animation → Full → **Fixations** off, **Saccades** on | `global_show_fix`, `global_show_saccades` | Lines appear as the reading reaches each fixation. Direction arrows follow their lines. |
-| Animation | Shared View tile | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
-| Four views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Animation | Switch at the top of Plot controls | `single_animate` | Switch from a custom figure to the replay and back in either mode. Its axes and layers come back. |
+| Gaze over time and Custom | Third row of Plot controls | `viz_view_gaze_over_time`, `viz_view_custom`, `global_x_field`, `global_y_field` | Plot elapsed seconds against horizontal position, visit another view, then restore the last manual design with Custom. |
+| Views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Find a setting | Full → Find a setting | `plot_setting_finder` | Search for a legend position, axis field or frame limit and reach its editable controls. The current figure and Undo history stay in place. |
 | Compare readings | Below Palette | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
 | Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |

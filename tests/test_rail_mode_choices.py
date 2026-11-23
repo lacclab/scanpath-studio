@@ -428,8 +428,8 @@ def _color_bar_tip(at: AppTest) -> str:
     ("color_by", "says"),
     [
         ("(uniform)", "the markers are one color"),
-        ("line", "Figure &amp; canvas ▾ → Legends → Fixation colors"),
-        ("eye", "Figure &amp; canvas ▾ → Legends → Fixation colors"),
+        ("line", "Figure → Legends → Fixation colors"),
+        ("eye", "Figure → Legends → Fixation colors"),
     ],
 )
 def test_a_greyed_color_bar_row_says_why_and_where(color_by, says):

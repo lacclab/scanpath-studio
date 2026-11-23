@@ -36,14 +36,14 @@ the original release lets the recipient verify the table byte for byte.
 ## Cite what you export { #cite }
 
 Files saved through **Export** include citation information in their metadata.
-To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
+To add a visible credit to the figure, use **Figure** → **Title & labels** → **Credit**.
 
 - :material/format_quote: **Cite**, under each download and in
   :material/share: **Share** → **Code**, gives a one-line figure credit, the
   APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or
   EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
 - Each export bundle includes `CITATION.bib` and citation instructions in `README.md`.
-- **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio*
+- **Figure** → **Title & labels** → **Credit** adds a small *Made with Scanpath Studio*
   line under the plot, for a figure shared without its caption. In code, pass
   `show_credit=True`, or `--credit` to `render`.
 - In code, [`cite`][scanpath_studio.api.cite] and `scanpath-studio cite` print

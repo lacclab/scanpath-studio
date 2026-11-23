@@ -1410,8 +1410,9 @@ def _tutorial_library_dialog() -> None:
     with st.expander("Replay a sample reading"):
         st.markdown(
             "1. In **Scanpath**, choose **Bundled demo**.\n"
-            "2. Pick a reading in **Select trial** and choose **Animation**.\n"
-            "3. Press **Play** to watch the reading. Use **Pause** and **Next fixation** to inspect one fixation at a time."
+            "2. Pick a reading in **Select trial** and turn on **Animation**.\n"
+            "3. Press **Play** to watch the reading. Use **Pause** and **Next fixation** to inspect one fixation at a time. "
+            "Turn off **Animation** to return to your figure."
         )
         if sample_reading_available():
             st.button(

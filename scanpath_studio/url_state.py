@@ -32,6 +32,7 @@ from .authoring import (
     parse_authoring_document,
     sample_draft,
 )
+from .chart_axes import GAZE_OVER_TIME
 from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
@@ -122,6 +123,7 @@ from .controls import (
     clear_replay_layer_restore,
     color_field_options,
     forget_color_range,
+    forget_design_selection,
     numeric_field_options,
     palette_state,
 )
@@ -1897,7 +1899,7 @@ _TEXT_STATE_KEYS = frozenset(
 )
 #: A data field the rail heals against the loaded data: a string, or unset.
 _FIELD_STATE_KEYS = frozenset(
-    {"global_word_hover_measure", "global_x_field", "global_y_field"}
+    {"global_color_by", "global_word_hover_measure", "global_x_field", "global_y_field"}
 )
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
@@ -1933,7 +1935,7 @@ def _legend_position(value) -> str:
     return position
 
 
-#: Each legend's three keys (Figure & canvas → Legends), checked the same way
+#: Each legend's three keys (Figure → Legends), checked the same way
 #: whether they come from a link, a settings file, a design or the cache.
 _LEGEND_STATE_PARSERS = {
     key: parse
@@ -3247,13 +3249,18 @@ def _restore_plot_config(
 
     axes = section("axes")
     numeric = numeric_field_options(fixations, raw_gaze)
-    for cfg_key, state_key, label in (
-        ("x_field", "global_x_field", "X axis field"),
-        ("y_field", "global_y_field", "Y axis field"),
+    if (axes.get("x_field"), axes.get("y_field")) == GAZE_OVER_TIME and not all(
+        field in numeric for field in GAZE_OVER_TIME
     ):
-        val = axes.get(cfg_key)
-        if val is not None:
-            put_valid(val in numeric, state_key, val, label)
+        skipped.append("Gaze over time (no recorded fixation onsets)")
+    else:
+        for cfg_key, state_key, label in (
+            ("x_field", "global_x_field", "X axis field"),
+            ("y_field", "global_y_field", "Y axis field"),
+        ):
+            val = axes.get(cfg_key)
+            if val is not None:
+                put_valid(val in numeric, state_key, val, label)
     if "coordinate_grid" in axes:
         put("global_show_coordinate_grid", bool(axes["coordinate_grid"]))
     if "coordinate_grid_auto" in axes:
@@ -3594,6 +3601,8 @@ def _restore_plot_config(
             compare, SINGLE_COMPARE_FIX_RANGE, "_compare_fix_range_trial", restore
         )
 
+    if has_valid_plot_section and restore.applied:
+        forget_design_selection(st.session_state)
     return restore.applied, skipped
 
 

@@ -206,10 +206,10 @@ class FigureSettings:
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
     #: The legend of a categorical ``color_by`` (and the Highlight entries,
-    #: raw gaze) — Figure & canvas → Legends → Fixation colors → Show.
+    #: raw gaze) — Figure → Legends → Fixation colors → Show.
     show_color_legend: bool = True
     #: The note naming the highlighted words (``highlight_column``) —
-    #: Figure & canvas → Legends → Text highlight → Show.
+    #: Figure → Legends → Text highlight → Show.
     show_highlight_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"

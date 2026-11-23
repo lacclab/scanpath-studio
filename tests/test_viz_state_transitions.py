@@ -327,7 +327,7 @@ def test_animate_says_why_layers_are_greyed():
     at.run()
     greyed = ("global_show_heatmap", "global_show_raw_gaze")
     assert not any(at.toggle(key=key).help for key in greyed)
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert not at.exception
     assert not at.toggle(key="global_show_fix").disabled
     for key in greyed:

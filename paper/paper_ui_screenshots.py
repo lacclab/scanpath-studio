@@ -228,39 +228,27 @@ def reset_viz(page: Page) -> None:
 
 
 def set_fix_window(page: Page, lo: int, hi: int) -> None:
-    """Drive the 🧹 Filter panel's *Fixation index range* to ``lo``–``hi``.
-
-    Keyboard rather than a drag: the range is two native ``input[type=range]``
-    elements, and PageUp/Down move in one stride, so converging on a value takes
-    a handful of presses instead of a pixel calculation that has to be right.
-    """
-    for attempt in range(5):
-        if page.locator('.st-key-single_fix_range input[aria-label*="start"]').count():
-            break
-        btns = visible(page.locator(".st-key-split_mode_rail_filter button"))
-        if btns:
-            btns[0].click()
-        settle(page, quiet=1.0)
-    else:
-        raise RuntimeError("the 🧹 Filter panel never opened")
-
-    for aria, target in (("start", lo), ("end", hi)):
-        thumb = page.locator(f'.st-key-single_fix_range input[aria-label*="{aria}"]')
-        thumb.focus()
-        for _ in range(300):
-            current = int(thumb.input_value())
-            if current == target:
-                break
-            delta = target - current
-            if abs(delta) >= 15:
-                page.keyboard.press("PageUp" if delta > 0 else "PageDown")
-            else:
-                page.keyboard.press("ArrowRight" if delta > 0 else "ArrowLeft")
-        else:
-            raise RuntimeError(f"fixation window {aria} never reached {target}")
-    settle(page, quiet=1.5)
+    """Set the reading's fixation window using the two exact index fields."""
+    editor = page.locator(".st-key-plot_editor_tabs")
+    editor.get_by_role("tab", name="Layers", exact=True).click()
+    editor.get_by_role("button", name="Filters & highlights").click()
+    menu = page.locator('[data-testid="stPopoverBody"]')
+    lower = menu.get_by_role("spinbutton", name="Fixation index range (min)")
+    upper = menu.get_by_role("spinbutton", name="Fixation index range (max)")
+    # When both ends move beyond the old maximum, move the upper end first
+    # so the editor never has to reorder the pair.
+    bounds = [(lower, lo), (upper, hi)]
+    if lo > int(upper.input_value()):
+        bounds.reverse()
+    for field, target in bounds:
+        if int(field.input_value()) != target:
+            field.fill(str(target))
+            field.press("Enter")
+            settle(page)
+    if (int(lower.input_value()), int(upper.input_value())) != (lo, hi):
+        raise RuntimeError(f"The fixation window did not reach {lo}–{hi}.")
     page.keyboard.press("Escape")
-    settle(page, quiet=1.5)
+    settle(page)
 
 
 def shot_zoomed_plot(page: Page, name: str, key: str, w0: int, w1: int) -> None:

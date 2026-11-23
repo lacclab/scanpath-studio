@@ -6,7 +6,7 @@ Update it in the same PR as such a change; `tests/test_mode_parity.py` checks
 the code side.
 
 The scanpath rail (`controls.render_plot_controls`) is **one** control set
-feeding **three** figure builders, picked by the Animation tile and Compare readings switch (`single_animate` / `single_compare_toggle`, resolved in `tabs.py`):
+feeding **three** figure builders, picked by the Animation and Compare readings switches (`single_animate` / `single_compare_toggle`, resolved in `tabs.py`):
 
 | mode | builder | thread |
 | --- | --- | --- |

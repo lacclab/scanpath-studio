@@ -648,8 +648,8 @@ def plot_controls(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(
-        page.locator(".st-key-split_mode_rail_sac_popover button"),
-        "Saccades ▾",
+        page.locator(".st-key-plot_menu_sac button"),
+        "Saccades",
         wait=False,
         hold=0.5,
     )
@@ -660,8 +660,8 @@ def plot_controls(d: Demo) -> None:
     d.pause(0.8)
     d.click(_toggle(page, "global_show_words"), "word boxes", hold=1.0)
     d.click(
-        page.locator(".st-key-split_mode_rail_fix_popover button"),
-        "Fixations ▾",
+        page.locator(".st-key-plot_menu_fix button"),
+        "Fixations",
         wait=False,
         hold=0.5,
     )
@@ -814,11 +814,9 @@ def favorites(d: Demo) -> None:
 def replay(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
+    d.click(page.locator(".st-key-single_animate label"), "Animation", hold=2.4)
     d.click(
-        page.get_by_role("button", name="Animation", exact=True), "Animation", hold=2.4
-    )
-    d.click(
-        page.locator(".st-key-split_mode_rail_animation_popover button"),
+        page.locator(".st-key-plot_menu_animation button"),
         "Animate ▾",
         wait=False,
         hold=0.4,

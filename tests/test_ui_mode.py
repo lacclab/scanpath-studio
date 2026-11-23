@@ -7,6 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import session_keys as sk
 from scanpath_studio import tabs, ui_mode
+from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 from tests.conftest import APP_SCRIPT, pin_view
 
@@ -308,9 +309,10 @@ def test_more_lists_cover_the_spec():
     for word in (
         "animation",
         "compare",
-        "layer style",
+        "layers",
         "filters & highlights",
-        "figure & canvas",
+        "axes",
+        "figure",
         "saved designs",
     ):
         assert word in titles("rail")
@@ -444,18 +446,37 @@ def test_animation_keeps_the_underlying_static_layers():
     at = _boot()
     at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_show_heatmap"] is True
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert not at.exception
     assert at.session_state["single_animate"] is True
     assert at.session_state["global_show_heatmap"] is True
+    assert at.toggle(key="single_animate").value
     assert at.toggle(key="global_show_fix").value is True
     assert at.session_state["_quick_view_selection"] == "heatmap"
-    assert _tile_type(at, "animation") == "primary"
-    assert _tile_type(at, "scanpath") == "secondary"
-    at.button(key="viz_view_animation").click().run()
-    assert _tile_type(at, "heatmap") == "primary"
+    assert _lit_tiles(at) == ["heatmap"]
+    at.toggle(key="single_animate").set_value(False).run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["heatmap"]
+    assert at.toggle(key="global_show_heatmap").value is True
     assert at.toggle(key="global_show_fix").value is False
     assert at.toggle(key="global_show_saccades").value is False
+
+
+def test_saccades_only_replay_keeps_a_hand_edited_scanpath():
+    at = _boot(mode="full")
+    at.slider(key="global_saccade_width").set_value(4.5).run()
+    at.toggle(key="global_show_fix").set_value(False).run()
+    for replay in (True, False):
+        at.toggle(key="single_animate").set_value(replay).run()
+        assert not at.exception
+        assert _lit_tiles(at) == ["custom"]
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value
+        figure = at.session_state[SNIPPET_STATE_KEY]
+        assert figure.kind == ("animation" if replay else "static")
+        assert figure.settings["show_fixations"] is False
+        assert figure.settings["show_saccades"] is True
+        assert figure.settings["saccade_width"] == 4.5
 
 
 @pytest.mark.parametrize("name", ["heatmap", "illustration"])
@@ -470,7 +491,7 @@ def test_viz_view_static_tiles_turn_animate_off(name):
     else:
         assert at.session_state["global_fixation_snap_to_line"] is True
     assert _tile_type(at, name) == "primary"
-    assert _tile_type(at, "animation") == "secondary"
+    assert not at.toggle(key="single_animate").value
 
 
 @pytest.mark.parametrize("mode", ["essentials", "full"])
@@ -481,13 +502,15 @@ def test_both_modes_draw_one_grid_and_palette(mode):
         for btn in at.button
         if btn.key
         in {
-            "viz_view_animation",
+            "viz_view_gaze_over_time",
+            "viz_view_custom",
             "viz_view_scanpath",
             "viz_view_heatmap",
             "viz_view_illustration",
         }
     ]
-    assert names == ["Animation", "Scanpath", "Heatmap", "Illustration"]
+    assert names == ["Scanpath", "Heatmap", "Illustration", "Gaze over time", "Custom"]
+    assert at.toggle(key="single_animate").label == "Animation"
     assert sum(widget.key == "global_palette" for widget in at.selectbox) == 1
     assert at.toggle(key="single_compare_toggle") is not None
     assert at.toggle(key="global_show_fix") is not None
@@ -499,12 +522,13 @@ def test_animation_preserves_custom_scanpath_and_comparison_across_modes():
     at.color_picker(key="global_fixation_color").pick("#123456").run()
     at.toggle(key="single_compare_toggle").set_value(True).run()
     selection = at.session_state["single_compare_trial"]
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     at.select_slider(key="single_playback_speed").set_value(2.0).run()
     for mode in ("essentials", "full"):
         at.segmented_control(key=SWITCH).set_value(mode).run()
         assert not at.exception
-        assert _lit_tiles(at) == ["animation"]
+        assert at.toggle(key="single_animate").value
+        assert _lit_tiles(at) == ["custom"]
         assert at.session_state["global_fixation_color"] == "#123456"
         assert at.session_state["global_palette"] == "Custom"
         assert at.session_state["single_playback_speed"] == 2.0
@@ -526,14 +550,13 @@ def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
         at.session_state[sk.COMPARE_SOURCE_STATE_KEY] = "Bundled demo"
         at.run()
     at.button(key="viz_view_illustration").click().run()
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     at.toggle(key="single_compare_toggle").set_value(True).run()
     if cross_dataset:
         assert at.session_state[sk.COMPARE_SOURCE_STATE_KEY] == "Bundled demo"
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(False).run()
     assert _lit_tiles(at) == ["scanpath"]
     assert at.button(key="viz_view_illustration").disabled
-    at.button(key="viz_view_scanpath").click().run()
     at.toggle(key="single_compare_toggle").set_value(False).run()
     assert _lit_tiles(at) == ["illustration"]
 
@@ -550,18 +573,7 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
     for name in ("rail_animation", "rail_reset"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
     source = inspect.getsource(controls.render_plot_controls)
-    for name in (
-        "rail_layers_label",
-        "rail_designs",
-        "rail_fix",
-        "rail_sac",
-        "rail_stim",
-        "rail_boxes",
-        "rail_heatmap",
-        "rail_rawgaze",
-        "rail_filter",
-        "rail_figure",
-    ):
+    for name in ("rail_designs", "plot_editor"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', source), name
     assert 'simple_only(viz, "rail_more")' in source
 
@@ -614,11 +626,11 @@ def _assert_animation_keeps_the_static_tile(at: AppTest) -> None:
     draw: the static figure stays, and so does its tile."""
     requested = at.session_state["single_animate"]
     for expected in (not requested, requested):
-        at.button(key="viz_view_animation").click().run()
+        at.toggle(key="single_animate").set_value(expected).run()
         assert not at.exception, at.exception
         assert at.session_state["single_animate"] == expected
         assert _tile_type(at, "scanpath") == "primary"
-        assert _tile_type(at, "animation") == "secondary"
+        assert at.toggle(key="single_animate").value == expected
 
 
 def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
@@ -656,7 +668,7 @@ def _open_samples_only(mode: str = "essentials") -> AppTest:
     )
 
 
-SIMPLE_TILES = ("animation", "scanpath", "heatmap", "illustration")
+SIMPLE_TILES = ("scanpath", "heatmap", "illustration", "gaze_over_time", "custom")
 
 
 def _lit_tiles(at: AppTest) -> list[str]:
@@ -723,7 +735,7 @@ def test_simple_palette_pick_keeps_the_tile_lit():
     assert _lit_tiles(at) == ["scanpath"]
     # A layer edit customizes this scanpath.
     at.toggle(key="global_show_stimulus").set_value(False).run()
-    assert _lit_tiles(at) == ["scanpath"]
+    assert _lit_tiles(at) == ["custom"]
 
 
 def test_simple_tile_keeps_the_palette():
@@ -745,12 +757,13 @@ def test_simple_tile_keeps_the_palette():
     # It holds on the next run too, and through the replay tile.
     at.run()
     assert at.session_state["global_palette"] == HIGH_CONTRAST
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert at.session_state["global_palette"] == HIGH_CONTRAST
-    assert _lit_tiles(at) == ["animation"]
+    assert at.toggle(key="single_animate").value
+    assert _lit_tiles(at) == ["heatmap"]
 
 
-def test_custom_marker_color_keeps_the_scanpath_tile():
+def test_custom_marker_color_selects_custom():
     """A colour past every palette is shaped in Full, and counts."""
     at = _boot()
     at.button(key="viz_view_scanpath").click().run()
@@ -759,7 +772,7 @@ def test_custom_marker_color_keeps_the_scanpath_tile():
     at.color_picker(key="global_fixation_color").pick("#123456").run()
     assert not at.exception
     assert at.session_state["global_palette"] == "Custom"
-    assert _lit_tiles(at) == ["scanpath"]
+    assert _lit_tiles(at) == ["custom"]
 
 
 def test_full_view_tiles_keep_the_selected_palette():
@@ -773,9 +786,8 @@ def test_full_view_tiles_keep_the_selected_palette():
 
 def _subtab_labels(at: AppTest) -> list[str]:
     """The labels of the per-trial subtab bar (the one holding ``Share``)."""
-    labels = [t.label for t in at.tabs]
-    assert tabs.SUBTAB_SHARE in labels
-    return labels
+    bar = next(bar for bar in at.get("tab_container") if bar.key == "single_subtab")
+    return [tab.label for tab in bar.tabs]
 
 
 def test_subtab_labels_for_simple():
@@ -879,8 +891,8 @@ def test_more_in_simple_falls_back_to_advanceds_first_subtab():
 def test_fresh_simple_session_opens_on_the_replay():
     at = _boot()
     assert at.session_state["single_animate"] is True
-    assert _tile_type(at, "animation") == "primary"
-    assert _tile_type(at, "scanpath") == "secondary"
+    assert at.toggle(key="single_animate").value
+    assert _tile_type(at, "scanpath") == "primary"
 
 
 def test_advanced_session_keeps_the_static_start():
@@ -1064,18 +1076,6 @@ def test_more_picker_describes_the_summary_table():
     assert "trial summary table" in text and "chips" not in text
     line = next(v for k, v in lines.items() if "summary" in k.lower())
     assert "condition" in line and "above the plot" in line
-
-
-def test_shared_view_tiles_keep_their_size():
-    from scanpath_studio.styles import get_app_css
-
-    css = " ".join(get_app_css().split())
-    sel = ".st-key-scanpath_rail .st-key-tour_grp_views button {"
-    assert sel in css
-    assert "min-height: 4rem" in css.split(sel)[1].split("}")[0]
-    assert "font-size: 1.05rem" in css
-    # The narrow tiers keep the grid on one line per tile.
-    assert "font-size: 0.95rem" in css
 
 
 def test_simple_export_points_to_the_bundle_in_advanced():

@@ -21,10 +21,10 @@ print(gallery_figure("title-caption-legend"))
 === "In the app"
 
     1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
-    2. In :material/arrow_outward: **Saccades** ▾ → **Line** → **Color**, choose **By type**.
-    3. In :material/aspect_ratio: **Figure & canvas** ▾ → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Set each one's **Size**, here 34 px and 20 px.
-    4. Under **Legends**, tick **Show** for **Fixation sizes**. Set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
-    5. Under **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 60 px.
+    2. In :material/arrow_outward: **Saccades** → **Color**, choose **By type**.
+    3. In :material/aspect_ratio: **Figure** → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Under **Text size and color**, set each size, here 34 px and 20 px.
+    4. Under **Legends**, tick **Show** for **Fixation sizes**. Open **Legend position and style** and set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
+    5. Under **Screen & framing**, tick **Crop to data**. Under **Margins and border color**, untick the automatic margin and enter 60 px.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

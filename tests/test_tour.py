@@ -951,38 +951,11 @@ class TestSpotlightSelectorsResolve:
         )
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
-        assert "sps-control-label" in control_source
-        # The last custom design and the user's saved designs share one section.
-        assert 'key="viz_view_custom"' in inspect.getsource(
-            controls._render_saved_designs
+        assert "_render_view_controls(" in control_source
+        assert (
+            '_render_saved_designs(advanced_only(viz, "rail_designs"))'
+            in control_source
         )
-        assert '_render_saved_designs(advanced_only(viz, "rail_designs"))' in (
-            control_source
-        )
-        # A section is a `[toggle | ▾]` row, not an expander.
-        assert "_rail_section(" in control_source
-        assert 'viz.expander("↗️ Saccades"' not in control_source
-
-    def test_plot_rail_merges_figure_and_canvas_without_nested_expander(self):
-        """Figure and canvas share one group, without nesting expanders.
-
-        📐 Figure & canvas is a `[name | ▾]` row whose popover holds the screen
-        half, the axes and the labels; the *text* half is in 📄 Stimulus → Text.
-        """
-        import inspect
-
-        from scanpath_studio import app, controls
-
-        control_source = inspect.getsource(controls.render_plot_controls)
-        canvas_source = inspect.getsource(app.render_canvas_controls)
-
-        assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
-        # The typography draws always, greyed while Text is off.
-        assert "text_disabled=not show_labels" in control_source
-        # Drawn inside a popover, so it must never open an expander of its own.
-        assert ".expander(" not in canvas_source
-        assert 'viz.expander("🖥️ Canvas & text"' not in control_source
-        assert 'viz.expander("📐 Figure & axes"' not in control_source
 
     def test_corpus_canvas_controls_stay_inside_the_style_expander(self):
         """The collapsed Corpus style row must own every canvas/font field."""
@@ -994,24 +967,6 @@ class TestSpotlightSelectorsResolve:
         assert "as style_panel" in source
         assert "canvas_renderer(style_panel)" in source
         assert "canvas_renderer(target)" not in source
-
-    def test_plot_rail_uses_contextual_style_filter_labels(self):
-        """Repeated per-layer labels stay terse.
-
-        🧹 Filter is one section for the whole figure, and every section is a
-        `[toggle | ▾]` row — so a layer's style controls *are* its section's
-        popover body and need no label of their own. What is pinned is that the labels are the
-        section names, terse, and that Reset is not one of them.
-        """
-        import inspect
-
-        from scanpath_studio import controls
-
-        control_source = inspect.getsource(controls.render_plot_controls)
-
-        assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
-        assert "f\"{ICONS['plot_filter']} **Filters & highlights**{" in control_source
-        assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
         """Reset is the last thing in the rail, at full width.

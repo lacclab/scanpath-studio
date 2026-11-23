@@ -81,14 +81,18 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
         ("🎬 Animation settings", "Speed and frame rate."),
         ("👥 Compare readings", "Two readings, overlaid or side by side."),
         (
-            "🎨 Layer style",
+            "🎨 Layers",
             "Colour fixations by a measure; sizes, word boxes and raw gaze.",
         ),
         (
             "🎯 Filters & highlights",
             "A fixation window, short or long fixations, saccade types.",
         ),
-        ("🖼 Figure & canvas", "The screen, axes, titles and legends."),
+        (
+            "📈 Axes",
+            "Plot screen position, fixation order, elapsed time or another field.",
+        ),
+        ("🖼 Figure", "Framing, titles, hover fields and legends."),
         ("💾 Saved designs", "Keep your own figure designs and reuse them."),
     ),
     "subtabs": (
@@ -414,10 +418,11 @@ def hidden_settings_reasons(
         "custom_view": custom_view and axes == ("x", "y"),
     }
     reasons = [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
-    if axes != ("x", "y"):
+    from .chart_axes import ELAPSED, ELAPSED_LABEL, GAZE_OVER_TIME
+
+    if axes != ("x", "y") and (custom_view or axes != GAZE_OVER_TIME):
         import streamlit as st
 
-        from .chart_axes import ELAPSED, ELAPSED_LABEL
         from .column_names import active as active_column_names
 
         labels = active_column_names(st.session_state, "fixations").option_labels(

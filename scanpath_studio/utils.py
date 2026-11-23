@@ -637,25 +637,49 @@ def _trial_level_columns_from_frame(
     if "participant_id" in scoped.columns and identity != "participant_id":
         group_cols.insert(0, "participant_id")
     grouped = scoped.groupby(group_cols, sort=False, dropna=False)
+    kept = _single_valued_columns(
+        grouped,
+        [
+            col
+            for col in scoped.columns
+            if col != identity and _trial_sort_column_allowed(col)
+        ],
+    )
+    progress.report()
+    # Each reading's first row, in the groups' order. A kept column holds one
+    # value per reading, so that row's cell is it — a missing cell included,
+    # which `GroupBy.first` would skip; `infer_objects` gives an object column
+    # the dtype a per-group aggregation would.
+    firsts = scoped.drop_duplicates(subset=group_cols).set_index(group_cols, drop=False)
     discovered: dict[str, pd.Series] = {}
-    for col in scoped.columns:
-        if col == identity or not _trial_sort_column_allowed(col):
-            continue
-        try:
-            if (grouped[col].nunique(dropna=False) > 1).any():
-                continue
-            if col in group_cols:
-                values = scoped[group_cols].drop_duplicates().copy()
-            else:
-                values = grouped[col].agg(lambda cells: cells.iloc[0]).reset_index()
-        except (TypeError, ValueError):
-            # Nested/list-like event payloads are not sortable scalar metadata.
-            continue
-        series = _by_reading(values.set_index(group_cols, drop=False)[col], by_trial)
+    for col in kept:
+        values = firsts[col] if col in group_cols else firsts[col].infer_objects()
+        series = _by_reading(values, by_trial)
         if series.dropna().empty or _looks_like_free_text(series):
             continue
         discovered[str(col)] = series
     return discovered
+
+
+def _single_valued_columns(grouped, columns: list) -> list:
+    """The ``columns`` with at most one value in every group, a missing cell
+    counting as a value. One pass over all of them; nested/list-like event
+    payloads fail it, and are then left out one column at a time."""
+    if not columns:
+        return []
+    try:
+        counts = grouped[columns].nunique(dropna=False)
+        return [col for col in columns if not (counts[col] > 1).any()]
+    except (TypeError, ValueError):
+        pass
+    kept = []
+    for col in columns:
+        try:
+            if not (grouped[col].nunique(dropna=False) > 1).any():
+                kept.append(col)
+        except (TypeError, ValueError):
+            continue
+    return kept
 
 
 def _merge_trial_level_sources(
@@ -699,6 +723,7 @@ def _trial_level_sort_columns_cached(
 ) -> dict[str, pd.Series]:
     """Cached metadata discovery over the participant-scoped picker frames."""
     del cache_key  # explicit hash input for the underscore-prefixed frames
+    progress.report()  # a miss: real work, so a gated card over it may show
     if _combos is None or _combos.empty or trial_field not in _combos.columns:
         return {}
     picker_ids = set(_combos[trial_field].dropna().astype(str).unique())

@@ -6512,11 +6512,13 @@ _REPLAY_PLAYER_JS = """(function () {
       stop();
       var i = eventIndex;
       if (i < 0) {
+        // From a frame (playing, paused or scrubbed), step from the fixation
+        // it shows: the latest one whose onset it has reached.
         var ms = times[shown];
-        i = direction > 0 ? events.findIndex(function (e) { return e.ms > ms; })
-                          : events.findLastIndex(function (e) { return e.ms < ms; });
-        if (i < 0) { i = direction > 0 ? events.length - 1 : 0; }
-      } else { i = Math.max(0, Math.min(i + direction, events.length - 1)); }
+        i = -1;
+        while (i + 1 < events.length && events[i + 1].ms <= ms) { i++; }
+      }
+      i = Math.max(0, Math.min(i + direction, events.length - 1));
       var e = events[i], r = readings[e.side], j = e.index;
       eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
       if (!template) { template = readFrame ? readFrame(last) : gd._transitionData._frames[last]; }

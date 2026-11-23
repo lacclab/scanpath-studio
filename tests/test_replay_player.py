@@ -462,6 +462,45 @@ class TestToolbar:
         assert style["colorScheme"] == scheme
         assert (style["color"], style["background"]) == ("CanvasText", "Canvas")
 
+    @pytest.mark.parametrize(
+        ("at_ms", "button", "onset"),
+        [
+            # Paused mid-way through the fixation at 800 ms: the fixations on
+            # either side of it, never the one already on screen.
+            (880, "previous", 400),
+            (880, "next", 1200),
+            # On an onset, and in the saccade after a fixation.
+            (800, "previous", 400),
+            (1080, "previous", 400),
+            # Before the second onset there is no earlier fixation.
+            (200, "previous", 0),
+        ],
+    )
+    def test_fixation_steps_go_from_the_fixation_on_screen(
+        self, tmp_path, at_ms, button, onset
+    ):
+        fig = _replay(autoplay=False)
+        frame = _times(fig).index(at_ms)
+        log = _run_page(
+            fig, [["seek", frame], ["toolbar", button], ["run_until", 100]], tmp_path
+        )
+        assert f"onset {onset} ms" in log["toolbar"]["readout"]
+
+    def test_repeated_previous_presses_walk_back_one_fixation_each(self, tmp_path):
+        fig = _replay(autoplay=False)
+        log = _run_page(
+            fig,
+            [["seek", _times(fig).index(880)]]
+            + [["toolbar", "previous"]] * 2
+            + [["toolbar", "next"]],
+            tmp_path,
+        )
+        assert "onset 400 ms" in log["toolbar"]["readout"]
+
+    def test_the_player_needs_no_find_last_index(self):
+        # Array.prototype.findLastIndex needs Safari 15.4 or later.
+        assert "findLastIndex" not in animation_player_post_script(_replay())
+
     def test_a_figure_drawing_its_own_controls_gets_no_toolbar(self, tmp_path):
         log = _run(_replay(), [["run_until", 100]], tmp_path)
         assert log["toolbar"] is None

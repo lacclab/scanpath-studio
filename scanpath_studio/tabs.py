@@ -9289,6 +9289,45 @@ def _c_trial_keys(_frame, fkey):
     return trial_keys(_frame)
 
 
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_group_means(_frame, mkey, _readings, _specs, key):
+    """Group means' two value arrays: one mean per participant, or every value
+    when the frame names no participants.
+
+    ``key`` is the frame's fingerprint and what selects each group — its
+    readings, or its spec on a frame without the reading key
+    (:func:`_group_means_key`).
+    """
+    measure = MEASURES[mkey]
+    if not _frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(_frame):
+        # Each row's already-resolved reading, looked up on the frame's codes.
+        codes, reading_keys = distinct_key_codes(_frame, _TRIAL_KEY_COLUMNS)
+        masks = [reading_keys.isin(group)[codes] for group in _readings]
+    else:
+        masks = [group_mask(_frame, spec) for spec in _specs]
+    values = reader_means if "participant_id" in _frame else measure_values
+    columns = _frame.columns.intersection(["participant_id", measure.column])
+    return tuple(values(_frame.loc[mask, columns], measure) for mask in masks)
+
+
+def _group_means_key(frame, readings, specs) -> tuple:
+    """`_c_group_means`'s key: the readings as order-free set hashes, which
+    cost one pass over the distinct readings, or the specs when the frame has
+    no reading key to look them up by."""
+    if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
+        groups = tuple(hash(frozenset(group)) for group in readings)
+    else:
+        groups = hashable_key(specs)
+    return (frame_fingerprint(frame), groups)
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
+def _c_reader_vs_cohort(_frame, participant_id, mkey, normalize, fkey):
+    return reader_vs_cohort_values(
+        _frame, participant_id, MEASURES[mkey], normalize=normalize
+    )
+
+
 # --- Cross-cutting analysis controls -----------------------------------------
 
 _AGG_OPTIONS = ["mean", "median", "sum"]
@@ -11509,7 +11548,9 @@ def _render_reader_comparison(
         if measure.frame == "fixations"
         else words
     )
-    groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
+    groups = _c_reader_vs_cohort(
+        frame, pid, measure.key, normalize, frame_fingerprint(frame)
+    )
     participant = f"Participant {pid}"
     if not groups:
         st.info(
@@ -12558,19 +12599,15 @@ def render_group_comparison_tab(
         if measure is None:
             return
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        # Lookup each row's already-resolved reading on the original frame,
-        # then take just the measurement and reader needed for the two means.
-        if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
-            codes, reading_keys = distinct_key_codes(frame, _TRIAL_KEY_COLUMNS)
-            masks = (
-                reading_keys.isin(group)[codes] for group in (readings_a, readings_b)
-            )
-        else:
-            masks = (group_mask(frame, spec) for spec in (use_a, use_b))
         by_reader = "participant_id" in frame
-        values = reader_means if by_reader else measure_values
-        columns = frame.columns.intersection(["participant_id", measure.column])
-        a, b = (values(frame.loc[mask, columns], measure) for mask in masks)
+        readings, specs = (readings_a, readings_b), (use_a, use_b)
+        a, b = _c_group_means(
+            frame,
+            measure.key,
+            readings,
+            specs,
+            _group_means_key(frame, readings, specs),
+        )
         observations = "fixations" if measure.frame == "fixations" else "words"
         observation = (
             f"For each participant, the mean includes all {observations} with a value "

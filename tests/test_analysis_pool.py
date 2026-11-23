@@ -152,7 +152,10 @@ def test_corpus_analysis_names_the_filtered_pool_and_clears_it():
     assert line.startswith("**12 of 24 trials · 1 of 2 participants**")
     # The filter value is drawn as written, never as markdown.
     assert md_literal("Participant: l7_1090") in line
-    # The Scanpath funnel's own panel, under the same keys.
+    assert "filter_participants" not in {m.key for m in at.multiselect}
+    at.session_state["corpus_pool_popover"] = True
+    at.run(timeout=90)
+    # The editor restores the same selections as the Scanpath funnel.
     assert at.multiselect(key="filter_participants").value == [reader]
     clear = at.button(key="corpus_pool_clear")
     assert not clear.disabled
@@ -161,8 +164,12 @@ def test_corpus_analysis_names_the_filtered_pool_and_clears_it():
     pin_view(at, "Corpus Analysis")
     at.run(timeout=90)
     assert not at.exception, at.exception
-    assert _pool_line(at) == "**24 trials · 2 participants** · no filters"
-    assert at.button(key="corpus_pool_clear").disabled
+    assert _pool_line(at) == "**24 trials · 2 participants**"
+    assert "corpus_pool_clear" not in {b.key for b in at.button}
+    assert "filter_participants" not in {m.key for m in at.multiselect}
+    at.session_state["corpus_pool_popover"] = True
+    at.run(timeout=90)
+    assert at.multiselect(key="filter_participants").value == []
     assert at.session_state["_trial_filters"]["participants"] is None
 
 
@@ -182,4 +189,4 @@ def test_a_cleared_filter_stays_cleared_across_views():
         pin_view(at, view)
         at.run(timeout=90)
         assert not at.exception, at.exception
-    assert _pool_line(at) == "**24 trials · 2 participants** · no filters"
+    assert _pool_line(at) == "**24 trials · 2 participants**"

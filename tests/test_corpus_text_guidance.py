@@ -30,7 +30,6 @@ def _profile_app():
 def _profile(words):
     at = AppTest.from_function(_profile_app)
     at.session_state["words"] = words
-    at.session_state["ptext_view"] = "Cohort profile"
     return at.run()
 
 
@@ -85,10 +84,20 @@ def test_an_empty_cohort_profile_explains_the_cause_and_keeps_individual_reading
     assert at.dataframe[0].value["source_value"].isna().all()
 
     at.session_state["words"] = words.assign(first_fixation_ms=200.0)
+    options = next(
+        p for p in at.get("popover") if p.proto.popover.label == "Chart settings"
+    )
+    assert options.selectbox(key="ptext_view").value == "Cohort profile"
+    assert {s.key for s in options.selectbox} == {
+        "ptext_view",
+        "ptext_agg",
+        "ptext3_spread",
+    }
+    assert {s.key for s in at.selectbox} >= {"ptext_text", "ptext_measure"}
     at.number_input(key="ptext3_min").set_value(2).run()
     assert not at.exception
     assert not at.get("plotly_chart")
-    assert any("Lower it in **Analysis settings**" in note.value for note in at.info)
+    assert any("Lower it in **Chart settings**" in note.value for note in at.info)
     assert at.dataframe[0].value["source_value"].tolist() == [200.0]
     at.number_input(key="ptext3_min").set_value(1).run()
     assert not at.exception and at.get("plotly_chart")
@@ -241,6 +250,8 @@ def test_filtering_out_existing_words_offers_mapping_for_the_dataset(
     pin_view(at, "Corpus Analysis")
     at.run()
     assert not at.exception
+    at.session_state["corpus_pool_popover"] = True
+    at.run()
     at.multiselect(key="filter_participants").set_value(["fixation-reader"]).run()
     assert not at.exception
     assert at.button(key="corpus_map_measures").label == "Map reading measures"

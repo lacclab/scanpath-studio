@@ -6752,8 +6752,12 @@ def corpus_style_controls(
     """
     _seed_viz_state(trial_fixations, base_font_size, words)
     target = host or st
-    with target.expander(
-        f"{ICONS['designs']} Corpus figure style", expanded=False
+    with target.popover(
+        "Figure style",
+        type="tertiary",
+        icon=ICONS["designs"],
+        key="corpus_figure_style",
+        width="content",
     ) as style_panel:
         active = _active_palette()
         options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
@@ -6786,9 +6790,6 @@ def corpus_style_controls(
             persist_state="session",
             help="Used by word matrices and stimulus heatmaps.",
         )
-        # The canvas controls belong to this disclosure too. Rendered after
-        # the `with` block, every monitor/font/background field would sit
-        # open across the Corpus page under a collapsed expander.
         if canvas_renderer is not None:
             canvas_renderer(style_panel)
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)

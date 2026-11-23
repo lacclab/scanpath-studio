@@ -20,8 +20,8 @@ print(gallery_figure("across-experiment"))
 
 === "In the app"
 
-    1. Open your data in the :material/bar_chart: **Corpus Analysis** view, on the **Per participant** tab.
-    2. Choose a participant, and in **View** choose **Per-trial trend**.
+    1. Open your data in the :material/bar_chart: **Corpus Analysis** view and select **Participants**.
+    2. Choose a participant and select **Open participant profile**. In **Chart settings**, set **View** to **Per-trial trend**.
     3. Choose a reading measure your data provides, and **Mean** in **Aggregate**. The horizontal axis is the trial order from the data’s `trial_index` or `TRIAL_INDEX` column. Without one, the app orders the trials by fixation time, or as listed.
 
     [Follow the progression tutorial](../tutorials/corpus-analysis/progression-over-time.md)

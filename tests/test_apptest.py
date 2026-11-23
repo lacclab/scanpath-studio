@@ -3477,7 +3477,7 @@ class TestCorpusAnalysisTab:
             ("Overview", "corpus_measure"),
             ("Per text", "ptext_view"),
             ("Per participant", "prdr_view"),
-            ("Groups", "pgrp_view"),
+            ("Groups", "cmp_view"),
         ],
     )
     def test_analysis_sections_render(self, subtab, view_key):
@@ -3491,9 +3491,6 @@ class TestCorpusAnalysisTab:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         keys = {s.key for s in at.selectbox}
-        # The Groups tab defaults to a single group (compare toggle off), so its
-        # single-group view selector (pgrp_view) is present; cmp_view appears only
-        # when 'Compare a second group' is on (see test_each_analysis_view_renders).
         assert view_key in keys, f"{view_key} view selector not found"
         # The Screen picker is offered only by a multipart corpus. The demo
         # has no `screen_id`, so it must not appear — every single-screen
@@ -3679,9 +3676,12 @@ class TestCorpusAnalysisTab:
         at.run(timeout=60)
         assert not at.exception, at.exception
         captions = [c.value for c in at.caption]
-        note = next(c for c in captions if "All time spent on a word" in c)
+        note = at.selectbox(key="ptext_measure").proto.help
         assert "All time spent on a word" in note and "Unit: ms." in note
-        assert "Each word's value is the mean across its participants." in note
+        assert any(
+            "Each word's value is the mean across its participants." in c
+            for c in captions
+        )
         assert any(
             c.startswith("SEM: how precisely the center is known") for c in captions
         )
@@ -3693,6 +3693,7 @@ class TestCorpusAnalysisTab:
         single = _make_apptest()
         pin_view(single, "Corpus Analysis")
         single.session_state["corpus_subtab"] = "Groups"
+        single.session_state["groups_compare"] = False
         single.session_state["pgrp_mode"] = "Independent filter sets"
         single.run(timeout=60)
         assert not single.exception, f"Streamlit exceptions: {single.exception}"

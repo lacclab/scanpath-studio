@@ -61,6 +61,7 @@ def _overview_app():
 
     render_corpus_overview(
         st.session_state["words"],
+        group_by="participant",
         download=lambda *args, **kwargs: None,
         canvas_width=700,
         base_font_size=14,
@@ -83,15 +84,13 @@ def test_unmapped_trial_numbers_and_nullable_empty_readings():
     with pytest.raises(ValueError, match="mapped Text ID"):
         agg.corpus_overview(words, measure, "text")
     at = AppTest.from_function(_overview_app)
-    at.query_params["corpus_group_by"] = "Text"
     at.session_state["words"] = words
     at.run()
     assert not at.exception
-    assert at.segmented_control(key="corpus_group_by").value == "Participant"
-    assert at.segmented_control(key="corpus_group_by").options == ["Participant"]
+    assert at.selectbox(key="corpus_inspect_participant").value is None
+    assert not at.button
     at.selectbox(key="corpus_inspect_participant").select("b").run()
     assert not at.exception
-    assert at.metric[0].value == "—"
     assert any("no recorded values for this measure" in c.value for c in at.caption)
     # A mapped Text ID can legitimately equal a trial ID. Only that reader
     # belongs to text 1, even though the generated ID has the same spelling.
@@ -154,7 +153,11 @@ def test_filtered_overview_replays_and_opens_selected_profile(
     pin_view(at, "Corpus Analysis")
     at.run()
     at.selectbox(key="corpus_measure").select("ffd")
-    at.segmented_control(key="corpus_group_by").set_value(group).run()
+    at.segmented_control(key="corpus_destination").set_value(group + "s").run()
+    assert not at.exception
+    assert "csv" not in captured and not at.dataframe
+    at.session_state["corpus_summary_table"] = True
+    at.run()
     assert not at.exception
     assert at.session_state["corpus_subtab"] == "Overview"
     assert at.selectbox(key="corpus_measure").value == "ffd"
@@ -179,21 +182,29 @@ def test_filtered_overview_replays_and_opens_selected_profile(
     selector = at.selectbox(key=f"corpus_inspect_{group.lower()}")
     selected = selector.options[-1]
     selector.select(selected).run()
-    if group == "Participant":
+    with monkeypatch.context() as profile:
+        if group == "Participant":
 
-        def unused_enrichment(*args, **kwargs):
-            pytest.fail("Word distributions should read only the supplied word values.")
+            def unused_enrichment(*args, **kwargs):
+                pytest.fail(
+                    "Word distributions should read only the supplied word values."
+                )
 
-        monkeypatch.setattr(tabs, "_c_enrich_fix", unused_enrichment)
-    at.button(key="corpus_open_profile").click().run()
+            profile.setattr(tabs, "_c_enrich_fix", unused_enrichment)
+        at.button(key="corpus_open_profile").click().run()
     assert not at.exception
     if group == "Text":
         assert at.selectbox(key="ptext_text").value.startswith(f"{selected}  (")
         assert at.selectbox(key="ptext_view").value == "Cohort profile"
         assert at.selectbox(key="ptext_measure").value == agg.MEASURES["ffd"].label
+        view_key, alternate = "ptext_view", "Measure on the stimulus"
     else:
         assert at.selectbox(key="prdr_pid").value == selected
         assert at.selectbox(key="prdr_measure").value == agg.MEASURES["ffd"].label
+        view_key, alternate = "prdr_view", "Per-trial trend"
+    # The first edit inside Chart settings must replace the drill-down default.
+    at.selectbox(key=view_key).select(alternate).run()
+    assert at.selectbox(key=view_key).value == alternate
 
 
 def test_bookmarked_overview_opens_group_comparison_with_the_same_measure():
@@ -206,8 +217,8 @@ def test_bookmarked_overview_opens_group_comparison_with_the_same_measure():
     )
     at.run()
     assert at.selectbox(key="corpus_measure").value == "ffd"
-    assert at.segmented_control(key="corpus_group_by").value == "Participant"
-    at.button(key="corpus_open_groups").click().run()
+    assert at.segmented_control(key="corpus_destination").value == "Participants"
+    at.segmented_control(key="corpus_destination").set_value("Groups").run()
     assert not at.exception
     assert at.toggle(key="groups_compare").value
     assert at.selectbox(key="cmp_view").value == "Group means & difference"
@@ -293,7 +304,9 @@ def test_rate_chart_and_table_display_the_underlying_proportions_as_percentages(
     at.session_state["corpus_summary_table"] = True
     at.run()
     assert not at.exception
-    assert at.metric[0].value == "50.0%"
+    assert at.selectbox(key="corpus_inspect_participant").value is None
+    at.selectbox(key="corpus_inspect_participant").select("a").run()
+    assert any("**50.0%** mean" in m.value for m in at.markdown)
     assert at.dataframe[0].value["value"].tolist() == [0.5, 0.0]
     assert (
         json.loads(at.dataframe[0].proto.columns)["value"]["type_config"]["format"]
@@ -404,7 +417,7 @@ def test_compare_groups_shows_rate_changes_in_percentage_points():
     pin_view(at, "Corpus Analysis")
     at.session_state["corpus_measure"] = "skip"
     at.run()
-    at.button(key="corpus_open_groups").click().run()
+    at.segmented_control(key="corpus_destination").set_value("Groups").run()
     assert not at.exception
     means = [m.value for m in at.metric if m.label.endswith(" mean")]
     assert len(means) == 2 and all(v.endswith("%") for v in means)

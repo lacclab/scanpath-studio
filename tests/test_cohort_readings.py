@@ -219,6 +219,30 @@ def _bookmarked_groups():
     return at
 
 
+def test_groups_opens_on_named_means_with_the_editor_and_chart_options_collapsed(
+    experimental_off,
+):
+    at = _bookmarked_groups().run()
+    assert not at.exception
+    assert at.toggle(key="groups_compare").value is True
+    assert at.selectbox(key="cmp_view").value == "Group means & difference"
+    assert at.selectbox(key="cmp_measure").value == "Total fixation duration — TFD"
+    popovers = {p.proto.popover.label: p for p in at.get("popover")}
+    assert popovers["Edit groups"].multiselect(key="cmp_a").value == ["Adv"]
+    assert popovers["Edit groups"].multiselect(key="cmp_b").value == ["Ele"]
+    settings = popovers["Chart settings"]
+    assert {s.key for s in settings.selectbox} == {"cmp_view"}
+    assert [m.label for m in settings.metric] == ["Standardized difference"]
+    means = {m.label: m.value for m in at.metric if m.label.endswith(" mean")}
+    assert any("Adv" in name for name in means) and any("Ele" in name for name in means)
+    assert len(means) == 2 and all(value.endswith(" ms") for value in means.values())
+    assert at.metric[-1].label == "Difference (A − B)"
+    at.toggle(key="groups_compare").set_value(False).run()
+    assert not at.exception
+    assert at.selectbox(key="pgrp_view").value == "Distributions"
+    assert at.multiselect(key="pgrp_g").value == ["Adv"]
+
+
 @pytest.mark.parametrize("owner", ["words", "fixations"])
 def test_a_field_on_one_table_can_split_both_groups(owner):
     at = AppTest.from_function(_groups_app)
@@ -238,10 +262,59 @@ def test_group_field_keeps_values_with_different_filter_spellings():
     ]
 
 
+def test_group_means_select_only_the_reader_and_measure(monkeypatch):
+    mean = tabs.reader_means
+    selected = []
+
+    def record(frame, measure):
+        selected.append((set(frame), frame["participant_id"].unique().tolist()))
+        return mean(frame, measure)
+
+    monkeypatch.setattr(tabs, "reader_means", record)
+    at = AppTest.from_function(_groups_app)
+    at.session_state["cmp_mode"] = "Independent filter sets"
+    at.session_state["cmp_setA_difficulty_level"] = ["Adv"]
+    at.session_state["cmp_setB_difficulty_level"] = ["Ele"]
+    at.run()
+    assert not at.exception
+    assert selected == [
+        ({"participant_id", "duration_ms"}, ["p_adv"]),
+        ({"participant_id", "duration_ms"}, ["p_ele"]),
+    ]
+    assert (
+        next(m.value for m in at.metric if m.label == "Difference (A − B)")
+        == "-200.00 ms"
+    )
+
+
+def test_group_means_without_reader_ids_pool_recorded_values():
+    at = AppTest.from_string(
+        """
+import pandas as pd
+from scanpath_studio import tabs
+
+tabs.render_group_comparison_tab(
+    pd.DataFrame({"first_fixation_ms": [100.0, None, 300.0]}),
+    pd.DataFrame(),
+    viz_settings={}, canvas_width=700, canvas_height=460,
+    base_font_size=14, font_family="Arial",
+)
+"""
+    )
+    at.session_state["cmp_mode"] = "Independent filter sets"
+    at.run()
+    assert not at.exception
+    a = next(m for m in at.metric if m.label == "Group A mean")
+    assert (a.value, a.delta) == ("200.00 ms", "2 observations")
+    assert any("Participant IDs are missing" in note.value for note in at.caption)
+
+
 def test_profile_becomes_group_a_and_an_unfinished_split_has_no_result(
     experimental_off,
 ):
-    at = _bookmarked_groups().run()
+    at = _bookmarked_groups()
+    at.session_state["groups_compare"] = False
+    at.run()
     at.multiselect(key="pgrp_g").set_value(["Ele"]).run()
     at.toggle(key="groups_compare").set_value(True).run()
     assert at.multiselect(key="cmp_a").value == ["Ele"]
@@ -269,7 +342,9 @@ def test_profile_becomes_group_a_and_an_unfinished_split_has_no_result(
 def test_independent_filters_keep_the_named_group_and_allow_the_whole_pool(
     experimental_off,
 ):
-    at = _bookmarked_groups().run()
+    at = _bookmarked_groups()
+    at.session_state["groups_compare"] = False
+    at.run()
     at.radio(key="pgrp_mode").set_value("Independent filter sets").run()
     at.text_input(key="pgrp_set0_label").set_value("Elementary readings")
     at.multiselect(key="pgrp_set0_difficulty_level").set_value(["Ele"]).run()

@@ -1048,6 +1048,7 @@ class TestGroupingEndToEnd:
             at.session_state[md.TEXT_RAW_SESSION_KEY] = frame
         pin_view(at, _VIEW_CORPUS)
         at.session_state["corpus_subtab"] = "Groups"
+        at.session_state["groups_compare"] = False
         at.session_state["pgrp_field"] = option
         at.session_state["pgrp_g"] = ["x"]
         at.run(timeout=120)

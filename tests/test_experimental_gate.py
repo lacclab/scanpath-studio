@@ -397,12 +397,9 @@ class TestPerSentenceGate:
         at.session_state["corpus_subtab"] = "Per sentence"
         at.run()
         assert not at.exception, at.exception
-        assert [t.label for t in at.tabs][-4:] == [
-            "Overview",
-            "Per text",
-            "Per participant",
-            "Groups",
-        ]
+        destination = at.segmented_control(key="corpus_destination")
+        assert destination.options == ["Texts", "Participants", "Groups"]
+        assert destination.value == "Texts"
         assert calls == []
 
 
@@ -469,6 +466,8 @@ class TestComputedMeasuresGate:
         at = AppTest.from_file(APP_SCRIPT)
         pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = subtab
+        if subtab == "Groups":
+            at.session_state["groups_compare"] = False
         at.run(timeout=60)
         assert not at.exception, at.exception
         views = set(at.selectbox(key=view_key).options)

@@ -1,1 +1,1 @@
-Corpus Analysis opens with a comparison across texts or participants. Select a point to see what its mean represents, inspect word values or compare readers, and download the full summary and its recipe.
+Corpus Analysis opens with a chart of texts or participants. Select a dot for its readings, open a word or participant profile, or choose Groups to compare two conditions. Chart settings, tables and downloads open on demand.

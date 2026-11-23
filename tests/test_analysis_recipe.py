@@ -165,13 +165,13 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
     bound.clear()
     pin_view(at, "Corpus Analysis")
     at.session_state["corpus_subtab"] = "Per text"
+    at.session_state["ptext_view"] = "Per-participant profiles"
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    # Per-participant profiles is the first view inside Per text.
     buttons = {b.key: b for b in at.download_button}
     assert "dl_ptext1" in buttons
-    assert buttons["dl_ptext1_recipe"].proto.label == "⬇ Download the recipe (JSON)"
+    assert buttons["dl_ptext1_recipe"].proto.label == "Download recipe (JSON)"
     assert bound, "the recipe button was never handed its inputs"
 
     recipe = json.loads(tabs._recipe_json(*bound[-1]))

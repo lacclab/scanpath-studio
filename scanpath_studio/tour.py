@@ -125,10 +125,10 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
-    #: The Corpus Analysis subtabs are lazy (only the open one renders), so a
-    #: step aimed at a control inside one has to open it, as ``subtab``
-    #: does for the Scanpath view. A label from ``tabs.CORPUS_SUBTABS``.
+    #: The published Corpus section, plus the summary unit when the step
+    #: targets Texts or Participants in Overview.
     corpus_subtab: str | None = None
+    corpus_group_by: str | None = None
     #: The step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
@@ -375,16 +375,19 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 NAV_SELECTOR,
             ),
             TutorialStep(
-                "Open Per participant",
-                "Select **Per participant** to inspect one participant across trials.",
+                "Choose a participant",
+                "In **Participants**, select a dot or find a reader by ID. "
+                "Choose **Open participant profile** to inspect their trials.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,
+                corpus_subtab="Overview",
+                corpus_group_by="Participant",
             ),
             TutorialStep(
                 "Choose the participant and the view",
-                "Set **View** to **Per-trial trend** and choose a participant. "
+                "Open **Chart settings** and set **View** to **Per-trial trend**. "
                 "It plots one point per trial across the experiment. Trial order "
-                "comes from your data; check any notice about an inferred order.",
+                "comes from your data. Check any notice about an inferred order.",
                 ".st-key-tutorial_per_reader_view",
                 view=_VIEW_CORPUS,
                 corpus_subtab="Per participant",
@@ -399,7 +402,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Compare this participant with the others",
-                "Choose **Compare with other participants**. For a duration, "
+                "In **Chart settings**, choose **Compare with other participants**. For a duration, "
                 "compare where the two distributions fall. For a rate, use "
                 "the word counts beneath each percentage.",
                 ".st-key-tutorial_per_reader_view",
@@ -2015,6 +2018,8 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
         st.session_state["single_subtab"] = step.subtab
     if step.corpus_subtab is not None:
         st.session_state["corpus_subtab"] = step.corpus_subtab
+    if step.corpus_group_by is not None:
+        st.session_state["corpus_group_by"] = step.corpus_group_by
     # The Data page's two screens. A step that points into the editor
     # opens it; one that points at the overview closes it, so walking back up a
     # tutorial does not leave the editor covering the table the previous step
@@ -2054,6 +2059,11 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     if (
         step.corpus_subtab is not None
         and st.session_state.get("corpus_subtab", "Overview") != step.corpus_subtab
+    ):
+        return False
+    if (
+        step.corpus_group_by is not None
+        and st.session_state.get("corpus_group_by") != step.corpus_group_by
     ):
         return False
     return step.subtab is None or _current_subtab() == step.subtab

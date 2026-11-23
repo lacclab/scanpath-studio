@@ -1618,7 +1618,8 @@ def _render_save_plot_button(
         fig_width = int(fig.layout.width or canvas_width)
         fig_height = int(fig.layout.height or canvas_height)
         if fmt == "PNG":
-            _render_print_size(fig_width, fig_height)
+            with st.expander("Print size and resolution"):
+                _render_print_size(fig_width, fig_height)
         _image_download_component()(
             key=f"{key_prefix}_save_image",
             data={
@@ -5727,50 +5728,77 @@ def _render_export_panel(
             st.caption(
                 "The stimulus image can contain readable text. Turn it off under Stimulus to omit it."
             )
-    if animate and replay is not None:
-        _render_animation_export(replay, file_stem=file_stem or "animation")
-        render_cite_button(st, key="anim_export", what="this replay")
-    elif animate or displayed_fig is None:
-        st.caption("Select a trial to export its figure.")
-    else:
-        _render_save_plot_button(
-            displayed_fig,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            slug=save_slug,
-            key_prefix="single",
-            plot_key=plot_key,
+    quick_export = st.container()
+    from . import publication_ui
+
+    def figure_settings() -> dict:
+        return _current_figure_config(
+            selected_participant,
+            selected_trial,
+            canvas_width,
+            canvas_height,
+            viz_settings.get("x_field", "x"),
+            viz_settings.get("y_field", "y"),
+            _build_figure_settings(
+                viz_settings, bool(viz_settings.get("show_raw_gaze"))
+            ),
+            viz_settings,
+            base_font_size,
+            raw_gaze,
+            font_family=font_family,
         )
-        render_cite_button(st, key="single_export")
-        if (displayed_fig.layout.meta or {}).get("scanpath_panels"):
-            from . import panel_proof_ui
 
-            def panel_settings():
-                return _current_figure_config(
-                    selected_participant,
-                    selected_trial,
-                    canvas_width,
-                    canvas_height,
-                    viz_settings.get("x_field", "x"),
-                    viz_settings.get("y_field", "y"),
-                    _build_figure_settings(
-                        viz_settings, bool(viz_settings.get("show_raw_gaze"))
-                    ),
-                    viz_settings,
-                    base_font_size,
-                    raw_gaze,
-                    font_family=font_family,
+    reading = f"Participant {selected_participant} · Trial {selected_trial}"
+    title = (
+        _figure_alt(displayed_fig, reading) if displayed_fig is not None else reading
+    )
+    editing = publication_ui.render(
+        displayed_fig,
+        title=title,
+        kind="replay" if animate else "scanpath",
+        plot_id=_true_scale_plot_id(plot_key),
+        replay=replay,
+        settings_for=figure_settings,
+    )
+
+    if not editing:
+        with quick_export:
+            if animate and replay is not None:
+                _render_animation_export(replay, file_stem=file_stem or "animation")
+                render_cite_button(st, key="anim_export", what="this replay")
+            elif animate or displayed_fig is None:
+                st.caption("Select a trial to export its figure.")
+            else:
+                _render_save_plot_button(
+                    displayed_fig,
+                    canvas_width=int(canvas_width),
+                    canvas_height=int(canvas_height),
+                    slug=save_slug,
+                    key_prefix="single",
+                    plot_key=plot_key,
                 )
+                render_cite_button(st, key="single_export")
+                if (displayed_fig.layout.meta or {}).get("scanpath_panels"):
+                    from . import panel_proof_ui
 
-            panel_proof_ui.render(displayed_fig, _print_size_setting(), panel_settings)
+                    panel_proof_ui.render(
+                        displayed_fig, _print_size_setting(), figure_settings
+                    )
 
     if not include_bundle:
         ui_mode.render_export_pointer(st)
         return
     st.divider()
-    st.markdown("## Export bundle")
+    if editing:
+        bundle = st.expander(
+            "Export bundle", key="publication_bundle", on_change="rerun"
+        )
+        if not bundle.open:
+            return
+    else:
+        bundle = st.expander("Export bundle")
     if animate or st.session_state.get(SINGLE_COMPARE_TOGGLE):
-        st.caption("The bundle exports static, single-trial figures.")
+        bundle.caption("The bundle exports static, single-trial figures.")
     # The batch draws raw gaze when the rail does — forced off, a
     # raw-gaze-only dataset would export blank figures. Each trial's own
     # samples are handed to its figure inside `bulk_export`.
@@ -5861,25 +5889,26 @@ def _render_export_panel(
         st.session_state["_export_text_metadata"] = _attached_texts.frame
     else:
         st.session_state.pop("_export_text_metadata", None)
-    _render_bulk_export(
-        combos,
-        words_filtered,
-        fixations_filtered,
-        combos_all,
-        words_all,
-        fixations_all,
-        raw_gaze,
-        raw_gaze_all=raw_gaze if raw_gaze_all is None else raw_gaze_all,
-        canvas_width=int(canvas_width),
-        canvas_height=int(canvas_height),
-        base_font_size=int(base_font_size),
-        font_family=font_family,
-        x_field=viz_settings["x_field"],
-        y_field=viz_settings["y_field"],
-        figure_settings=bulk_settings,
-        selected_participant=selected_participant,
-        selected_trial=selected_trial,
-    )
+    with bundle:
+        _render_bulk_export(
+            combos,
+            words_filtered,
+            fixations_filtered,
+            combos_all,
+            words_all,
+            fixations_all,
+            raw_gaze,
+            raw_gaze_all=raw_gaze if raw_gaze_all is None else raw_gaze_all,
+            canvas_width=int(canvas_width),
+            canvas_height=int(canvas_height),
+            base_font_size=int(base_font_size),
+            font_family=font_family,
+            x_field=viz_settings["x_field"],
+            y_field=viz_settings["y_field"],
+            figure_settings=bulk_settings,
+            selected_participant=selected_participant,
+            selected_trial=selected_trial,
+        )
     render_cite_button(st, key="bulk_export", what="these figures and tables")
 
 
@@ -8469,6 +8498,11 @@ def _render_bulk_export(
         except ValueError as error:
             preview.error(str(error))
         else:
+            if options.print_width_mm and options.raster_formats():
+                sizing = f"{options.print_width_mm:g} mm wide"
+                if options.include_png or options.include_tiff:
+                    sizing += f" · {options.print_dpi} dpi for raster figures"
+                preview.caption(sizing)
             for note in contents.notes:
                 preview.caption(note)
             preview.dataframe(pd.DataFrame(contents.files), hide_index=True)
@@ -10593,6 +10627,12 @@ def _chart(fig) -> None:
         config={**PLOTLY_CONFIG},
         alt=_figure_alt(fig, "Corpus analysis chart"),
     )
+    from . import publication_ui
+
+    title = _figure_alt(fig, "Corpus chart")
+    publication_ui.render(
+        fig, title=title, kind="chart", key="chart_" + st._main._get_delta_path_str()
+    )
 
 
 def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
@@ -11245,6 +11285,14 @@ def render_per_text_tab(
                 f"Stimulus layout from {md_literal(str(chosen[0]))} / {md_literal(str(chosen[1]))}."
             )
         _render_true_scale_chart(fig, key="ptext_stimulus")
+        from . import publication_ui
+
+        publication_ui.render(
+            fig,
+            title=f"{measure.axis_label} · {text_id}",
+            kind="chart",
+            key="ptext_stimulus",
+        )
         values = agg_words[["word_id", "value"]]
         if chosen:
             values = values.assign(

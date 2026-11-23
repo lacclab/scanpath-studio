@@ -1483,6 +1483,10 @@ def _render_downloads(host) -> None:
 
 def _render_saved_here_section(app_url: str, host) -> None:
     """Show what will reopen next time, separately from the public datasets on disk."""
+    from . import publication_ui
+
+    with host.container():
+        publication_ui.render(key="saved")
     status = cache_status(url=app_url)
     _announce_download_deleted()
     local_files = local_filesystem_enabled()
@@ -9332,6 +9336,9 @@ def _run_app() -> None:
     # entries before anything fingerprints a frame, so a frame rebuilt this run
     # is hashed afresh and last run's frames stop being kept alive.
     reset_fingerprint_memo()
+    from .publication_ui import apply_pending
+
+    apply_pending()
     # Every stored dataset's tables, open or not — the Data page counts
     # them all — are held run after run and never written into, so each is
     # hashed once rather than on every rerun, however it entered the store

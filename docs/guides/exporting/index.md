@@ -11,6 +11,7 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Goal | Where |
 | --- | --- |
 | Save the figure or replay on screen | :material/file_export: **Export** → **Current figure** |
+| Prepare a figure for a paper or slide | :material/file_export: **Export** → **Prepare figure for export** |
 | Export many trials and their tables | :material/file_export: **Export** → **Export bundle** |
 | Share a view or copy its code | :material/share: **Share** → **Link** or **Code** |
 | Reuse the figure settings | :material/palette: **My designs**, or :material/share: **Share** → **Settings file** |
@@ -19,6 +20,17 @@ To export multiple trials, switch to Full and open **Export bundle**.
 Essentials offers **Current figure** for the figure or replay on screen.
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
+
+## Prepare a paper figure or slide
+
+Open **Scanpath → Export → Prepare figure for export**. The preview shows the current reading, comparison or replay still. For a corpus chart, open **Prepare figure for export** directly beneath the chart. Choose **Download PNG** for a slide or document, or switch the file format to SVG, PDF or TIFF.
+
+- **Crop** lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under **Label events**, pin a fixation or saccade and drag its label into position.
+- **Caption and description** suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.
+- For a replay, **Replay clip** lets you choose the interval, speed and poster frame. **Prepare MP4 and poster** produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.
+- When a journal specifies dimensions, open **Print settings** to set the width, resolution or minimum text size. In Full mode on the Scanpath view, **Use this size for batch export** applies the width and resolution to the export bundle.
+
+Under **Save or open**, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under **Data Management → Saved work → Saved figures**, or via **Share → Settings file**. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.
 
 ## Reproduce a coauthor's results
 

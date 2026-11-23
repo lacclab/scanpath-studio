@@ -157,6 +157,7 @@ from .session_keys import (
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
+    PARAM_PREPARE,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PLOT_CONFIG_SCHEMA_VERSION,
@@ -3728,6 +3729,15 @@ def _apply_uploaded_plot_config(
     except (ValueError, UnicodeDecodeError):
         st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
+    from . import publication, publication_ui
+
+    if config.get("schema") == publication.SCHEMA:
+        try:
+            publication_ui.restore(config)
+        except ValueError as exc:
+            st.toast(str(exc), icon=ICONS["warning"])
+            return
+        st.rerun()
     try:
         applied, skipped = _restore_plot_config(config, combos, fixations, raw_gaze)
     except Exception as exc:  # backstop for an unexpectedly shaped config
@@ -4099,6 +4109,8 @@ def _build_share_query(
             "`{trials.font_size}`). Links don't carry metadata tables, so the "
             "field shows empty unless the recipient attaches the same table."
         )
+    if st.session_state.get("share_prepare_figure"):
+        params[PARAM_PREPARE] = "1"
     return urlencode(params), caveats
 
 
@@ -4673,6 +4685,12 @@ def _render_share_body(
         "**Share this view.** The link reopens Scanpath Studio on the current "
         "trial with your visualization settings."
     )
+    if visible:
+        st.checkbox(
+            "Open Prepare figure for export with this link",
+            key="share_prepare_figure",
+            persist_state="session",
+        )
     query, caveats = _build_share_query(data_choice)
     # Keep the rendered value inspectable in AppTest without duplicating the
     # browser-only URL composition logic.

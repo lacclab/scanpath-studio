@@ -154,6 +154,23 @@ print(
 
 ::: scanpath_studio.api.save_figure
 
+### Publication figures
+
+Pass the Plotly figure you want to prepare. A `.json` file reopens in the app and an `.html` file opens an offline editor. Other supported extensions render the artwork.
+
+```python
+recipe = sps.publication_figure(
+    scanpath,
+    name="Figure 2",
+)
+sps.save_publication(recipe, "figure-2.json")
+sps.save_publication(recipe, "figure-2.svg")
+```
+
+::: scanpath_studio.api.publication_figure
+
+::: scanpath_studio.api.save_publication
+
 ::: scanpath_studio.api.save_panel_proof
 
 ::: scanpath_studio.api.save_figure_layers

@@ -11,6 +11,7 @@ check data and manage saved work without opening the app:
 | --- | --- |
 | [`scanpath-studio`](#launch-the-app), `run` | Launch the app |
 | [`render`](#render) | Write one trial's scanpath, heatmap or replay to a file |
+| [`publication`](#publication) | Export a saved figure recipe or open it as an offline editor |
 | [`corpus`](#corpus) | Render a corpus figure from a tidy CSV you already have |
 | [`recipe`](#recipe) | Recreate a cohort profile CSV from its saved recipe |
 | [`check`](#check) | Run the Data checks on your tables |
@@ -20,6 +21,18 @@ check data and manage saved work without opening the app:
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version.
 If you mistype a command, the CLI suggests the closest match.
+
+## Publication
+
+Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
+
+```bash
+scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio publication reading.publication.json -o reading.html
+scanpath-studio publication figure-2.json -o figure-2.pdf
+```
+
+Choose SVG, PDF, PNG or TIFF for artwork, or MP4 for a selected replay clip. Rendering these files requires a Chromium browser. The HTML editor is self-contained and can be used offline.
 
 ## Launch the app
 

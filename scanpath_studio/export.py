@@ -269,6 +269,19 @@ class ExportOptions:
     # Spend extra encoding time on lossless compression of PNG figures and layers.
     compact_pngs: bool = False
 
+    print_width_mm: float | None = None
+    print_dpi: int = DEFAULT_PRINT_DPI
+    include_tiff: bool = False
+
+    def image_scale(self, fmt: str, width: int) -> float:
+        if fmt in {"png", "tiff"}:
+            if self.print_width_mm is None:
+                return self.png_scale
+            return print_scale(width, self.print_width_mm, "mm", self.print_dpi)
+        if fmt == "pdf" and self.print_width_mm is not None:
+            return self.print_width_mm / 25.4 * 96 / width
+        return 1
+
     def any_table(self) -> bool:
         return (
             self.include_fixations
@@ -286,6 +299,8 @@ class ExportOptions:
         formats: list[str] = []
         if self.include_png:
             formats.append("png")
+        if self.include_tiff:
+            formats.append("tiff")
         if self.include_svg:
             formats.append("svg")
         if self.include_pdf:
@@ -1536,19 +1551,30 @@ class _ExportReading:
     height: int
     settings: dict
 
-    def can_build_ahead(self, scale: int) -> bool:
+    def can_build_ahead(self, options: ExportOptions) -> bool:
         # Only the figure specification is built ahead. Build images and dense
         # sample traces on demand. The full recording canvas before Plotly fits
         # it gives a conservative bound of 64 MiB for one RGBA surface.
+        try:
+            scale = max(
+                (
+                    options.image_scale(fmt, self.width)
+                    for fmt in options.raster_formats()
+                ),
+                default=1,
+            )
+        except ValueError:
+            # Each writer reports its own invalid print settings in the inventory.
+            return False
         return (
-            self.width * self.height * scale**2 <= MAX_RGBA_PIXELS
+            self.width * self.height * max(1, scale) ** 2 <= MAX_RGBA_PIXELS
             and sum(len(frame) for frame in self.frames) <= 10_000
             and not self.settings.get("background_image")
             and any(not frame.empty for frame in self.frames)
         )
 
 
-def _figures_for_readings(readings, build, worker, scale):
+def _figures_for_readings(readings, build, worker, options):
     """Overlap building the next Plotly figure with drawing this one in Chrome.
 
     The calling thread owns the trial slices, session-dependent settings, browser
@@ -1558,7 +1584,7 @@ def _figures_for_readings(readings, build, worker, scale):
     """
     pending = None
     for reading in readings:
-        if worker is None or not reading.can_build_ahead(scale):
+        if worker is None or not reading.can_build_ahead(options):
             if pending is not None:
                 yield pending
                 pending = None
@@ -1900,6 +1926,50 @@ def _render_naming_options(
     return path_pattern
 
 
+def _print_dimensions(options, fmt, width, height):
+    if options.print_width_mm is None or fmt == "html":
+        return {}
+    return {
+        "width_mm": options.print_width_mm,
+        "height_mm": round(options.print_width_mm * height / width, 4),
+        "dpi": options.print_dpi if fmt in {"png", "tiff"} else "",
+    }
+
+
+def _bundle_image(renderer, figure, fmt, width, height, options):
+    """Set physical size without changing the layout of source text and markers."""
+    from PIL import Image
+
+    from .citation import file_metadata
+    from .file_citation import stamp
+    from .panel_proof import size_svg
+
+    mm = options.print_width_mm
+    raster = fmt in {"png", "tiff"}
+    scale = options.image_scale(fmt, width)
+    if raster and width * height * scale**2 > 64_000_000:
+        raise ValueError("Use a smaller raster width or DPI, or export as SVG.")
+    data = renderer(figure, "png" if fmt == "tiff" else fmt, width, height, scale)
+    if fmt == "svg" and mm is not None:
+        return size_svg(data, width, height, mm)
+    if fmt == "tiff" or fmt == "png" and mm is not None:
+        with Image.open(io.BytesIO(data)) as im:
+            out = io.BytesIO()
+            args = {"dpi": (options.print_dpi,) * 2} if mm is not None else {}
+            if fmt == "tiff":
+                im.save(
+                    out,
+                    format="TIFF",
+                    compression="tiff_lzw",
+                    tiffinfo={270: file_metadata()["Comment"]},
+                    **args,
+                )
+            else:
+                im.save(out, format="PNG", **args)
+            data = stamp(out.getvalue(), fmt)
+    return compact_png(data) if fmt == "png" and options.compact_pngs else data
+
+
 def render_export_options(
     st_module,
     combos: pd.DataFrame,
@@ -1953,14 +2023,14 @@ def render_export_options(
                 st,
                 "pills",
                 "Formats",
-                options=["PDF", "SVG", "PNG", "HTML"],
+                options=["PDF", "SVG", "PNG", "TIFF", "HTML"],
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
                 persist_state="session",
                 help=(
-                    "PDF and SVG are vector images, PNG is a pixel image, and HTML is "
-                    "interactive. Creating PDF, SVG or PNG files requires Chrome, Chromium or"
+                    "PDF and SVG are vector images, PNG and TIFF are pixel images, and HTML is "
+                    "interactive. Creating PDF, SVG, PNG or TIFF files requires Chrome, Chromium or"
                     " Edge. HTML needs no additional browser installation."
                 ),
             )
@@ -1990,16 +2060,44 @@ def render_export_options(
         # The bundle's static figures need a browser on the server,
         # which the current figure's PNG/SVG do not — said only when it is
         # missing, and only while one of those formats is picked.
-        if note := missing_browser_note(include_pdf or include_svg or include_png):
+        include_tiff = "TIFF" in fig_formats
+        if note := missing_browser_note(
+            include_pdf or include_svg or include_png or include_tiff
+        ):
             st.warning(note, icon=ICONS["warning"])
         # Only surface the scale stepper when PNG is on, and keep it narrow
         # with `width` (columns would nest inside the row's own): a 1–4 stepper
         # stretched across the whole field column reads as a text box.
-        if include_png:
+        width_mm = None
+        dpi = DEFAULT_PRINT_DPI
+        if any(f in fig_formats for f in ("PDF", "SVG", "PNG", "TIFF")):
+            width_mm = panel_field(
+                st,
+                "number_input",
+                "Print width (mm)",
+                min_value=1.0,
+                max_value=1000.0,
+                value=None,
+                key=f"{key_prefix}_print_width",
+                persist_state="session",
+                help="Leave empty to keep each figure’s own size.",
+            )
+        if width_mm and (include_png or include_tiff):
+            dpi = panel_field(
+                st,
+                "number_input",
+                "Print resolution (dpi)",
+                min_value=50,
+                max_value=1200,
+                value=DEFAULT_PRINT_DPI,
+                key=f"{key_prefix}_print_dpi",
+                persist_state="session",
+            )
+        if (include_png or include_tiff) and not width_mm:
             png_scale = panel_field(
                 st,
                 "number_input",
-                "PNG scale",
+                "Image scale" if include_tiff else "PNG scale",
                 min_value=1,
                 max_value=4,
                 value=2,
@@ -2008,17 +2106,16 @@ def render_export_options(
                 persist_state="session",
                 help="Higher values give sharper images and larger files.",
             )
-            compact_pngs = panel_field(
-                st,
-                "toggle",
-                "Smaller PNG files",
-                key=f"{key_prefix}_compact_pngs",
-                persist_state="session",
-                help="Uses lossless compression to reduce file size. Building the ZIP takes longer.",
-            )
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
-            compact_pngs = False
+        compact_pngs = include_png and panel_field(
+            st,
+            "toggle",
+            "Smaller PNG files",
+            key=f"{key_prefix}_compact_pngs",
+            persist_state="session",
+            help="Uses lossless compression to reduce file size. Building the ZIP takes longer.",
+        )
 
         st.markdown("### Also include")
         # Per-layer figure breakdown for publication editing.
@@ -2034,11 +2131,13 @@ def render_export_options(
         # Layers are static vectors/rasters — HTML can't be split. When no
         # vector/raster format is picked, they fall back to SVG (which needs
         # Kaleido/Chrome, unlike the browser-free HTML the user chose), so warn.
-        if separable_layers and not (include_png or include_svg or include_pdf):
+        if separable_layers and not (
+            include_png or include_svg or include_pdf or include_tiff
+        ):
             st.caption(
                 f"{ICONS['warning']} HTML figures can't be split, so the layers "
                 "export as **SVG**, which needs Chrome, Chromium or Edge. Pick SVG, "
-                "PDF or PNG above to choose the layer format."
+                "PDF, TIFF or PNG above to choose the layer format."
             )
         include_plot_config = panel_field(
             st,
@@ -2135,6 +2234,9 @@ def render_export_options(
 
     options = ExportOptions(
         include_png=include_png,
+        include_tiff=include_tiff,
+        print_width_mm=width_mm,
+        print_dpi=int(dpi),
         include_svg=include_svg,
         include_pdf=include_pdf,
         include_html=include_html,
@@ -2416,6 +2518,9 @@ INVENTORY_COLUMNS = (
     "screen_id",
     "status",
     "note",
+    "width_mm",
+    "height_mm",
+    "dpi",
 )
 
 
@@ -3012,7 +3117,9 @@ def bulk_export(
     # and screen it belongs to.
     inventory: list[dict] = []
 
-    def _inventory(path, artifact, status, unit=None, note="", fmt=None):
+    def _inventory(
+        path, artifact, status, unit=None, note="", fmt=None, dimensions=None
+    ):
         inventory.append(
             {
                 "path": path,
@@ -3025,6 +3132,7 @@ def bulk_export(
                 "screen_id": (unit or {}).get("screen_id", ""),
                 "status": status,
                 "note": note,
+                **(dimensions or {}),
             }
         )
 
@@ -3370,16 +3478,11 @@ def bulk_export(
         if needs_kaleido and len(units) > 1
         else nullcontext(None) as worker,
     ):
-
-        def render_figure(fig, fmt, width, height, scale):
-            data = render(fig, fmt, width, height, scale)
-            return compact_png(data) if fmt == "png" and options.compact_pngs else data
-
         for reading, get_figure in _figures_for_readings(
             reading_inputs(),
             build_figure,
             worker,
-            options.png_scale if options.include_png else 1,
+            options,
         ):
             combo, layout = reading.row, reading.layout
             trial_words, trial_fix, trial_raw_gaze = reading.frames
@@ -3544,14 +3647,22 @@ def bulk_export(
                                     )
                                 ).encode("utf-8")
                             else:
-                                scale = options.png_scale if fmt == "png" else 1
-                                data = render_figure(fig, fmt, out_w, out_h, scale)
+                                data = _bundle_image(
+                                    render, fig, fmt, out_w, out_h, options
+                                )
                             path = _path("figure", fmt)
                             _write_figure_file(zf, path, data, fmt)
                         except Exception as exc:
                             record_failure(_path("figure", fmt), "figure", fmt, exc)
                             continue
-                        _inventory(path, "figure", "written", unit_ids, fmt=fmt)
+                        _inventory(
+                            path,
+                            "figure",
+                            "written",
+                            unit_ids,
+                            fmt=fmt,
+                            dimensions=_print_dimensions(options, fmt, out_w, out_h),
+                        )
                         progress.bytes_written += len(data)
                         progress.figures_written += 1
 
@@ -3579,15 +3690,28 @@ def bulk_export(
                                 # layer can take the path offered for retry.
                                 path = _path(f"layers/{layer_name}", fmt)
                                 try:
-                                    scale = options.png_scale if fmt == "png" else 1
-                                    data = render_figure(
-                                        layer_fig, fmt, out_w, out_h, scale
+                                    data = _bundle_image(
+                                        render,
+                                        layer_fig,
+                                        fmt,
+                                        out_w,
+                                        out_h,
+                                        options,
                                     )
                                     _write_figure_file(zf, path, data, fmt)
                                 except Exception as exc:
                                     record_failure(path, artifact, fmt, exc)
                                     continue
-                                _inventory(path, artifact, "written", unit_ids, fmt=fmt)
+                                _inventory(
+                                    path,
+                                    artifact,
+                                    "written",
+                                    unit_ids,
+                                    fmt=fmt,
+                                    dimensions=_print_dimensions(
+                                        options, fmt, out_w, out_h
+                                    ),
+                                )
                                 progress.bytes_written += len(data)
                                 progress.figures_written += 1
 

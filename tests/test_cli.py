@@ -674,6 +674,23 @@ def test_render_multipart_manifest_lists_and_renders_all_screens(tmp_path, capsy
     assert (tmp_path / "parent__screen-001-intro.html").is_file()
     assert (tmp_path / "parent__screen-002-question.html").is_file()
 
+    cli.main(
+        [
+            *common,
+            "--all-screens",
+            "--dpi",
+            "600",
+            "-o",
+            str(tmp_path / "Fig.2.PUBLICATION.JSON"),
+        ]
+    )
+    for screen in ("001-intro", "002-question"):
+        name = f"Fig.2__screen-{screen}"
+        doc = json.loads((tmp_path / f"{name}.PUBLICATION.JSON").read_bytes())
+        assert doc["name"] == name
+        assert doc["dpi"] == 600
+        assert doc["schema"] == "scanpath-studio/publication/1"
+
     # --screens: only the screens named, each keeping its place in the trial.
     chosen = tmp_path / "chosen.html"
     cli.main([*common, "--screens", "question", "-o", str(chosen)])

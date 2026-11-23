@@ -57,3 +57,8 @@ The canvas / font controls (`app.render_canvas_controls`: line spacing,
 scale-to-boxes, base font, canvas size, text colour) reach all three builders.
 `app.seed_canvas_state` seeds their keys before any view renders, so the
 rail-less Corpus view resolves the same geometry.
+
+
+## Publication figures
+
+The publication workspace captures a rendered Plotly source from any supported view. Crops in source-figure pixels, labels, caption placement and optional print settings belong to the publication recipe. The source retains its original axes, clock, plot settings when captured from Scanpath, and illustration disclosures. The offline editor, app proof and command-line renderer use the same layout.

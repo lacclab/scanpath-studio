@@ -1634,6 +1634,20 @@ _GLYPH_DIAMETER_PER_STROKE_PX = 2 * FIXATION_GLYPH_SIZE_SCALE
 _HOLLOW_GLYPHS = {"♥": "♡"}
 
 
+def _publication_events(rows: pd.DataFrame, *, spatial: bool, side: str = "") -> dict:
+    """Point identities and displayed-reading times, independent of marker labels."""
+    from .measures import fixation_clock
+
+    onsets, recorded = fixation_clock(rows)
+    return {
+        "publication_order": rows["order_in_trial"].tolist(),
+        "publication_spatial": spatial,
+        "publication_onset": onsets.tolist(),
+        "publication_recorded_clock": recorded,
+        "publication_reading": side,
+    }
+
+
 def _glyph_scatter_traces(
     x, y, marker: dict, glyph: str, **top: Any
 ) -> list[go.Scatter]:
@@ -5063,6 +5077,7 @@ def _render_scanpath_figure(
                 glyph,
                 hovertemplate=hovertemplate,
                 customdata=customdata,
+                meta=_publication_events(ordered, spatial=spatial_axes),
                 name="Fixations",
                 showlegend=False,
             ):
@@ -5104,6 +5119,7 @@ def _render_scanpath_figure(
                     textposition=order_textposition,
                     hovertemplate=hovertemplate,
                     customdata=customdata,
+                    meta=_publication_events(ordered, spatial=spatial_axes),
                     name="Fixations",
                     showlegend=False,
                 )
@@ -5523,43 +5539,61 @@ def _draw_word_value_heatmap(
                 name=_shape_layer_tag("heatmap"),
             )
         )
-    if show_colorbars:
+    if show_colorbars or unit:
         scope = "fixed range" if heatmap_range is not None else "this trial"
         scale_title = _heatmap_title(colorbar_title, heatmap_norm)
         # A caller supplying its own values can be drawing a cohort aggregate.
         # Only the per-reading count/dwell heatmaps carry this scope.
         if unit:
             scale_title += f"<br>{z_min_raw:g}–{z_max_raw:g} {unit} · {scope}"
-        fig.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(
-                    colorscale=heatmap_colorscale,
-                    showscale=True,
-                    cmin=z_min,
-                    cmax=z_max,
-                    colorbar=_colorbar_dict(
-                        scale_title,
-                        **(colorbar_style or {}),
-                    )
-                    | _heatmap_ticks(
-                        z_min,
-                        z_max,
-                        heatmap_norm,
-                        counts=colorbar_title == "Fixation count",
-                    ),
+        carrier = go.Scatter(
+            x=[None],
+            y=[None],
+            mode="markers",
+            marker=dict(
+                colorscale=heatmap_colorscale,
+                showscale=show_colorbars,
+                cmin=z_min,
+                cmax=z_max,
+                colorbar=_colorbar_dict(
+                    scale_title,
+                    **(colorbar_style or {}),
+                )
+                | _heatmap_ticks(
+                    z_min,
+                    z_max,
+                    heatmap_norm,
+                    counts=colorbar_title == "Fixation count",
                 ),
-                showlegend=False,
-                hoverinfo="skip",
-                # Keep this carrier with the coloured word boxes in a layer export.
-                name="heatmap colorbar",
-                # The UI can pin exactly the raw limits this reading drew,
-                # including when its visible colours use a log transform.
-                meta={"word_heatmap_range": (z_min_raw, z_max_raw)} if unit else None,
-            )
+            ),
+            showlegend=False,
+            hoverinfo="skip",
+            # Keep this carrier with the coloured word boxes in a layer export.
+            name="heatmap colorbar",
+            # The UI can pin exactly the raw limits this reading drew,
+            # including when its visible colours use a log transform.
+            meta={
+                "word_heatmap_range": (z_min_raw, z_max_raw),
+                "publication_heatmap": {
+                    "measure": colorbar_title,
+                    "norm": heatmap_norm,
+                    "values": list(map(float, vals)),
+                    "tag": _shape_layer_tag("heatmap"),
+                },
+            }
+            if unit
+            else None,
         )
+        if show_colorbars:
+            fig.add_trace(carrier)
+        else:
+            # An editor can turn on a shared scale without adding a trace to the live plot.
+            fig.update_layout(
+                meta={
+                    **(fig.layout.meta or {}),
+                    "publication_hidden_heatmap": carrier.to_plotly_json(),
+                }
+            )
     return heatmap_shapes
 
 
@@ -8171,6 +8205,7 @@ def _add_comparison_fixation_trace(
     style: dict,
     font_settings: dict,
     *,
+    reading_side: str = "",
     fields: tuple[str, str] = ("x", "y"),
     show_fixations: bool = True,
     show_saccades: bool = True,
@@ -8445,6 +8480,7 @@ def _add_comparison_fixation_trace(
             showlegend=False,
             hovertemplate=f"{display_name}<br>{hovertemplate}",
             customdata=customdata,
+            meta=_publication_events(trial_fix, spatial=spatial, side=reading_side),
         ):
             _add(trace)
         if show_order:
@@ -8480,6 +8516,7 @@ def _add_comparison_fixation_trace(
                 textfont=order_font,
                 hovertemplate=f"{display_name}<br>{hovertemplate}",
                 customdata=customdata,
+                meta=_publication_events(trial_fix, spatial=spatial, side=reading_side),
             )
         )
     if show_legend and own_entry:
@@ -9019,6 +9056,7 @@ def _make_split_comparison_figure(
             spec["style"],
             font_settings,
             fields=fields,
+            reading_side=chr(ord("A") + idx),
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
@@ -9707,6 +9745,7 @@ def _render_comparison_figure(
             spec["display_name"],
             spec["style"],
             font_settings,
+            reading_side=chr(ord("A") + _idx),
             show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,

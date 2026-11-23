@@ -2103,7 +2103,10 @@ def _compare_second_dataset(api, args, words, fixations):
     try:
         return (
             *api.load_scanpath_data(
-                args.compare_words, args.compare_fixations, names="canonical"
+                args.compare_words,
+                args.compare_fixations,
+                keep_columns=args.keep_columns,
+                names="canonical",
             ),
             True,
         )

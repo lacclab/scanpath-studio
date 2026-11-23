@@ -3619,7 +3619,12 @@ def compare_scanpaths(
     figure could draw the wrong reading, or rows of both mixed into one. The frames you
     pass in are not modified, and only the trace labels show the prefix.
 
-    **The overlay gate.** An overlay needs both readings on screens of the same size, or
+    **Numeric axes.** Set ``x_field`` and ``y_field`` to compare index, position,
+    duration or other numeric fields in panels with matching ranges. An overlay
+    request uses side-by-side panels on these axes. Elapsed seconds start at
+    each full reading's first recorded fixation onset.
+
+    **The overlay gate.** A spatial overlay needs both readings on screens of the same size, or
     it raises ``ValueError`` (the app falls back to side by side). That holds across
     datasets, and within one when the two screens carry different ``canvas_width`` /
     ``canvas_height`` or ``setup_b`` states another screen. Pass
@@ -3737,12 +3742,22 @@ def compare_scanpaths(
     # A's or B's, is processed under the internal names.
     carried = {
         table: found[1]
-        for table, frame in (("fixations", fixations), ("words", words))
+        for table, frame in (
+            ("fixations", fixations),
+            ("words", words),
+            ("raw_gaze", raw_gaze if raw_gaze is not None else raw_gaze_b),
+        )
         if (found := _cn.frame_names(frame)) is not None
     }
     names = _call_names(column_names, **carried)
     word_side = _table_names(column_names, "words", carried.get("words"))
-    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
+    sample_side = _table_names(column_names, "raw_gaze", carried.get("raw_gaze"))
+    figure_overrides = _canonical_options(
+        figure_overrides, names, words=word_side, raw_gaze=sample_side
+    )
+    fields = figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y")
+    if fields != ("x", "y") and resolved_layout == "overlay":
+        resolved_layout = "side_by_side"
     words, fixations, words_b, fixations_b = (
         _cn.to_canonical_frame(frame)
         for frame in (words, fixations, words_b, fixations_b)
@@ -3772,7 +3787,13 @@ def compare_scanpaths(
     # every page of a multipart reading into one scanpath, saccades across pages
     # and all.
     trial_words_a, trial_fix_a, pid_a, tid_a, selected_a = _select_part(
-        words, fixations, str(pid_a), str(tid_a), screen, raw_gaze=raw_gaze
+        words,
+        fixations,
+        str(pid_a),
+        str(tid_a),
+        screen,
+        raw_gaze=raw_gaze,
+        elapsed_axis=chart_axes.ELAPSED in fields,
     )
     trial_words_b, trial_fix_b, pid_b, tid_b, selected_b = _select_part(
         words_b,
@@ -3782,6 +3803,7 @@ def compare_scanpaths(
         screen_b,
         raw_gaze=raw_gaze_b,
         screen_param="screen_b",
+        elapsed_axis=chart_axes.ELAPSED in fields,
     )
     trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, selected_a)
     trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, selected_b)
@@ -3912,6 +3934,12 @@ def compare_scanpaths(
         trial_fix_b = separate_self_compare(trial_fix_b, pid_b)
         trial_raw_b = separate_self_compare(trial_raw_b, pid_b)
         figure_pid_b = self_compare_participant(pid_b)
+    trial_fix_a, trial_raw_a = chart_axes.comparison_coordinates(
+        trial_fix_a, trial_raw_a, fields
+    )
+    trial_fix_b, trial_raw_b = chart_axes.comparison_coordinates(
+        trial_fix_b, trial_raw_b, fields
+    )
     merged_words, merged_words_b, _ = align_compare_columns(
         trial_words_a, trial_words_b
     )
@@ -3949,7 +3977,12 @@ def compare_scanpaths(
         compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
         column_labels=_column_labels(
-            names, trial_words_a, trial_fix_a, words=word_side
+            names,
+            trial_words_a,
+            trial_fix_a,
+            words=word_side,
+            raw_gaze=merged_raw,
+            sample_names=sample_side,
         ),
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.

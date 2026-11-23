@@ -1011,7 +1011,39 @@ _VIZ_WIDGET_DEFAULTS = {
 }
 
 
-def _render_fixation_cleaning(*, prefix: str = "global") -> None:
+def _available_fixation_rules(
+    fixations: pd.DataFrame | None, *, has_words: bool
+) -> set[str]:
+    """Flag rules whose source fields are available for this reading."""
+    if fixations is not None and fixations.empty:
+        return set()
+    unavailable = set()
+    if fixations is not None:
+        if not {"blink", "is_blink", "blink_before", "blink_after"}.intersection(
+            fixations
+        ):
+            unavailable.add("blink")
+        if (
+            "duration_ms" not in fixations
+            or not np.isfinite(
+                pd.to_numeric(fixations["duration_ms"], errors="coerce")
+            ).any()
+        ):
+            unavailable.update(("short", "long"))
+    if not has_words:
+        unavailable.add("oob")
+    return set(FIXATION_FLAG_CATEGORIES) - unavailable
+
+
+def _render_fixation_cleaning(
+    *,
+    available: set[str],
+    disabled: bool = False,
+    prefix: str = "global",
+    comparing: bool = False,
+    show_markers: bool = True,
+    secondary_available: set[str] | None = None,
+) -> None:
     """Show the four fixation rules, with marker styling shared by A and B."""
     ss = st.session_state
     # Separating the marker styles leaves enough room to show each rule and
@@ -1027,9 +1059,10 @@ def _render_fixation_cleaning(*, prefix: str = "global") -> None:
         "saccade lines and static heatmaps still use the fixation.",
     )
     _sub_caption(head[2], "Cutoff (ms)", "Shorter than or longer than this duration.")
-    rule_disabled, _ = _layer_gate(False, None)
+    layer_disabled, _ = _layer_gate(disabled, None)
     for category, spec in FIXATION_FLAG_CATEGORIES.items():
         label = spec.label
+        rule_disabled = layer_disabled or category not in available
         cols = st.columns(rule_widths, gap=_LABEL_GAP, vertical_alignment="center")
         _row_label(cols[0], label, spec.help)
         mode = cols[1].selectbox(
@@ -1052,7 +1085,6 @@ def _render_fixation_cleaning(*, prefix: str = "global") -> None:
                 label_visibility="collapsed",
             )
 
-    comparing = ss.get("_resolved_comparing", False)
     if prefix == "cmp1":
         if any(
             ss.get(f"cmp1_fixclass_{cat}_mode") == "Highlight"
@@ -1069,8 +1101,15 @@ def _render_fixation_cleaning(*, prefix: str = "global") -> None:
         _sub_caption(head[1], "Shape")
         _sub_caption(head[2], "Color")
         for category, spec in FIXATION_FLAG_CATEGORIES.items():
-            active = ss.get(f"global_fixclass_{category}_mode") == "Highlight" or (
-                comparing and ss.get(f"cmp1_fixclass_{category}_mode") == "Highlight"
+            active = (
+                show_markers
+                and not layer_disabled
+                and category in available
+                and ss.get(f"global_fixclass_{category}_mode") == "Highlight"
+            ) or (
+                secondary_available is not None
+                and category in secondary_available
+                and ss.get(f"cmp1_fixclass_{category}_mode") == "Highlight"
             )
             cols = st.columns(rule_widths, gap=_LABEL_GAP, vertical_alignment="center")
             _row_label(cols[0], spec.label, spec.help)
@@ -1080,14 +1119,14 @@ def _render_fixation_cleaning(*, prefix: str = "global") -> None:
                 format_func=FIXATION_FLAG_MARKERS.__getitem__,
                 key=f"global_fixclass_{category}_symbol",
                 persist_state="session",
-                disabled=rule_disabled or not active,
+                disabled=not active,
                 label_visibility="collapsed",
             )
             cols[2].color_picker(
                 f"{spec.label} color",
                 key=f"global_fixclass_{category}_color",
                 persist_state="session",
-                disabled=rule_disabled or not active,
+                disabled=not active,
                 label_visibility="collapsed",
             )
 
@@ -2427,14 +2466,8 @@ def _draw_view_grid(
     grid, *, design: str | None, has_time: bool, comparing: bool
 ) -> None:
     """Keep the selected static design visible alongside the playback switch."""
-    ss = st.session_state
     current = design
-    if comparing and (
-        static_plot_view() == "illustration"
-        or (ss.get("global_x_field"), ss.get("global_y_field")) != ("x", "y")
-    ):
-        # These designs resume when comparison ends. The two-reading figure
-        # uses screen coordinates and straight saccades in the meantime.
+    if comparing and static_plot_view() == "illustration":
         current = static_plot_view(comparing=True)
     row = grid.columns(2, gap="small", wrap=False)
     row[0].toggle(
@@ -2448,11 +2481,13 @@ def _draw_view_grid(
         if index % 2 == 0:
             row = grid.columns(2, gap="small", wrap=False)
         reason = None
-        if name in {"illustration", "gaze_over_time"} and comparing:
+        if name == "illustration" and comparing:
             reason = f"Turn off Compare readings to use {label}."
         elif name == "gaze_over_time" and not has_time:
             reason = (
-                "This reading needs recorded fixation onsets to plot gaze over time."
+                "Both readings need recorded fixation onsets to compare gaze over time."
+                if comparing
+                else "This reading needs recorded fixation onsets to plot gaze over time."
             )
         row[index % 2].button(
             label,
@@ -5448,7 +5483,9 @@ def _render_colorbar_rows(bar: str, *, disabled: bool, reason: str | None) -> No
     )
 
 
-def _render_marker_outline_row(comparing: bool) -> None:
+def _render_marker_outline_row(
+    comparing: bool, *, identity_outline: bool = False
+) -> None:
     """``Outline | width px | colour`` under 👁️ Fixations."""
     outline_help = (
         "Width in px (0 draws none) and color of the ring around each filled "
@@ -5459,7 +5496,7 @@ def _render_marker_outline_row(comparing: bool) -> None:
         "Outline", caption_help=_layer_gate(False, outline_help)[1]
     ).columns([0.5, 0.16, 0.34], gap=_LABEL_GAP, vertical_alignment="center")
     # Greyed with the rest of 👁️ Fixations while the section is off.
-    off = _layer_gate(False, None)[0]
+    off = _layer_gate(identity_outline, None)[0]
     width_col.number_input(
         "Marker outline width",
         min_value=FIXATION_OUTLINE_WIDTH_BOUNDS[0],
@@ -5477,7 +5514,7 @@ def _render_marker_outline_row(comparing: bool) -> None:
         "Marker outline color",
         key="global_fixation_outline_color",
         persist_state="session",
-        disabled=off,
+        disabled=off or st.session_state["global_fixation_outline_width"] == 0,
         label_visibility="collapsed",
     )
 
@@ -5839,7 +5876,11 @@ def compare_b_filters() -> dict:
 
 
 def render_compare_filters(
-    host, compare_fixations: pd.DataFrame | None, *, status=None
+    host,
+    compare_fixations: pd.DataFrame | None,
+    *,
+    status=None,
+    words: pd.DataFrame | None = None,
 ) -> None:
     """Scanpath B's half of the Filters & highlights section.
 
@@ -5853,6 +5894,20 @@ def render_compare_filters(
     if host is None:
         return
     animating = bool(st.session_state.get("_resolved_animating"))
+    ss = st.session_state
+    axes = ss.get("global_x_field", "x"), ss.get("global_y_field", "y")
+    chart = not animating and axes != ("x", "y")
+    sequence = chart and charts.position_chart(axes, "order_in_trial")
+    drawable = not chart or charts.drawable_fixations(axes, compare_fixations)
+    markers = bool(ss.get("global_show_fix", True)) and drawable
+    lines = ss.get("global_show_saccades", True) and (
+        not chart or (sequence and drawable)
+    )
+    window_active = (
+        markers
+        or lines
+        or (not chart and not animating and ss.get("global_show_heatmap"))
+    )
     with host:
         with (
             _rail_subsection(
@@ -5862,14 +5917,23 @@ def render_compare_filters(
             ),
             _popover_rows("filter_fix_b"),
         ):
-            windowed = _render_fix_range_slider(
-                compare_fixations,
-                key="single_compare_fix_range",
-                trial_state_key="_compare_fix_range_trial",
-                all_trials_key=None,
-            )
+            with _layer_off("Fixation index range", off=not window_active):
+                windowed = _render_fix_range_slider(
+                    compare_fixations,
+                    key="single_compare_fix_range",
+                    trial_state_key="_compare_fix_range_trial",
+                    all_trials_key=None,
+                )
             _mark_active_plot_filters(status, windowed, "cmp1")
-            _render_fixation_cleaning(prefix="cmp1")
+            _render_fixation_cleaning(
+                prefix="cmp1",
+                available=_available_fixation_rules(
+                    compare_fixations,
+                    has_words=words is None or charts.has_word_boxes(words),
+                ),
+                show_markers=markers,
+                disabled=not (markers or ((animating or sequence) and lines)),
+            )
         _cls_dis, _cls_reason = _mode_gate(animating, True, in_animation=False)
         with (
             _rail_subsection(
@@ -5889,7 +5953,7 @@ def render_compare_filters(
                 format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
                 key="cmp1_saccade_classes",
                 persist_state="session",
-                disabled=_cls_dis,
+                disabled=_cls_dis or chart or not lines,
                 help=_gated_help(
                     "The saccade classes scanpath B draws. An empty list draws all.",
                     _cls_reason,
@@ -6228,6 +6292,8 @@ def _legends_drawn(
     animating: bool,
     comparing: bool,
     numeric_fields,
+    chart_axes=False,
+    raw_available=True,
 ) -> list[str]:
     """The legend kinds the current figure can draw, in table order.
 
@@ -6236,7 +6302,7 @@ def _legends_drawn(
     categorical *Color by* (or by line), a *Highlight* filter (A's or, in
     Compare, B's) or raw gaze; the size key with fixations on a fixed scale;
     the text-highlight note while words are highlighted — by *Mark text*, or
-    *Mark border* on the static figure, the only one that draws borders.
+    *Mark border* on any spatial figure.
     """
     ss = st.session_state
     color_by = ss.get("global_color_by")
@@ -6251,27 +6317,26 @@ def _legends_drawn(
         for prefix in prefixes
         for category in FIXATION_FLAG_CATEGORIES
     )
-    raw_gaze = bool(ss.get("global_show_raw_gaze")) and not animating
+    raw_gaze = raw_available and bool(ss.get("global_show_raw_gaze")) and not animating
     kinds = {
-        "compare": comparing,
+        "compare": comparing and (show_fix or raw_gaze or animating),
         "saccades": show_saccades
-        and not (animating or comparing)
+        and not (animating or comparing or chart_axes)
         and ss.get("global_saccade_color_mode") == "By type",
-        "colors": (show_fix and (categorical or highlighted)) or raw_gaze,
+        "colors": (show_fix and (categorical or highlighted))
+        or (raw_gaze and not comparing),
         "size_key": show_fix
         and (ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE)
         != "relative",
-        "highlight": bool(ss.get("global_highlight_column"))
+        "highlight": not chart_axes
+        and bool(ss.get("global_highlight_column"))
         and bool(ss.get("global_show_stimulus", True))
         and (
             (
                 ss.get("global_critical_span_style", "None") == "Mark text"
                 and bool(ss.get("global_show_labels", True))
             )
-            or (
-                ss.get("global_critical_span_style") == "Mark border"
-                and not (animating or comparing)
-            )
+            or (ss.get("global_critical_span_style") == "Mark border")
         ),
     }
     return [kind for kind in LEGEND_KINDS if kinds[kind]]
@@ -7133,6 +7198,7 @@ def render_plot_controls(
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
     trial_samples: pd.DataFrame | None = None,
+    compare_meta: dict | None = None,
     raw_gaze: pd.DataFrame | None = None,
     words: pd.DataFrame | None = None,
     fix_range_fixations: pd.DataFrame | None = None,
@@ -7194,7 +7260,8 @@ def render_plot_controls(
     )
     _render_view_controls(
         view_host if view_host is not None else rail,
-        has_time=has_time,
+        has_time=has_time
+        and (not compare_meta or charts.has_clock(compare_meta["fixations"])),
         slots=slots,
     )
     viz = rail.container(key="tour_grp_viz_controls")
@@ -7228,7 +7295,27 @@ def render_plot_controls(
         st.session_state.get("global_x_field", "x"),
         st.session_state.get("global_y_field", "y"),
     )
-    chart_axes = not (animating or comparing) and fields != ("x", "y")
+    chart_axes = not animating and fields != ("x", "y")
+    primary_fix = (
+        fix_range_fixations if fix_range_fixations is not None else trial_fixations
+    )
+    secondary = compare_meta or {}
+    b_fix = secondary.get("fixations")
+    b_words = secondary.get("words")
+    b_samples = secondary.get("raw_gaze")
+    primary_words = has_words
+    b_has_words = charts.has_word_boxes(b_words)
+    has_words = primary_words or b_has_words
+    primary_markers = has_fixations and (
+        (not chart_axes and animating) or charts.drawable_fixations(fields, primary_fix)
+    )
+    secondary_markers = (
+        b_fix is not None
+        and not b_fix.empty
+        and (not chart_axes or charts.drawable_fixations(fields, b_fix))
+    )
+    has_markers = primary_markers or secondary_markers
+    has_fixations = has_fixations or (b_fix is not None and not b_fix.empty)
     sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
     screen_help = "Choose screen X and Y to draw this layer."
     # Handy shorthands for the two recurring gates.
@@ -7257,7 +7344,7 @@ def render_plot_controls(
         slug="fix",
         visibility_key="global_show_fix",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations,
+        disabled=not has_fixations or not has_markers,
         help=_greyed_help((not has_fixations, "This trial has no fixations.")),
     )
     show_saccades, sac_grp = _layer_row(
@@ -7338,7 +7425,10 @@ def render_plot_controls(
     # The comparison builder draws each reading's samples; the replay
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
-    raw_axis_off = chart_axes and not charts.raw_axes_available(fields, trial_samples)
+    raw_axis_off = (chart_axes or has_raw_gaze) and not (
+        charts.drawable_raw_samples(fields, trial_samples, primary_fix)
+        or charts.drawable_raw_samples(fields, b_samples, b_fix)
+    )
     raw_axis_help = "Both axes must be fields available in the raw samples."
     show_raw_gaze, raw_gaze_grp = _layer_row(
         layers,
@@ -7397,7 +7487,7 @@ def render_plot_controls(
         fix_grp,
         _layer_off(
             f"{ICONS['fixations']} Fixations",
-            off=not show_fix or not has_fixations,
+            off=not show_fix or not has_fixations or not has_markers,
             reason=no_fixations_note or None,
         ),
         _popover_rows("fix"),
@@ -7641,7 +7731,31 @@ def render_plot_controls(
             # The outline round each filled marker — one for every figure, both
             # scanpaths of a comparison included. A hollow marker's ring is its
             # colour.
-            _render_marker_outline_row(comparing)
+            if comparing:
+                # Cross-dataset colouring falls back to uniform if the field
+                # is absent or has different types in the two readings.
+                shared_fill = color_by not in (None, UNIFORM_COLOR_FIELD, "line") and (
+                    color_by in primary_fix
+                    and b_fix is not None
+                    and color_by in b_fix
+                    and pd.api.types.is_numeric_dtype(primary_fix[color_by])
+                    == pd.api.types.is_numeric_dtype(b_fix[color_by])
+                )
+                fixed_outline = all(
+                    not drawable
+                    or shared_fill
+                    or (color_by == "line" and boxes)
+                    or st.session_state.get(f"cmp{idx}_hollow")
+                    for idx, (drawable, boxes) in enumerate(
+                        (
+                            (primary_markers, primary_words),
+                            (secondary_markers, b_has_words),
+                        )
+                    )
+                )
+            else:
+                fixed_outline = bool(st.session_state.get("global_hollow_fixations"))
+            _render_marker_outline_row(comparing, identity_outline=fixed_outline)
             _dis, _tip = _layer_gate(
                 not show_order,
                 "Put each index number above its fixation, inside it, or below it.",
@@ -7710,7 +7824,7 @@ def render_plot_controls(
             static_disabled, static_reason = _mode_gate(
                 animating, comparing, **_static_only
             )
-            snap_disabled = static_disabled or chart_axes
+            snap_disabled = static_disabled or chart_axes or not primary_words
             snap_reason = screen_help if chart_axes else static_reason
             snapped, _ = _check_row(
                 "Snap",
@@ -7769,7 +7883,11 @@ def render_plot_controls(
                         "Show drift connectors",
                         key="global_align_connectors",
                         persist_state="session",
-                        disabled=static_disabled,
+                        disabled=static_disabled
+                        or chart_axes
+                        or not primary_words
+                        or st.session_state.get("global_align_algorithm", "Off")
+                        == "Off",
                         help=_gated_help(
                             "A faint line from each fixation's recorded position to "
                             "its corrected one.",
@@ -7783,17 +7901,34 @@ def render_plot_controls(
             f"{ICONS['fixations']} Fixations{_fixation_filter_badge()}",
             first=True,
         ),
-        _layer_off(
-            f"{ICONS['fixations']} Fixations",
-            off=not (show_fix or (animating and show_saccades)) or not has_fixations,
-            reason=no_fixations_note or None,
-            caption=has_fixations,
-        ),
         _popover_rows("filter_fix"),
     ):
-        windowed = _render_fix_range_slider(fix_range_fixations)
+        line_visible = show_saccades and (
+            not chart_axes or (sequence and primary_markers)
+        )
+        show_markers = show_fix and primary_markers
+        window_active = (
+            show_markers
+            or line_visible
+            or (not chart_axes and not animating and show_heatmap)
+        )
+        with _layer_off(
+            "Fixation index range",
+            off=not window_active or not has_fixations,
+            reason="Show a layer that uses fixations to adjust the index range.",
+        ):
+            windowed = _render_fix_range_slider(fix_range_fixations)
         _mark_active_plot_filters(filter_status, windowed)
-        _render_fixation_cleaning()
+        _render_fixation_cleaning(
+            disabled=not has_fixations
+            or not (show_markers or ((animating or sequence) and line_visible)),
+            available=_available_fixation_rules(primary_fix, has_words=primary_words),
+            comparing=comparing,
+            show_markers=show_markers,
+            secondary_available=_available_fixation_rules(b_fix, has_words=b_has_words)
+            if show_fix and secondary_markers
+            else None,
+        )
 
     # --- Saccades ---------------------------------------------------------
     # Each scanpath can use its own colour, width, and dash in Compare.
@@ -8081,21 +8216,20 @@ def render_plot_controls(
         )
 
     # --- Stimulus ---------------------------------------------------------
-    # Text and image choices stay editable while the master switch is off.
-    # Only the settings passed to the figure are gated on that switch.
+    # Preserve the stimulus preferences while the selected view hides that layer.
     with (
         stim_grp,
-        _layer_off("Stimulus", off=chart_axes, reason=screen_help),
+        _layer_off(
+            "Stimulus",
+            off=chart_axes or not show_stimulus,
+            reason=screen_help if chart_axes else None,
+        ),
         _popover_rows("stim"),
     ):
-        if not show_stimulus:
-            st.caption(
-                f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off, so "
-                "nothing below shows in the plot. Your settings are kept."
-            )
         show_labels, text_rest = _check_row(
             "Text",
             key="global_show_labels",
+            disabled=not has_words,
             persist_state="session",
             help="Draw the words at their recorded positions. Text appearance starts "
             "with the font and size from the dataset’s recording setup.",
@@ -8104,7 +8238,7 @@ def render_plot_controls(
             "Redact",
             key="global_redact_text",
             persist_state="session",
-            disabled=not show_labels,
+            disabled=not has_words,
             help=(
                 "Replace each word with a rounded block and hide its text in tooltips. "
                 "Other selected tooltip columns and the stimulus image can still carry text."
@@ -8147,18 +8281,19 @@ def render_plot_controls(
             # feature and only its colour picker is gated (`tabs._marked_text_column`
             # hands the other two builders `None` under that style, so nothing is
             # marked there rather than silently falling back to text marking).
-            border_disabled, border_reason = _mode_gate(
-                animating, comparing, **_static_only
-            )
+
             span_on, span_rest = _check_row(
                 "Highlight words",
                 key="global_highlight_span_on",
+                disabled=not has_words or not highlight_options,
                 persist_state="session",
                 on_change=_on_span_toggle,
                 help="Mark the words where the chosen true/false column is true "
                 "(e.g. a target span).",
             )
-            span_off_disabled, _ = _layer_gate(not span_on, None)
+            span_off_disabled, _ = _layer_gate(
+                not span_on or not has_words or not highlight_options, None
+            )
             if highlight_options:
                 highlight_labels = cn.active(st.session_state, "words").option_labels(
                     highlight_options
@@ -8183,12 +8318,6 @@ def render_plot_controls(
             style_help = (
                 "**Mark text** colors the span's words (needs **Text** on). "
                 "**Mark border** outlines the span. The box beside it sets the color."
-                + (
-                    f"\n\n{ICONS['warning']} **Mark border** is drawn on the static "
-                    "figure only."
-                    if border_disabled
-                    else ""
-                )
             )
             style_field = _sub_row("Style", caption_help=style_help)
             mode_col, span_color_col = style_field.columns(
@@ -8211,10 +8340,10 @@ def render_plot_controls(
                     "Border color",
                     key="global_span_border_color",
                     persist_state="session",
-                    disabled=span_off_disabled or border_disabled,
+                    disabled=span_off_disabled,
                     help=_gated_help(
                         "Color of the span outline (used with **Mark border**).",
-                        border_reason,
+                        "",
                     ),
                     label_visibility="collapsed",
                 )
@@ -8223,7 +8352,7 @@ def render_plot_controls(
                     "Highlighted text color",
                     key="global_highlight_text_color",
                     persist_state="session",
-                    disabled=span_off_disabled,
+                    disabled=span_off_disabled or not show_labels,
                     label_visibility="collapsed",
                 )
 
@@ -8244,7 +8373,7 @@ def render_plot_controls(
                 "or one you upload."
                 + ("" if can_show_image else " Upload one below to switch it on."),
             )
-            # The uploader is never greyed: it is the only way to get an image in
+            # The uploader can enable the image layer when a spatial view has no page.
             # and enable the switch in the first place.
             _sub_row(
                 "File",
@@ -8257,6 +8386,7 @@ def render_plot_controls(
                 # No persist_state: st.file_uploader does not take it, and an
                 # UploadedFile is already stashed by _uploaded_image_data_uri.
                 key="global_stimulus_image_upload",
+                disabled=chart_axes or not show_stimulus,
                 max_upload_size=upload_limit_mb(),
                 label_visibility="collapsed",
             )
@@ -8264,7 +8394,7 @@ def render_plot_controls(
             # could never come alive, so they wait for one rather than sit greyed.
             # Loaded but switched off, they grey.
             if can_show_image:
-                image_idle = not show_stim_image
+                image_idle = chart_axes or not show_stimulus or not show_stim_image
                 opacity_help = "Image opacity."
                 _numeric_slider(
                     st,
@@ -8385,8 +8515,9 @@ def render_plot_controls(
         # A selectbox rather than a radio: long options do not fit one line
         # beside a title, and a wrapped radio reads as two settings.
         # `persist_state` shows the seeded style on first open.
+        has_positions = charts.drawable_fixations(("x", "y"), primary_fix)
         style_disabled, style_help = _layer_gate(
-            heat_disabled or comparing,
+            heat_disabled or comparing or not has_positions,
             _gated_help(
                 "Word boxes: color each word box by its fixations. Smoothed: "
                 "the fixations blurred with a Gaussian (see Blur), scaled to the "
@@ -8399,7 +8530,12 @@ def render_plot_controls(
         heat_style = _layer_field("Draw as", style_help).selectbox(
             "Style",
             options=["Word boxes", "Smoothed"],
-            key="global_heatmap_style",
+            key=(
+                "_effective_word_box_heatmap"
+                if (comparing or not has_positions)
+                and st.session_state.get("global_heatmap_style") == "Smoothed"
+                else "global_heatmap_style"
+            ),
             persist_state="session",
             disabled=style_disabled,
             help=style_help,
@@ -8439,7 +8575,10 @@ def render_plot_controls(
             _render_heatmap_blur_row(
                 trial_fixations,
                 words,
-                disabled=heat_disabled or comparing or heat_style != "Smoothed",
+                disabled=heat_disabled
+                or comparing
+                or not has_positions
+                or heat_style != "Smoothed",
                 reason="Comparison heatmaps use split word boxes."
                 if comparing
                 else heat_reason,
@@ -8563,7 +8702,15 @@ def render_plot_controls(
 
         if comparing:
             for idx, _ in _COMPARE_SCANPATHS:
-                _compare_raw_gaze_color_row(idx, disabled=raw_disabled)
+                _compare_raw_gaze_color_row(
+                    idx,
+                    disabled=raw_disabled
+                    or not charts.drawable_raw_samples(
+                        fields,
+                        (trial_samples, b_samples)[idx],
+                        (primary_fix, b_fix)[idx],
+                    ),
+                )
         else:
             with detail_section("Sample color", key="plot_detail_raw_color"):
                 st.caption(
@@ -8580,7 +8727,11 @@ def render_plot_controls(
                     "Color",
                     key="global_raw_gaze_color",
                     persist_state="session",
-                    disabled=color_disabled,
+                    disabled=color_disabled
+                    or trial_samples is None
+                    or bool(
+                        {"timestamp_ms", "sample_index"}.intersection(trial_samples)
+                    ),
                     help=color_help,
                     label_visibility="collapsed",
                 )
@@ -8750,24 +8901,16 @@ def render_plot_controls(
             canvas_renderer(
                 screen_rows,
                 text_host=stim_text_slot,
-                text_disabled=not show_labels,
+                text_disabled=chart_axes
+                or not (show_stimulus and show_labels and has_words),
             )
 
     with axes:
-        # The animation and the comparison figures always plot spatial x/y —
-        # only `make_scanpath_figure` takes `x_field`/`y_field`. The
-        # greyed fields' hover says so, and what turns them back on.
-        axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
-        axes_note = (
-            "Comparisons use screen coordinates."
-            if comparing
-            else "Animation uses screen coordinates."
-        )
         axis_disabled, axis_help = _layer_gate(
-            axis_disabled,
-            f"{axes_note} Your axis choices apply to the static plot of one reading."
-            if axis_disabled
-            else "Choose screen X and Y for the spatial scanpath, or select two numeric fields to chart the reading.",
+            animating,
+            "Animation uses screen coordinates. Choose a static view to edit the axes."
+            if animating
+            else "Choose screen X and Y for the stimulus view, or select two numeric fields.",
         )
         presets = {
             "Screen X and Y": ("x", "y"),
@@ -8805,6 +8948,14 @@ def render_plot_controls(
             or has_time
             or (field == "timestamp_ms" and has_sample_time)
         }
+        if comparing and b_fix is not None:
+            reading_fields.intersection_update(numeric_field_options(b_fix, b_samples))
+            if secondary.get("dataset"):
+                reading_fields.intersection_update(charts.COMPARISON_FIELDS)
+                if any(field not in reading_fields for field in fields):
+                    st.caption(
+                        "These saved axes use dataset-specific fields. Check their units or choose a shared preset."
+                    )
         available = {
             name: pair
             for name, pair in presets.items()
@@ -9072,6 +9223,7 @@ def render_plot_controls(
             format_func=fix_names.option_labels(fix_hover, roles=True).__getitem__,
             key="global_fixation_hover_fields",
             persist_state="session",
+            disabled=not (show_fix and has_markers),
             help="Choose the fields to show when someone points to a fixation. They appear in the order you select them.",
         )
         word_names = cn.active(st.session_state, "words")
@@ -9082,6 +9234,7 @@ def render_plot_controls(
             format_func=word_names.option_labels(word_hover, roles=True).__getitem__,
             key="global_word_hover_fields",
             persist_state="session",
+            disabled=chart_axes or not (show_stimulus and show_labels and has_words),
             help="Choose the fields to show when someone points to a word. They appear in the order you select them.",
         )
         if st.session_state.get("global_redact_text"):
@@ -9101,11 +9254,13 @@ def render_plot_controls(
     # own visibility switch is off.
     with legends, _popover_rows("legends"):
         drawn = _legends_drawn(
-            show_fix=show_fix,
+            show_fix=show_fix and has_markers,
             show_saccades=show_saccades,
             animating=animating,
             comparing=comparing,
             numeric_fields=numeric_fields,
+            chart_axes=chart_axes,
+            raw_available=has_raw_gaze and not raw_axis_off,
         )
         if drawn:
             st.markdown("**Show on the figure**")
@@ -9114,12 +9269,20 @@ def render_plot_controls(
                 "The current layers have no legend. You can add one by coloring "
                 "fixations by a category or choosing a fixed marker-size scale."
             )
+        size_mismatch = comparing and tuple(
+            st.session_state.get("cmp0_marker_size_range", DEFAULT_MARKER_SIZE_RANGE)
+        ) != tuple(
+            st.session_state.get("cmp1_marker_size_range", DEFAULT_MARKER_SIZE_RANGE)
+        )
         for kind in drawn:
             st.checkbox(
                 LEGEND_KIND_LABELS[kind],
                 key=_LEGEND_SHOW_KEYS[kind],
+                disabled=kind == "size_key" and size_mismatch,
+                help="Both readings need the same marker size range for one size key."
+                if kind == "size_key" and size_mismatch
+                else _LEGEND_ROW_HELP[kind],
                 persist_state="session",
-                help=_LEGEND_ROW_HELP[kind],
             )
         if drawn:
             layout = detail_section(
@@ -9127,7 +9290,9 @@ def render_plot_controls(
             )
             for kind in drawn:
                 label = LEGEND_KIND_LABELS[kind]
-                shown = st.session_state[_LEGEND_SHOW_KEYS[kind]]
+                shown = st.session_state[_LEGEND_SHOW_KEYS[kind]] and not (
+                    kind == "size_key" and size_mismatch
+                )
                 # Older links and files spelled some positions without a side.
                 pos_key = f"global_legend_{kind}_position"
                 stored = st.session_state.get(pos_key)

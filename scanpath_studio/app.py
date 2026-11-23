@@ -8265,9 +8265,7 @@ def _rail_text_rows(
     → ✏️ Edit dataset), which sets the dataset's own typography; these rows
     start from it and change only how the figure draws it.
 
-    ``disabled`` greys every row while the Text layer is off (the rail's
-    greyed-not-hidden rule: the settings stay readable, and their stored
-    values are untouched).
+    ``disabled`` greys the word-only controls. The base font still applies to the figure.
     Returns ``(base_font_size, font_family, line_spacing, scale_text_to_boxes)``.
     """
     off_reason = (
@@ -8317,7 +8315,7 @@ def _rail_text_rows(
 
         size = _sub_row(
             "Size",
-            caption_help=tip(
+            caption_help=(
                 "Fitted: the size of the axis and legend text. Not fitted: the "
                 "reading text's too, in px or pt (px = pt × DPI ÷ 72). Without a "
                 "monitor width in the Recording setup, pt is read as px."
@@ -8332,7 +8330,7 @@ def _rail_text_rows(
             format_func=lambda use_pt: "pt" if use_pt else "px",
             key="global_use_stimulus_font_pt",
             persist_state="session",
-            disabled=disabled or scale_text_to_boxes,
+            disabled=scale_text_to_boxes,
             label_visibility="collapsed",
         )
         if not scale_text_to_boxes and use_pt:
@@ -8343,7 +8341,6 @@ def _rail_text_rows(
                 step=0.5,
                 key="global_stimulus_font_pt",
                 persist_state="session",
-                disabled=disabled,
                 label_visibility="collapsed",
             )
             st.session_state["global_base_font_size"] = font_size_px(
@@ -8359,13 +8356,12 @@ def _rail_text_rows(
                 step=1,
                 key="global_base_font_size",
                 persist_state="session",
-                disabled=disabled,
                 label_visibility="collapsed",
             )
 
         font = _sub_row(
             "Font",
-            caption_help=tip(
+            caption_help=(
                 "The reading text's font, from the Recording setup's list. A "
                 "listed font that isn't installed falls back to its family. "
                 "**Multilingual (Noto Sans)** covers CJK, Hebrew and Arabic. "
@@ -8376,7 +8372,7 @@ def _rail_text_rows(
             [0.62, 0.38], gap=_LABEL_GAP, vertical_alignment="center"
         )
         font_family = _font_rows(
-            family_col, other_col, disabled=disabled, label_visibility="collapsed"
+            family_col, other_col, disabled=False, label_visibility="collapsed"
         )
 
         st.color_picker(

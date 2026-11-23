@@ -127,7 +127,6 @@ from scanpath_studio.compare_source import (
     load_secondary_dataset,
     secondary_dataset_options,
     snapshot_for,
-    source_has_raw_gaze,
 )
 from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
@@ -228,6 +227,7 @@ from scanpath_studio.controls import (
     render_trial_filters,
     render_viz_reset,
     selected_hover_text,
+    shadow_widget_key,
     static_plot_view,
     write_through,
 )
@@ -2070,20 +2070,6 @@ def _drift_corrected(
         return fix
     corrected, _ = alignment.correct(fix, words, method=str(algorithm).lower())
     return corrected
-
-
-def _marked_text_column(viz_settings: dict) -> str | None:
-    """The critical-span column for builders whose only marking channel is *text*.
-
-    ``make_scanpath_figure`` takes both ``highlight_column`` and
-    ``critical_span_style`` and decides internally: "Mark text" recolours the word
-    labels, "Mark border" instead draws a box overlay. The animation and
-    comparison builders have no overlay layer, so they take ``highlight_column``
-    alone — and must be handed ``None`` under any other style, or "Mark border"
-    would silently turn into text marking there."""
-    if viz_settings.get("critical_span_style", "Mark text") != "Mark text":
-        return None
-    return viz_settings.get("highlight_column")
 
 
 def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) -> dict:
@@ -4662,6 +4648,7 @@ def _build_compare_meta(
     include_raw_gaze: bool = True,
     dataset_canvas: tuple[int, int] | None = None,
     screen_canvas: tuple[int, int] | None = None,
+    elapsed_axis: bool = False,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     Compare's A/B chip table, or None when no comparison is active.
@@ -4715,6 +4702,8 @@ def _build_compare_meta(
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
     compare_fix = with_onset_provenance(compare_fix)
+    if elapsed_axis:
+        compare_fix = chart_axes.with_origin(compare_fix)
     if compare_screen is not None:
         if not compare_words.empty:
             if SCREEN_ID not in compare_words.columns:
@@ -5415,9 +5404,6 @@ def _plan_replay(
         # static figure does once an algorithm is picked. Not the co-animation:
         # it colours like the comparison figure, which keeps the rail's choice.
         color_by_line=bool(settings.color_by_line or (drift_corrected and not dual)),
-        # The replay has no border-overlay layer, so only the text-marking mode
-        # carries a highlight column.
-        highlight_column=_marked_text_column(viz_settings),
         show_legend=viz_settings.get("show_compare_legend", True),
         label_a=(
             _resolve_compare_label(
@@ -6564,10 +6550,11 @@ def render_single_trial_tab(
         fixations_filtered, selected_participant, selected_trial
     )
     parent_fixations = with_onset_provenance(parent_fixations)
-    if chart_axes.ELAPSED in (
+    elapsed_axis = chart_axes.ELAPSED in (
         st.session_state.get("global_x_field"),
         st.session_state.get("global_y_field"),
-    ):
+    )
+    if elapsed_axis:
         parent_fixations = chart_axes.with_origin(parent_fixations)
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
@@ -6728,20 +6715,24 @@ def render_single_trial_tab(
         source=compare_source,
         # A's corpus, so a cross-dataset pair names both sides.
         primary_dataset=current_dataset_name(),
-        # Only the static comparison draws B's samples, so nothing is cut for
-        # them while the switch is off or the replay runs. The *unfiltered*
+        # Only the static comparison can draw B's samples. The *unfiltered*
         # samples: B's pool ignores A's filters, so A's `raw_gaze` can lack B.
-        raw_gaze=(
-            (raw_gaze if raw_gaze_all is None else raw_gaze_all)
-            if draw_compare_raw_gaze
-            else None
-        ),
-        include_raw_gaze=draw_compare_raw_gaze,
+        raw_gaze=(raw_gaze if raw_gaze_all is None else raw_gaze_all)
+        if not animate
+        else None,
+        include_raw_gaze=not animate,
         dataset_canvas=dataset_canvas,
         screen_canvas=compare_screen_canvas,
+        elapsed_axis=elapsed_axis,
     )
     comparing = compare_meta is not None
-    st.session_state["_resolved_comparing"] = comparing
+    compare_comparable, compare_setup_note = _compare_setups(
+        compare_meta, trial_words, trial_fixations, canvas_width, canvas_height
+    )
+    rail_comparing = comparing and (
+        not animate or (compare_comparable and not compare_meta["fixations"].empty)
+    )
+    st.session_state["_resolved_comparing"] = rail_comparing
     st.session_state["_resolved_animating"] = bool(animate)
 
     # Render the rail (plot controls) before the figure so it sees the
@@ -6980,11 +6971,34 @@ def render_single_trial_tab(
                     # Seed so the control shows "Overlay" selected by default
                     # (the body reads this key to resolve compare_layout).
                     st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
+                    chart_layout = not animate and (
+                        st.session_state.get("global_x_field", "x"),
+                        st.session_state.get("global_y_field", "y"),
+                    ) != ("x", "y")
+                    layout_key = SINGLE_COMPARE_LAYOUT
+                    choices = ["Overlay", "Side by side", "Stacked"]
+                    callback = {}
+                    if chart_layout:
+                        choices = choices[1:]
+                        saved = st.session_state[SINGLE_COMPARE_LAYOUT]
+                        layout_key = shadow_widget_key(
+                            "chart_compare_layout",
+                            saved if saved in choices else choices[0],
+                        )
+
+                        def choose_chart_layout():
+                            write_through(
+                                SINGLE_COMPARE_LAYOUT, st.session_state[layout_key]
+                            )
+
+                        callback["on_change"] = choose_chart_layout
+
                     _labeled(
                         st,
                         "segmented_control",
                         "Layout",
-                        options=["Overlay", "Side by side", "Stacked"],
+                        options=choices,
+                        required=True,
                         format_func=lambda value: (
                             "Top & bottom" if value == "Stacked" else value
                         ),
@@ -6992,7 +7006,8 @@ def render_single_trial_tab(
                         # column leaves; at the popovers' width they wrap.
                         label_width=0.2,
                         width="stretch",
-                        key=SINGLE_COMPARE_LAYOUT,
+                        key=layout_key,
+                        **callback,
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
@@ -7017,7 +7032,9 @@ def render_single_trial_tab(
                     # figure has the specific answer, and the resolve happens
                     # there too, *without* rewriting the key, so a
                     # same-dataset pair gets the user's Overlay back.
-                    overlaid = animate or stored_layout == "Overlay"
+                    overlaid = animate or (
+                        stored_layout == "Overlay" and not chart_layout
+                    )
                     if _compare_source_name() is not None and overlaid:
                         st.caption(
                             "Across datasets, Overlay needs both to be recorded on "
@@ -7092,15 +7109,12 @@ def render_single_trial_tab(
             view_host=view_host,
             # B's fixation window is rendered into its tab after the rail.
             slots=rail_slots,
-            # Either dataset can supply the comparison's sample layer.
-            has_raw_gaze=has_raw_gaze
-            or bool(
-                comparing
-                and source_has_raw_gaze(st.session_state.get(COMPARE_SOURCE_KEY))
-            ),
+            has_raw_gaze=trial_has_raw_gaze
+            or (rail_comparing and not compare_meta["raw_gaze"].empty),
+            compare_meta=compare_meta if rail_comparing else None,
             has_stimulus_image=has_stimulus_image,
             has_fixations=trial_has_fixations,
-            has_words=not trial_words.empty,
+            has_words=chart_axes.has_word_boxes(trial_words),
             words=words_filtered,
             # The selected trial's fixations size the fixation-index window
             # slider (its max is this trial's fixation count).
@@ -7156,7 +7170,7 @@ def render_single_trial_tab(
             comparing=comparing,
             custom_view=st.session_state.get("_custom_plot_in_use", False),
             axes=(viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
-            if not (animate or comparing)
+            if not animate
             else ("x", "y"),
         )
         if ui_mode.is_simple()
@@ -7174,7 +7188,7 @@ def render_single_trial_tab(
             "Stacked": "stacked",
         }.get(st.session_state.get(SINGLE_COMPARE_LAYOUT), "overlay")
     fields = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
-    if animate or comparing:
+    if animate:
         fields = ("x", "y")
     effective_show_raw_gaze = global_raw_toggle and chart_axes.raw_axes_available(
         fields, trial_raw_gaze
@@ -7219,7 +7233,9 @@ def render_single_trial_tab(
             chart_axes.drawable_raw_samples(fields, trial_raw_gaze, trial_fixations)
             or (
                 compare_shows_raw_gaze
-                and chart_axes.drawable_raw_samples(("x", "y"), compare_raw_gaze)
+                and chart_axes.drawable_raw_samples(
+                    fields, compare_raw_gaze, compare_meta["fixations"]
+                )
             )
         )
     )
@@ -7260,11 +7276,12 @@ def render_single_trial_tab(
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
     # B's picker and frames are now resolved, so its filter tab can show
     # the fixation range for the reading actually on screen.
-    if comparing:
+    if rail_comparing:
         render_compare_filters(
             rail_slots.get("compare_filter"),
             compare_fix,
             status=rail_slots.get("compare_filter_status"),
+            words=compare_meta["words"],
         )
     elif "compare_filter" in rail_slots:
         rail_slots["compare_filter"].caption(
@@ -7273,21 +7290,11 @@ def render_single_trial_tab(
     # Record the completed edit after both readings and their fixation windows
     # have resolved, in the slot already placed at the foot of the rail.
     render_viz_reset(plot_footer)
-    # The one predicate both gates below consult. Computed here because
-    # this is the first point B's screen is known.
-    # The *trial's* frames, not the filtered corpus: A's canvas is overwritten with
-    # the rendered one on the next line anyway, so the only thing that survives is
-    # the provenance — which comes from the source→monitor table, not the data. The
-    # fallback branch of `resolve_source_monitor` scans every row of whatever it is
-    # given, which on a full corpus is tens of milliseconds per rerun for a value
-    # that is then discarded.
-    compare_comparable, compare_setup_note = _compare_setups(
-        compare_meta, trial_words, trial_fixations, canvas_width, canvas_height
-    )
     # Resolve, don't rewrite: `single_compare_layout` is left alone,
     # so switching back to a same-dataset pair restores the user's Overlay.
     compare_layout = requested_layout
-    if compare_layout == "overlay" and not compare_comparable:
+    chart_comparison = comparing and not animate and fields != ("x", "y")
+    if compare_layout == "overlay" and (chart_comparison or not compare_comparable):
         compare_layout = "side_by_side"
     # Widget label -> the wire/settings vocabulary the builders take.
     compare_stimulus = {"Both": "both", "A": "a", "B": "b"}.get(
@@ -7468,10 +7475,14 @@ def render_single_trial_tab(
     self_compare_figure_id: str | None = None
     cmp_raw_gaze: pd.DataFrame | None = None
     if comparing and compare_meta is not None:
-        words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
-        fix_a, fix_b, shared_fix = _align_compare_columns(
-            plot_fixations, plot_compare_fix
+        chart_fix_a, chart_raw_a = chart_axes.comparison_coordinates(
+            plot_fixations, trial_raw_gaze, fields
         )
+        chart_fix_b, chart_raw_b = chart_axes.comparison_coordinates(
+            plot_compare_fix, compare_raw_gaze, fields
+        )
+        words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
+        fix_a, fix_b, shared_fix = _align_compare_columns(chart_fix_a, chart_fix_b)
         if not cross_dataset and (
             str(figure_compare_participant),
             str(compare_trial),
@@ -7480,15 +7491,13 @@ def render_single_trial_tab(
             # only — `make_comparison_figure` slices by (participant, trial).
             words_b = separate_self_compare(words_b, selected_participant)
             fix_b = separate_self_compare(fix_b, selected_participant)
-            compare_raw_gaze = separate_self_compare(
-                compare_raw_gaze, selected_participant
-            )
+            chart_raw_b = separate_self_compare(chart_raw_b, selected_participant)
             self_compare_figure_id = self_compare_participant(selected_participant)
         cmp_words = pd.concat([words_a, words_b])
         cmp_fixations = pd.concat([fix_a, fix_b])
         if compare_shows_raw_gaze:
             cmp_raw_gaze = pd.concat(
-                _align_compare_columns(trial_raw_gaze, compare_raw_gaze)[:2]
+                _align_compare_columns(chart_raw_a, chart_raw_b)[:2]
             )
         if cross_dataset:
             shared_numeric = shared_fix
@@ -7660,7 +7669,9 @@ def render_single_trial_tab(
                 # B's own screen, from its own navigator (`screen_b=`).
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
-                compare_stimulus=str(compare_stimulus),
+                compare_stimulus=str(compare_stimulus)
+                if compare_layout == "overlay"
+                else "both",
                 dataset=_dataset_label(compare_meta["dataset"])
                 if compare_meta.get("dataset")
                 else "",
@@ -7877,7 +7888,7 @@ def render_single_trial_tab(
                     # resolve.
                     setup_note=(
                         f"{compare_setup_note} They are shown side by side instead."
-                        if compare_layout != requested_layout
+                        if compare_layout != requested_layout and not chart_comparison
                         else compare_setup_note
                     ),
                     primary_combo_row=primary_combo_row,
@@ -8840,7 +8851,6 @@ def _render_comparison_figure(
         # Comparison retains its count-vs-duration spelling; the static builder
         # translates "counts" to None internally.
         heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),
-        highlight_column=_marked_text_column(viz_settings),
     )
     dropped_metric = None
     canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
@@ -8949,7 +8959,7 @@ def _render_comparison_figure(
     )
     if text_note:
         st.warning(text_note, icon=ICONS["warning"])
-    if cross_dataset:
+    if cross_dataset and (settings.x_field, settings.y_field) == ("x", "y"):
         # The one thing a cross-dataset figure must never be is silent
         # about its own geometry. Each panel is true-to-scale on its *own*
         # monitor, so a box twice the size of the one beside it may be the same
@@ -8987,7 +8997,11 @@ def _render_comparison_figure(
                 f"a {canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
-    elif canvas_b is not None and canvas_b != canvas_a:
+    elif (
+        (settings.x_field, settings.y_field) == ("x", "y")
+        and canvas_b is not None
+        and canvas_b != canvas_a
+    ):
         # One dataset, two screen sizes: each panel is drawn to its own screen,
         # and `setup_note` says why an Overlay could not be drawn.
         st.caption(

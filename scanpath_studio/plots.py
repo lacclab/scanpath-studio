@@ -3042,6 +3042,20 @@ def build_critical_span_overlay(
     return shapes
 
 
+def _span_borders(fig, words, settings, *, xref="x", yref="y"):
+    """Outline the displayed stimulus and add its legend entry once."""
+    if settings.critical_span_style != "Mark border":
+        return []
+    shapes = build_critical_span_overlay(
+        words, settings.highlight_column, color=settings.span_border_color
+    )
+    if shapes:
+        _add_highlight_key(
+            fig, settings.highlight_column, settings.span_border_color, border=True
+        )
+    return [dict(shape, xref=xref, yref=yref) for shape in shapes]
+
+
 # --- Separable-layer export -------------------------------------------------
 # The scanpath figure is a single flattened image, but publication workflows want
 # to restyle each layer in Illustrator / Inkscape. `split_scanpath_layers` returns
@@ -3214,6 +3228,13 @@ def _chart_axis_title(field: str, table: str | None = None) -> str:
             else f"{label} ({direction.lower()} position, px)"
         )
     return label
+
+
+def _trace_has_points(trace: go.Scatter) -> bool:
+    if trace.x is None or trace.y is None:
+        return False
+    x, y = (pd.to_numeric(np.asarray(v), errors="coerce") for v in (trace.x, trace.y))
+    return bool((np.isfinite(x) & np.isfinite(y)).any())
 
 
 def _chart_axis_range(traces, coordinate: str, reverse: bool):
@@ -4384,6 +4405,52 @@ def _discard_flagged_fixations(
     return with_onset_provenance(fixations)[~drop]
 
 
+def _chart_lines(
+    ordered,
+    fields,
+    *,
+    show_saccades,
+    show_fixations,
+    saccade_color,
+    saccade_style,
+    saccade_width,
+    opacity,
+    fixation_color,
+):
+    x_field, y_field = fields
+    if chart_axes.position_chart(fields, "order_in_trial") and show_saccades:
+        path = ordered.sort_values("order_in_trial", kind="stable")
+        yield go.Scatter(
+            x=path[x_field],
+            y=path[y_field],
+            mode="lines",
+            line=dict(color=saccade_color, width=saccade_width, dash=saccade_style),
+            opacity=opacity,
+            name="Fixation sequence",
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    if show_fixations and chart_axes.position_chart(fields, chart_axes.ELAPSED):
+        onset = ordered[chart_axes.ELAPSED].to_numpy(dtype=float)
+        duration = ordered["duration_ms"].to_numpy(dtype=float)
+        end = onset + np.where(duration >= 0, duration / 1000, np.nan)
+        position_field = y_field if x_field == chart_axes.ELAPSED else x_field
+        pos = ordered[position_field].to_numpy(dtype=float)
+        gaps = np.full(len(ordered), np.nan)
+        time_segments = np.column_stack((onset, end, gaps)).ravel()
+        positions = np.column_stack((pos, pos, gaps)).ravel()
+        horizontal = x_field == chart_axes.ELAPSED
+        yield go.Scatter(
+            x=time_segments if horizontal else positions,
+            y=positions if horizontal else time_segments,
+            mode="lines",
+            line=dict(width=3, color=fixation_color),
+            name="Fixation duration",
+            hoverinfo="skip",
+            showlegend=False,
+        )
+
+
 def _render_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -4445,7 +4512,6 @@ def _render_scanpath_figure(
     # API and CLI too rather than falling through to a missing column.
     color_by_line = settings.color_by_line or settings.color_by == "line"
     fixation_flags = settings.fixation_flags
-    span_border_color = settings.span_border_color
     # The fixations' colour bar; the heatmap's is `cb_style` below.
     colorbar_orientation = settings.fixation_colorbar_orientation
     colorbar_tickangle = settings.fixation_colorbar_tickangle
@@ -4648,11 +4714,7 @@ def _render_scanpath_figure(
             if show_words
             else []
         )
-        if has_highlight and critical_span_style == "Mark border":
-            layout_shapes += build_critical_span_overlay(
-                words, highlight_column, color=span_border_color
-            )
-            _add_highlight_key(fig, highlight_column, span_border_color, border=True)
+        layout_shapes.extend(_span_borders(fig, words, settings))
         if show_word_labels:
             _add_word_label_trace(
                 fig,
@@ -4874,7 +4936,8 @@ def _render_scanpath_figure(
                 )
             )
 
-    if show_fixations and not fixations.empty:
+    sequence = show_saccades and chart_axes.position_chart(fields, "order_in_trial")
+    if (show_fixations or sequence) and not fixations.empty:
         # ``render_fix`` == fixations unless Snap to line is on, in which case
         # the markers, order labels and colour-by-line use the snapped y.
         # Classify the recorded positions, then select the same rows of the
@@ -4886,43 +4949,20 @@ def _render_scanpath_figure(
             if flags.get(category, {}).get("mode") == "Hide":
                 positions = positions[~mask.to_numpy()[positions]]
         ordered = render_fix.iloc[positions]
-        if chart_axes.position_chart(fields, "order_in_trial") and show_saccades:
-            path = ordered.sort_values("order_in_trial", kind="stable")
-            fig.add_trace(
-                go.Scatter(
-                    x=path[x_field],
-                    y=path[y_field],
-                    mode="lines",
-                    line=dict(
-                        color=saccade_color, width=saccade_width, dash=saccade_style
-                    ),
-                    opacity=settings.saccade_opacity,
-                    name="Fixation sequence",
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
-        if chart_axes.position_chart(fields, chart_axes.ELAPSED):
-            onset = ordered[chart_axes.ELAPSED].to_numpy(dtype=float)
-            duration = ordered["duration_ms"].to_numpy(dtype=float)
-            end = onset + np.where(duration >= 0, duration / 1000, np.nan)
-            position_field = y_field if x_field == chart_axes.ELAPSED else x_field
-            pos = ordered[position_field].to_numpy(dtype=float)
-            gaps = np.full(len(ordered), np.nan)
-            time_segments = np.column_stack((onset, end, gaps)).ravel()
-            positions = np.column_stack((pos, pos, gaps)).ravel()
-            horizontal = x_field == chart_axes.ELAPSED
-            fig.add_trace(
-                go.Scatter(
-                    x=time_segments if horizontal else positions,
-                    y=positions if horizontal else time_segments,
-                    mode="lines",
-                    line=dict(width=3, color=fixation_color),
-                    name="Fixation duration",
-                    hoverinfo="skip",
-                    showlegend=False,
-                )
-            )
+        for line in _chart_lines(
+            ordered,
+            fields,
+            show_saccades=show_saccades,
+            show_fixations=show_fixations,
+            saccade_color=saccade_color,
+            saccade_style=saccade_style,
+            saccade_width=saccade_width,
+            opacity=settings.saccade_opacity,
+            fixation_color=fixation_color,
+        ):
+            fig.add_trace(line)
+
+    if show_fixations and not fixations.empty:
         # "Color by line" overrides the chosen color field: each fixation is
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
@@ -7052,7 +7092,11 @@ def _render_scanpath_animation(
     fixation_color = settings.fixation_color
     fixation_symbol = settings.fixation_symbol
     text_color = settings.text_color
-    highlight_column = settings.highlight_column
+    highlight_column = (
+        settings.highlight_column
+        if settings.critical_span_style == "Mark text"
+        else None
+    )
     highlight_text_color = settings.highlight_text_color
     word_hover_measure = settings.word_hover_measure
     word_hover_fields = settings.word_hover_fields
@@ -7110,10 +7154,10 @@ def _render_scanpath_animation(
     stimulus_words = words
     if (
         _compare_stimulus_sides(settings.compare_stimulus) == (False, True)
-        and words_b is not None
-        and not words_b.empty
+        and fixations_b is not None
+        and not fixations_b.empty
     ):
-        stimulus_words = words_b
+        stimulus_words = words.iloc[:0] if words_b is None else words_b
     shapes = (
         build_word_boxes(
             stimulus_words,
@@ -7125,6 +7169,7 @@ def _render_scanpath_animation(
         if show_words and not stimulus_words.empty
         else []
     )
+    shapes.extend(_span_borders(fig, stimulus_words, settings))
     if show_word_labels and not stimulus_words.empty:
         _add_word_label_trace(
             fig,
@@ -8079,7 +8124,13 @@ def _add_comparison_raw_gaze_trace(
     trace joins its scanpath's legend group, so toggling A in the legend hides
     A's samples with it.
     """
-    if not chart_axes.drawable_raw_samples(("x", "y"), samples):
+    fields = settings.x_field, settings.y_field
+    # Elapsed seconds have already been projected against this reading's origin.
+    if not chart_axes.raw_axes_available(fields, samples) or any(
+        field not in samples for field in fields
+    ):
+        return
+    if not (np.isfinite(samples[fields[0]]) & np.isfinite(samples[fields[1]])).any():
         return
     if "timestamp_ms" in samples.columns:
         customdata, when = samples["timestamp_ms"], "<br>Timestamp: %{customdata} ms"
@@ -8088,8 +8139,8 @@ def _add_comparison_raw_gaze_trace(
     else:
         customdata, when = None, ""
     trace = go.Scatter(
-        x=samples["x"],
-        y=samples["y"],
+        x=samples[fields[0]],
+        y=samples[fields[1]],
         mode="markers",
         marker=dict(
             size=settings.raw_gaze_marker_size,
@@ -8097,7 +8148,8 @@ def _add_comparison_raw_gaze_trace(
             opacity=settings.raw_gaze_opacity,
         ),
         hovertemplate=(
-            f"Raw gaze · {display_name}<br>x: %{{x:.1f}}<br>y: %{{y:.1f}}"
+            f"Raw gaze · {display_name}<br>{_plotly_literal(_column_title(fields[0], 'raw_gaze'))}: %{{x:.2f}}"
+            f"<br>{_plotly_literal(_column_title(fields[1], 'raw_gaze'))}: %{{y:.2f}}"
             + when
             + "<extra></extra>"
         ),
@@ -8119,6 +8171,7 @@ def _add_comparison_fixation_trace(
     style: dict,
     font_settings: dict,
     *,
+    fields: tuple[str, str] = ("x", "y"),
     show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
@@ -8195,7 +8248,8 @@ def _add_comparison_fixation_trace(
     words_for_flags = trial_words if trial_words is not None else pd.DataFrame()
     keep = _visible_saccade_classes(saccade_classes)
     class_series = None
-    if keep is not None and (show_saccades or show_saccade_arrows):
+    spatial = fields == ("x", "y")
+    if spatial and keep is not None and (show_saccades or show_saccade_arrows):
         existing = trial_fix.get("saccade_class")
         if existing is not None:
             class_series = existing
@@ -8217,7 +8271,7 @@ def _add_comparison_fixation_trace(
     # Comparison figures always draw straight connectors (no Arc mode here); bind
     # it once so the segments and the arrowheads can never disagree.
     arch_frac: float | None = None
-    if show_saccades and len(trial_fix) > 1:
+    if spatial and show_saccades and len(trial_fix) > 1:
         if class_series is not None:
             segs = _saccade_segments_by_class(
                 trial_fix, "x", "y", class_series, arch_frac
@@ -8245,7 +8299,7 @@ def _add_comparison_fixation_trace(
                     hoverinfo="skip",
                 )
             )
-    if show_saccade_arrows and len(trial_fix) > 1:
+    if spatial and show_saccade_arrows and len(trial_fix) > 1:
         amx, amy, aang, aseg = _saccade_arrow_rows(trial_fix, "x", "y", arch_frac)
         if amx and class_series is not None:
             mask = _arrow_class_mask(trial_fix, class_series, keep, aseg)
@@ -8273,7 +8327,7 @@ def _add_comparison_fixation_trace(
                 )
             )
 
-    if not show_fixations:
+    if spatial and not show_fixations:
         return
 
     # Only the categories doing something: the rail always sends all four, so
@@ -8287,6 +8341,22 @@ def _add_comparison_fixation_trace(
         trial_fix = _discard_flagged_fixations(trial_fix, words_for_flags, flags)
         if trial_fix.empty:
             return
+    if not spatial:
+        for line in _chart_lines(
+            trial_fix,
+            fields,
+            show_saccades=show_saccades,
+            show_fixations=show_fixations,
+            saccade_color=saccade_color,
+            saccade_style=saccade_style,
+            saccade_width=saccade_width,
+            opacity=saccade_opacity,
+            fixation_color=fix_color,
+        ):
+            line.legendgroup = display_name
+            _add(line)
+    if not show_fixations:
+        return
     sizes = _compute_marker_sizes(
         trial_fix["duration_ms"],
         style["marker_size_range"],
@@ -8366,8 +8436,8 @@ def _add_comparison_fixation_trace(
         # ♥ as text, as on the static figure (`_glyph_scatter_traces`);
         # the index labels and a numeric colour bar get traces of their own.
         for trace in _glyph_scatter_traces(
-            trial_fix["x"],
-            trial_fix["y"],
+            trial_fix[fields[0]],
+            trial_fix[fields[1]],
             marker,
             glyph,
             name=display_name,
@@ -8380,8 +8450,8 @@ def _add_comparison_fixation_trace(
         if show_order:
             _add(
                 go.Scatter(
-                    x=trial_fix["x"],
-                    y=trial_fix["y"],
+                    x=trial_fix[fields[0]],
+                    y=trial_fix[fields[1]],
                     mode="text",
                     text=trial_fix["order_in_trial"],
                     textposition=_order_textposition(order_label_position),
@@ -8398,8 +8468,8 @@ def _add_comparison_fixation_trace(
     else:
         _add(
             go.Scatter(
-                x=trial_fix["x"],
-                y=trial_fix["y"],
+                x=trial_fix[fields[0]],
+                y=trial_fix[fields[1]],
                 mode="markers+text" if show_order else "markers",
                 marker=marker,
                 name=display_name,
@@ -8448,8 +8518,8 @@ def _add_comparison_fixation_trace(
             name = FIXATION_FLAG_CATEGORIES[cat].label
             _add(
                 go.Scatter(
-                    x=hits["x"],
-                    y=hits["y"],
+                    x=hits[fields[0]],
+                    y=hits[fields[1]],
                     mode="markers",
                     marker=dict(
                         symbol=spec.get("symbol") or "x",
@@ -8462,7 +8532,8 @@ def _add_comparison_fixation_trace(
                     showlegend=show_legend,
                     hovertemplate=(
                         f"{display_name} · {name} fixation<br>"
-                        "x %{x:.0f}, y %{y:.0f}<extra></extra>"
+                        f"{_plotly_literal(_chart_axis_title(fields[0]))}: %{{x:.2f}}<br>"
+                        f"{_plotly_literal(_chart_axis_title(fields[1]))}: %{{y:.2f}}<extra></extra>"
                     ),
                 )
             )
@@ -8747,7 +8818,11 @@ def _make_split_comparison_figure(
         length=settings.heatmap_colorbar_length,
     )
     text_color = settings.text_color
-    highlight_column = settings.highlight_column
+    highlight_column = (
+        settings.highlight_column
+        if settings.critical_span_style == "Mark text"
+        else None
+    )
     highlight_text_color = settings.highlight_text_color
     word_hover_measure = settings.word_hover_measure
     word_hover_fields = settings.word_hover_fields
@@ -8823,6 +8898,8 @@ def _make_split_comparison_figure(
         if len(both) and pd.notna(both.min()) and pd.notna(both.max()):
             metric_range = (float(both.min()), float(both.max()))
 
+    fields = (settings.x_field, settings.y_field)
+    spatial = fields == ("x", "y")
     trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
         participant, trial_id = trial
@@ -8843,13 +8920,26 @@ def _make_split_comparison_figure(
             styles[idx] if styles else None,
             default_marker_size_range=marker_size_range,
         )
+        samples = _comparison_raw_gaze(raw_gaze, trial, show=settings.show_raw_gaze)
+        if not spatial:
+            trial_fix, samples = chart_axes.comparison_coordinates(
+                trial_fix, samples, fields
+            )
+            if chart_axes.drawable_fixations(fields, trial_fix):
+                # A field can be numeric in one dataset and text in the other.
+                trial_fix = trial_fix.assign(
+                    **{
+                        field: pd.to_numeric(trial_fix[field], errors="coerce")
+                        for field in fields
+                    }
+                )
+            else:
+                trial_fix = trial_fix.iloc[:0]
         trial_specs.append(
             dict(
                 trial_words=trial_words,
                 trial_fix=trial_fix,
-                raw_gaze=_comparison_raw_gaze(
-                    raw_gaze, trial, show=settings.show_raw_gaze
-                ),
+                raw_gaze=samples,
                 display_name=display_name,
                 style=style,
                 color=style["fix_color"],
@@ -8887,7 +8977,7 @@ def _make_split_comparison_figure(
             heatmap_range=heatmap_range,
             heatmap_norm=heatmap_norm,
         )
-        if show_heatmap
+        if show_heatmap and spatial
         else ([], 0.0, 1.0, "")
     )
 
@@ -8910,6 +9000,113 @@ def _make_split_comparison_figure(
     subplot_titles = [
         f"{side} · {spec['display_name']}" for side, spec in zip("AB", trial_specs)
     ]
+
+    def draw_reading(fig, spec, idx, row, col):
+        # Under the scanpath, as on the single-trial figure.
+        _add_comparison_raw_gaze_trace(
+            fig,
+            spec["raw_gaze"],
+            spec["display_name"],
+            spec["raw_gaze_color"],
+            settings,
+            row=row,
+            col=col,
+        )
+        _add_comparison_fixation_trace(
+            fig,
+            spec["trial_fix"],
+            spec["display_name"],
+            spec["style"],
+            font_settings,
+            fields=fields,
+            show_fixations=show_fixations,
+            show_saccades=show_saccades,
+            show_saccade_arrows=show_saccade_arrows,
+            saccade_opacity=settings.saccade_opacity,
+            saccade_arrow_size=settings.saccade_arrow_size,
+            outline_width=settings.fixation_outline_width,
+            outline_color=settings.fixation_outline_color,
+            show_order=show_order,
+            order_font_size=order_font_size,
+            order_label_position=settings.order_label_position,
+            show_legend=show_legend,
+            color_by=color_by,
+            colorscale=fixation_colorscale,
+            color_range=metric_range,
+            show_colorbar=show_colorbars and idx == 0,
+            colorbar_style=cb_style,
+            fixation_symbol=fixation_symbol,
+            fixation_hover_fields=fixation_hover_fields,
+            row=row,
+            col=col,
+            trial_words=spec["trial_words"],
+            **_comparison_filters(spec["style"], settings),
+            duration_scale=duration_scale,
+            category_colors=category_colors[idx],
+        )
+
+    if fields != ("x", "y"):
+        rows, cols = (2, 1) if is_stacked else (1, 2)
+        fig = make_subplots(
+            rows=rows,
+            cols=cols,
+            subplot_titles=subplot_titles,
+            horizontal_spacing=0.13,
+            vertical_spacing=0.18,
+        )
+        fig.update_annotations(name=_PANEL_NAME)
+        for idx, spec in enumerate(trial_specs):
+            row, col = (idx + 1, 1) if is_stacked else (1, idx + 1)
+            first_trace = len(fig.data)
+            draw_reading(fig, spec, idx, row, col)
+            if not any(_trace_has_points(t) for t in fig.data[first_trace:]):
+                fig.add_annotation(
+                    text="No data on these axes",
+                    x=0.5,
+                    y=0.5,
+                    xref="x domain",
+                    yref="y domain",
+                    row=row,
+                    col=col,
+                    showarrow=False,
+                )
+        for coord, field, update in zip(
+            ("x", "y"), fields, (fig.update_xaxes, fig.update_yaxes), strict=True
+        ):
+            limits = _chart_axis_range(fig.data, coord, coord == "y" and field == "y")
+            sample_axis = not any(not spec["trial_fix"].empty for spec in trial_specs)
+            tick_options = {}
+            if limits and field in {
+                "order_in_trial",
+                "order_in_screen",
+                "fixation_id",
+                SAMPLE_INDEX,
+            }:
+                tick_options = dict(
+                    tick0=1, dtick=max(1, math.ceil(abs(limits[1] - limits[0]) / 10))
+                )
+            update(
+                title_text=_chart_axis_title(
+                    field, "raw_gaze" if sample_axis else None
+                ),
+                **tick_options,
+                range=limits,
+                showgrid=True,
+                zeroline=False,
+                automargin=True,
+            )
+        if show_fixations:
+            _add_category_legend(fig, category_legend, category_label or "")
+        fig.update_layout(
+            width=1000,
+            height=800 if is_stacked else 480,
+            template="plotly_white",
+            font=font_settings,
+            plot_bgcolor=background_color,
+            paper_bgcolor=background_color,
+            margin=dict(t=62, l=70, r=55, b=70),
+        )
+        return fig
 
     # Each panel's own axis ranges, from its trial's words + fixations.
     panel_ranges = []
@@ -9069,6 +9266,9 @@ def _make_split_comparison_figure(
                 box["yref"] = yref
                 all_shapes.append(box)
 
+        all_shapes.extend(
+            _span_borders(fig, trial_words, settings, xref=xref, yref=yref)
+        )
         if settings.show_plot_frame:
             all_shapes.append(
                 dict(
@@ -9085,47 +9285,7 @@ def _make_split_comparison_figure(
                 )
             )
 
-        # Under the scanpath, as on the single-trial figure.
-        _add_comparison_raw_gaze_trace(
-            fig,
-            spec["raw_gaze"],
-            spec["display_name"],
-            spec["raw_gaze_color"],
-            settings,
-            row=row,
-            col=col,
-        )
-        _add_comparison_fixation_trace(
-            fig,
-            trial_fix,
-            spec["display_name"],
-            spec["style"],
-            font_settings,
-            show_fixations=show_fixations,
-            show_saccades=show_saccades,
-            show_saccade_arrows=show_saccade_arrows,
-            saccade_opacity=settings.saccade_opacity,
-            saccade_arrow_size=settings.saccade_arrow_size,
-            outline_width=settings.fixation_outline_width,
-            outline_color=settings.fixation_outline_color,
-            show_order=show_order,
-            order_font_size=order_font_size,
-            order_label_position=settings.order_label_position,
-            show_legend=show_legend,
-            color_by=color_by,
-            colorscale=fixation_colorscale,
-            color_range=metric_range,
-            show_colorbar=show_colorbars and idx == 0,
-            colorbar_style=cb_style,
-            fixation_symbol=fixation_symbol,
-            fixation_hover_fields=fixation_hover_fields,
-            row=row,
-            col=col,
-            trial_words=spec["trial_words"],
-            **_comparison_filters(spec["style"], settings),
-            duration_scale=duration_scale,
-            category_colors=category_colors[idx],
-        )
+        draw_reading(fig, spec, idx, row, col)
 
         if show_word_labels:
             _add_word_label_trace(
@@ -9316,7 +9476,11 @@ def _render_comparison_figure(
         length=settings.heatmap_colorbar_length,
     )
     text_color = settings.text_color
-    highlight_column = settings.highlight_column
+    highlight_column = (
+        settings.highlight_column
+        if settings.critical_span_style == "Mark text"
+        else None
+    )
     highlight_text_color = settings.highlight_text_color
     word_hover_measure = settings.word_hover_measure
     word_hover_fields = settings.word_hover_fields
@@ -9331,14 +9495,17 @@ def _render_comparison_figure(
     fit_to_monitor = settings.fit_to_monitor
     show_coordinate_grid = settings.show_coordinate_grid
     coordinate_grid_spacing = settings.coordinate_grid_spacing
-    if layout in {"side_by_side", "stacked"}:
+    if layout in {"side_by_side", "stacked"} or (
+        settings.x_field,
+        settings.y_field,
+    ) != ("x", "y"):
         return _make_split_comparison_figure(
             words,
             fixations,
             trial_a,
             trial_b,
             settings=settings,
-            orientation=layout,
+            orientation="stacked" if layout == "stacked" else "side_by_side",
             styles=(style_a, style_b),
             raw_gaze=raw_gaze,
         )
@@ -9593,6 +9760,11 @@ def _render_comparison_figure(
                 px_per_unit=overlay_scale,
             )
 
+    # Keep the selected outlines above both readings' word-box fills.
+    if settings.critical_span_style == "Mark border":
+        for visible, spec in zip(draws_stimulus, trial_specs, strict=True):
+            if visible:
+                layout_shapes.extend(_span_borders(fig, spec["trial_words"], settings))
     _add_category_legend(fig, category_legend, category_label or "")
 
     if settings.show_plot_frame:
@@ -10777,7 +10949,6 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "heatmap_range",
         "heatmap_colorscale",
         "show_raw_gaze",
-        "critical_span_style",
         "saccade_color_mode",
         "saccade_class_colors",
         "saccade_type_legend",
@@ -10787,7 +10958,6 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "fixation_snap_position",
         # The replay draws no heatmap.
         "heatmap_opacity",
-        "span_border_color",
         "word_heatmap_col",
         "word_heatmap_title",
         "show_connectors",
@@ -11029,7 +11199,10 @@ def make_comparison_figure(
             "heatmap_metric": "duration_ms",
         },
     )
-    if resolved.show_stimulus_image:
+    if resolved.show_stimulus_image and (resolved.x_field, resolved.y_field) == (
+        "x",
+        "y",
+    ):
 
         def page(reading: tuple) -> tuple:
             return _reading_rows(words, reading), _reading_rows(fixations, reading)
@@ -11075,7 +11248,18 @@ def make_comparison_figure(
         )
         for idx, style in enumerate((resolved.style_a, resolved.style_b))
     }
-    if resolved.show_fixations and len(ranges) == 1:
+    if (
+        resolved.show_fixations
+        and resolved.duration_size_legend
+        and len(ranges) == 1
+        and (
+            (resolved.x_field, resolved.y_field) == ("x", "y")
+            or any(
+                t.hovertemplate and t.name == t.legendgroup and _trace_has_points(t)
+                for t in fig.data
+            )
+        )
+    ):
         _maybe_add_duration_key(fig, resolved, ranges.pop(), fixations)
     return fig
 

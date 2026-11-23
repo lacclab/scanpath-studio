@@ -1515,3 +1515,91 @@ class TestCrossDatasetCompareFlow:
             else {}
         )
         assert main_filters.get("participants") is None
+
+
+def test_raw_gaze_switch_left_on_can_be_turned_off_on_a_trial_without_samples():
+    """The Raw gaze switch is one setting for every trial, so it can arrive on
+    at a trial with no samples of its own. It stays live there while the
+    dataset has samples elsewhere, so the warning above the plot can be
+    dismissed by switching it off."""
+    from scanpath_studio.data import infer_raw_gaze_schema, normalize_raw_gaze
+    from scanpath_studio.synthetic import (
+        make_synthetic_fixations,
+        make_synthetic_words,
+    )
+
+    words, fixations = make_synthetic_words(), make_synthetic_fixations()
+    trial = fixations["trial_id"].iloc[0]
+    # Only the second reader has samples.
+    samples = pd.DataFrame(
+        {
+            "participant_id": ["reader2"] * 3,
+            "trial_id": [trial] * 3,
+            "timestamp_ms": [0.0, 1.0, 2.0],
+            "x": [100.0, 110.0, 120.0],
+            "y": [100.0, 100.0, 100.0],
+        }
+    )
+    at = AppTest.from_file(APP_SCRIPT)
+    at.session_state["_datasets"] = {
+        "Two readers": {
+            "words": pd.concat(
+                [words, words.assign(participant_id="reader2")], ignore_index=True
+            ),
+            "fixations": pd.concat(
+                [fixations, fixations.assign(participant_id="reader2")],
+                ignore_index=True,
+            ),
+            "raw_gaze": normalize_raw_gaze(samples, infer_raw_gaze_schema(samples)),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Two readers"
+    at.run(timeout=60)
+    at.session_state["single_participant_id"] = "synthetic"
+    at.session_state["global_show_raw_gaze"] = True
+    at.toggle(key="single_animate").set_value(True).run(timeout=60)
+    _clean(at, "with Raw gaze on, animating:")
+    # The replay draws no raw gaze: the switch is greyed for the mode, and
+    # nothing is said to be missing.
+    assert at.toggle(key="global_show_raw_gaze").disabled
+    assert not any("No raw-gaze samples" in w.value for w in at.warning)
+
+    at.toggle(key="single_animate").set_value(False).run(timeout=60)
+    _clean(at, "with Raw gaze on:")
+    switch = at.toggle(key="global_show_raw_gaze")
+    assert switch.value is True
+    assert not switch.disabled
+    assert any("No raw-gaze samples" in w.value for w in at.warning)
+
+    switch.set_value(False).run(timeout=60)
+    _clean(at, "after switching Raw gaze off:")
+    switch = at.toggle(key="global_show_raw_gaze")
+    assert switch.value is False
+    # Still live: the other reader's samples can be switched on from here.
+    assert not switch.disabled
+    assert not any("No raw-gaze samples" in w.value for w in at.warning)
+
+    # Axes other than x/y gate on this trial's samples, and it has none.
+    at.session_state["global_x_field"] = "@elapsed_seconds"
+    switch.set_value(True).run(timeout=60)
+    _clean(at, "with Raw gaze on, on time axes:")
+    switch = at.toggle(key="global_show_raw_gaze")
+    assert switch.value is True
+    assert not switch.disabled
+
+
+def test_raw_gaze_switch_greys_in_a_dataset_without_samples():
+    """No trial has samples, so the switch greys and nothing nags above the
+    plot, even when it arrives on from another dataset or a link."""
+    at = AppTest.from_file(APP_SCRIPT)
+    at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+    at.run(timeout=60)
+    at.session_state["global_show_raw_gaze"] = True
+    at.toggle(key="single_animate").set_value(False).run(timeout=60)
+    _clean(at, "with Raw gaze on:")
+    switch = at.toggle(key="global_show_raw_gaze")
+    assert switch.disabled
+    assert switch.help == "No raw gaze samples in the trials shown."
+    assert not any("No raw-gaze samples" in w.value for w in at.warning)

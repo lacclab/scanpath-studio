@@ -453,7 +453,7 @@ def story(s: Session) -> None:
     s.wait(400)
 
     s.caption("Replay the reading, fixation by fixation")
-    s.glide(page.get_by_role("button", name="Animation", exact=True))
+    s.glide(page.locator(".st-key-single_animate label"))
     s.park()
     s.idle()
     s.wait(5200)

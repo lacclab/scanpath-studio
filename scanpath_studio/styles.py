@@ -2062,29 +2062,50 @@ def get_app_css() -> str:
     .st-key-plot_editor_tabs [class*="st-key-plot_menu_"] button:hover {
         background: var(--sps-accent-soft);
     }
-    /* One tile grid in both modes, with the icon above its label. */
-    .st-key-scanpath_rail .st-key-tour_grp_views button {
-        min-height: 4rem;
-        padding-top: 0.4rem;
-        padding-bottom: 0.4rem;
+    /* The switch occupies the first cell. The five buttons below and beside
+       it choose which figure to return to when playback is switched off. */
+    .st-key-scanpath_rail .st-key-tour_grp_views button,
+    .st-key-tour_grp_views .st-key-single_animate label {
+        min-height: 3.55rem;
+        padding-block: 0.25rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_views button > div > span {
+    .st-key-scanpath_rail .st-key-tour_grp_views button > div > span,
+    .st-key-tour_grp_views .st-key-single_animate label {
         flex-direction: column;
         align-items: center;
-        gap: 0.2rem;
+        gap: 0.15rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_views button p {
-        font-size: 1.05rem;
+    .st-key-scanpath_rail .st-key-tour_grp_views button p,
+    .st-key-tour_grp_views .st-key-single_animate p {
+        font-size: 1rem;
         line-height: 1.2;
+    }
+    .st-key-tour_grp_views .st-key-single_animate label {
+        width: 100%;
+        justify-content: center;
+        cursor: pointer;
+        border: 1px solid var(--sps-border);
+        border-radius: 0.5rem;
+    }
+    .st-key-tour_grp_views .st-key-single_animate label:hover,
+    .st-key-tour_grp_views .st-key-single_animate label:focus-within {
+        border-color: var(--sps-accent);
+    }
+    .st-key-tour_grp_views .st-key-single_animate [data-testid="stWidgetLabel"] {
+        padding: 0;
+        margin: 0;
+    }
+    .st-key-tour_grp_views [data-testid="stCheckbox"] {
+        margin: 0 !important;
     }
     .st-key-scanpath_rail .st-key-tour_grp_views button
         span:has(> [data-testid="stIconMaterial"]),
     .st-key-scanpath_rail .st-key-tour_grp_views button
         [data-testid="stIconMaterial"] {
-        width: 1.6rem;
-        height: 1.6rem;
-        font-size: 1.6rem;
-        line-height: 1.6rem;
+        width: 1.4rem;
+        height: 1.4rem;
+        font-size: 1.4rem;
+        line-height: 1.4rem;
     }
     /* An Essentials / Full wrapper (`ui_mode.advanced_only` / `simple_only`)
        in the rail is one more block around what it holds. The wrapper takes
@@ -2179,7 +2200,7 @@ def get_app_css() -> str:
     /* Streamlit gives each unwrapped column a 128px minimum. Both tiles
        must fit the rail even when its content is narrower than 256px. */
     .st-key-tour_grp_views [data-testid="stColumn"] { min-width: 0; }
-    /* The grid's two rows are as far apart as its two columns
+    /* The grid's rows are as far apart as its two columns
        (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
        app-wide 0.25rem under each block, twice over. The key sits on the
        vertical block itself, so the rule names it, not a child of it. */
@@ -2466,10 +2487,15 @@ def get_app_css() -> str:
         .st-key-scanpath_rail > * { order: 1; }
         .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
         .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_view_modes, .st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
-        .st-key-scanpath_rail .st-key-tour_grp_views button {
+        .st-key-scanpath_rail .st-key-tour_grp_views button,
+        .st-key-tour_grp_views .st-key-single_animate label {
             min-height: 44px;
         }
-        .st-key-scanpath_rail .st-key-tour_grp_views button > div > span {
+        .st-key-scanpath_rail .st-key-tour_grp_views[data-testid="stVerticalBlock"] {
+            gap: 0.15rem !important;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_views button > div > span,
+        .st-key-tour_grp_views .st-key-single_animate label {
             flex-direction: row;
         }
     }

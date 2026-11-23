@@ -7,6 +7,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -803,7 +804,9 @@ _VIZ_WIDGET_DEFAULTS = {
     # figure (√ by default — area grows with duration). Configs and links saved
     # without it are read as "relative", so they still draw as saved.
     "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
+    "global_marker_size_range": DEFAULT_MARKER_SIZE_RANGE,
     "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
+    "global_color_by": UNIFORM_COLOR_FIELD,
     "global_duration_size_legend": DEFAULT_DURATION_SIZE_LEGEND,
     # 📐 Figure → Legends: where each legend sits (Auto = the builder's
     # own placement). Size None = the figure's own text size.
@@ -1191,7 +1194,7 @@ _QUICK_VIEW_DRIFTED_FROM = "_quick_view_drifted_from"
 _CUSTOM_VIEW = "custom"
 
 #: The user's own saved designs: ``{name: {global_key: value}}``.
-#: The three built-ins are *code*; these are data, which can be kept,
+#: The built-ins are *code*; these are data, which can be kept,
 #: compared and come back to.
 DESIGN_PRESETS_KEY = _DESIGN_PRESETS_WIRE_KEY
 #: Which saved design the ✏️ button has open for editing, if any.
@@ -1208,7 +1211,7 @@ _DESIGN_SAVE_MODE_KEY = "design_save_mode"
 #: exactly where the name it replaces was.
 _DESIGN_ROW_W = (0.62, 0.19, 0.19)
 #: A selection of `design:<name>`, kept in the same slot as the built-ins so
-#: `_sync_quick_view_state`'s drift detection applies to saved designs too —
+#: `_active_quick_view`'s drift detection applies to saved designs too —
 #: touch any control and the highlight drops, exactly as for a built-in.
 _DESIGN_SELECTION_PREFIX = "design:"
 
@@ -1241,11 +1244,6 @@ def save_design_preset(name: str) -> str | None:
     clean = " ".join(str(name).split())[:60]
     if not clean:
         return None
-    # A design named after a built-in would shadow it in `_apply_view_preset`,
-    # which checks saved designs first — so the built-in button would silently
-    # start applying someone else's settings.
-    if clean in _VIEW_PRESETS:
-        clean = f"{clean} (mine)"
     presets = dict(design_presets())
     presets[clean] = _capture_quick_view_state()
     st.session_state[DESIGN_PRESETS_KEY] = presets
@@ -1256,7 +1254,7 @@ def save_design_preset(name: str) -> str | None:
     # `*__num` slider twins in session_state; those keys are collected the moment
     # the popover closes, so a baseline taken here would read as drift on the
     # next full run and drop the highlight off the design just saved. Letting
-    # `_sync_quick_view_state` take the baseline puts it in the same frame as
+    # `_active_quick_view` take the baseline puts it in the same frame as
     # the comparison.
     st.session_state.pop(_QUICK_VIEW_APPLIED_STATE, None)
     return clean
@@ -1281,7 +1279,7 @@ def delete_design_preset(name: str) -> None:
 
     Deleting the design you are *looking at* must not change the figure — the
     settings are already applied and are the user's own. Only the highlight
-    goes, which `_sync_quick_view_state` handles by falling through to Custom.
+    goes, which `_active_quick_view` handles by falling through to Custom.
     """
     presets = dict(design_presets())
     presets.pop(name, None)
@@ -1348,8 +1346,7 @@ def designs_from_json(text: str, *, report: list[str] | None = None) -> dict[str
 
     Keeps only what a design can hold — the keys :func:`_is_design_key` names,
     as `_apply_view_preset` applies them, each validated by
-    :func:`sanitize_design` — and gives a name that collides with a built-in
-    the same ``" (mine)"`` suffix :func:`save_design_preset` does. What was
+    :func:`sanitize_design`. Names are preserved across versions. What was
     left out is appended to ``report`` as one line per design (and one for a
     file written by a newer version). Raises ``ValueError`` for anything that
     is not a designs file.
@@ -1377,8 +1374,6 @@ def designs_from_json(text: str, *, report: list[str] | None = None) -> dict[str
             if clean:
                 notes.append(f"{clean}: not a design, skipped")
             continue
-        if clean in _VIEW_PRESETS:
-            clean = f"{clean} (mine)"
         design = {
             str(key): value for key, value in values.items() if _is_design_key(key)
         }
@@ -1504,6 +1499,14 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_saccade_color_mode": "One color",
         "global_fixation_opacity": 1.0,
     },
+    "gaze_over_time": {
+        "global_x_field": charts.GAZE_OVER_TIME[0],
+        "global_y_field": charts.GAZE_OVER_TIME[1],
+        "global_show_fix": True,
+        # Duration is already drawn to scale along the time axis. Keep its
+        # onset marker small enough to see the end of a short fixation.
+        "global_marker_size_range": (4, 4),
+    },
     "reading_order": {
         "global_show_fix": True,
         "global_show_order": True,
@@ -1560,7 +1563,9 @@ def _drop_linked_view_params() -> None:
         st.query_params.pop(param, None)
 
 
-def _apply_view_preset(name: str, *, keep: tuple[str, ...] = ()) -> None:
+def _apply_view_preset(
+    name: str, *, keep: tuple[str, ...] = (), built_in: bool = False
+) -> None:
     """Apply one deterministic named view, or restore the Custom snapshot.
 
     Runs as a button ``on_click`` callback, i.e. *before* the next rerun
@@ -1572,7 +1577,8 @@ def _apply_view_preset(name: str, *, keep: tuple[str, ...] = ()) -> None:
     dependent canvas/field defaults. Custom is the only view that preserves
     manual edits; leaving it snapshots the complete live design state (``_is_design_key``).
     """
-    saved = design_presets()
+    # A library from an older version can already have a new tile's name.
+    saved = {} if built_in else design_presets()
     if name not in {*_VIEW_PRESETS, _CUSTOM_VIEW, *saved}:
         raise ValueError(f"Unknown design preset: {name}")
 
@@ -1611,8 +1617,7 @@ def _hold_view_writes(
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        # The Animation tile writes the flag directly; it has no widget echo.
-        if key == SINGLE_ANIMATE or key in _MOUNTED_VIEW_KEYS or key not in ss:
+        if key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
@@ -1654,6 +1659,7 @@ _MOUNTED_VIEW_KEYS = frozenset(
         "global_x_field",
         "global_y_field",
         "global_palette",
+        SINGLE_ANIMATE,
         SINGLE_COMPARE_TOGGLE,
         "global_preproc_enabled",
         "global_preproc_short_policy",
@@ -1736,7 +1742,7 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = deepcopy(value)
     ss[_QUICK_VIEW_SELECTION_KEY] = name
-    # The complete baseline is captured by `_sync_quick_view_state` after the
+    # The complete baseline is captured by `_active_quick_view` after the
     # next rerun has restored data-dependent defaults.
     ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
 
@@ -1811,17 +1817,6 @@ def _render_saved_designs(host) -> None:
     )
     shell = host.container(key="design_shell")
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
-        st.button(
-            "Restore last custom design",
-            icon=ICONS["preset_custom"],
-            key="viz_view_custom",
-            disabled=not isinstance(
-                st.session_state.get(_QUICK_VIEW_CUSTOM_STATE), dict
-            ),
-            width="stretch",
-            on_click=_apply_view_preset,
-            args=(_CUSTOM_VIEW,),
-        )
         if not saved:
             st.caption(
                 "No saved designs yet. Set up the layers, colors and figure, then "
@@ -2149,7 +2144,7 @@ _ABSENT = object()
 #: still records whether Compare was on, so applying it restores that.)
 _VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
 #: The dataset the applied design's baseline was taken on; see
-#: `_sync_quick_view_state`.
+#: `_active_quick_view`.
 _QUICK_VIEW_DATASET = "_quick_view_dataset"
 
 
@@ -2214,32 +2209,49 @@ def _returned_to_design() -> str | None:
     return name
 
 
-def _link_departs_from(name: str) -> bool:
-    """Whether the open deep link sets a design value design ``name`` would not.
+def forget_design_selection(state) -> None:
+    """Recognize a restored figure from its settings when the rail next draws."""
+    for key in (
+        _QUICK_VIEW_SELECTION_KEY,
+        _QUICK_VIEW_APPLIED_STATE,
+        _QUICK_VIEW_DRIFTED_FROM,
+    ):
+        state.pop(key, None)
 
-    On a link's first run the highlight is inferred from the settings
-    the link restored. Matching a design's own few keys is not enough — a link
-    from a view with a hand-changed colour would match Scanpath — so every design
-    value the link carries is held against what the design would set (its own
-    value, else the widget default). Values with no default (the canvas size,
-    seeded per dataset) say nothing either way.
-    """
-    from .url_state import linked_state_keys
 
+def _initial_plot_design(current: dict) -> str:
+    """Recognize the same stock figure on first visit, Share link or file restore."""
     ss = st.session_state
-    preset = _VIEW_PRESETS[name]
-    for key in linked_state_keys():
-        if not _is_design_key(key) or key in _VIEW_MODE_KEYS or key not in ss:
-            continue
-        expected = preset.get(key, _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT))
-        if expected is _ABSENT:
-            continue
-        if _write_match_key(ss.get(key)) != _write_match_key(expected):
-            return True
-    return False
+    palette = _active_palette()
+    if palette is None:
+        return _CUSTOM_VIEW
+    defaults = {
+        **_VIZ_WIDGET_DEFAULTS,
+        **palette_state(palette, include_compare=True),
+        "global_x_field": "x",
+        "global_y_field": "y",
+    }
+    # Samples-only datasets seed Raw gaze on as part of their stock scanpath.
+    raw_default = isinstance(ss.get(RAW_GAZE_SNAP_RESTORE_KEY), dict) and ss.get(
+        _RAW_GAZE_LAYER
+    )
+    for name in ("scanpath", "heatmap", "illustration", "gaze_over_time"):
+        expected = {**defaults, **_VIEW_PRESETS[name]}
+        if raw_default:
+            expected[_RAW_GAZE_LAYER] = True
+        if all(
+            _write_match_key(value) == _write_match_key(expected[key])
+            for key, value in current.items()
+            if key in expected
+            and key != "global_palette"
+            and key not in _VIEW_MODE_KEYS
+            and not _is_drift_mirror(key)
+        ):
+            return name
+    return _CUSTOM_VIEW
 
 
-def _sync_quick_view_state() -> str:
+def _active_quick_view() -> str:
     """Keep the design-preset highlight in step with manual plot-control edits.
 
     Only a change to a plot setting drops the highlight to 🛠️ Custom; see
@@ -2269,22 +2281,14 @@ def _sync_quick_view_state() -> str:
             return _drift_to_custom(str(selected), applied)
         return str(selected)
     if selected not in {*_VIEW_PRESETS, _CUSTOM_VIEW}:
-        selected = next(
-            (
-                name
-                for name in ("illustration", "scanpath", "heatmap")
-                if all(
-                    ss.get(key) == value for key, value in _VIEW_PRESETS[name].items()
-                )
-                and not _link_departs_from(name)
-            ),
-            _CUSTOM_VIEW,
-        )
+        current = _capture_quick_view_state()
+        selected = _initial_plot_design(current)
         ss[_QUICK_VIEW_SELECTION_KEY] = selected
         if selected == _CUSTOM_VIEW:
-            ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+            ss[_QUICK_VIEW_CUSTOM_STATE] = current
         else:
-            ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
+            ss[_QUICK_VIEW_APPLIED_STATE] = current
+        return selected
 
     if selected == _CUSTOM_VIEW:
         returned = _returned_to_design()
@@ -2302,23 +2306,8 @@ def _sync_quick_view_state() -> str:
     return str(selected)
 
 
-def _active_quick_view() -> str | None:
-    """Return the quick-view preset whose owned values match current state.
-
-    Illustration is deliberately checked before Scanpath: its layer set is a
-    superset of the Scanpath contract, so checking Scanpath first would mislabel
-    an active Illustration as Scanpath even while arc-and-snap geometry is live.
-    """
-    return _sync_quick_view_state()
-
-
-#: The view tiles in reading order. Both interface modes use this grid.
+#: The shared grid starts with the playback switch. Each button selects a static view.
 _VIEW_TILES = {
-    "animation": (
-        "Animation",
-        "animate",
-        "Animate the current reading, or both readings when comparing.",
-    ),
     "scanpath": (
         "Scanpath",
         "preset_scanpath",
@@ -2335,6 +2324,17 @@ _VIEW_TILES = {
         "illustration",
         "A clean schematic: fixations snapped onto their lines, arced "
         "saccades, one saccade color, opaque markers.",
+    ),
+    "gaze_over_time": (
+        "Gaze over time",
+        "gaze_over_time",
+        "Plot horizontal fixation position against seconds since the first fixation. "
+        "Each horizontal bar spans one fixation’s duration.",
+    ),
+    _CUSTOM_VIEW: (
+        "Custom",
+        "preset_custom",
+        "Return to your last custom figure, or start one from the current settings.",
     ),
 }
 
@@ -2362,22 +2362,18 @@ def static_plot_view(*, comparing: bool = False) -> str | None:
     return None
 
 
-def _choose_plot_view(name: str, comparing: bool) -> None:
-    """Animation uses the current styling and comparison. Static presets keep the palette."""
-    ss = st.session_state
-    if name == "animation":
-        # Selecting the active tile returns to any underlying figure, including
-        # a custom-axis chart that none of the static presets represents.
-        ss[SINGLE_ANIMATE] = not ss.get(SINGLE_ANIMATE, False)
-        return
-    if name != static_plot_view(comparing=comparing):
+def _choose_plot_view(name: str, current: str | None) -> None:
+    """A static view ends the replay. Custom brings back its own palette too."""
+    if name != current:
         keep = (
             *_palette_keys(),
             "_palette_picked",
             *(k for k in _VIZ_WIDGET_DEFAULTS if k.startswith("global_anim_")),
         )
-        _apply_view_preset(name, keep=keep)
-    ss[SINGLE_ANIMATE] = False
+        _apply_view_preset(
+            name, keep=() if name == _CUSTOM_VIEW else keep, built_in=True
+        )
+    st.session_state[SINGLE_ANIMATE] = False
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
@@ -2391,124 +2387,64 @@ def _palette_keys() -> frozenset[str]:
     )
 
 
-def _palette_drift_keys() -> frozenset[str]:
-    """Color settings accounted for by a named palette.
-
-    Individually edited colors still count as a custom design.
-    """
-    return _palette_keys() if _active_palette() is not None else frozenset()
-
-
-def _palette_only_drift() -> str | None:
-    """The built-in view a drift to Custom left, when only the palette moved.
-
-    The preset highlight drops to Custom on any colour change, the palette's
-    included. Check the baseline the drift recorded, without the keys `_palette_drift_keys` names.
-    """
-    drifted = st.session_state.get(_QUICK_VIEW_DRIFTED_FROM)
-    if not (isinstance(drifted, tuple) and len(drifted) == 2):
-        return None
-    name, applied = drifted
-    if name not in _VIEW_PRESETS or not isinstance(applied, dict):
-        return None
-    ignored = _palette_drift_keys()
-    if not ignored:
-        return None
-    current = _capture_quick_view_state()
-    if _design_drifted(
-        {k: v for k, v in applied.items() if k not in ignored},
-        {k: v for k, v in current.items() if k not in ignored},
-    ):
-        return None
-    return name
-
-
-def _seeded_raw_gaze_view() -> str | None:
-    """The built-in view the settings are, once the dataset's raw-gaze default
-    is allowed for; ``None`` when there is none.
-
-    A dataset recorded as raw gaze alone opens with its 🔵 Raw gaze layer on
-    (`app.seed_raw_gaze_default`), which no built-in view has, so the preset
-    highlight opens on Custom. That is the dataset's default, not a setting
-    anyone shaped: the layer must still be
-    at that default (the seed's stash is what says one was made), and every
-    other plot setting with a widget default must be the view's own, the
-    palette's colours aside (`_palette_drift_keys`). This keeps the hidden-settings note quiet for that default.
-    """
+def _draw_view_grid(
+    grid, *, design: str | None, has_time: bool, comparing: bool
+) -> None:
+    """Keep the selected static design visible alongside the playback switch."""
     ss = st.session_state
-    if not isinstance(ss.get(RAW_GAZE_SNAP_RESTORE_KEY), dict):
-        return None
-    if ss.get(_RAW_GAZE_LAYER) is not True or ss.get(_QUICK_VIEW_DRIFTED_FROM):
-        return None
-    ignored = _palette_drift_keys()
-    current = _capture_quick_view_state()
-    for name in ("illustration", "scanpath", "heatmap"):
-        expected = {**_VIEW_PRESETS[name], _RAW_GAZE_LAYER: True}
-        if all(
-            _write_match_key(current.get(key, ss.get(key)))
-            == _write_match_key(
-                expected.get(key, _VIZ_WIDGET_DEFAULTS.get(key, current.get(key)))
+    current = design
+    if comparing and (
+        static_plot_view() == "illustration"
+        or (ss.get("global_x_field"), ss.get("global_y_field")) != ("x", "y")
+    ):
+        # These designs resume when comparison ends. The two-reading figure
+        # uses screen coordinates and straight saccades in the meantime.
+        current = static_plot_view(comparing=True)
+    row = grid.columns(2, gap="small", wrap=False)
+    row[0].toggle(
+        "Animation", key=SINGLE_ANIMATE, width="stretch", persist_state="session"
+    )
+    for index, (name, (label, icon, help_text)) in enumerate(_VIEW_TILES.items(), 1):
+        if index % 2 == 0:
+            row = grid.columns(2, gap="small", wrap=False)
+        reason = None
+        if name in {"illustration", "gaze_over_time"} and comparing:
+            reason = f"Turn off Compare readings to use {label}."
+        elif name == "gaze_over_time" and not has_time:
+            reason = (
+                "This reading needs recorded fixation onsets to plot gaze over time."
             )
-            for key in current.keys() | expected.keys()
-            if not _is_drift_mirror(key)
-            and key not in _VIEW_MODE_KEYS
-            and key not in ignored
-        ) and not _link_departs_from(name):
-            return name
-    return None
-
-
-def render_view_tiles(grid, *, animating: bool, comparing: bool) -> None:
-    """Highlight the view the figure draws, including a cross-dataset comparison."""
-    current = "animation" if animating else static_plot_view(comparing=comparing)
-    names = list(_VIEW_TILES)
-    for row in (names[:2], names[2:]):
-        for cell, name in zip(
-            grid.columns(2, gap="small", wrap=False), row, strict=True
-        ):
-            label, icon, help_text = _VIEW_TILES[name]
-            disabled = name == "illustration" and bool(
-                st.session_state.get(SINGLE_COMPARE_TOGGLE)
-            )
-            if name == "animation" and st.session_state.get(SINGLE_ANIMATE):
-                help_text = (
-                    "Return to the static figure with its current settings."
-                    if animating
-                    else "This reading has no fixations. Select to turn off animation for other readings."
-                )
-            cell.button(
-                label,
-                key=f"viz_view_{name}",
-                icon=ICONS[icon],
-                type="primary" if current == name else "secondary",
-                width="stretch",
-                disabled=disabled,
-                help="Turn off Compare readings to use Illustration."
-                if disabled
-                else help_text,
-                on_click=_choose_plot_view,
-                args=(name, comparing),
-            )
-
-
-def _render_view_controls(host, *, animating: bool, slots: dict | None) -> None:
-    """Render the shared View grid and Palette in their fixed position at the top."""
-    design = _active_quick_view()
-    if design == _CUSTOM_VIEW:
-        design = _palette_only_drift() or _seeded_raw_gaze_view() or design
-    st.session_state["_custom_plot_in_use"] = design not in _VIEW_TILES
-    host.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
-    grid = host.container(key="tour_grp_views")
-    if slots is None:
-        render_view_tiles(
-            grid,
-            animating=animating,
-            comparing=bool(st.session_state.get(SINGLE_COMPARE_TOGGLE)),
+        row[index % 2].button(
+            label,
+            key=f"viz_view_{name}",
+            icon=ICONS[icon],
+            type="primary" if current == name else "secondary",
+            width="stretch",
+            disabled=reason is not None,
+            help=reason or help_text,
+            on_click=_choose_plot_view,
+            args=(name, design),
         )
+
+
+def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
+    """Render the shared views, playback switch and palette at the top of the rail."""
+    design = _active_quick_view()
+    st.session_state["_custom_plot_in_use"] = (
+        design == _CUSTOM_VIEW or design not in _VIEW_TILES
+    )
+    host.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
+    draw = partial(
+        _draw_view_grid,
+        host.container(key="tour_grp_views"),
+        design=design,
+        has_time=has_time,
+    )
+    if slots is None:
+        draw(comparing=bool(st.session_state.get(SINGLE_COMPARE_TOGGLE)))
     else:
-        # B can come from another dataset. Fill the grid once its picker has
-        # resolved the reading the figure will actually draw.
-        slots["view_tiles"] = grid
+        # Wait for the comparison picker to resolve B, including another dataset.
+        slots["view_tiles"] = draw
     palette = _active_palette()
     st.session_state["global_palette"] = palette or CUSTOM_PALETTE
     host.selectbox(
@@ -2570,8 +2506,17 @@ def apply_palette(name: str) -> None:
     """
     if name == CUSTOM_PALETTE:
         return
-    for key, value in palette_state(name, include_compare=True).items():
+    colors = palette_state(name, include_compare=True)
+    for key, value in colors.items():
         write_through(key, value)
+    # Each stock view has a separate palette control. Picking a palette on
+    # that view must leave the last hand-edited figure available on Custom.
+    ss = st.session_state
+    baseline = ss.get(_QUICK_VIEW_APPLIED_STATE)
+    if ss.get(_QUICK_VIEW_SELECTION_KEY) in _VIEW_PRESETS and isinstance(
+        baseline, dict
+    ):
+        ss[_QUICK_VIEW_APPLIED_STATE] = {**baseline, **colors, "global_palette": name}
 
 
 #: Programmatic widget writes the browser may not have taken yet:
@@ -6039,7 +5984,6 @@ def _seed_viz_state(
     """
     for _key, _default in _VIZ_WIDGET_DEFAULTS.items():
         _pin(_key, _default)
-    _pin("global_marker_size_range", (8, 24))
     _seed_compare_styles()
 
     color_fields = color_field_options(trial_fixations)
@@ -6049,6 +5993,18 @@ def _seed_viz_state(
 
     numeric_fields = numeric_field_options(trial_fixations)
     if numeric_fields:
+        ss = st.session_state
+        if (
+            charts.ELAPSED not in numeric_fields
+            and (ss.get("global_x_field"), ss.get("global_y_field"))
+            == charts.GAZE_OVER_TIME
+        ):
+            # Both fields belong to this preset. Falling back one field at a
+            # time would leave horizontal position plotted against itself.
+            ss.pop("global_x_field", None)
+            ss.pop("global_y_field", None)
+            if ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time":
+                forget_design_selection(ss)
         x_default = "x" if "x" in numeric_fields else numeric_fields[0]
         y_default = (
             "y"
@@ -7108,8 +7064,13 @@ def render_plot_controls(
 
     rail = host if host is not None else st
 
+    has_time = charts.ELAPSED in numeric_fields and (
+        fix_range_fixations is None or charts.has_clock(fix_range_fixations)
+    )
     _render_view_controls(
-        view_host if view_host is not None else rail, animating=animating, slots=slots
+        view_host if view_host is not None else rail,
+        has_time=has_time,
+        slots=slots,
     )
     viz = rail.container(key="tour_grp_viz_controls")
     _render_saved_designs(advanced_only(viz, "rail_designs"))
@@ -8824,18 +8785,19 @@ def render_plot_controls(
         )
         presets = {
             "Screen X and Y": ("x", "y"),
+            "Horizontal position over time": charts.GAZE_OVER_TIME,
+            "Vertical position over time": (charts.ELAPSED, "y"),
             "Horizontal position by fixation index": ("order_in_trial", "x"),
             "Vertical position by fixation index": ("order_in_trial", "y"),
-            "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
             "Duration by fixation index": ("order_in_trial", "duration_ms"),
-            "Horizontal position over time": (charts.ELAPSED, "x"),
-            "Vertical position over time": (charts.ELAPSED, "y"),
+            "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
         }
 
         available = {
             name: pair
             for name, pair in presets.items()
             if all(field in numeric_fields for field in pair)
+            and (has_time or charts.ELAPSED not in pair)
         }
         current = next(
             (name for name, pair in available.items() if pair == fields), None

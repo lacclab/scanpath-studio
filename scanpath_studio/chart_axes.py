@@ -10,6 +10,7 @@ from .data import assign_derived, synthesized_onset_mask
 # This axis is computed on a complete reading, before selecting a screen or window.
 ELAPSED = "@elapsed_seconds"
 ELAPSED_LABEL = "Seconds since first fixation onset"
+GAZE_OVER_TIME = (ELAPSED, "x")
 POSITION_FIELDS = ("x", "y")
 CLOCK_FIELDS = ("timestamp_ms", ELAPSED)
 

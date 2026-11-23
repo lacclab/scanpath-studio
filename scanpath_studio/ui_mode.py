@@ -431,10 +431,11 @@ def hidden_settings_reasons(
         "custom_view": custom_view and axes == ("x", "y"),
     }
     reasons = [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
-    if axes != ("x", "y"):
+    from .chart_axes import ELAPSED, ELAPSED_LABEL, GAZE_OVER_TIME
+
+    if axes != ("x", "y") and (custom_view or axes != GAZE_OVER_TIME):
         import streamlit as st
 
-        from .chart_axes import ELAPSED, ELAPSED_LABEL
         from .column_names import active as active_column_names
 
         labels = active_column_names(st.session_state, "fixations").option_labels(

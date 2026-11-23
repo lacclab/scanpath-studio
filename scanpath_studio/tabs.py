@@ -223,7 +223,6 @@ from scanpath_studio.controls import (
     render_plot_controls,
     render_trial_chip_picker,
     render_trial_filters,
-    render_view_tiles,
     render_viz_reset,
     selected_hover_text,
     static_plot_view,
@@ -7263,7 +7262,7 @@ def render_single_trial_tab(
         dataset_canvas=dataset_canvas,
     )
     comparing = compare_meta is not None
-    render_view_tiles(rail_slots["view_tiles"], animating=animate, comparing=comparing)
+    rail_slots["view_tiles"](comparing=comparing)
     # Compare draws raw gaze too — each reading's own samples, so the
     # layer is on when either reading has some.
     compare_raw_gaze = (

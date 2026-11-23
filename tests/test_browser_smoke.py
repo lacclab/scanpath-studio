@@ -242,10 +242,20 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
 def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
     page = _open(browser, f"{app_url}/?ui=full&source=demo&animate=0")
     try:
-        names = ("animation", "scanpath", "heatmap", "illustration")
+        grid = page.locator(".st-key-tour_grp_views")
+        switch = grid.locator(".st-key-single_animate label")
         tiles = [
-            page.locator(f".st-key-viz_view_{name}").get_by_role("button")
-            for name in names
+            switch,
+            *(
+                grid.get_by_role("button", name=name, exact=True)
+                for name in (
+                    "Scanpath",
+                    "Heatmap",
+                    "Illustration",
+                    "Gaze over time",
+                    "Custom",
+                )
+            ),
         ]
         palette = page.locator(".st-key-global_palette")
 
@@ -269,8 +279,12 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         _settle(page)
         expected = positions()
         x, _, width, _ = expected[-1]
-        for left, _, tile_width, _ in expected[:-1]:
+        for left, _, tile_width, height in expected[:-1]:
             assert x <= left and left + tile_width <= x + width + 1
+            assert 44 <= height < 64
+        for left, right in zip(expected[:6:2], expected[1:6:2], strict=True):
+            assert left[1] == right[1] and left[0] + left[2] <= right[0]
+        assert expected[0][1] < expected[2][1] < expected[4][1] < expected[-1][1]
         for mode in ("Essentials", "Full"):
             page.locator(".st-key-ui_mode_switch").get_by_text(mode, exact=True).click()
             _settle(page)
@@ -642,7 +656,6 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         switch("Essentials")
         assert chart() == heatmap
         switch("Full")
-        page.locator(".st-key-design_shell summary").click()
         click("viz_view_custom")
         assert chart() == second
         click("single_prev_trial")

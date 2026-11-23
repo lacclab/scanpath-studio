@@ -316,6 +316,116 @@ def test_mode_round_trip_keeps_export_scope_and_artifacts():
         assert at.session_state["bulk_export_combine"]
 
 
+def test_time_view_replay_and_custom_restore():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.button(key="viz_view_custom").click().run()
+    assert at.button(key="viz_view_custom").proto.type == "primary"
+    at.checkbox(key="global_show_order").check().run()
+    initial_palette = at.selectbox(key="global_palette").value
+    at.button(key="viz_view_gaze_over_time").click().run()
+    assert tuple(at.session_state["global_marker_size_range"]) == (4, 4)
+    at.selectbox(key="global_palette").set_value("High contrast").run()
+    for mode, animate in (("essentials", True), ("full", False)):
+        at.segmented_control(key="ui_mode_switch").set_value(mode).run()
+        at.toggle(key="single_animate").set_value(animate).run()
+        assert not at.exception
+        assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"
+        assert (
+            at.session_state["global_x_field"],
+            at.session_state["global_y_field"],
+        ) == chart_axes.GAZE_OVER_TIME
+    at.button(key="viz_view_custom").click().run()
+    assert at.checkbox(key="global_show_order").value
+    assert at.selectbox(key="global_palette").value == initial_palette
+    assert at.session_state["global_x_field"] == "x"
+    assert at.session_state["global_y_field"] == "y"
+
+
+def test_time_view_falls_back_to_screen_axes_on_a_dataset_without_onsets():
+    w, f = example_import_tables()
+    w, f = api.load_scanpath_data(w, f.drop(columns="timestamp_ms"), names="canonical")
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at.session_state["_datasets"] = {
+        "Untimed": {
+            "words": w,
+            "fixations": f,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+        }
+    }
+    at.run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    picker = at.selectbox(key="data_source_picker")
+    first = picker.index
+    picker.select_index(
+        next(i for i, label in enumerate(picker.options) if "Untimed" in label)
+    ).run()
+    assert not at.exception
+    assert at.button(key="viz_view_gaze_over_time").disabled
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "x",
+        "y",
+    )
+    at.selectbox(key="data_source_picker").select_index(first).run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    assert (
+        at.session_state["global_x_field"],
+        at.session_state["global_y_field"],
+    ) == chart_axes.GAZE_OVER_TIME
+
+
+def test_choosing_scanpath_in_compare_replaces_the_underlying_time_chart():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    assert at.button(key="viz_view_gaze_over_time").disabled
+    at.button(key="viz_view_scanpath").click().run()
+    assert at.toggle(key="single_compare_toggle").value
+    at.toggle(key="single_compare_toggle").set_value(False).run()
+    assert at.button(key="viz_view_scanpath").proto.type == "primary"
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "x",
+        "y",
+    )
+
+
+def test_time_shortcuts_follow_the_clock_of_the_selected_reading():
+    words, fix = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    words = pd.concat(
+        [words.assign(trial_id="recorded"), words.assign(trial_id="untimed")]
+    )
+    fix = pd.concat(
+        [
+            fix.assign(trial_id="recorded"),
+            fix.assign(trial_id="untimed", timestamp_ms=np.nan),
+        ]
+    )
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at.session_state["_datasets"] = {
+        "Mixed": {
+            "words": words,
+            "fixations": fix,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Mixed"
+    at.run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    at.selectbox(key="single_trial_id").set_value("untimed").run()
+    assert not at.exception
+    assert at.button(key="viz_view_gaze_over_time").disabled
+    assert (
+        "Horizontal position over time"
+        not in at.selectbox(key="_plot_axis_preset").options
+    )
+    at.selectbox(key="single_trial_id").set_value("recorded").run()
+    assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"
+    assert (
+        at.selectbox(key="_plot_axis_preset").value == "Horizontal position over time"
+    )
+
+
 def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
     next(box for box in at.selectbox if box.label == "Axis preset").set_value(
@@ -325,9 +435,9 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
         chart_axes.ELAPSED,
         "y",
     )
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert at.session_state["single_animate"]
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(False).run()
     assert not at.session_state["single_animate"]
     assert at.session_state["global_x_field"] == chart_axes.ELAPSED
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()

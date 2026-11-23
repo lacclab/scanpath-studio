@@ -98,9 +98,9 @@ def test_compare_and_animate_accept_an_edit_immediately_after_undo():
     assert at.toggle(key="single_compare_toggle").value
     assert not at.checkbox(key="global_show_order").value
     _click(at, "viz_undo")
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     _click(at, "viz_undo")
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert at.session_state["single_animate"] and at.button(key="viz_redo").disabled
 
 

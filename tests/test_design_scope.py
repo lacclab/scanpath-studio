@@ -27,6 +27,8 @@ NOT_A_DESIGN_SETTING = {
     # An uploaded file is not a setting, and Streamlit refuses to assign a value
     # to an uploader's key (see `controls._is_restorable_global`).
     "global_stimulus_image_upload",
+    # The replay can be switched on and off with any saved design.
+    sk.SINGLE_ANIMATE,
 }
 
 B_FILTERS = {

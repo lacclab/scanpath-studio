@@ -351,7 +351,7 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
 
     if wanted("animate"):
         print("animate menu")
-        page.get_by_role("button", name="Animation", exact=True).click()
+        page.locator(".st-key-single_animate label").click()
         ui.settle(page)
         _shot_controls(page, "animate", _open_menu_body(page, "plot_menu_animation"))
         page.keyboard.press("Escape")

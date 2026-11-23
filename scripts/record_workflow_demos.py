@@ -816,9 +816,7 @@ def favorites(d: Demo) -> None:
 def replay(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(
-        page.get_by_role("button", name="Animation", exact=True), "Animation", hold=2.4
-    )
+    d.click(page.locator(".st-key-single_animate label"), "Animation", hold=2.4)
     d.click(
         page.locator(".st-key-plot_menu_animation button"),
         "Animate ▾",

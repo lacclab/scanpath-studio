@@ -698,7 +698,7 @@ class TestScanpathView:
 
     def test_animate_on_draws_the_static_figure_with_a_reason(self, raw_gaze, figures):
         at = self._open(raw_gaze, demo_first=False)
-        at.button(key="viz_view_animation").click().run()
+        at.toggle(key="single_animate").set_value(True).run()
         assert not at.exception, at.exception
         assert [trace.name for trace in figures[-1].data] == ["Raw gaze"]
         captions = " ".join(c.value for c in at.caption)

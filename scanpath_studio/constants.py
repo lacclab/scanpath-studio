@@ -1202,6 +1202,7 @@ ICONS: dict[str, str] = {
     "desktop": ":material/computer:",
     # Plot rail: design presets, layer sections and figure groups.
     "preset_scanpath": ":material/timeline:",
+    "gaze_over_time": ":material/show_chart:",
     "preset_custom": ":material/build:",
     "illustration": ":material/draw:",
     "fixations": ":material/blur_on:",

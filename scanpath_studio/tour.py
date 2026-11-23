@@ -306,7 +306,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Choose a static figure or a replay",
-                "Choose **Animation** to inspect fixation order and timing. "
+                "Turn on **Animation** to inspect fixation order and timing. "
                 "Multipart trials replay one screen at a time.",
                 ".st-key-tour_grp_views",
             ),
@@ -767,10 +767,10 @@ _SIMPLE_SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_views",
         "dock": "left",
         "title": f"{ICONS['plot_controls']} Choose a view",
-        "body": "**Animation** replays the reading, **Scanpath** shows a "
-        "static plot, **Heatmap** shades each word by fixation time, and "
-        "**Illustration** creates a schematic for slides and papers. **Palette** "
-        "changes the colors.",
+        "body": "Turn **Animation** off to see the selected figure. Choose "
+        "**Gaze over time** to follow horizontal fixation position as the reading "
+        "unfolds, or **Custom** to return to your last hand-edited figure. "
+        "**Palette** changes the colors.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",

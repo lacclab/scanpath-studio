@@ -78,8 +78,10 @@ whole figure. Hover over a grayed-out control to see why it is unavailable.
 
 Choose **Animation** to play the reading fixation by fixation. The play and pause
 buttons and time slider appear above the plot. Select **Animation** again to return
-to the previous static figure with its settings. During an animation, the **Fixations**, **Heatmap** and
-**Raw gaze** switches are grayed. For playback and frame stepping from the
+to the previous static figure with its settings. To replay just the saccades, open
+**Full**, leave **Saccades** on, and turn **Fixations** off. Each line appears
+when the reading reaches its next fixation. **Heatmap** and **Raw gaze** are
+available in static views. For playback and frame stepping from the
 keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Animation settings** in Full for these controls:
 
 | Control | What it does |
@@ -253,7 +255,7 @@ These controls change the fixation marks and saccades drawn in the figure. The t
 | --- | --- |
 | **Fixations** → **Index range** | Show only some fixations: a range of the reading order, such as fixations 10 to 40. |
 | **Fixations** → **All trials** | Keep that fixation range when you move to another trial. Off, it applies to this trial only, and the next trial shows all its fixations. |
-| **Short** / **Long** | Find fixations shorter or longer than a duration threshold (80 ms and 800 ms by default). Each row's **Mode** is **Off**, **Highlight** or **Hide**. **Highlight** marks the fixations. **Hide** hides their markers, but saccades and the heatmap still use them. |
+| **Short** / **Long** | Find fixations shorter or longer than a duration threshold (80 ms and 800 ms by default). Each row's **Mode** is **Off**, **Highlight** or **Hide**. **Highlight** marks the fixations. **Hide** hides their markers on static plots. During replay, saccades connect the remaining fixations. |
 | **Outside the text** | Highlight or hide fixations that land in no word box. |
 | **Near a blink** | Highlight or hide fixations at or next to a blink (needs a blink column). |
 | **Marker** and **Color** | Choose the marker shape and color of each highlighted fixation kind. |

@@ -2932,8 +2932,9 @@ def animate_scanpath(
 
     The replay takes a subset of [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s
     options (``figure_options("animation")``), and the ones they share default alike, so
-    the replay matches the static figure. The replay is made of fixations: it draws no
-    raw gaze, and nothing detects fixations from samples.
+    the replay matches the static figure. Set ``show_fixations=False`` to replay the
+    saccades alone. The replay uses fixation times and positions and has no raw-gaze
+    layer.
 
     **Two scanpaths.** ``trial_b`` co-animates a second trial, like the app's Animate +
     Compare. Both readings are drawn in A's coordinates, so a co-animation is an

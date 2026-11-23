@@ -24,7 +24,7 @@ lists the four render views. The reference and compact Share snippets use
 | --- | :---: | :---: | :---: | --- |
 | `show_words`, `show_labels`, `show_saccades`, `show_order`, `order_font_size`, `order_label_position` | ✅ | ✅ | ✅ | |
 | `word_box_*` (colour, line / fill opacity) | ✅ | ✅ | fill and both opacities | Compare outlines each reading's boxes in its own `cmp{idx}_box_color` (its scanpath colour by default); each style can also override the fill and opacities |
-| `show_fix` | ✅ | ❌ | ✅ | The replay *is* the fixation trail |
+| `show_fix` | ✅ | ✅ | ✅ | Hiding fixation markers also hides their indices and highlights. Saccades keep their recorded timing in the replay. |
 | `show_saccade_arrows`, `saccade_arrow_size`, `saccade_opacity` | ✅ | ✅ | ✅ | One figure-wide value in Compare. A fixation-index chart connects visible fixations with the uniform line colour, dash, width and opacity. Arrows and saccade classes apply to screen coordinates. |
 | `legend_layout` | ✅ | ✅ (not saccades) | ✅ (not saccades) | `plots.apply_legend_layout`; one `legend_<kind>=SPOT[,ARR][,SIZE]` link param per moved legend, `render --legend` |
 | Global fixation index color, marker color, opacity and hollow markers, saccade color / style / width | ✅ | ✅ (single only) | ❌ | Compare and the co-animation use the per-scanpath `cmp{idx}_*` styles; fixation indices use each scanpath's fixation color |

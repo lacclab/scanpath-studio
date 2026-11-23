@@ -450,9 +450,14 @@ def test_animation_keeps_the_underlying_static_layers():
     assert not at.exception
     assert at.session_state["single_animate"] is True
     assert at.session_state["global_show_heatmap"] is True
-    assert at.session_state["global_show_fix"] is False
+    assert at.toggle(key="global_show_fix").value is True
+    assert at.session_state["_quick_view_selection"] == "heatmap"
     assert _tile_type(at, "animation") == "primary"
     assert _tile_type(at, "scanpath") == "secondary"
+    at.button(key="viz_view_animation").click().run()
+    assert _tile_type(at, "heatmap") == "primary"
+    assert at.toggle(key="global_show_fix").value is False
+    assert at.toggle(key="global_show_saccades").value is False
 
 
 @pytest.mark.parametrize("name", ["heatmap", "illustration"])

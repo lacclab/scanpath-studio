@@ -6377,6 +6377,24 @@ _REPLAY_PLAYER_JS = """(function () {
       if (meta.scanpath_autoplay) { play(); }
     });
 
+    // The colour scheme of the page showing the replay. Inside the app the
+    // replay is a same-origin iframe, and Streamlit sets `color-scheme` on
+    // `.stApp` to the active theme; prefers-color-scheme would be the
+    // computer's setting instead, which can differ. A saved replay, or a page
+    // the frame can't read, is light, like the toolbar's buttons.
+    function pageScheme() {
+      try {
+        var host = window.parent;
+        if (!host || host === window) return 'light';
+        var app = host.document.querySelector('.stApp');
+        if (!app) return 'light';
+        var scheme = host.getComputedStyle(app).colorScheme || '';
+        return /\\bdark\\b/.test(scheme) && !/\\blight\\b/.test(scheme) ? 'dark' : 'light';
+      } catch (e) {
+        return 'light';
+      }
+    }
+
     // One row: ▶ Play, ⏸ Pause, ⟲ Restart, the time slider and its readout.
     // The labels, the readout's text and the font are the figure's own
     // controls', so the two never disagree.
@@ -6471,7 +6489,7 @@ _REPLAY_PLAYER_JS = """(function () {
       slot.appendChild(range);
       var readout = document.createElement('span');
       readout.setAttribute('aria-hidden', 'true');
-      readout.style.colorScheme = 'light dark';
+      readout.style.colorScheme = pageScheme();
       readout.style.color = 'CanvasText';
       readout.style.background = 'Canvas';
       readout.style.borderRadius = '4px';

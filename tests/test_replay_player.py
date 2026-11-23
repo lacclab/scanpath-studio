@@ -107,9 +107,10 @@ def _run(fig, steps, tmp_path) -> dict:
     return json.loads(done.stdout)
 
 
-def _run_page(fig, steps, tmp_path, *, slot: bool = False) -> dict:
+def _run_page(fig, steps, tmp_path, *, slot: bool = False, parent=None) -> dict:
     """`_run` on the layout `plots.replay_page` gives the page: the figure's
-    own controls hidden, and the player's toolbar in their place."""
+    own controls hidden, and the player's toolbar in their place. ``parent`` is
+    the page around the replay's frame (see the harness)."""
     page, _script = replay_page(fig)
     layout = page["layout"]
     config = {
@@ -120,6 +121,7 @@ def _run_page(fig, steps, tmp_path, *, slot: bool = False) -> dict:
         "frames": len(fig.frames),
         "steps": steps,
         "slot": slot,
+        "parent": parent,
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config), encoding="utf-8")
@@ -437,6 +439,28 @@ class TestToolbar:
         assert log["toolbar"]["readout"] == (
             slider.currentvalue.prefix + slider.steps[300].label
         )
+
+    @pytest.mark.parametrize(
+        ("parent", "scheme"),
+        [
+            (None, "light"),  # a saved replay, a page of its own
+            ({"scheme": "light"}, "light"),
+            ({"scheme": "dark"}, "dark"),
+            ({"scheme": "normal"}, "light"),
+            ("cross-origin", "light"),
+        ],
+    )
+    def test_the_readout_follows_the_theme_of_the_page_showing_it(
+        self, tmp_path, parent, scheme
+    ):
+        # System colours under `light dark` would follow the computer's setting,
+        # not the app's theme: one scheme, read from the app, decides the chip.
+        log = _run_page(
+            _replay(autoplay=False), [["run_until", 100]], tmp_path, parent=parent
+        )
+        style = log["toolbar"]["readout_style"]
+        assert style["colorScheme"] == scheme
+        assert (style["color"], style["background"]) == ("CanvasText", "Canvas")
 
     def test_a_figure_drawing_its_own_controls_gets_no_toolbar(self, tmp_path):
         log = _run(_replay(), [["run_until", 100]], tmp_path)

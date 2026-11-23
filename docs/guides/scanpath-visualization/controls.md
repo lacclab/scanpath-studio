@@ -63,8 +63,7 @@ pencil (:material/edit:), which are in Full.
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
 
 
-The four **View** tiles and **Palette** appear in both modes. Full adds comparison,
-animation settings, saved designs, and three editing tabs.
+The **View** and **Palette** tiles appear in both modes. In Full, **My views** sits below the view tiles. The switches below the palette open comparison and replay, and the arrow beside each switch opens its settings.
 
 - **Layers** lists what the plot can draw. Click a layer’s name to edit its settings. The switch on the right shows or hides it. **Filters & highlights** applies to the current reading.
 - **Axes** chooses the X and Y fields and configures the coordinate grid.
@@ -124,10 +123,10 @@ saved:
 | :material/timeline: **Scanpath** / :material/local_fire_department: **Heatmap** / :material/draw: **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic. |
 | :material/show_chart: **Gaze over time** | Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation. |
 | :material/build: **Custom** | Restore your last hand-edited figure, including its axes and palette. On first use, start with the figure on screen. |
-| :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
-| :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
-| :material/palette: **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
-| **Palette** | Choose **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
+| :material/palette: **My views** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
+| :material/palette: **My views** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
+| :material/palette: **My views** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
+| **Palette** | Choose **Default** (colorblind-safe), **Grayscale** for print, or **High contrast**. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
 
 ### :material/blur_on: Fixations
 

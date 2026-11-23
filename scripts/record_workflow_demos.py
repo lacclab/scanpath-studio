@@ -668,7 +668,10 @@ def plot_controls(d: Demo) -> None:
     d.click(page.locator(".st-key-global_show_order label"), "fixation order", hold=0.4)
     d.close_popover()
     d.pause(1.4)
-    d.choose("global_palette", "High contrast", "high-contrast palette")
+    d.click(
+        page.locator(".st-key-viz_palette_high_contrast button"),
+        "high-contrast palette",
+    )
     d.pause(1.6)
     d.finish("Regressions, word boxes and reading order")
 
@@ -681,7 +684,11 @@ def essentials(d: Demo) -> None:
     d.click(
         page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.4
     )
-    d.choose("global_palette", "High contrast", "palette", hold=1.2)
+    d.click(
+        page.locator(".st-key-viz_palette_high_contrast button"),
+        "palette",
+        hold=1.2,
+    )
     d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.4)
     d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.6)
     d.click(

@@ -37,12 +37,12 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Figure | Full → Figure | `global_legend_<kind>_*`, title and framing keys | Open each named menu. A title, framing change and legend position reach the plot. |
 | Sample charts | Full → Axes → Axis preset | `global_x_field`, `global_y_field`, `global_show_raw_gaze` | Pupil and position presets draw samples against the recorded clock or sample number. A screen covered only by samples is selectable and exportable. |
 | Saccades-only replay | Animation → Full → **Fixations** off, **Saccades** on | `global_show_fix`, `global_show_saccades` | Lines appear as the reading reaches each fixation. Direction arrows follow their lines. |
-| Animation | Switch at the top of Plot controls | `single_animate` | Switch from a custom figure to the replay and back in either mode. Its axes and layers come back. |
+| Animation | Animation tile or the switch beside Animation settings | `single_animate` | Switch from a custom figure to the replay and back in either mode. Its axes and layers come back. |
 | Gaze over time and Custom | Third row of Plot controls | `viz_view_gaze_over_time`, `viz_view_custom`, `global_x_field`, `global_y_field` | Plot elapsed seconds against horizontal position, visit another view, then restore the last manual design with Custom. |
-| Views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show view and palette tiles. Full has My views between them. The replay tile and Animation switch control the same replay. |
 | Find a setting | Full → Find a setting | `plot_setting_finder` | Search for a legend position, axis field or frame limit and reach its editable controls. The current figure and Undo history stay in place. |
 | Comparison charts and span borders | Full → Figure & canvas → Axis preset, Stimulus → Highlight words | `global_x_field`, `global_show_fix`, `single_fix_range`, `single_compare_stimulus` | Hiding markers keeps an index–position sequence visible within its window. Panels share their ranges. A co-replay with stimulus B outlines B’s selected words. |
-| Compare readings | Below Palette | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
+| Compare readings | Below the palette tiles | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
 | Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
 

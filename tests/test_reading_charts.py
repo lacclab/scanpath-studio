@@ -448,10 +448,10 @@ def test_time_view_replay_and_custom_restore():
     at.button(key="viz_view_custom").click().run()
     assert at.button(key="viz_view_custom").proto.type == "primary"
     at.checkbox(key="global_show_order").check().run()
-    initial_palette = at.selectbox(key="global_palette").value
+    initial_palette = at.session_state["global_palette"]
     at.button(key="viz_view_gaze_over_time").click().run()
     assert tuple(at.session_state["global_marker_size_range"]) == (4, 4)
-    at.selectbox(key="global_palette").set_value("High contrast").run()
+    at.button(key="viz_palette_high_contrast").click().run()
     for mode, animate in (("essentials", True), ("full", False)):
         at.segmented_control(key="ui_mode_switch").set_value(mode).run()
         at.toggle(key="single_animate").set_value(animate).run()
@@ -463,7 +463,7 @@ def test_time_view_replay_and_custom_restore():
         ) == chart_axes.GAZE_OVER_TIME
     at.button(key="viz_view_custom").click().run()
     assert at.checkbox(key="global_show_order").value
-    assert at.selectbox(key="global_palette").value == initial_palette
+    assert at.session_state["global_palette"] == initial_palette
     assert at.session_state["global_x_field"] == "x"
     assert at.session_state["global_y_field"] == "y"
 

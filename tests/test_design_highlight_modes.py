@@ -83,7 +83,7 @@ def test_time_chart_with_a_palette_reopens_from_share_link_and_file(monkeypatch)
 
     at = _app()
     at.button(key="viz_view_gaze_over_time").click().run()
-    at.selectbox(key="global_palette").set_value("High contrast").run()
+    at.button(key="viz_palette_high_contrast").click().run()
     assert _highlight(_app(_share_query(at))) == "gaze_over_time"
 
     exported = {}
@@ -105,7 +105,7 @@ def test_time_chart_with_a_palette_reopens_from_share_link_and_file(monkeypatch)
     ).run()
     assert not at.exception
     assert _highlight(at) == "gaze_over_time"
-    assert at.selectbox(key="global_palette").value == "High contrast"
+    assert at.session_state["global_palette"] == "High contrast"
 
     at.selectbox(key="global_color_by").set_value("duration_ms").run()
     received = _app(_share_query(at))

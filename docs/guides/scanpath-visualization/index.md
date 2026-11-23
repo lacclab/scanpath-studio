@@ -35,11 +35,11 @@ Essentials shows:
 
 - the dataset and trial pickers with **◀ ▶**;
 - the plot, which starts with a replay on a new visit;
-- the **Animation** switch, five static views and the **Palette**;
+- the **Animation** tile, five static views and the **Palette** tiles;
 - the **Export** tab, for the figure on screen, and **Share**.
 
 The :material/add: **More** buttons show which additional controls are available
-in Full and offer **Switch to Full**. The view controls and Palette stay in the same place when you switch modes.
+in Full and offer **Switch to Full**. Both modes keep the selected view and palette.
 An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial
 filters, remain active in Essentials; a short note tells you when they apply.
 Starting a tutorial from :material/help: **Help** switches to Full for the
@@ -96,10 +96,10 @@ back your last hand-edited figure.
 | Section | What it controls |
 | --- | --- |
 | **View** | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
-| **Palette** | choose **Default (colorblind-safe)**, **Print / grayscale**, or **High contrast** |
+| :material/palette: **My views** | save a named view, apply it to another reading, or share it |
+| **Palette** | choose **Default** (colorblind-safe), **Grayscale**, or **High contrast** |
 | :material/compare: **Compare readings** | add a second reading over this one, beside it, or below it |
 | :material/movie: **Animation settings** | set playback speed, autoplay, and frame quality |
-| :material/palette: **My designs** | save a named design, apply it to another reading, or share it |
 | :material/blur_on: **Fixations** | the fixation markers: color, shape and size, and the fixation index |
 | :material/arrow_outward: **Saccades** | the saccade lines and arrows, in one color, by direction or by saccade type |
 | :material/article: **Stimulus** | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |
@@ -183,7 +183,7 @@ You can save each of these to a file and load it again:
 | figure settings | :material/share: **Share** → **Settings file** |
 | favorites, tags and notes | :material/database: **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | :material/edit: **Edit dataset** → **Download setup file** |
-| saved figure designs | :material/palette: **My designs** → **Export** |
+| saved figure designs | :material/palette: **My views** → **Export** |
 
 Keep your source data alongside these files, and load the same dataset before
 restoring them. In the desktop app or a local install, the app also keeps your datasets,

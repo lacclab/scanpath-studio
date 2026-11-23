@@ -205,7 +205,6 @@ from scanpath_studio.controls import (
     _gated_help,
     _labeled,
     _numeric_slider,
-    _plot_menu,
     _popover_rows,
     _text_field_and_frame,
     active_filter_items,
@@ -220,6 +219,7 @@ from scanpath_studio.controls import (
     has_active_trial_filters,
     leave_animation,
     metadata_readings,
+    on_animation_change,
     pin_word_heatmap_range,
     plot_popover_on_change,
     read_trial_filters,
@@ -6795,11 +6795,27 @@ def render_single_trial_tab(
                 if animate_requested
                 else f"{ICONS['warning']} Turn on **Animation** to change playback."
             )
-            animation_settings = _plot_menu(
-                ui_mode.advanced_only(modes, "rail_animation"),
+            animation_row = ui_mode.advanced_only(modes, "rail_animation").container(
+                horizontal=True,
+                wrap=False,
+                vertical_alignment="center",
+                gap=None,
+                key="split_mode_animation",
+            )
+            animation_row.toggle(
+                f"{ICONS['animate']} Animation",
+                key=SINGLE_ANIMATE,
+                persist_state="session",
+                wrap=True,
+                on_change=on_animation_change,
+                help="Switch between the replay and the current static view.",
+            )
+            animation_settings = animation_row.popover(
                 "Animation settings",
-                icon=ICONS["animate"],
-                slug="animation",
+                width="content",
+                key="plot_menu_animation",
+                on_change=plot_popover_on_change(),
+                help="Animation settings. Adjust playback speed, autoplay and frame timing.",
             )
             with animation_settings, _popover_rows("animation"):
                 st.session_state.setdefault(

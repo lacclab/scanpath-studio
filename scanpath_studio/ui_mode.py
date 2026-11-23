@@ -93,7 +93,7 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
             "Plot screen position, fixation order, elapsed time or another field.",
         ),
         ("🖼 Figure", "Framing, titles, hover fields and legends."),
-        ("💾 Saved designs", "Keep your own figure designs and reuse them."),
+        ("💾 My views", "Keep your own figure designs and reuse them."),
     ),
     "subtabs": (
         (

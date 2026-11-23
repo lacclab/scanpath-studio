@@ -696,6 +696,10 @@ DEFAULT_PALETTE = "Default (colorblind-safe)"
 CUSTOM_PALETTE = "Custom"
 
 
+def palette_tile_key(name: str) -> str:
+    return "viz_palette_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 def palette_settings(name: str) -> dict:
     """Figure-kwarg colour settings for palette ``name`` (falls back to Default).
 

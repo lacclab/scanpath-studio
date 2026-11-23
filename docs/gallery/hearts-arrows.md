@@ -25,7 +25,7 @@ print(gallery_figure("hearts-arrows"))
     3. In :material/arrow_outward: **Saccades** → **Line and arrow appearance**, set **Shape** to **Arc**. In the main Saccades menu, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Line and arrow appearance** → **Arrow size** to **12**.
     4. In :material/aspect_ratio: **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave :material/article: **Stimulus** ▾ → **Highlight words** unticked.
 
-    Save the look under :material/palette: **My designs** to apply it to your own data.
+    Save the look under :material/palette: **My views** to apply it to your own data.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

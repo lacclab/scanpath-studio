@@ -4381,6 +4381,7 @@ def figure_code(
     title: str = "",
     caption: str = "",
     fix_index_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
     illustration_label: str = "auto",
     drift_correction: str | None = None,
     drift_connectors: bool = False,
@@ -4440,6 +4441,10 @@ def figure_code(
         title: As the builders take it.
         caption: As the builders take it.
         fix_index_range: As the builders take it.
+        fix_index_range_b: B's window, with ``compare``, as
+            [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] and
+            [`animate_scanpath`][scanpath_studio.api.animate_scanpath] take it
+            (``--compare-fix-index-range``).
         illustration_label: As the builders take it.
         drift_correction: Experimental, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
@@ -4509,6 +4514,7 @@ def figure_code(
         title=title,
         caption=caption,
         fix_index_range=fix_index_range,
+        fix_index_range_b=fix_index_range_b,
         illustration_label=illustration_label,
         drift_correction=drift_correction,
         drift_connectors=drift_connectors,

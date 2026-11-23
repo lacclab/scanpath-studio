@@ -2685,6 +2685,10 @@ def _print_reproduction_code(
         # pair above — so it has to be named here or the printed recipe would
         # silently widen the window back to the whole trial.
         fix_index_range=_parse_fix_index_range(args.fix_index_range),
+        # B's own window, which both builders that draw a B take.
+        fix_index_range_b=_parse_fix_index_range(args.compare_fix_index_range)
+        if compare is not None
+        else None,
         playback_speed=args.playback_speed,
         autoplay=args.autoplay,
         compare=compare,

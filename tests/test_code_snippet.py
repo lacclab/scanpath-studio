@@ -791,6 +791,23 @@ def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
     assert (tmp_path / "scanpath.html").is_file()
 
 
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_figure_code_keeps_b_fixation_window(kind):
+    both = api.figure_code(
+        kind=kind,
+        participant="p1",
+        trial="t1",
+        compare=("p2", "t2"),
+        fix_index_range_b=(5, 30),
+        flavor="both",
+    )
+    assert "fix_index_range_b=(5, 30)" in both
+    assert "--compare-fix-index-range 5:30" in both
+    # Without a B there is no window of B's to write.
+    alone = api.figure_code(kind=kind, fix_index_range_b=(5, 30), flavor="both")
+    assert "fix_index_range_b" not in alone and "compare-fix-index" not in alone
+
+
 def test_figure_code_flavours():
     both = api.figure_code(participant="p1", trial="t1", flavor="both")
     assert "sps.plot_scanpath(" in both

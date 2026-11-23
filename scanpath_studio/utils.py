@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import weakref
+from collections import deque
 from collections.abc import Callable, Iterable
 
 import numpy as np
@@ -280,6 +281,19 @@ def _build_combo_options_cached(
 
 _TRIAL_INDICES: dict = {}
 _TRIAL_INDEX_LOCK = threading.Lock()
+#: Entries whose source frame was collected, as ``(identity, ref)``. A weakref
+#: callback can run during garbage collection while this thread holds the
+#: lock, so it only queues here (``deque.append`` is atomic) and code holding
+#: the lock drops them.
+_RELEASED_INDICES: deque = deque()
+
+
+def _drop_released_indices() -> None:
+    """Remove collected frames' entries; call with `_TRIAL_INDEX_LOCK` held."""
+    while _RELEASED_INDICES:
+        identity, ref = _RELEASED_INDICES.popleft()
+        if _TRIAL_INDICES.get(identity, (None,))[0] is ref:
+            del _TRIAL_INDICES[identity]
 
 
 def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
@@ -293,6 +307,7 @@ def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
     fingerprint = frame_fingerprint(frame)
     positions = None
     with _TRIAL_INDEX_LOCK:
+        _drop_released_indices()
         cached = _TRIAL_INDICES.get(identity)
         if cached is not None and cached[0]() is frame and cached[1] == fingerprint:
             return cached[2]
@@ -300,21 +315,20 @@ def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
             positions = next(
                 (
                     entry[2]
-                    for entry in _TRIAL_INDICES.values()
+                    for entry in tuple(_TRIAL_INDICES.values())
                     if entry[1] == fingerprint and entry[0]() is not None
                 ),
                 None,
             )
 
     def release(ref):
-        with _TRIAL_INDEX_LOCK:
-            if _TRIAL_INDICES.get(identity, (None,))[0] is ref:
-                del _TRIAL_INDICES[identity]
+        _RELEASED_INDICES.append((identity, ref))
 
     if positions is None:
         grouped = frame.groupby(["participant_id", "trial_id"], sort=False).indices
         positions = {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
     with _TRIAL_INDEX_LOCK:
+        _drop_released_indices()
         _TRIAL_INDICES[identity] = weakref.ref(frame, release), fingerprint, positions
     return positions
 

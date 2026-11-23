@@ -304,6 +304,9 @@ def test_trial_index_is_reused_and_released_with_its_source():
     del frame
     gc.collect()
     assert ref() is None
+    # The collected frame's entry is dropped by the next index access, never
+    # from inside the garbage collector's callback.
+    utils._trial_positions(other)
     assert ident not in utils._TRIAL_INDICES
 
 

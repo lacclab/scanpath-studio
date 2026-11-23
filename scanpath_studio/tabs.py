@@ -14144,6 +14144,15 @@ def _render_data_provenance() -> None:
             )
 
 
+def _render_word_reading_measures(words: pd.DataFrame) -> None:
+    measures = brought_reading_measures(words)
+    if measures:
+        labels = {column: label for _, column, label, *_ in READING_MEASURE_FIELDS}
+        labels.update((m.column, m.label) for m in MEASURES.values())
+        with st.expander(f"Reading measures in the Words table ({len(measures)})"):
+            st.markdown("\n".join(f"- {labels[column]}" for column in measures))
+
+
 def render_data_tables(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -14170,6 +14179,8 @@ def render_data_tables(
         frame, whole = recordings[key]
         with st.container(key=f"data_table_{key}"):
             st.subheader(label, anchor=f"data-table-{key}")
+            if key == "words":
+                _render_word_reading_measures(frame)
             if frame.empty:
                 if whole.empty:
                     forget_frame_cache(f"data_table_display_{key}")
@@ -16802,12 +16813,6 @@ def render_dataset_summary(
         missing = stats["fixations_without_words"]
         if missing and stats["recordings"]["words"][1]:
             st.caption(f"{plural(missing, 'trial')} with fixations but no word rows.")
-        measures = brought_reading_measures(words)
-        if measures:
-            labels = {column: label for _, column, label, *_ in READING_MEASURE_FIELDS}
-            labels.update((m.column, m.label) for m in MEASURES.values())
-            with st.expander(f"Reading measures in the Words table ({len(measures)})"):
-                st.markdown("\n".join(f"- {labels[column]}" for column in measures))
     if stats["screen_error"]:
         st.warning(stats["screen_error"])
     elif not stats["parts"].empty:

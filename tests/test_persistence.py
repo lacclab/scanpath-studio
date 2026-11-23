@@ -666,6 +666,7 @@ def test_an_open_tab_cannot_recreate_work_cleared_from_another_session(tmp_path)
 
 
 def test_local_save_failure_does_not_escape_into_the_app(tmp_path, monkeypatch):
+    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
     invalid_root = tmp_path / "not-a-directory"
     invalid_root.write_text("occupied", encoding="utf-8")
     monkeypatch.setattr(persistence, "state_directory", lambda: invalid_root)

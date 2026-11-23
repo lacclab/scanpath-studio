@@ -27,6 +27,7 @@
 
 ### Changed
 
+- The documentation screenshots and walkthroughs now show Scanpath View, the updated plot controls and the current export steps.
 - Corpus Analysis shows the participant profiles immediately after the measure and aggregation pickers. The cohort overlay, normalization and measure definition sit below the chart.
 - Fixation markers and saccades accept opacity from 0 to 1 in the app, shared settings, CLI and Python API, including fully transparent marks.
 - Open the import wizard directly from the welcome tour, find upload buttons by table name, and use the guide with reduced motion.

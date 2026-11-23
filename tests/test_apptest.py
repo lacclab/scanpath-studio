@@ -1307,9 +1307,7 @@ class TestDatasetTable:
         )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
-        """No *About this dataset* popover — the description, the home
-        page on its line, and a note only where it changes how a figure is
-        read (PoTeC's positions are reconstructed)."""
+        """An unavailable PoTeC keeps its home page and identifies the demo recordings on display."""
         from scanpath_studio import datasets
 
         token = "PoTeC — Potsdam Textbook Corpus"
@@ -1324,7 +1322,10 @@ class TestDatasetTable:
         assert any(
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
-        assert any("raw-gaze samples are synthesized" in c for c in captions)
+        assert any(
+            "EyeLink recordings for all 24 paragraph readings" in c for c in captions
+        )
+        assert all("Fixation positions are reconstructed" not in c for c in captions)
         assert any("belong to the bundled demo" in msg.value for msg in at.info)
         # What an *About this dataset* popover would write (its own label is
         # not in the tree).

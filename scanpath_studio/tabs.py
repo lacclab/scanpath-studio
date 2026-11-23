@@ -8275,6 +8275,32 @@ def render_single_trial_tab(
 #: the wire, never in the recovery cache.
 _BULK_EXPORT_STOPPED = "_bulk_export_stopped"
 
+#: The session's replaced disk bundle, which `DiskBundle.retire` keeps on disk
+#: for a while so a download already under way can finish. One per session.
+#: Internal: never on the wire, never in the recovery cache.
+_BULK_EXPORT_RETIRED = "_bulk_export_retired"
+
+
+def _retire_bulk_bundle(bundle) -> None:
+    """Let go of a replaced bundle without cutting off its download.
+
+    A disk bundle is deleted after a grace period, or at once when the session
+    retires another. A bundle held in memory needs nothing."""
+    if not isinstance(bundle, DiskBundle):
+        return
+    earlier = st.session_state.get(_BULK_EXPORT_RETIRED)
+    if earlier is not None and earlier is not bundle:
+        earlier.close()
+    st.session_state[_BULK_EXPORT_RETIRED] = bundle
+    bundle.retire()
+
+
+def _drop_bulk_export_cache() -> None:
+    """Forget the session's bundle; its download keeps working for a while."""
+    cache = st.session_state.pop("_bulk_export_cache", None)
+    if cache:
+        _retire_bulk_bundle(cache["data"])
+
 
 def _bulk_export_task_key() -> tuple:
     """The bundle build's progress task — one per session."""
@@ -8286,7 +8312,7 @@ def _stop_bulk_export(task_key: tuple, retry: bool = False) -> None:
     progress.cancel(task_key)
     st.session_state[_BULK_EXPORT_STOPPED] = "retry" if retry else "build"
     if not retry:
-        st.session_state.pop("_bulk_export_cache", None)
+        _drop_bulk_export_cache()
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -8543,7 +8569,7 @@ def _render_bulk_export(
     )
     cache = st.session_state.get("_bulk_export_cache")
     if cache and cache.get("sig") != sig:
-        st.session_state.pop("_bulk_export_cache", None)
+        _drop_bulk_export_cache()
         cache = None
 
     retry = bool(
@@ -8620,14 +8646,18 @@ def _render_bulk_export(
             progress_slot.empty()
             status_box.update(label="Export failed", state="error")
             if not retry:
-                st.session_state.pop("_bulk_export_cache", None)
+                _drop_bulk_export_cache()
                 cache = None
             st.warning(f"Couldn't build the export bundle: {exc}")
         else:
             stop_slot.empty()
             progress_slot.empty()
+            replaced = cache["data"] if cache else None
             cache = {"sig": sig, "data": bundle, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
+            # A retry with nothing left to repair hands back the same bundle.
+            if replaced is not bundle:
+                _retire_bulk_bundle(replaced)
             # The status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
             built = summarize_export(built_progress, len(bundle))

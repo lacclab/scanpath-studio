@@ -11322,6 +11322,8 @@ def render_per_text_tab(
             st.warning(
                 "This text has different wording or word boxes across readings. Choose the version to include in the figure."
             )
+            # A version chosen for another text or screen names no option here.
+            _drop_stale("ptext_stimulus_revision", list(revisions))
             chosen = st.selectbox(
                 "Stimulus version, by representative reading",
                 list(revisions),
@@ -11330,6 +11332,7 @@ def render_per_text_tab(
                     f"{' / '.join(map(str, k))} · {len(revisions[k])} reading(s)"
                 ),
                 key="ptext_stimulus_revision",
+                persist_state="session",
             )
             if chosen is None:
                 return

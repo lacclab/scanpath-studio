@@ -239,6 +239,44 @@ def test_returning_from_another_view_keeps_the_corpus_route(elsewhere):
     assert at.segmented_control(key="corpus_destination").value == "Texts"
 
 
+def test_the_chosen_stimulus_version_survives_another_view(experimental_off):
+    words, fix = api.load_sample_data(names="canonical")
+    texts = ("2_1_1_Ele", "2_1_2_Ele")
+    for text in texts:
+        rows = words["unique_text_id"].eq(text)
+        second = rows & words["participant_id"].ne(
+            words.loc[rows, "participant_id"].iloc[0]
+        )
+        words.loc[second, "x"] += 50  # The second reader saw the words moved.
+    at = _bookmarked(corpus_subtab="Per text")
+    at.session_state["data_source_choice"] = "Two layouts"
+    at.session_state["_datasets"] = {
+        "Two layouts": {"words": words, "fixations": fix, "raw_gaze": pd.DataFrame()}
+    }
+    at.run()
+
+    def open_text(text):
+        picker = at.selectbox(key="ptext_text")
+        picker.select(next(o for o in picker.options if o.startswith(text))).run()
+        assert not at.exception
+        return at.selectbox(key="ptext_stimulus_revision")
+
+    at.selectbox(key="ptext_view").select("Measure on the stimulus").run()
+    version = open_text(texts[0])
+    assert version.value is None and len(version.options) == 2
+    version.select(version.options[1]).run()
+    chosen = at.selectbox(key="ptext_stimulus_revision").value
+
+    # Data Management, since a first visit to Scanpath moves the text to its trial.
+    _visit(at, "data")
+    _visit(at, "corpus-analysis")
+    assert not at.exception
+    assert at.selectbox(key="ptext_stimulus_revision").value == chosen
+
+    # Another text's versions do not include the one chosen for the first.
+    assert open_text(texts[1]).value is None
+
+
 def test_a_help_action_bounces_back_to_the_open_profile():
     at = _bookmarked().run()
     at.button(key="corpus_open_profile").click().run()

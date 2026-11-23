@@ -8,7 +8,13 @@ import pytest
 
 from scanpath_studio import persistence
 from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
-from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH, GUIDE_RETURN_KEY
+from scanpath_studio.constants import (
+    _VIEW_CORPUS,
+    _VIEW_SCANPATH,
+    DATASET_ALIASES_KEY,
+    DATASET_DESCRIPTIONS_KEY,
+    GUIDE_RETURN_KEY,
+)
 from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,
@@ -528,6 +534,72 @@ class TestAnnotationsPerDataset:
             save_state(second, tmp_path)
         assert second[ANNOTATIONS_STATE_KEY][key]["note"] == "Reviewer B"
         assert reopen()[ANNOTATIONS_STATE_KEY][key] == self.STAR
+
+    def test_two_reviewers_on_different_trials_both_keep_their_notes(
+        self, tmp_path, monkeypatch
+    ):
+        """Each tab's page, trial and plot settings are its own: the last save
+        wins them, and they never stop two tabs' notes from merging."""
+        import scanpath_studio.annotations as ann
+        from scanpath_studio.dataset_identity import dataset_share_id
+
+        monkeypatch.setenv(persistence.STATE_DIR_ENV_VAR, str(tmp_path))
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
+        url = "http://localhost"
+        base = {"_datasets": {"Pilot": _dataset()}, "data_source_choice": "Pilot"}
+        dataset_share_id(base, "Pilot")  # as the Add-dataset wizard does
+        ann.activate_dataset(base, "Pilot")
+        assert save_state(base, tmp_path)
+
+        def reopen():
+            state = {}
+            assert restore_state(state, tmp_path)
+            ann.activate_dataset(state, "Pilot")
+            return state
+
+        a, b = reopen(), reopen()
+        a.update(single_trial_id="01__b", main_nav="corpus", global_show_heatmap=True)
+        a[ANNOTATIONS_STATE_KEY][("01", "b")] = dict(self.STAR)
+        b.update(single_trial_id="01__c", global_show_heatmap=False)
+        b[ANNOTATIONS_STATE_KEY][("01", "c")] = dict(self.NOTE)
+        assert save_local_state(a, url)
+        assert save_local_state(b, url)
+        assert persistence.SAVE_CONFLICT_KEY not in b
+        fresh = reopen()
+        assert set(fresh[ANNOTATIONS_STATE_KEY]) == {("01", "b"), ("01", "c")}
+        assert fresh["single_trial_id"] == "01__c"
+        assert fresh["global_show_heatmap"] is False
+
+        # Both tabs go on saving, each edit merged into the other's.
+        b[ANNOTATIONS_STATE_KEY][("01", "d")] = dict(self.NOTE)
+        assert save_local_state(b, url)
+        a["single_trial_id"] = "01__e"
+        a[ANNOTATIONS_STATE_KEY][("01", "e")] = dict(self.STAR)
+        assert save_local_state(a, url)
+        assert persistence.SAVE_CONFLICT_KEY not in a
+        fresh = reopen()
+        assert {key[1] for key in fresh[ANNOTATIONS_STATE_KEY]} == {"b", "c", "d", "e"}
+        assert fresh["single_trial_id"] == "01__e"
+
+    @pytest.mark.parametrize(
+        "work",
+        [
+            {DATASET_DESCRIPTIONS_KEY: {"Pilot": "Reviewer A's words"}},
+            {DATASET_ALIASES_KEY: {"Pilot": "Renamed by A"}},
+            {DESIGN_PRESETS: {"A's design": {}}},
+        ],
+    )
+    def test_another_tabs_work_on_its_datasets_still_conflicts(self, tmp_path, work):
+        base = {"_datasets": {"Pilot": _dataset()}}
+        assert save_state(base, tmp_path)
+        a, b = {}, {}
+        for tab in (a, b):
+            assert restore_state(tab, tmp_path)
+        a.update(work)
+        assert save_state(a, tmp_path)
+        b["global_show_heatmap"] = True
+        with pytest.raises(persistence.RecoveryConflictError):
+            save_state(b, tmp_path)
 
     def test_two_datasets_with_colliding_ids_round_trip_apart(self, tmp_path):
         import scanpath_studio.annotations as annotations_mod

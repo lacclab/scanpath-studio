@@ -474,7 +474,7 @@ def test_finding_a_setting_opens_its_editor_and_keeps_the_chart(app_url, browser
         page.context.close()
 
 
-def test_phone_corpus_profile_shows_data_above_the_fold(app_url, browser):
+def test_phone_corpus_overview_and_profile_show_data_above_the_fold(app_url, browser):
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
         page.goto(f"{app_url}/corpus-analysis")
@@ -484,10 +484,14 @@ def test_phone_corpus_profile_shows_data_above_the_fold(app_url, browser):
         _settle(page)
         assert trace.bounding_box()["y"] < 844
         box = chart.bounding_box()
-        assert (
-            page.locator(".st-key-ptext1_overlay").bounding_box()["y"]
-            >= box["y"] + box["height"] - 1
-        )
+        lookup = page.get_by_role("combobox", name="Find a text")
+        assert lookup.bounding_box()["y"] >= box["y"] + box["height"] - 1
+
+        page.goto(f"{app_url}/corpus-analysis?corpus_subtab=Per+text")
+        page.get_by_role("button", name="Chart settings").wait_for()
+        trace.wait_for()
+        _settle(page)
+        assert trace.bounding_box()["y"] < 844
 
 
 def test_the_page_renders_without_an_exception(page):

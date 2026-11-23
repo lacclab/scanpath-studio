@@ -567,3 +567,22 @@ def test_publication_recipe_preserves_panel_order_and_wording(labels):
     restored = json.loads(publication.render(doc, "json"))
     publication.validate_project(restored)
     assert restored == doc
+
+
+@given(
+    st.lists(st.text(alphabet='ab,"\n', max_size=6), min_size=1, max_size=5),
+)
+def test_a_header_line_ends_where_the_csv_module_ends_its_record(cells):
+    """The header line is cut at its first newline outside quotes, as the
+    csv module writes and reads it, in one pass over the text."""
+    import csv
+    import io
+
+    from scanpath_studio.data import _unquoted_line_end
+
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerow(cells)
+    record = buf.getvalue()
+    text = record + "next\n"
+    assert _unquoted_line_end(text, '"', "\n") == len(record) - 1
+    assert _unquoted_line_end(text.encode(), b'"', b"\n") == len(record.encode()) - 1

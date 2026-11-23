@@ -2313,10 +2313,22 @@ def _first_line(head: bytes) -> bytes:
 def _unquoted_line_end(text, quote, newline) -> int:
     """Where the first record of ``text`` ends: its first newline outside a
     quoted field ("Notes\\n(free text)" is one header cell), or -1."""
-    at = text.find(newline)
-    while at >= 0 and text.count(quote, 0, at) % 2:
-        at = text.find(newline, at + 1)
-    return at
+    # One forward pass: every quote and newline is found once, so a header
+    # with an unclosed quote and many lines costs no more than reading it.
+    inside, pos, line_end = False, 0, -1
+    while True:
+        if line_end < pos:
+            line_end = text.find(newline, pos)
+            if line_end < 0:
+                return -1
+        quote_at = text.find(quote, pos, line_end)
+        if quote_at >= 0:
+            inside = not inside
+            pos = quote_at + 1
+        elif inside:
+            pos = line_end + 1
+        else:
+            return line_end
 
 
 def _sniff_delimiter(buf, name: str) -> str:

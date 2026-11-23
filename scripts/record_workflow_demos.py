@@ -565,6 +565,10 @@ def export_figure(d: Demo) -> None:
     d.pause(0.8)
     d.click(_tab(page, "Export"), "Export")
     d.scroll_to(page.locator(".st-key-tutorial_export"), top=150)
+    d.click(
+        page.locator("summary").filter(has_text="Print size and resolution"),
+        "Print size",
+    )
     d.type_into(
         page.locator(".st-key-export_figure_width input"), "180", "180 mm at 300 dpi"
     )
@@ -579,10 +583,9 @@ def export_bundle(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(_tab(page, "Export"), "Export")
-    d.scroll_to(
-        page.locator('h2:has-text("Export bundle"), h1:has-text("Export bundle")'),
-        top=90,
-    )
+    bundle = page.locator("summary").filter(has_text="Export bundle")
+    d.scroll_to(bundle, top=90)
+    d.click(bundle, "Export bundle")
     d.pause(0.6)
     d.click(
         page.locator(".st-key-bulk_export_figfmts button").filter(has_text="PNG"),
@@ -852,9 +855,7 @@ def replay(d: Demo) -> None:
 def replay_export(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(
-        page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.0
-    )
+    d.click(page.locator(".st-key-viz_view_animation button"), "Animation", hold=1.0)
     d.click(_tab(page, "Export"), "Export")
     d.scroll_to(page.locator(".st-key-tutorial_export"), top=150)
     d.click(page.locator("label").filter(has_text="GIF"), "GIF", hold=0.6)

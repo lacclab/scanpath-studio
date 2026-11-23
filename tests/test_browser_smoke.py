@@ -195,7 +195,7 @@ def test_help_menu_opens_four_destinations_over_the_current_view(app_url, browse
         expected = [
             "Task guides",
             "Troubleshooting & feedback",
-            "Documentation",
+            "Documentation ↗",
             "About & citation",
         ]
         sync_api.expect(items).to_have_count(len(expected))
@@ -203,6 +203,8 @@ def test_help_menu_opens_four_destinations_over_the_current_view(app_url, browse
             sync_api.expect(items.nth(index)).to_have_accessible_name(
                 re.compile("^" + re.escape(name) + r"( \(opens in new tab\))?$")
             )
+        docs = items.filter(has_text="Documentation ↗")
+        sync_api.expect(docs).to_have_attribute("target", "_blank")
         items.first.click()
         dialog = page.get_by_role("dialog", name="Task guides")
         sync_api.expect(dialog).to_be_visible()

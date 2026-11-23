@@ -196,7 +196,7 @@ def render_nav() -> str:
                 action_pages["help_tutorials"],
                 action_pages["help_faq"],
                 st.Page(
-                    build_info().docs_url, title="Documentation", icon=ICONS["docs"]
+                    build_info().docs_url, title="Documentation ↗", icon=ICONS["docs"]
                 ),
                 action_pages["help_about"],
                 action_pages["help_feedback"],

@@ -5,7 +5,7 @@ description: "Every control on Scanpath Studio's Scanpath view and what it does:
 
 # All controls
 
-Find every control in the :material/route: **Scanpath** view, in the order it
+Find every control in the :material/route: **Scanpath View**, in the order it
 appears on screen. Search this page (++ctrl+f++, or
 ++cmd+f++ on a Mac) for what you want to change, such as *colors*,
 *legends* or *axes*.

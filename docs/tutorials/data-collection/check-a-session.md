@@ -7,7 +7,7 @@ description: "Inspect an eye-tracking recording trial by trial — fixations aga
 Inspect a recording and save the trials that need attention.
 
 Before you start, switch to **Full** at the top of the :material/route:
-**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+**Scanpath View** ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 ## 1. Open the session { #1-load-the-session }
 
@@ -17,7 +17,7 @@ used in the experiment.
 
 ## 2. Inspect a trial
 
-In the :material/route: **Scanpath** view, pick a trial in **Select trial**.
+In the :material/route: **Scanpath View**, pick a trial in **Select trial**.
 Turn on :material/crop_square: **Word boxes** and check:
 
 - whether the boxes match the stimulus image, if you have one;

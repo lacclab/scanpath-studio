@@ -8,12 +8,12 @@ Save a scanpath, heatmap or comparison at the size you need.
 
 In either mode, use the view tiles to choose a figure. For **Compare readings**
 and **My views**, switch to **Full** at the top of the
-:material/route: **Scanpath** view
+:material/route: **Scanpath View**
 ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 ## 1. Choose the view { #1-choose-the-view }
 
-Pick a trial in the :material/route: **Scanpath** view. Choose a **View** tile, or set the layers in Full. Turn on
+Pick a trial in the :material/route: **Scanpath View**. Choose a **View** tile, or set the layers in Full. Turn on
 :material/compare: **Compare** if the figure needs two readings.
 Check that text and markers are readable and nothing is clipped.
 

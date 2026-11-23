@@ -19,7 +19,7 @@ print(gallery_figure("redacted-text"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. In :material/article: **Stimulus** ▾ → **Text**, tick **Redact**. The blocks take the text color.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)

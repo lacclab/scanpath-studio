@@ -18,7 +18,7 @@ print(gallery_figure("raw-gaze"))
 
 === "In the app"
 
-    1. Open the bundled demo in the :material/route: **Scanpath** view. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
+    1. Open the bundled demo in the :material/route: **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
     2. Turn on :material/grain: **Raw gaze** and turn off :material/arrow_outward: **Saccades**.
     3. In :material/blur_on: **Fixations** → **Opacity**, set 0.35 so the samples show through.
 

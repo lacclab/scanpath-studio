@@ -18,7 +18,7 @@ print(gallery_figure("word-boxes"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. Turn on :material/local_fire_department: **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Word boxes**. Keep **Color** → **By** at **Duration (ms)**.
     3. Turn off :material/blur_on: **Fixations** and :material/arrow_outward: **Saccades**, and keep :material/article: **Stimulus** on.
 

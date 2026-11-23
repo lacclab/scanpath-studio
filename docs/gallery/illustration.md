@@ -20,7 +20,7 @@ print(gallery_figure("illustration"))
 === "In the app"
 
     1. Load your Words and Fixations tables, or the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 340 px.
-    2. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. Open the dataset in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     3. In :material/blur_on: **Fixations** ▾, open **Position on the text** and tick **Snap to line** and **Fixation index** → **Show**. In :material/arrow_outward: **Saccades** → **Line and arrow appearance** → **Shape**, choose **Arc**.
     4. In :material/aspect_ratio: **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**.
 

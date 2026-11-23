@@ -16,7 +16,7 @@ description: "Visualize eye movements over the text: fixations, saccades, word b
 6. Plot controls.
 7. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
 
-The :material/route: **Scanpath** view draws one reading at a time, at the size of
+The :material/route: **Scanpath View** draws one reading at a time, at the size of
 the screen it was recorded on.
 
 !!! tip "Looking for a specific button?"

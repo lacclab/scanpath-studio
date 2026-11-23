@@ -4,7 +4,7 @@ Nothing in the app writes to ``st.sidebar``, so Streamlit draws no sidebar
 chrome and the main content gets the full page width.
 
 **The nav** (:func:`render_nav`) is Streamlit's own
-``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
+``st.navigation(position="top")``: three **views** — 🗺️ Scanpath View · 📊 Corpus
 Analysis · 🗂️ Data — and a ❓ Help section for task guides, troubleshooting
 and feedback, the current edition's documentation, and About & citation.
 Selecting a dialog action arms it and bounces the router
@@ -42,15 +42,12 @@ from scanpath_studio.constants import (
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
 
-#: Nav entries: view constant → (label, icon, url path). The labels are short —
-#: "Scanpath", not "Scanpath Visualization" — because the nav sits in Streamlit's
-#: header strip beside the toolbar, where a long label crowds it. The exception
-#: is *Data Management*, which matches the page's own header.
+#: Nav entries: view constant → (label, icon, URL path).
 #: **Data comes last** even though setting a dataset up comes first in time: it
 #: is visited occasionally, while the two analysis views are where the work
 #: happens.
 _NAV_PAGES = {
-    _VIEW_SCANPATH: ("Scanpath", ICONS["view_scanpath"], "scanpath"),
+    _VIEW_SCANPATH: ("Scanpath View", ICONS["view_scanpath"], "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", ICONS["view_corpus"], "corpus-analysis"),
     _VIEW_DATA: ("Data Management", ICONS["view_data"], "data"),
 }
@@ -82,7 +79,7 @@ NOTICES_KEY = "top_menu_notices"
 
 
 def view_label(view: str) -> str:
-    """The nav's short label for ``view`` (e.g. "Scanpath"), for use in prose.
+    """The nav's short label for ``view`` (e.g. "Scanpath View"), for use in prose.
 
     The ``_VIEW_*`` constants are the wire values ("Scanpath Visualization");
     quoting those at the user would name something the nav doesn't say.

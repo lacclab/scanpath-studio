@@ -119,6 +119,7 @@ from .constants import (
 )
 from .controls import (
     _ALIGN_OPTIONS,
+    _AUTO_REPLAY_FIXATIONS,
     claim_mapping,
     clear_replay_layer_restore,
     color_field_options,
@@ -151,6 +152,7 @@ from .session_keys import (
     COMPARE_STYLE_PARAMS,
     EXPORT_PARAMS,
     FIX_RANGE_PARAM,
+    GLOBAL_SHOW_FIX,
     LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
@@ -162,6 +164,7 @@ from .session_keys import (
     PENDING_COMPARE_STATE_KEY,
     PLOT_CONFIG_SCHEMA_VERSION,
     PUBLIC_DATASET_CHOICE,
+    REPLAY_FIXATIONS_PARAM,
     SAME_DATASET,
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
@@ -1062,6 +1065,21 @@ def _warn_invalid_link_param(param: str, raw) -> None:
     st.warning(f"Ignored the link's invalid {param}={_shown_link_value(raw)}.")
 
 
+def _link_replay_draws_fixations(qp) -> bool:
+    """Whether a link that opens a replay with ``show_fixations=0`` draws them.
+
+    Only a ``replay_fixations`` the link carries hides them: one shared while a
+    replay always drew fixations has none, and opens as it was drawn."""
+    raw = qp.get(REPLAY_FIXATIONS_PARAM)
+    if raw is None:
+        return True
+    try:
+        return _coerce_bool(raw)
+    except (ValueError, TypeError):
+        _warn_invalid_link_param(REPLAY_FIXATIONS_PARAM, raw)
+        return True
+
+
 def _clamp_url_value(state_key: str, value):
     """Clamp a deep-linked value to its widget bounds (scalars and 2-tuples)."""
     bounds = _URL_BOUNDED.get(state_key)
@@ -1343,6 +1361,9 @@ def _apply_url_preset() -> str | None:
     _apply_url_legends(qp)
 
     snapped_from_link: set[str] = set()
+    # Whether this run seeds the fixation layer from the link (it re-applies
+    # on every rerun, as `setdefault`), for the replay check below.
+    fixations_unseeded = GLOBAL_SHOW_FIX not in st.session_state
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
             continue
@@ -1455,6 +1476,16 @@ def _apply_url_preset() -> str | None:
     # Older links use the tab name to select Animation.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
+        if (
+            fixations_unseeded
+            and st.session_state.get(SINGLE_ANIMATE)
+            and st.session_state.get(GLOBAL_SHOW_FIX) is False
+            and _link_replay_draws_fixations(qp)
+        ):
+            # The replay draws the fixations, and leaving it returns to the
+            # static figure without them, as the switch's own replay does.
+            st.session_state[GLOBAL_SHOW_FIX] = True
+            st.session_state[_AUTO_REPLAY_FIXATIONS] = True
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
 
@@ -2290,6 +2321,24 @@ def _migrate_config_7_to_8(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_9_to_10(config: dict) -> dict:
+    """Draw a saved replay's fixations. A replay drew them whatever the
+    Fixation switch said, so a file that saved a replay with the switch off
+    showed them; read as saved, it would open an empty replay, or saccades
+    alone. Fixation windows and their scope are left alone."""
+    migrated = dict(config)
+    mode, layers = migrated.get("mode"), migrated.get("layers")
+    if (
+        isinstance(mode, dict)
+        and mode.get("animate") is True
+        and isinstance(layers, dict)
+        and "fixations" in layers
+        and not layers["fixations"]
+    ):
+        migrated["layers"] = {**layers, "fixations": True}
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -2302,8 +2351,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     7: _migrate_config_7_to_8,
     # Without an upload ID, a saved name still resolves by its original store key.
     8: dict,
-    # Earlier files leave existing fixation windows and their scope alone.
-    9: dict,
+    9: _migrate_config_9_to_10,
 }
 
 
@@ -4079,6 +4127,14 @@ def _build_share_query(
             params.pop(url_key, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
+        # A linked replay draws fixations unless `replay_fixations` hides
+        # them (see `REPLAY_FIXATIONS_PARAM`). Fixations the replay turned on
+        # for itself travel as the static figure's off, which the reader
+        # turns on for the replay alone, as here.
+        if st.session_state.get(_AUTO_REPLAY_FIXATIONS):
+            params["show_fixations"] = "0"
+        elif params.get("show_fixations") == "0":
+            params[REPLAY_FIXATIONS_PARAM] = "0"
 
     # A compact provenance badge for the recording setup. The link carries
     # the setup's *values* wherever they differ from the corpus' own — but it

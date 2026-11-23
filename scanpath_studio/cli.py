@@ -3026,6 +3026,13 @@ def render(argv: list[str]) -> None:
             "MP4, use the app's Export, or "
             "scanpath_studio.animation_export.export_animation in Python."
         )
+    if args.animate and args.show_fixations is False and args.show_saccades is False:
+        raise SystemExit(
+            "--animate with --no-fixations and --no-saccades leaves nothing to "
+            "replay: the replay draws the fixations and the saccades between "
+            "them, and no heatmap or raw gaze. Drop one of the two, or drop "
+            "--animate for a static figure."
+        )
     # The connectors draw *between* the original and corrected y, so on
     # their own there is nothing to connect. Warn rather than fail — the render
     # is still valid, just uncorrected.

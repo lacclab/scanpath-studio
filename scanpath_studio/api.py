@@ -3052,6 +3052,8 @@ def animate_scanpath(
         ValueError: An option the replay does not take (the message names the valid
             ones), a style naming ``saccade_classes`` (the replay has no saccade-class
             filter), or B frames holding several trials without ``trial_b``.
+        ValueError: ``show_fixations=False`` with ``show_saccades=False``, which
+            leaves the replay nothing to draw.
         IncomparableScreensError: B's dataset has a different canvas from A's. A
             ``ValueError``.
     """
@@ -3094,6 +3096,16 @@ def animate_scanpath(
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
     animation_overrides = {**_animation_defaults(), **animation_overrides}
+    if not (
+        animation_overrides.get("show_fixations", True)
+        or animation_overrides.get("show_saccades", True)
+    ):
+        raise ValueError(
+            "show_fixations=False and show_saccades=False leave nothing to replay: "
+            "the replay draws the fixations and the saccades between them, and no "
+            "heatmap or raw gaze. Keep one of them on, or draw a static figure "
+            "with plot_scanpath(...)."
+        )
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     names = _call_names(column_names, fixations=fix_names, words=word_names)

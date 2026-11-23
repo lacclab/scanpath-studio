@@ -529,6 +529,12 @@ COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
 #: a link may legitimately not carry it.
 FIX_RANGE_PARAM = "fix_range"
+#: Whether a linked replay draws fixations. Share writes ``replay_fixations=0``
+#: beside ``show_fixations=0`` when the link opens a replay with the fixations
+#: hidden. A link that opens a replay with ``show_fixations=0`` and no
+#: ``replay_fixations`` was shared while a replay always drew fixations, so it
+#: opens with them shown; ``show_fixations`` then sets the static figure's.
+REPLAY_FIXATIONS_PARAM = "replay_fixations"
 #: Where an arriving `compare=` selection waits until the candidate list exists.
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
@@ -927,6 +933,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
+        REPLAY_FIXATIONS_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
         *EXPORT_PARAMS,

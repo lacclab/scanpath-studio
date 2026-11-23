@@ -260,6 +260,34 @@ def test_shared_public_b_survives_a_catalogue_label_change(short):
     assert state["cmp_dataset"] == "New label"
 
 
+@given(st.booleans(), st.booleans(), st.booleans(), st.booleans())
+def test_a_shared_replay_reopens_with_its_layers(animate, fixations, saccades, auto):
+    """A link reopens the mode and gaze layers it was shared with, and a
+    replay that showed fixations for itself still returns to a static figure
+    without them."""
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    # Only a replay turns its fixations on for itself, and it shows them.
+    auto = auto and animate and fixations
+    keys = ("single_animate", "global_show_fix", "global_show_saccades")
+    sender = {
+        "_share_selection": {"participant_id": "p", "trial_id": "t"},
+        **dict(zip(keys, (animate, fixations, saccades), strict=True)),
+        **({"_auto_replay_fixations": True} if auto else {}),
+    }
+    recipient: dict = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", sender)
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        url_state._apply_url_preset()
+    assert {k: bool(recipient.get(k)) for k in keys} == {
+        k: bool(sender[k]) for k in keys
+    }
+    assert bool(recipient.get("_auto_replay_fixations")) == auto
+
+
 @given(
     st.sampled_from([p for p in LEGEND_POSITIONS if p != "auto"]),
     st.sampled_from(LEGEND_ARRANGEMENTS),
@@ -316,6 +344,8 @@ _CONFIG_KEYS = st.sampled_from(
         "marker_size_scale",
         "coordinate_grid",
         "compare",
+        "animate",
+        "fixations",
         "x",
     ]
 )
@@ -355,6 +385,27 @@ def test_settings_migration_is_pure_and_idempotent(config):
         assert again == migrated
     # Whatever came in as JSON goes back out as JSON.
     json.dumps(migrated)
+
+
+@given(_CONFIG)
+def test_a_replay_saved_while_it_always_drew_fixations_draws_them(config):
+    """A schema-9 file that saved a replay opens it with fixations, as that
+    version drew it, and nothing else in the file changes."""
+    config = {**config, "schema": 9}
+    migrated, note = url_state._migrate_plot_config(config)
+    assert note is None
+    mode, layers = config.get("mode"), config.get("layers")
+    replay = isinstance(mode, dict) and mode.get("animate") is True
+    if replay and isinstance(layers, dict) and "fixations" in layers:
+        assert migrated["layers"]["fixations"]
+    if isinstance(layers, dict):
+        if not replay or "fixations" not in layers or layers["fixations"]:
+            assert migrated["layers"] == layers
+        else:
+            assert migrated["layers"] == {**layers, "fixations": True}
+    assert {k: v for k, v in migrated.items() if k not in ("layers", "schema")} == {
+        k: v for k, v in config.items() if k not in ("layers", "schema")
+    }
 
 
 @given(_CONFIG)

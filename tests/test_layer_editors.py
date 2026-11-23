@@ -116,7 +116,7 @@ def test_only_active_color_scales_show_their_plotly_stops():
     assert "Viridis color scale, low to high" in fixation_scale
     for position, color in get_colorscale("Viridis"):
         assert f"{color} {position * 100:g}%" in fixation_scale
-    assert app.selectbox(key="global_palette").value == CUSTOM_PALETTE
+    assert app.session_state["global_palette"] == CUSTOM_PALETTE
     assert (
         app.session_state[SNIPPET_STATE_KEY].settings["fixation_colorscale"]
         == "Viridis"
@@ -146,7 +146,7 @@ def test_compare_heatmap_scales_inherit_the_palette_until_a_reading_gets_its_own
     assert "Blues color scale" in both_scales[0]
     assert "Plasma color scale" in both_scales[1]
     assert app.button(key="viz_view_custom").proto.type == "primary"
-    assert app.selectbox(key="global_palette").value == DEFAULT_PALETTE
+    assert app.session_state["global_palette"] == DEFAULT_PALETTE
     assert "cmp0_heatmap_colorscale" not in app.session_state
     assert (
         app.session_state[SNIPPET_STATE_KEY].settings["style_b"]["heatmap_colorscale"]
@@ -159,7 +159,7 @@ def test_compare_heatmap_scales_inherit_the_palette_until_a_reading_gets_its_own
         .settings["style_b"]
         .get("heatmap_colorscale")
     )
-    app.selectbox(key="global_palette").set_value("High contrast").run()
+    app.button(key="viz_palette_high_contrast").click().run()
     inherited = palette_settings("High contrast")["heatmap_colorscale"]
     assert all(
         f"{inherited} color scale" in scale for scale in _previews(app, "heatmap")
@@ -188,7 +188,7 @@ def test_heatmap_scale_updates_the_palette_view_and_figure_in_one_rerun(monkeypa
 
     def check(scale, palette, view):
         assert picker().value == scale
-        assert app.selectbox(key="global_palette").value == palette
+        assert app.session_state["global_palette"] == palette
         assert app.button(key=f"viz_view_{view}").proto.type == "primary"
         assert (
             app.session_state[SNIPPET_STATE_KEY].settings["heatmap_colorscale"] == scale
@@ -205,7 +205,7 @@ def test_heatmap_scale_updates_the_palette_view_and_figure_in_one_rerun(monkeypa
     check("Blues", DEFAULT_PALETTE, "heatmap")
     app.button(key="viz_redo").click().run()
     check("Hot", CUSTOM_PALETTE, "custom")
-    app.selectbox(key="global_palette").set_value("High contrast").run()
+    app.button(key="viz_palette_high_contrast").click().run()
     check(
         palette_settings("High contrast")["heatmap_colorscale"],
         "High contrast",

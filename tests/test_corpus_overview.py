@@ -62,6 +62,8 @@ def _overview_app():
     render_corpus_overview(
         st.session_state["words"],
         group_by="participant",
+        profile_host=st.container(),
+        measure_host=st.container(),
         download=lambda *args, **kwargs: None,
         canvas_width=700,
         base_font_size=14,
@@ -88,7 +90,7 @@ def test_unmapped_trial_numbers_and_nullable_empty_readings():
     at.run()
     assert not at.exception
     assert at.selectbox(key="corpus_inspect_participant").value is None
-    assert not at.button
+    assert at.button(key="corpus_open_profile").label == "Open participant profile"
     at.selectbox(key="corpus_inspect_participant").select("b").run()
     assert not at.exception
     assert any("no recorded values for this measure" in c.value for c in at.caption)

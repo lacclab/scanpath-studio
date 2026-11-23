@@ -147,8 +147,9 @@ def test_stimulus_master_switch_suppresses_and_restores_the_border():
     assert len(_span_outlines(_static(at))) == 1
 
 
-def test_mark_text_stays_inactive_while_text_is_hidden():
-    at = _rail(**{**BORDER, "global_critical_span_style": "Mark text"})
+@pytest.mark.parametrize("style", ["Mark text", "Underline"])
+def test_label_highlight_stays_inactive_while_text_is_hidden(style):
+    at = _rail(**{**BORDER, "global_critical_span_style": style})
     assert at.session_state["_viz"]["highlight_column"] is None
     at.session_state["global_show_labels"] = True
     _rerun(at)

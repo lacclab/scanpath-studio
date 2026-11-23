@@ -248,6 +248,7 @@ class TestEveryPlotControlIsAccountedFor:
             and not key.startswith(
                 (
                     "viz_view_",
+                    "viz_palette_",
                     "more_to_advanced_",
                     "design_",
                     "quick_view",

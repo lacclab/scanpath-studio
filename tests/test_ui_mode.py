@@ -313,7 +313,7 @@ def test_more_lists_cover_the_spec():
         "filters & highlights",
         "axes",
         "figure",
-        "saved designs",
+        "my views",
     ):
         assert word in titles("rail")
     assert [t.split(" ", 1)[1] for t, _ in more["subtabs"]] == [
@@ -446,7 +446,7 @@ def test_animation_keeps_the_underlying_static_layers():
     at = _boot()
     at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_show_heatmap"] is True
-    at.toggle(key="single_animate").set_value(True).run()
+    at.button(key="viz_view_animation").click().run()
     assert not at.exception
     assert at.session_state["single_animate"] is True
     assert at.session_state["global_show_heatmap"] is True
@@ -510,8 +510,10 @@ def test_both_modes_draw_one_grid_and_palette(mode):
         }
     ]
     assert names == ["Scanpath", "Heatmap", "Illustration", "Gaze over time", "Custom"]
-    assert at.toggle(key="single_animate").label == "Animation"
-    assert sum(widget.key == "global_palette" for widget in at.selectbox) == 1
+    replay_state = "on" if at.toggle(key="single_animate").value else "off"
+    assert at.button(key="viz_view_animation").label == f"Animation *{replay_state}*"
+    assert at.button(key="viz_palette_default_colorblind_safe").proto.type == "primary"
+    assert at.button(key="viz_palette_print_grayscale").label == "Grayscale"
     assert at.toggle(key="single_compare_toggle") is not None
     assert at.toggle(key="global_show_fix") is not None
     assert "iconpop_more_rail" in {p.key for p in at.get("popover")}
@@ -572,7 +574,9 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
     rail = inspect.getsource(tabs.render_single_trial_tab)
     for name in ("rail_animation", "rail_reset"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
-    source = inspect.getsource(controls.render_plot_controls)
+    source = inspect.getsource(controls.render_plot_controls) + inspect.getsource(
+        controls._render_view_controls
+    )
     for name in ("rail_designs", "plot_editor"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', source), name
     assert 'simple_only(viz, "rail_more")' in source
@@ -631,6 +635,7 @@ def _assert_animation_keeps_the_static_tile(at: AppTest) -> None:
         assert at.session_state["single_animate"] == expected
         assert _tile_type(at, "scanpath") == "primary"
         assert at.toggle(key="single_animate").value == expected
+        assert (_tile_type(at, "animation") == "primary") == expected
 
 
 def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
@@ -729,7 +734,7 @@ def _palette_colors(at: AppTest, name: str) -> dict:
 def test_simple_palette_pick_keeps_the_tile_lit():
     at = _boot()
     at.button(key="viz_view_scanpath").click().run()
-    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    at.button(key="viz_palette_high_contrast").click().run()
     assert not at.exception
     assert at.session_state["global_palette"] == HIGH_CONTRAST
     assert _lit_tiles(at) == ["scanpath"]
@@ -743,7 +748,7 @@ def test_simple_tile_keeps_the_palette():
 
     at = _boot()
     at.button(key="viz_view_scanpath").click().run()
-    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    at.button(key="viz_palette_high_contrast").click().run()
     at.button(key="viz_view_heatmap").click().run()
     assert not at.exception
     assert at.session_state["global_show_heatmap"] is True
@@ -777,7 +782,7 @@ def test_custom_marker_color_selects_custom():
 
 def test_full_view_tiles_keep_the_selected_palette():
     at = _boot(mode="full")
-    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    at.button(key="viz_palette_high_contrast").click().run()
     assert _lit_tiles(at) == ["scanpath"]
     at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_palette"] == HIGH_CONTRAST

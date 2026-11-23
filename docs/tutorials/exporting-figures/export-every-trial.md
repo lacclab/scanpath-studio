@@ -7,7 +7,7 @@ description: "Batch-export scanpath figures and data tables for every selected e
 Build a ZIP of static figures and data tables for a set of trials.
 
 Before you start, switch to **Full** at the top of the :material/route:
-**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+**Scanpath View** ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. [Set the figure's design](export-one-figure.md#1-choose-the-view) once.
    Each exported trial uses that design, without animation or a comparison partner.

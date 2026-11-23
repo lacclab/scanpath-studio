@@ -89,7 +89,7 @@ Choose a reading in the demo to explore and save as an interactive figure.
 
 - **1 · Open a reading**
 
-    In the :material/route: **Scanpath** view, choose **Bundled demo** in **Select dataset**.
+    In the :material/route: **Scanpath View**, choose **Bundled demo** in **Select dataset**.
     Then choose a reading in **Select trial**.
 
 - **2 · Choose a view**

@@ -696,6 +696,10 @@ DEFAULT_PALETTE = "Default (colorblind-safe)"
 CUSTOM_PALETTE = "Custom"
 
 
+def palette_tile_key(name: str) -> str:
+    return "viz_palette_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 def palette_settings(name: str) -> dict:
     """Figure-kwarg colour settings for palette ``name`` (falls back to Default).
 
@@ -833,10 +837,11 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
 #: ``authors``.
 CITATION_AUTHORS = (
     ("Omer", "Shubi"),
-    ("Keren", "Gruteke Klein"),
     ("Maya", "Grossman"),
-    ("Ella", "Lion"),
+    ("Keren", "Gruteke Klein"),
     ("Deborah N.", "Jakobi"),
+    ("Ella", "Lion"),
+    ("Carlson", "Büth"),
     ("David R.", "Reich"),
     ("Lena", "Jäger"),
     ("Yevgeni", "Berzak"),

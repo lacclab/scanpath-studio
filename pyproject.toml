@@ -10,10 +10,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [
     { name = "Omer Shubi", email = "lacclab.technion@gmail.com" },
-    { name = "Keren Gruteke Klein" },
     { name = "Maya Grossman" },
-    { name = "Ella Lion" },
+    { name = "Keren Gruteke Klein" },
     { name = "Deborah N. Jakobi" },
+    { name = "Ella Lion" },
+    { name = "Carlson Büth" },
     { name = "David R. Reich" },
     { name = "Lena Jäger" },
     { name = "Yevgeni Berzak" },

@@ -1752,10 +1752,11 @@ def _about_dialog() -> None:
         with st.expander("Project team"):
             st.markdown(f"""
 [Omer Shubi](https://omershubi.github.io/),
-[Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/),
-[Ella Lion](https://ella-lion.github.io/),
+[Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html),
+[Ella Lion](https://ella-lion.github.io/),
+[Carlson Büth]({_DILI}/lab-members/bueth.html),
 [David R. Reich]({_DILI}/lab-members/reich.html),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
@@ -10969,12 +10970,14 @@ def _run_app() -> None:
             # Corpus Analysis has no trial-picker row, so the dataset picker
             # gets its own compact row at the top of the page — it stays
             # reachable on every analysis view.
-            _ds_col, pool_col = st.columns([2, 5], vertical_alignment="bottom")
-            render_data_source_picker(host=_ds_col)
+            dataset_row = st.container(
+                horizontal=True, vertical_alignment="bottom", gap="small"
+            )
+            render_data_source_picker(host=dataset_row.container(width=400))
             # The pool the analysis reads — and the filters behind it —
             # beside the dataset, where Scanpath keeps its own filter funnel.
             pool = render_analysis_pool_bar(
-                pool_col,
+                dataset_row,
                 words_all=words_all,
                 fixations_all=fixations_all,
                 raw_gaze_all=raw_gaze_all,

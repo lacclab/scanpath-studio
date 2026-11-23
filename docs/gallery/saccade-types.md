@@ -18,7 +18,7 @@ print(gallery_figure("saccade-types"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. In :material/arrow_outward: **Saccades** → **Color**, choose **By type**.
     3. To match this example, open :material/aspect_ratio: **Figure** → **Legends** and untick **Show** for **Saccade types**. This page shows the color key below the figure.
 

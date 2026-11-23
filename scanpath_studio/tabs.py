@@ -205,7 +205,6 @@ from scanpath_studio.controls import (
     _gated_help,
     _labeled,
     _numeric_slider,
-    _plot_menu,
     _popover_rows,
     _text_field_and_frame,
     active_filter_items,
@@ -220,6 +219,7 @@ from scanpath_studio.controls import (
     has_active_trial_filters,
     leave_animation,
     metadata_readings,
+    on_animation_change,
     pin_word_heatmap_range,
     plot_popover_on_change,
     read_trial_filters,
@@ -6795,11 +6795,27 @@ def render_single_trial_tab(
                 if animate_requested
                 else f"{ICONS['warning']} Turn on **Animation** to change playback."
             )
-            animation_settings = _plot_menu(
-                ui_mode.advanced_only(modes, "rail_animation"),
+            animation_row = ui_mode.advanced_only(modes, "rail_animation").container(
+                horizontal=True,
+                wrap=False,
+                vertical_alignment="center",
+                gap=None,
+                key="split_mode_animation",
+            )
+            animation_row.toggle(
+                f"{ICONS['animate']} Animation",
+                key=SINGLE_ANIMATE,
+                persist_state="session",
+                wrap=True,
+                on_change=on_animation_change,
+                help="Switch between the replay and the current static view.",
+            )
+            animation_settings = animation_row.popover(
                 "Animation settings",
-                icon=ICONS["animate"],
-                slug="animation",
+                width="content",
+                key="plot_menu_animation",
+                on_change=plot_popover_on_change(),
+                help="Animation settings. Adjust playback speed, autoplay and frame timing.",
             )
             with animation_settings, _popover_rows("animation"):
                 st.session_state.setdefault(
@@ -10296,10 +10312,11 @@ def render_analysis_pool_bar(
     bar = host.container(
         key="corpus_pool_bar",
         horizontal=True,
+        width="content",
         vertical_alignment="center",
         gap="small",
     )
-    bar.markdown(text, width="stretch")
+    bar.markdown(text, width="content")
     pop = bar.popover(
         "Edit filters",
         icon=ICONS["trial_filter"],
@@ -10459,23 +10476,32 @@ def _render_corpus_analysis_body(
         key="tutorial_corpus_subtabs",
         horizontal=True,
         horizontal_alignment="distribute",
-        vertical_alignment="center",
+        vertical_alignment="bottom",
+        gap="small",
+    )
+    destinations = navigation.container(
+        horizontal=True, vertical_alignment="center", width="content", gap="xsmall"
     )
     section, group_by = corpus_navigation.render_chooser(
-        navigation, has_text=has_text, measures=measures
+        destinations, has_text=has_text, measures=measures
     )
+    figure_controls = navigation.container(
+        horizontal=True, vertical_alignment="bottom", width="content", gap="xsmall"
+    )
+    if section == "Overview":
+        measure_host = figure_controls.container(width=245)
     viz_settings = corpus_style_controls(
         fixations_filtered,
         base_font_size,
         words=words_filtered,
-        host=navigation,
+        host=figure_controls,
         raw_gaze=raw_gaze,
         # This view renders true-to-scale stimulus figures from the
         # canvas / typography settings, so it hosts that panel too — the rail
         # (its other home) doesn't exist here.
         canvas_renderer=canvas_renderer,
     )
-    corpus_navigation.back_to_summary(section, has_text=has_text)
+    corpus_navigation.back_to_summary(destinations, section, has_text=has_text)
     if (
         section != "Overview"
         and AOI_TRIAL_ID in words_filtered
@@ -10490,6 +10516,8 @@ def _render_corpus_analysis_body(
             corpus_overview.render_corpus_overview(
                 words_filtered,
                 group_by=group_by,
+                profile_host=destinations,
+                measure_host=measure_host,
                 download=_download_tidy,
                 canvas_width=canvas_width,
                 base_font_size=base_font_size,
@@ -14128,6 +14156,15 @@ def _render_data_provenance() -> None:
             )
 
 
+def _render_word_reading_measures(words: pd.DataFrame) -> None:
+    measures = brought_reading_measures(words)
+    if measures:
+        labels = {column: label for _, column, label, *_ in READING_MEASURE_FIELDS}
+        labels.update((m.column, m.label) for m in MEASURES.values())
+        with st.expander(f"Reading measures in the Words table ({len(measures)})"):
+            st.markdown("\n".join(f"- {labels[column]}" for column in measures))
+
+
 def render_data_tables(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -14154,6 +14191,8 @@ def render_data_tables(
         frame, whole = recordings[key]
         with st.container(key=f"data_table_{key}"):
             st.subheader(label, anchor=f"data-table-{key}")
+            if key == "words":
+                _render_word_reading_measures(frame)
             if frame.empty:
                 if whole.empty:
                     forget_frame_cache(f"data_table_display_{key}")
@@ -16786,12 +16825,6 @@ def render_dataset_summary(
         missing = stats["fixations_without_words"]
         if missing and stats["recordings"]["words"][1]:
             st.caption(f"{plural(missing, 'trial')} with fixations but no word rows.")
-        measures = brought_reading_measures(words)
-        if measures:
-            labels = {column: label for _, column, label, *_ in READING_MEASURE_FIELDS}
-            labels.update((m.column, m.label) for m in MEASURES.values())
-            with st.expander(f"Reading measures in the Words table ({len(measures)})"):
-                st.markdown("\n".join(f"- {labels[column]}" for column in measures))
     if stats["screen_error"]:
         st.warning(stats["screen_error"])
     elif not stats["parts"].empty:

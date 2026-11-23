@@ -18,7 +18,7 @@ print(gallery_figure("text-lines"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. In :material/blur_on: **Fixations** → **Color**, choose **Text line (computed)**.
     3. Keep **Saccades** and **Stimulus** on. Each fixation takes the color of the nearest line of word boxes.
 

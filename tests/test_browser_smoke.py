@@ -319,8 +319,8 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
 
         below("tour_grp_views", "tour_grp_plot")
         below("tour_grp_subtabs", "tour_grp_views")
-        below("global_palette", "tour_grp_views")
-        below("tour_grp_subtabs", "global_palette")
+        below("rail_palette_tiles", "tour_grp_views")
+        below("tour_grp_subtabs", "rail_palette_tiles")
         views = box("tour_grp_views")
         assert views["y"] + views["height"] <= 844
         page.get_by_role("button", name="Heatmap", exact=True).click()
@@ -328,8 +328,8 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
         page.locator(".st-key-ui_mode_switch").get_by_text("Full", exact=True).click()
         _settle(page)
         below("tour_grp_view_modes", "tour_grp_plot")
-        below("global_palette", "tour_grp_views")
-        below("tour_grp_subtabs", "global_palette")
+        below("rail_palette_tiles", "tour_grp_views")
+        below("tour_grp_subtabs", "rail_palette_tiles")
         assert box("tour_grp_viz_controls")["height"] > 0
         page.set_viewport_size({"width": 1440, "height": 900})
         plot = box("tour_grp_plot")
@@ -341,9 +341,11 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
     page = _open(browser, f"{app_url}/?ui=full&source=demo&animate=0")
     try:
         grid = page.locator(".st-key-tour_grp_views")
-        switch = grid.locator(".st-key-single_animate label")
+        replay_tile = grid.get_by_role(
+            "button", name=re.compile(r"^Animation (on|off)$")
+        )
         tiles = [
-            switch,
+            replay_tile,
             *(
                 grid.get_by_role("button", name=name, exact=True)
                 for name in (
@@ -355,7 +357,7 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
                 )
             ),
         ]
-        palette = page.locator(".st-key-global_palette")
+        palette = page.locator(".st-key-rail_palette_tiles")
 
         def positions():
             header = page.locator(".st-key-plot_controls_header").bounding_box()
@@ -372,8 +374,8 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
 
         tiles[2].click()
         _settle(page)
-        palette.get_by_role("combobox").click()
-        page.get_by_role("option", name="High contrast", exact=True).click()
+        contrast = palette.get_by_role("button", name=re.compile(r"^High contrast"))
+        contrast.click()
         _settle(page)
         expected = positions()
         x, _, width, _ = expected[-1]
@@ -386,13 +388,30 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         for mode in ("Essentials", "Full"):
             page.locator(".st-key-ui_mode_switch").get_by_text(mode, exact=True).click()
             _settle(page)
-            assert positions() == expected
+            actual = positions()
+            assert actual[:-1] == expected[:-1]
+            assert actual[-1][0] == expected[-1][0]
+            assert page.locator(".st-key-design_shell").is_visible() == (mode == "Full")
             assert tiles[2].get_attribute("kind") == "primary"
-            assert palette.get_by_role("combobox").input_value() == "High contrast"
+            assert contrast.get_attribute("kind") == "primary"
             assert page.locator(".st-key-rail_compare").is_visible() == (mode == "Full")
             assert page.locator(".st-key-adv_only_rail_animation").is_visible() == (
                 mode == "Full"
             )
+        saved = page.locator(".st-key-design_shell").bounding_box()
+        assert grid.bounding_box()["y"] + grid.bounding_box()["height"] <= saved["y"]
+        assert saved["y"] + saved["height"] <= palette.bounding_box()["y"]
+        divider = page.locator(".st-key-palette_layers_divider hr").bounding_box()
+        compare_row = page.locator(".st-key-split_mode_compare").bounding_box()
+        assert compare_row["y"] - (divider["y"] + divider["height"]) >= 8
+        animation_switch = page.locator(".st-key-single_animate input")
+        replay_tile.click()
+        _settle(page)
+        assert animation_switch.is_checked()
+        page.locator(".st-key-single_animate label").click()
+        _settle(page)
+        assert replay_tile.get_attribute("kind") == "secondary"
+        assert tiles[2].get_attribute("kind") == "primary"
         compare = page.locator(".st-key-single_compare_toggle")
         compare.locator("label").click()
         _settle(page)
@@ -401,7 +420,7 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         ).click()
         _settle(page)
         assert compare.is_visible() and compare.locator("input").is_checked()
-        assert positions() == expected
+        assert positions()[:-1] == expected[:-1]
         compare.locator("label").click()
         _settle(page)
         assert not compare.is_visible()

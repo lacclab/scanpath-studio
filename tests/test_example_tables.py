@@ -121,7 +121,12 @@ class TestTheWizard:
 
         open_data_view(at, timeout=90)
         assert not at.exception, at.exception
-        text = "\n".join(m.value for m in at.markdown)
-        assert "Eye-tracking data" in text
+        assert any("Eye-tracking data" in m.value for m in at.markdown)
+        at.button(key="data_inspect_words").click().run(timeout=90)
+        assert not at.exception, at.exception
+        measures = next(
+            panel for panel in at.expander if panel.label.startswith("Reading measures")
+        )
+        text = "\n".join(m.value for m in measures.markdown)
         assert "- Total fixation duration — TFD" in text
         assert "- First fixation duration — FFD" in text

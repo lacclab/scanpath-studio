@@ -1529,7 +1529,12 @@ _CLI_EMITTERS: dict[str, Any] = {
     "highlight_column": _highlight_column,
     "critical_span_style": _mapped(
         "--critical-span-style",
-        {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
+        {
+            "Mark text": "mark-text",
+            "Mark border": "mark-border",
+            "Underline": "underline",
+            "None": "none",
+        },
     ),
     "fixation_flags": _fixation_flags,
     "legend_layout": _legend_layout,

@@ -151,7 +151,7 @@ TUTORIALS = (
         (
             TutorialStep(
                 "Pick a reading",
-                "In **Scanpath**, choose a reading in **Select trial**.",
+                "In **Scanpath View**, choose a reading in **Select trial**.",
                 ".st-key-tour_grp_trial_picker",
             ),
             TutorialStep(
@@ -178,7 +178,7 @@ TUTORIALS = (
         (
             TutorialStep(
                 "Choose the first reading",
-                "In **Scanpath**, pick a trial with fixations. Choose the **Scanpath** view for a static comparison.",
+                "In **Scanpath View**, pick a trial with fixations. Choose the **Scanpath** tile for a static comparison.",
                 ".st-key-tour_grp_trial_picker",
             ),
             TutorialStep(
@@ -1438,7 +1438,7 @@ def _tutorial_library_dialog() -> None:
     context = st.session_state.get("_tutorial_context", {})
     with st.expander("Replay a sample reading"):
         st.markdown(
-            "1. In **Scanpath**, choose **Bundled demo**.\n"
+            "1. In **Scanpath View**, choose **Bundled demo**.\n"
             "2. Pick a reading in **Select trial** and turn on **Animation**.\n"
             "3. Press **Play** to watch the reading. Use **Pause** and **Next fixation** to inspect one fixation at a time. "
             "Turn off **Animation** to return to your figure."
@@ -1452,7 +1452,7 @@ def _tutorial_library_dialog() -> None:
             )
         else:
             st.caption(
-                "In **Scanpath**, open **Bundled demo** and select a trial with fixations. "
+                "In **Scanpath View**, open **Bundled demo** and select a trial with fixations. "
                 "For a trial with several screens, choose a screen with fixations."
             )
         st.markdown(

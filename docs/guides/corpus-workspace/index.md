@@ -40,10 +40,11 @@ datasets that predate this mapping information use their stored text IDs.
 
 ## Choose a view
 
-After selecting a text, choose **Open word profile** to see where in the
-passage the measure changes. For a participant, **Open participant profile**
-compares their word values with the rest of the selected participants.
-The profile opens with the measure you were using. Use **Back to texts** or
+Beside **Texts**, choose **Open word profile** to see where in a passage the
+measure changes. Beside **Participants**, **Open participant profile** compares
+one reader’s word values with the rest of the selected participants.
+If you selected a dot or used the search box, the profile opens for that text
+or participant. It uses the measure shown in the summary. Use **Back to texts** or
 **Back to participants** to return to the comparison.
 
 In a participant profile, the wider parts of a violin show where more duration

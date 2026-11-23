@@ -1263,7 +1263,7 @@ def _open_annotation(
     if (pid, tid) not in open_trials:
         st.session_state[_DATASET_NOTE_KEY] = (
             f"error:Can't open {where}: the trial filters hide it. Clear or "
-            f"change the filters on {ICONS['view_scanpath']} **Scanpath**, "
+            f"change the filters on {ICONS['view_scanpath']} **Scanpath View**, "
             "then open it again."
         )
         return

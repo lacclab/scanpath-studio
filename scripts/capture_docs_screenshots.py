@@ -248,8 +248,8 @@ def _shot_mode_menu(page: Page, name: str, toggle_key: str, popover_key: str) ->
     ui.toggle(page, toggle_key)
 
 
-#: The two designs saved for the picture of My designs.
-EXAMPLE_DESIGNS = ("My design 1", "My design 2")
+#: The two designs saved for the picture of My views.
+EXAMPLE_DESIGNS = ("My view 1", "My view 2")
 
 
 def _save_design(page: Page, name: str) -> None:
@@ -262,7 +262,7 @@ def _save_design(page: Page, name: str) -> None:
 
 
 def _shot_designs(page: Page) -> None:
-    """View tiles, palette, and My designs with two saved designs."""
+    """View tiles, palette, and My views with two saved designs."""
     for name in EXAMPLE_DESIGNS:
         _save_design(page, name)
     shell = page.locator(".st-key-design_shell").first
@@ -272,13 +272,13 @@ def _shot_designs(page: Page) -> None:
     page.evaluate("window.scrollTo(0, 0)")
     rail = page.locator(".st-key-scanpath_rail").first.bounding_box()
     top = page.locator(".st-key-rail_view_controls").bounding_box()
-    designs = shell.bounding_box()
+    palette = page.locator(".st-key-rail_palette_tiles").bounding_box()
     pad = 10
     clip = {
         "x": rail["x"],
         "y": top["y"] - 2,
         "width": rail["width"],
-        "height": designs["y"] + designs["height"] + pad - top["y"],
+        "height": palette["y"] + palette["height"] + pad - top["y"],
     }
     _shot_controls(page, "designs", page, clip=clip)
 

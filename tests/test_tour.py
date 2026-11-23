@@ -953,8 +953,8 @@ class TestSpotlightSelectorsResolve:
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert "_render_view_controls(" in control_source
         assert (
-            '_render_saved_designs(advanced_only(viz, "rail_designs"))'
-            in control_source
+            '_render_saved_designs(advanced_only(host, "rail_designs"))'
+            in inspect.getsource(controls._render_view_controls)
         )
 
     def test_corpus_canvas_controls_stay_inside_the_style_expander(self):

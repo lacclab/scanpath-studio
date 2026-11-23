@@ -22,7 +22,7 @@ description: "Filter eye-tracking data for analysis: exclude unsuitable trials, 
 
 ## Before you start
 
-Open a dataset in the :material/route: **Scanpath** view. The filter
+Open a dataset in the :material/route: **Scanpath View**. The filter
 (:material/filter_alt:) beside **Select trial** selects whole trials.
 :material/filter_list: **Filters & highlights** in the Plot controls changes
 which fixations and saccades the figure draws.

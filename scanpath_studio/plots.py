@@ -367,7 +367,7 @@ class FigureSettings:
 FIGURE_OPTION_CHOICES: dict[str, tuple[str, ...]] = {
     "heatmap_style": ("Word boxes", "Smoothed"),
     "heatmap_norm": ("Linear", "Log"),
-    "critical_span_style": ("Mark text", "Mark border", "None"),
+    "critical_span_style": ("Mark text", "Mark border", "Underline", "None"),
     "saccade_color_mode": tuple(SACCADE_COLOR_MODES),
     "saccade_render_mode": ("Straight", "Arc"),
     "saccade_style": tuple(SACCADE_DASH_OPTIONS.values()),
@@ -3065,7 +3065,7 @@ def _span_borders(fig, words, settings, *, xref="x", yref="y"):
     )
     if shapes:
         _add_highlight_key(
-            fig, settings.highlight_column, settings.span_border_color, border=True
+            fig, settings.highlight_column, settings.span_border_color, swatch="▢"
         )
     return [dict(shape, xref=xref, yref=yref) for shape in shapes]
 
@@ -3525,7 +3525,7 @@ _HIGHLIGHT_KEY_NAME = "highlight_key"
 
 
 def _add_highlight_key(
-    fig: go.Figure, column: str, color: str, *, border: bool = False
+    fig: go.Figure, column: str, color: str, *, swatch: str = "■"
 ) -> None:
     """Name the highlighted words on the figure itself: a swatch in
     the highlight's colour and "Highlighted: is_in_aspan (answer span)", in
@@ -3535,7 +3535,6 @@ def _add_highlight_key(
     from .column_names import HIGHLIGHT_NOTES
 
     note = HIGHLIGHT_NOTES.get(str(column))
-    swatch = "▢" if border else "■"
     text = (
         f'<span style="color:{color}">{swatch}</span> Highlighted: '
         f"{_plotly_literal(_column_name(column))}" + (f" ({note})" if note else "")
@@ -3612,6 +3611,7 @@ def _add_redaction_blocks(
     *,
     block_height: float,
     color: str | Sequence[str],
+    underline: np.ndarray | None = None,
     row: int | None = None,
     col: int | None = None,
 ) -> None:
@@ -3635,6 +3635,25 @@ def _add_redaction_blocks(
         else np.full(len(words), color, dtype=object)
     )
     ok = np.isfinite(centre_x) & np.isfinite(centre_y) & np.isfinite(run) & (run > 0)
+    if underline is not None:
+        marked = ok & underline
+        left = centre_x[marked] - half_w[marked]
+        right = centre_x[marked] + half_w[marked]
+        y = centre_y[marked] + half_h * 1.5
+        gaps = np.full(len(y), None)
+        fig.add_trace(
+            go.Scatter(
+                x=np.column_stack((left, right, gaps)).ravel(),
+                y=np.column_stack((y, y, gaps)).ravel(),
+                mode="lines",
+                line=dict(color=color, width=1),
+                hoverinfo="skip",
+                showlegend=False,
+                name="words",
+            ),
+            row=row,
+            col=col,
+        )
     # Each corner's quarter circle, counter-clockwise from the (+x, +y) one;
     # `side_x` / `side_y` say which way each corner's centre sits from the
     # block's middle.
@@ -3703,6 +3722,7 @@ def _add_word_label_trace(
     word_hover_fields: Sequence[str] | None = None,
     redact: bool = False,
     px_per_unit: float = 1.0,
+    critical_span_style: str = "Mark text",
 ) -> None:
     """The reading text: each word centred in its box, with the word hover.
 
@@ -3750,18 +3770,23 @@ def _add_word_label_trace(
                 )
             hover += "<extra></extra>"
             customdata = pd.concat(customdata_parts, axis=1)
-    # Per-word text color: the highlight colour for highlighted words when the
-    # caller asks for "Mark text" (``highlight_column`` set), the base text
-    # colour otherwise. Both are configurable from the plot rail.
-    if highlight_column and highlight_column in words.columns:
-        critical_mask = words[highlight_column].fillna(False).astype(bool)
-        label_color = [
-            highlight_text_color if is_crit else text_color for is_crit in critical_mask
-        ]
-        if critical_mask.any():
-            _add_highlight_key(fig, highlight_column, highlight_text_color)
-    else:
-        label_color = text_color
+    label_color = text_color
+    underline = None
+    if (
+        highlight_column
+        and highlight_column in words
+        and critical_span_style in ("Mark text", "Underline")
+    ):
+        marked = words[highlight_column].fillna(False).to_numpy(dtype=bool)
+        if marked.any():
+            if critical_span_style == "Underline":
+                underline = marked
+                _add_highlight_key(fig, highlight_column, text_color, swatch="━")
+            else:
+                label_color = np.where(
+                    marked, highlight_text_color, text_color
+                ).tolist()
+                _add_highlight_key(fig, highlight_column, highlight_text_color)
     # The label is centred in its word's box, as the data defines it
     # (`_word_label_x`: a padded layout's line-start word sits flush left, as it
     # was shown). Never centre it on the glyph run instead: on a tiling corpus
@@ -3788,6 +3813,7 @@ def _add_word_label_trace(
             label_y.to_numpy(dtype=float),
             block_height=_REDACTION_BLOCK_EM * base_font_size / (px_per_unit or 1.0),
             color=label_color,
+            underline=underline,
             row=row,
             col=col,
         )
@@ -3800,7 +3826,14 @@ def _add_word_label_trace(
         drawn = dict(
             mode="text",
             textposition="middle center",
-            textfont=dict(color=label_color, size=base_font_size, family=font_family),
+            textfont=dict(
+                color=label_color,
+                size=base_font_size,
+                family=font_family,
+                lineposition=np.where(underline, "under", "none").tolist()
+                if underline is not None
+                else None,
+            ),
         )
         label_y = label_y + _label_drop_em(font_family) * base_font_size / (
             px_per_unit or 1.0
@@ -4504,7 +4537,6 @@ def _render_scanpath_figure(
     raw_gaze_color = settings.raw_gaze_color
     raw_gaze_marker_size = settings.raw_gaze_marker_size
     raw_gaze_opacity = settings.raw_gaze_opacity
-    critical_span_style = settings.critical_span_style
     highlight_column = settings.highlight_column
     saccade_color = settings.saccade_color
     saccade_style = settings.saccade_style
@@ -4696,18 +4728,6 @@ def _render_scanpath_figure(
         scale_text_to_boxes=scale_text_to_boxes,
     )
 
-    # Words flagged by ``highlight_column`` (default the OneStop answer span
-    # ``is_in_aspan``) get marked one of two ways:
-    #   - "Mark text": color the highlighted words dark pink (no border).
-    #   - "Mark border": draw a thin black outline around the span.
-    has_highlight = (
-        bool(highlight_column)
-        and highlight_column in words.columns
-        and not words.empty
-        and bool(words[highlight_column].fillna(False).astype(bool).any())
-    )
-    highlight_text = has_highlight and critical_span_style == "Mark text"
-
     # Every layout shape the figure draws, in drawing order, set on the figure
     # once at the end: each `update_layout(shapes=…)` / `add_shape` on a figure
     # that has shapes re-validates all of them, so adding the boxes, the heatmap
@@ -4735,9 +4755,10 @@ def _render_scanpath_figure(
                 words,
                 label_font_px,
                 font_settings["family"],
-                highlight_column=highlight_column if highlight_text else None,
+                highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
+                critical_span_style=settings.critical_span_style,
                 word_hover_measure=word_hover_measure,
                 word_hover_fields=word_hover_fields,
                 redact=settings.redact_text,
@@ -7074,9 +7095,8 @@ def _render_scanpath_animation(
 
     The static figure's word-label, arrow and flag options apply here too:
 
-    - the word labels take ``text_color`` / ``highlight_column`` /
-      ``highlight_text_color`` / ``word_hover_measure`` (``highlight_column`` is
-      the *text*-marking channel — there is no border-overlay style here);
+    - ``critical_span_style`` colors or underlines the words flagged by
+      ``highlight_column``, or draws a border around the span.
     - ``show_saccade_arrows`` adds the direction arrowheads, each revealed with
       the saccade it belongs to rather than all at frame zero;
     - ``fixation_flags`` applies the fixation-flag classification
@@ -7126,11 +7146,7 @@ def _render_scanpath_animation(
     fixation_color = settings.fixation_color
     fixation_symbol = settings.fixation_symbol
     text_color = settings.text_color
-    highlight_column = (
-        settings.highlight_column
-        if settings.critical_span_style == "Mark text"
-        else None
-    )
+    highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
     word_hover_measure = settings.word_hover_measure
     word_hover_fields = settings.word_hover_fields
@@ -7213,6 +7229,7 @@ def _render_scanpath_animation(
             highlight_column=highlight_column,
             text_color=text_color,
             highlight_text_color=highlight_text_color,
+            critical_span_style=settings.critical_span_style,
             word_hover_measure=word_hover_measure,
             word_hover_fields=word_hover_fields,
             redact=settings.redact_text,
@@ -8855,11 +8872,7 @@ def _make_split_comparison_figure(
         length=settings.heatmap_colorbar_length,
     )
     text_color = settings.text_color
-    highlight_column = (
-        settings.highlight_column
-        if settings.critical_span_style == "Mark text"
-        else None
-    )
+    highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
     word_hover_measure = settings.word_hover_measure
     word_hover_fields = settings.word_hover_fields
@@ -9342,6 +9355,7 @@ def _make_split_comparison_figure(
                 highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
+                critical_span_style=settings.critical_span_style,
                 word_hover_measure=word_hover_measure,
                 word_hover_fields=word_hover_fields,
                 redact=settings.redact_text,
@@ -9514,11 +9528,7 @@ def _render_comparison_figure(
         length=settings.heatmap_colorbar_length,
     )
     text_color = settings.text_color
-    highlight_column = (
-        settings.highlight_column
-        if settings.critical_span_style == "Mark text"
-        else None
-    )
+    highlight_column = settings.highlight_column
     highlight_text_color = settings.highlight_text_color
     word_hover_measure = settings.word_hover_measure
     word_hover_fields = settings.word_hover_fields
@@ -9793,6 +9803,7 @@ def _render_comparison_figure(
                 highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
+                critical_span_style=settings.critical_span_style,
                 word_hover_measure=word_hover_measure,
                 word_hover_fields=word_hover_fields,
                 redact=settings.redact_text,

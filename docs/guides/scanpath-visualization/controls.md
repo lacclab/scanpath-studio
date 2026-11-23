@@ -5,7 +5,7 @@ description: "Every control on Scanpath Studio's Scanpath view and what it does:
 
 # All controls
 
-Find every control in the :material/route: **Scanpath** view, in the order it
+Find every control in the :material/route: **Scanpath View**, in the order it
 appears on screen. Search this page (++ctrl+f++, or
 ++cmd+f++ on a Mac) for what you want to change, such as *colors*,
 *legends* or *axes*.
@@ -63,8 +63,7 @@ pencil (:material/edit:), which are in Full.
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
 
 
-The four **View** tiles and **Palette** appear in both modes. Full adds comparison,
-animation settings, saved designs, and three editing tabs.
+The **View** and **Palette** tiles appear in both modes. In Full, **My views** sits below the view tiles. The switches below the palette open comparison and replay, and the arrow beside each switch opens its settings.
 
 - **Layers** lists what the plot can draw. Click a layer’s name to edit its settings. The switch on the right shows or hides it. **Filters & highlights** applies to the current reading.
 - **Axes** chooses the X and Y fields and configures the coordinate grid.
@@ -124,10 +123,10 @@ saved:
 | :material/timeline: **Scanpath** / :material/local_fire_department: **Heatmap** / :material/draw: **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic. |
 | :material/show_chart: **Gaze over time** | Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation. |
 | :material/build: **Custom** | Restore your last hand-edited figure, including its axes and palette. On first use, start with the figure on screen. |
-| :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
-| :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
-| :material/palette: **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
-| **Palette** | Choose **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
+| :material/palette: **My views** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
+| :material/palette: **My views** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
+| :material/palette: **My views** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
+| **Palette** | Choose **Colorblind-safe**, **Grayscale** for print, or **High contrast**. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
 
 ### :material/blur_on: Fixations
 
@@ -193,7 +192,7 @@ Recording setup. Click **Stimulus** to adjust the text or image for this figure.
 | **Text appearance** → **Color** → text color | Choose the stimulus text color. |
 | **Word highlights** → **Show** | Highlight words in the stimulus text, such as the answer span. |
 | **Word highlights** → word column | Choose which words to highlight: a true/false word column, such as the critical span. |
-| **Word highlights** → **Style** | Choose the word highlight style, **Mark text** (colored text) or **Mark border** (a border around the words), and the highlight color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus. |
+| **Word highlights** → **Style** | **Mark text** changes the color of the selected words. **Mark border** outlines the span. Both have a color picker. **Underline** draws a line beneath each selected word in the current text color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus. |
 | **Stimulus image** → **Show** | Show the stimulus image, the screen as shown in the experiment, under the scanpath. |
 | **Stimulus image** → **File** | Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. It replaces the dataset's image and is not included in Share links. |
 | **Stimulus image** → **Opacity** | Set the stimulus image opacity. Lower it so the scanpath reads over it. |

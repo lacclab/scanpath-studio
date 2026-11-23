@@ -14,7 +14,7 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Prepare a figure for a paper or slide | :material/file_export: **Export** → **Prepare figure for export** |
 | Export many trials and their tables | :material/file_export: **Export** → **Export bundle** |
 | Share a view or copy its code | :material/share: **Share** → **Link** or **Code** |
-| Reuse the figure settings | :material/palette: **My designs**, or :material/share: **Share** → **Settings file** |
+| Reuse the figure settings | :material/palette: **My views**, or :material/share: **Share** → **Settings file** |
 
 To export multiple trials, switch to Full and open **Export bundle**.
 Essentials offers **Current figure** for the figure or replay on screen.

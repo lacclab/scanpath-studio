@@ -113,6 +113,7 @@ from .constants import (
     icons_to_html,
     md_literal,
     palette_settings,
+    palette_tile_key,
     spoken,
     upload_limit_mb,
 )
@@ -1243,7 +1244,7 @@ _CUSTOM_VIEW = "custom"
 DESIGN_PRESETS_KEY = _DESIGN_PRESETS_WIRE_KEY
 #: Which saved design the ✏️ button has open for editing, if any.
 _DESIGN_EDIT_KEY = "_design_preset_editing"
-#: Whether the 💾 "Save current design" modal is open.
+#: Whether the 💾 "Save current view" modal is open.
 _DESIGN_SAVE_PENDING_KEY = "_design_save_pending"
 #: Which saved design the 🗑️ confirmation is asking about, if any.
 _DESIGN_DELETE_PENDING_KEY = "_design_delete_pending"
@@ -1336,7 +1337,7 @@ def delete_design_preset(name: str) -> None:
 
 #: The saved-design file: `{"kind": DESIGNS_FILE_KIND, "designs": {…}}` — the
 #: portable copy of the library, written by *Export* and read by *Import* in
-#: My designs.
+#: My views.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
 #: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
 #: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
@@ -1448,12 +1449,12 @@ def _import_designs() -> None:
         incoming = designs_from_json(uploaded.getvalue().decode("utf-8"), report=report)
     except (ValueError, UnicodeDecodeError):
         st.session_state[_DESIGN_IMPORT_NOTE_KEY] = (
-            "error:This isn't a designs file. Pick a file saved with **Export**."
+            "error:Choose a file saved with **My views** → **Export**."
         )
         return
     st.session_state[DESIGN_PRESETS_KEY] = {**design_presets(), **incoming}
     count = len(incoming)
-    note = f"Imported {count} design{'' if count == 1 else 's'}."
+    note = f"Imported {count} view{'' if count == 1 else 's'}."
     if report:
         note = f"warning:{note} " + "; ".join(report) + "."
     st.session_state[_DESIGN_IMPORT_NOTE_KEY] = note
@@ -1480,20 +1481,20 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
         key="design_export",
         disabled=not saved,
         width="stretch",
-        help="Download your saved designs as a JSON file, to use on another "
+        help="Download your saved views as a JSON file, to use on another "
         "computer or share.",
     )
     with row.popover("Import", icon=ICONS["upload"], width="stretch"):
         st.file_uploader(
-            "Designs file (JSON)",
+            "Saved views file (JSON)",
             type=["json"],
             key=_DESIGN_IMPORT_KEY,
             on_change=_import_designs,
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "Choose a file saved with **Export**. Imported designs replace "
-            "saved designs with the same name; other designs are added."
+            "Import a file from **My views** → **Export**. A view with the same "
+            "name replaces the saved copy."
         )
 
 
@@ -1661,7 +1662,8 @@ def _hold_view_writes(
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        if key in _MOUNTED_VIEW_KEYS or key not in ss:
+        # The rail derives the palette name from its colors; the tiles have no value to echo.
+        if key == "global_palette" or key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
@@ -1687,7 +1689,7 @@ _SEEDED_VIEW_KEYS = frozenset(
 )
 
 #: Plot settings whose widgets are drawn outside every popover: the rail's
-#: layer switches and Palette box, the ⚖️ Compare switch above the plot, and
+#: layer switches, the Animation and Compare switches, and
 #: the preprocessing controls. They are mounted whenever a design is picked
 #: (Essentials hides the rail's rows with CSS, which keeps them mounted), so
 #: `_hold_view_writes` writes them plainly. `tests/test_viz_palette.py`
@@ -1702,7 +1704,6 @@ _MOUNTED_VIEW_KEYS = frozenset(
         "global_show_raw_gaze",
         "global_x_field",
         "global_y_field",
-        "global_palette",
         SINGLE_ANIMATE,
         SINGLE_COMPARE_TOGGLE,
         "global_preproc_enabled",
@@ -1856,15 +1857,15 @@ def _render_saved_designs(host) -> None:
     saved = design_presets()
     active = selected_design_name()
     label = (
-        f"{ICONS['designs']} My designs ({len(saved)})"
+        f"{ICONS['designs']} My views ({len(saved)})"
         if saved
-        else f"{ICONS['designs']} My designs"
+        else f"{ICONS['designs']} My views"
     )
     shell = host.container(key="design_shell")
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
         if not saved:
             st.caption(
-                "No saved designs yet. Set up the layers, colors and figure, then "
+                "No saved views yet. Set up the figure, then "
                 f"click {ICONS['save']} to save them here. You can then apply them "
                 "to any trial in one click."
             )
@@ -1889,34 +1890,34 @@ def _render_saved_designs(host) -> None:
             # baseline the platform font decides, which sits them high and unaligned
             # in their buttons. `spoken` names each icon for screen readers.
             cells[1].button(
-                spoken(f"Rename design {name}"),
+                spoken(f"Rename view {name}"),
                 icon=ICONS["edit"],
                 wrap=True,
                 key=f"design_edit_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Rename this design.",
+                help="Rename this view.",
                 on_click=_toggle_design_editor,
                 args=(name,),
             )
             cells[2].button(
-                spoken(f"Delete design {name}"),
+                spoken(f"Delete view {name}"),
                 icon=ICONS["delete"],
                 wrap=True,
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Delete this design.",
+                help="Delete this view.",
                 on_click=_ask_delete_design,
                 args=(name,),
             )
         _render_design_file_row(st, saved)
     if shell.button(
-        spoken("Save the plot settings as a design"),
+        spoken("Save the plot settings as a view"),
         icon=ICONS["save"],
         wrap=True,
         key="design_save",
-        help="Save the plot settings on screen now as a named design.",
+        help="Save the plot settings on screen now as a named view.",
     ):
         st.session_state[_DESIGN_SAVE_PENDING_KEY] = True
         st.session_state[_DESIGN_SAVE_MODE_KEY] = _SAVE_MODE_NEW
@@ -1944,7 +1945,7 @@ def _close_design_delete_dialog() -> None:
     st.session_state.pop(_DESIGN_DELETE_PENDING_KEY, None)
 
 
-@st.dialog("Delete this design?", on_dismiss=_close_design_delete_dialog)
+@st.dialog("Delete this view?", on_dismiss=_close_design_delete_dialog)
 @guarded()
 def _design_delete_dialog(name: str) -> None:
     """Confirm forgetting one saved design."""
@@ -1971,11 +1972,11 @@ def _design_delete_dialog(name: str) -> None:
 _DESIGN_NEW_NAME_KEY = "design_new_name"
 _DESIGN_REPLACE_TARGET_KEY = "design_replace_target"
 #: The name the 💾 dialog offers, so saving needs no naming at all.
-_DEFAULT_DESIGN_NAME = "My design {n}"
+_DEFAULT_DESIGN_NAME = "My view {n}"
 
 
 def next_design_name(taken) -> str:
-    """The first of "My design 1", "My design 2", … that no design in
+    """The first of "My view 1", "My view 2", … that no design in
     ``taken`` is called — a number freed by a delete is offered again."""
     taken = set(taken)
     n = 1
@@ -1996,7 +1997,7 @@ def _close_design_save_dialog() -> None:
 # modal in the browser without running a line of the body, so without this the
 # flag would stay armed and the dialog reopen on the very next rerun — clicking
 # a preset, toggling a layer, anything.
-@st.dialog("Save current design", on_dismiss=_close_design_save_dialog)
+@st.dialog("Save current view", on_dismiss=_close_design_save_dialog)
 @guarded()
 def _design_save_dialog() -> None:
     """Name the settings on screen and keep them.
@@ -2025,7 +2026,7 @@ def _design_save_dialog() -> None:
             "Save the settings on screen as",
             options=(_SAVE_MODE_NEW, _SAVE_MODE_REPLACE),
             format_func=lambda choice: (
-                "A new design"
+                "A new view"
                 if choice == _SAVE_MODE_NEW
                 else "A replacement for one I saved"
             ),
@@ -2034,22 +2035,22 @@ def _design_save_dialog() -> None:
     with st.form("design_save_form", border=False):
         if mode == _SAVE_MODE_REPLACE:
             name = st.selectbox(
-                "Design to replace",
+                "View to replace",
                 options=list(saved),
                 key=_DESIGN_REPLACE_TARGET_KEY,
             )
             st.warning(
-                "The chosen design is **overwritten** with the settings on "
+                "The chosen view is **overwritten** with the settings on "
                 "screen. Its old settings can't be recovered.",
                 icon=ICONS["warning"],
             )
         else:
-            # Filled with the next free "My design N": saving needs no
+            # Filled with the next free "My view N": saving needs no
             # name thought up, and typing over it is one select-all away.
             # `setdefault`, so a name being typed survives the radio's rerun.
             st.session_state.setdefault(_DESIGN_NEW_NAME_KEY, next_design_name(saved))
             name = st.text_input(
-                "Design name",
+                "View name",
                 key=_DESIGN_NEW_NAME_KEY,
                 placeholder="e.g. Paper figure",
                 help="Saves every plot setting on screen: layers, colors, "
@@ -2070,7 +2071,7 @@ def _design_save_dialog() -> None:
         st.rerun(scope="app")
     if save:
         if not save_design_preset(name or ""):
-            st.error("Give the design a name first.")
+            st.error("Give the view a name first.")
         else:
             _close_design_save_dialog()
             st.rerun(scope="app")
@@ -2353,7 +2354,7 @@ def _active_quick_view() -> str:
     return str(selected)
 
 
-#: The shared grid starts with the playback switch. Each button selects a static view.
+#: The static presets follow the Animation tile.
 _VIEW_TILES = {
     "scanpath": (
         "Scanpath",
@@ -2427,7 +2428,7 @@ def leave_animation() -> None:
     ss[SINGLE_ANIMATE] = False
 
 
-def _on_animation_change() -> None:
+def on_animation_change() -> None:
     """Give a replay a gaze layer when its static figure shows neither one."""
     ss = st.session_state
     if not ss[SINGLE_ANIMATE]:
@@ -2435,6 +2436,11 @@ def _on_animation_change() -> None:
     elif not (ss.get("global_show_fix", True) or ss.get("global_show_saccades", True)):
         ss["global_show_fix"] = True
         ss[_AUTO_REPLAY_FIXATIONS] = True
+
+
+def _toggle_animation_from_tile() -> None:
+    st.session_state[SINGLE_ANIMATE] = not st.session_state.get(SINGLE_ANIMATE, False)
+    on_animation_change()
 
 
 def _choose_plot_view(name: str, current: str | None) -> None:
@@ -2465,17 +2471,20 @@ def _palette_keys() -> frozenset[str]:
 def _draw_view_grid(
     grid, *, design: str | None, has_time: bool, comparing: bool
 ) -> None:
-    """Keep the selected static design visible alongside the playback switch."""
+    """Keep the selected static design visible alongside the Animation tile."""
     current = design
     if comparing and static_plot_view() == "illustration":
         current = static_plot_view(comparing=True)
     row = grid.columns(2, gap="small", wrap=False)
-    row[0].toggle(
-        "Animation",
-        key=SINGLE_ANIMATE,
+    replay_on = bool(st.session_state.get(SINGLE_ANIMATE))
+    row[0].button(
+        f"Animation {spoken('on' if replay_on else 'off')}",
+        icon=ICONS["animate"],
+        key="viz_view_animation",
+        type="primary" if replay_on else "secondary",
         width="stretch",
-        persist_state="session",
-        on_change=_on_animation_change,
+        help="Switch between the replay and the current static view.",
+        on_click=_toggle_animation_from_tile,
     )
     for index, (name, (label, icon, help_text)) in enumerate(_VIEW_TILES.items(), 1):
         if index % 2 == 0:
@@ -2520,15 +2529,35 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
     else:
         # Wait for the comparison picker to resolve B, including another dataset.
         slots["view_tiles"] = draw
-    palette = _active_palette()
-    st.session_state["global_palette"] = palette or CUSTOM_PALETTE
-    host.selectbox(
-        "Palette",
-        options=list(PALETTES) if palette else [CUSTOM_PALETTE, *PALETTES],
-        key="global_palette",
-        persist_state="session",
-        on_change=_on_palette_change,
+    _render_saved_designs(advanced_only(host, "rail_designs"))
+    palette = _active_palette() or CUSTOM_PALETTE
+    st.session_state["global_palette"] = palette
+    host.markdown(
+        '<div class="sps-control-label">Palette</div>', unsafe_allow_html=True
     )
+    grid = host.container(key="rail_palette_tiles")
+    names = list(PALETTES)
+    if palette == CUSTOM_PALETTE:
+        names.append(CUSTOM_PALETTE)
+    for index, name in enumerate(names):
+        if index % 2 == 0:
+            row = grid.columns(2, gap="small", wrap=False)
+        label = {
+            DEFAULT_PALETTE: "Colorblind-safe",
+            "Print / grayscale": "Grayscale",
+        }.get(name, name)
+        row[index % 2].button(
+            f"{label} {spoken('selected')}" if name == palette else label,
+            key=palette_tile_key(name),
+            icon=ICONS["designs"] if name == CUSTOM_PALETTE else None,
+            type="primary" if name == palette else "secondary",
+            width="stretch",
+            help=PALETTES[name]["description"]
+            if name in PALETTES
+            else "Your current colors.",
+            on_click=_on_palette_change,
+            args=(name,),
+        )
     host.container(key="palette_layers_divider").divider()
 
 
@@ -2725,7 +2754,9 @@ def _active_palette() -> str | None:
     return None
 
 
-def _on_palette_change() -> None:
+def _on_palette_change(name: str | None = None) -> None:
+    if name is not None:
+        st.session_state["global_palette"] = name
     name = st.session_state.get("global_palette") or DEFAULT_PALETTE
     if name != CUSTOM_PALETTE:
         # What "Custom" is a departure *from*, for the caption below.
@@ -6301,8 +6332,7 @@ def _legends_drawn(
     static figure, with saccades coloured by type; the fixation colours with a
     categorical *Color by* (or by line), a *Highlight* filter (A's or, in
     Compare, B's) or raw gaze; the size key with fixations on a fixed scale;
-    the text-highlight note while words are highlighted — by *Mark text*, or
-    *Mark border* on any spatial figure.
+    the text-highlight note while word highlights are visible on a spatial figure.
     """
     ss = st.session_state
     color_by = ss.get("global_color_by")
@@ -6333,7 +6363,8 @@ def _legends_drawn(
         and bool(ss.get("global_show_stimulus", True))
         and (
             (
-                ss.get("global_critical_span_style", "None") == "Mark text"
+                ss.get("global_critical_span_style", "None")
+                in ("Mark text", "Underline")
                 and bool(ss.get("global_show_labels", True))
             )
             or (ss.get("global_critical_span_style") == "Mark border")
@@ -6575,14 +6606,10 @@ def _collect_viz_settings(
     if isinstance(_fr, (tuple, list)) and len(_fr) == 2:
         fix_index_range = (int(_fr[0]), int(_fr[1]))
 
-    # The highlight column applies only while its style has something to draw on:
-    # **Mark text** recolours the word labels, so it needs Text; **Mark border**
-    # is its own outline layer (independent of Text and Word boxes, as in the
-    # builder), so it needs only the 📄 Stimulus master switch.
     critical_span_style = ss.get("global_critical_span_style", "None")
     span_drawable = (
-        show_labels if critical_span_style == "Mark text" else show_stimulus
-    ) and critical_span_style in ("Mark text", "Mark border")
+        show_labels and critical_span_style in ("Mark text", "Underline")
+    ) or (show_stimulus and critical_span_style == "Mark border")
     highlight_column = None
     if span_drawable and highlight_options:
         candidate = ss.get("global_highlight_column")
@@ -7266,7 +7293,6 @@ def render_plot_controls(
         slots=slots,
     )
     viz = rail.container(key="tour_grp_viz_controls")
-    _render_saved_designs(advanced_only(viz, "rail_designs"))
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
     editor = advanced_only(viz, "plot_editor")
     render_setting_finder(editor)
@@ -8251,7 +8277,7 @@ def render_plot_controls(
 
         with detail_section("Word highlights", key="plot_detail_stim_highlight"):
             # "Highlight a span": the canonical value lives in
-            # `global_critical_span_style` ("Mark text" | "Mark border" | "None"),
+            # `global_critical_span_style` (the chosen style or "None"),
             # which is what deep links / Share / restore carry — the on/off and the
             # mode widgets are derived from it each run, and their callbacks write
             # it back on interaction.
@@ -8270,18 +8296,10 @@ def render_plot_controls(
                 ]
 
             st.session_state["global_highlight_span_on"] = canonical != "None"
-            if canonical in ("Mark text", "Mark border"):
+            if canonical in ("Mark text", "Mark border", "Underline"):
                 st.session_state["global_highlight_span_mode"] = canonical
             else:
                 st.session_state.setdefault("global_highlight_span_mode", "Mark text")
-
-            # The span's *text*-marking channel reaches all three builders —
-            # the animation and the comparison figure take `highlight_column` +
-            # `highlight_text_color` and recolour the word labels. Neither has a
-            # border-overlay layer, so **Mark border** stays a `make_scanpath_figure`
-            # feature and only its colour picker is gated (`tabs._marked_text_column`
-            # hands the other two builders `None` under that style, so nothing is
-            # marked there rather than silently falling back to text marking).
 
             span_on, span_rest = _check_row(
                 "Highlight words",
@@ -8318,7 +8336,7 @@ def render_plot_controls(
                 )
             style_help = (
                 "**Mark text** colors the span's words (needs **Text** on). "
-                "**Mark border** outlines the span. The box beside it sets the color."
+                "**Mark border** outlines the span. **Underline** draws a line beneath each marked word in its text color (needs **Text** on)."
             )
             style_field = _sub_row("Style", caption_help=style_help)
             mode_col, span_color_col = style_field.columns(
@@ -8326,7 +8344,7 @@ def render_plot_controls(
             )
             span_mode = mode_col.radio(
                 "Style",
-                options=["Mark text", "Mark border"],
+                options=["Mark text", "Mark border", "Underline"],
                 horizontal=True,
                 key="global_highlight_span_mode",
                 persist_state="session",
@@ -8348,7 +8366,7 @@ def render_plot_controls(
                     ),
                     label_visibility="collapsed",
                 )
-            else:
+            elif span_mode == "Mark text":
                 span_color_col.color_picker(
                     "Highlighted text color",
                     key="global_highlight_text_color",

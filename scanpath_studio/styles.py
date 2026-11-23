@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from scanpath_studio.constants import (
+    PALETTES,
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
     SELECTOR_ROW_WRAP_REM,
     SELECTOR_SCREEN_FLOOR_REM,
     SELECTOR_SCREEN_PICKER_REM,
     SELECTOR_STEPS_FLOOR_REM,
+    palette_tile_key,
 )
 
 
@@ -2114,45 +2116,35 @@ def get_app_css() -> str:
     .st-key-plot_editor_tabs [class*="st-key-plot_menu_"] button:hover {
         background: var(--sps-accent-soft);
     }
-    /* The switch occupies the first cell. The five buttons below and beside
-       it choose which figure to return to when playback is switched off. */
-    .st-key-scanpath_rail .st-key-tour_grp_views button,
-    .st-key-tour_grp_views .st-key-single_animate label {
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button {
         min-height: 3.55rem;
         padding-block: 0.25rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_views button > div > span,
-    .st-key-tour_grp_views .st-key-single_animate label {
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button > div > span {
         flex-direction: column;
         align-items: center;
         gap: 0.15rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_views button p,
-    .st-key-tour_grp_views .st-key-single_animate p {
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button p {
         font-size: 1rem;
         line-height: 1.2;
     }
-    .st-key-tour_grp_views .st-key-single_animate label {
-        width: 100%;
-        justify-content: center;
-        cursor: pointer;
-        border: 1px solid var(--sps-border);
-        border-radius: 0.5rem;
+    __PALETTE_SWATCHES__
+    .st-key-rail_palette_tiles button p::before {
+        content: "";
+        display: block;
+        width: 2.4rem;
+        height: 0.45rem;
+        border-radius: 1rem;
+        margin: 0 auto 0.3rem;
+        background: var(--palette-swatch);
+        box-shadow: 0 0 0 1px rgb(128 128 128 / 45%);
     }
-    .st-key-tour_grp_views .st-key-single_animate label:hover,
-    .st-key-tour_grp_views .st-key-single_animate label:focus-within {
-        border-color: var(--sps-accent);
-    }
-    .st-key-tour_grp_views .st-key-single_animate [data-testid="stWidgetLabel"] {
-        padding: 0;
-        margin: 0;
-    }
-    .st-key-tour_grp_views [data-testid="stCheckbox"] {
-        margin: 0 !important;
-    }
-    .st-key-scanpath_rail .st-key-tour_grp_views button
+    .st-key-viz_palette_custom button p::before { display: none; }
+    .st-key-rail_compare { padding-top: 0.5rem; }
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button
         span:has(> [data-testid="stIconMaterial"]),
-    .st-key-scanpath_rail .st-key-tour_grp_views button
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button
         [data-testid="stIconMaterial"] {
         width: 1.4rem;
         height: 1.4rem;
@@ -2204,7 +2196,7 @@ def get_app_css() -> str:
         width: 100%;
         justify-content: flex-start;
     }
-    /* The rail's expanders (e.g. 🎨 My designs). Streamlit gives the
+    /* The rail's expanders (e.g. 🎨 My views). Streamlit gives the
        expander label `word-break: break-word`, which in a rail this narrow
        snaps the header mid-word — the same defect the nowrap rule above
        prevents for toggle labels. Break at spaces only, and give the label the
@@ -2242,30 +2234,27 @@ def get_app_css() -> str:
     .st-key-scanpath_rail [data-testid="stMarkdownContainer"]:has(> .sps-control-label) {
         margin-bottom: 0;
     }
-    .st-key-scanpath_rail .st-key-global_palette [data-testid="stWidgetLabel"] {
-        opacity: 0.72;
-    }
-    .st-key-scanpath_rail .st-key-tour_grp_views {
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) {
         margin-top: 0;
         margin-bottom: 0.05rem;
     }
     /* Streamlit gives each unwrapped column a 128px minimum. Both tiles
        must fit the rail even when its content is narrower than 256px. */
-    .st-key-tour_grp_views [data-testid="stColumn"] { min-width: 0; }
+    :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) [data-testid="stColumn"] { min-width: 0; }
     /* The grid's rows are as far apart as its two columns
        (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
        app-wide 0.25rem under each block, twice over. The key sits on the
        vertical block itself, so the rule names it, not a child of it. */
     .st-key-scanpath_rail
-        .st-key-tour_grp_views[data-testid="stVerticalBlock"] {
+        :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles)[data-testid="stVerticalBlock"] {
         gap: 0.4rem !important;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_views > div,
-    .st-key-scanpath_rail .st-key-tour_grp_views [data-testid="stColumn"]
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) > div,
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) [data-testid="stColumn"]
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
-    /* 🎨 My designs. 💾 Save is drawn *into* the expander's own title
+    /* 🎨 My views. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
        right-hand side is empty (the chevron sits left), so the list underneath
        keeps the full width of the rail instead of losing a fifth of it to one
@@ -2368,9 +2357,9 @@ def get_app_css() -> str:
         min-height: 0;
     }
     @container sps-rail (max-width: 240px) {
-        .st-key-tour_grp_views [data-testid="stHorizontalBlock"] { gap: 0.4rem !important; }
-        .st-key-scanpath_rail .st-key-tour_grp_views button { padding-inline: 0.25rem; }
-        .st-key-scanpath_rail .st-key-tour_grp_views button p { font-size: 0.95rem; }
+        :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) [data-testid="stHorizontalBlock"] { gap: 0.4rem !important; }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button { padding-inline: 0.25rem; }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button p { font-size: 0.95rem; }
     }
     /* The rail's heading row holds nothing but the heading; Reset sits
        at the foot of the rail (`plot_reset_footer`), full width like every
@@ -2540,15 +2529,13 @@ def get_app_css() -> str:
         .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
         .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_view_modes, .st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
         .st-key-plot_controls_header h2 { padding-bottom: 0.25rem !important; }
-        .st-key-scanpath_rail .st-key-tour_grp_views button,
-        .st-key-tour_grp_views .st-key-single_animate label {
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button {
             min-height: 44px;
         }
-        .st-key-scanpath_rail .st-key-tour_grp_views[data-testid="stVerticalBlock"] {
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles)[data-testid="stVerticalBlock"] {
             gap: 0.15rem !important;
         }
-        .st-key-scanpath_rail .st-key-tour_grp_views button > div > span,
-        .st-key-tour_grp_views .st-key-single_animate label {
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button > div > span {
             flex-direction: row;
         }
     }
@@ -2634,7 +2621,17 @@ def get_app_css() -> str:
         .replace("__SELECTOR_SCREEN_PICKER__", f"{SELECTOR_SCREEN_PICKER_REM}rem")
         .replace("__SELECTOR_ROW_WRAP__", f"{SELECTOR_ROW_WRAP_REM:g}rem")
     )
-    return css
+    swatches = []
+    for name, colors in PALETTES.items():
+        fix, saccade, highlight = (
+            colors[k]
+            for k in ("fixation_color", "saccade_color", "highlight_text_color")
+        )
+        swatches.append(
+            f".st-key-{palette_tile_key(name)} {{ --palette-swatch: linear-gradient(90deg, "
+            f"{fix} 0 33%, {saccade} 33% 66%, {highlight} 66% 100%); }}"
+        )
+    return css.replace("__PALETTE_SWATCHES__", "\n".join(swatches))
 
 
 def compact_css(css: str) -> str:

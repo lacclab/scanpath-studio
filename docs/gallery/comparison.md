@@ -18,7 +18,7 @@ print(gallery_figure("comparison"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. Turn on :material/compare: **Compare**. In **Trial B**, choose another participant's reading of the same text.
     3. In **Compare settings**, set **Layout** to **Overlay** and name the two readings under **Reading labels**. To compare the complete readings, keep the **Index range** of both scanpaths at the full range, under :material/filter_list: **Filters & highlights** ▾ → **Reading A** and **Reading B**.
     4. In :material/aspect_ratio: **Figure** → **Screen & framing**, tick **Crop to data**. Under **Margins and border color**, untick the automatic margin and enter 50 px.

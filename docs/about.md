@@ -11,10 +11,11 @@ documentation for your Stable or Dev build. **About & citation → App details**
 links to [what’s new in that build](whats-new.md).
 
 Developed by [Omer Shubi](https://omershubi.github.io/),
-[Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/),
-[Ella Lion](https://ella-lion.github.io/),
+[Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html),
+[Ella Lion](https://ella-lion.github.io/),
+[Carlson Büth](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/bueth.html),
 [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html),
 [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/),

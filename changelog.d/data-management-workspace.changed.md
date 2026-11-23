@@ -1,1 +1,1 @@
-Data Management opens on the current dataset with direct access to recording tables, data checks and annotations. The searchable dataset library and local storage have their own tabs.
+Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.

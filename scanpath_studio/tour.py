@@ -216,7 +216,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Check what was loaded",
                 "**Current dataset → Overview** shows how many participants, trials "
-                "and texts you loaded. Choose **Tables** to inspect their rows, "
+                "and texts you loaded. Choose **Tables** to browse all six tables, "
                 "or **Data checks** to review any problems.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
@@ -1831,7 +1831,7 @@ def _maybe_start_welcome_tour() -> None:
         return
     if tour_opted_out():  # "Don't show this again", persisted in a cookie
         return
-    # A session recovered from *Saved on this computer* belongs to
+    # A session recovered from *Saved work* belongs to
     # someone who has used the app here before — a new browser, or cleared
     # site data, cleared the cookie opt-out, not their experience.
     from scanpath_studio.persistence import session_was_restored
@@ -2438,7 +2438,7 @@ def _where_data_goes() -> str:
         answer += (
             " The app also saves a **local copy** of your datasets, mappings, "
             "settings and annotations, so you can resume after a refresh. "
-            f"**{ICONS['view_data']} Data Management → Saved on this computer** "
+            f"**{ICONS['view_data']} Data Management → Saved work** "
             "shows what is stored and where."
         )
     return answer

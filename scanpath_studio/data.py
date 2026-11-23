@@ -521,7 +521,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
 
     def _publish(value: Any) -> None:
         with _INFLIGHT_LOCK:
-            wins = store.get((_LATEST_REQUESTED, slot)) == key
+            wins = store.get((_LATEST_REQUESTED, slot), _MISSING) == key
             if wins:
                 previous = store.get(slot)
                 if keep > 1 and previous is not None and previous[0] != key:
@@ -556,6 +556,8 @@ def forget_frame_cache(slot: str) -> None:
         return  # No runtime: there is no cache.
     if store:
         with _INFLIGHT_LOCK:
+            # A conversion already in flight must not repopulate a forgotten slot.
+            store.pop((_LATEST_REQUESTED, slot), None)
             store.pop(slot, None)
             store.pop((_EARLIER, slot), None)
 

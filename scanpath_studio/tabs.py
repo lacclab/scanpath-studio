@@ -214,6 +214,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    metadata_readings,
     pin_word_heatmap_range,
     plot_popover_on_change,
     read_trial_filters,
@@ -247,6 +248,7 @@ from scanpath_studio.data import (
     empty_fixations_frame,
     empty_words_frame,
     filter_to_keys,
+    forget_frame_cache,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
@@ -10291,27 +10293,17 @@ def data_scope_text(
     combos_all: pd.DataFrame,
     words_all: pd.DataFrame,
     fixations_all: pd.DataFrame,
-) -> str:
-    """What the Data page's Overview and recording tables count, on one line.
-
-    ``12 of 24 trials · 1 of 2 readers · filtered: Participant: p1`` while a
-    trial filter narrows the pool, ``24 trials · 2 readers · whole dataset``
-    otherwise — the Corpus Analysis pool line's counts and filter names,
-    so the two pages describe the same pool the same way.
-    """
-    counts = pool_count_text(
-        len(combos),
-        len(combos_all),
-        _n_unique_readers(combos),
-        _n_unique_readers(combos_all),
-    )
+) -> str | None:
+    """Explain an active Scanpath filter once, wherever its results are shown."""
     if not has_active_trial_filters():
-        return f"{counts} · whole dataset"
-    described = " · ".join(
+        return None
+    described = ", ".join(
         md_literal(format_filter_item(i))
         for i in active_filter_items(words_all, fixations_all)
     )
-    return f"{counts} · filtered" + (f": {described}" if described else "")
+    count = f"{len(combos):,} of {plural(len(combos_all), 'trial')}"
+    note = f"Scanpath filters include {count}."
+    return f"{note} {described}" if described else note
 
 
 def render_data_scope(text: str | None, *, key: str) -> None:
@@ -13572,16 +13564,33 @@ def _render_raw_table(
     local path. Bulk export is the supported way out, and it strips those at its
     single chokepoint (``export.strip_local_paths``).
     """
-    # Bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    shown = shareable_frame(df, table=table)
-    # Headed by the dataset's own names (``table`` says whose).
+    from streamlit.dataframe_util import convert_pandas_df_to_arrow_table
+
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
-    # A copy of a partner from the same source column is shown once — left out
-    # of `column_order` rather than dropped, so a large frame is not copied.
-    hidden = names.redundant_aliases(shown)
-    order = [c for c in shown.columns if c not in hidden]
+
+    def display_source():
+        shown = shareable_frame(df, table=table)
+        hidden = names.redundant_aliases(shown)
+        order = [c for c in shown.columns if c not in hidden]
+        # A lazy grid serves slices, but first needs the entire frame in Arrow
+        # with a physical index. Keep that conversion for the three recordings.
+        source = (
+            convert_pandas_df_to_arrow_table(shown, preserve_index=True)
+            if table
+            else shown
+        )
+        return source, order
+
+    if table:
+        source, order = frame_cache(
+            f"data_table_display_{table}",
+            (frame_fingerprint(df), tuple(sorted(names.entries.items()))),
+            display_source,
+        )
+    else:
+        source, order = display_source()
     st.dataframe(
-        shown,
+        source,
         hide_index=True,
         width="stretch",
         lazy=True,
@@ -13592,49 +13601,32 @@ def _render_raw_table(
         st.caption(caption)
 
 
-def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
-    """Render the raw fixations table, as uploaded/mapped — no computation."""
-    if fixations_filtered.empty:
-        st.caption(
-            "No fixation rows. This dataset has none, or the filters exclude them all."
-        )
-        return
-    _render_raw_table(fixations_filtered, table="fixations")
-
-
-def render_words_tab(words_filtered: pd.DataFrame) -> None:
-    """Render the raw Words table, as uploaded/mapped — no computation.
-
-    The table as given: the per-word reading measures derived from it
-    (`compute_word_metrics`'s FFD/FPRT/RPD/TFD/…) are not raw data and do not
-    belong here.
-    """
-    if words_filtered.empty:
-        st.caption(
-            "No Words table rows. This dataset has none, or the filters exclude "
-            "them all."
-        )
-        return
-    _render_raw_table(words_filtered, table="words")
-
-
-def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
-    """Render raw gaze data tab."""
-    if raw_gaze_filtered.empty:
-        st.caption(
-            "No raw gaze samples. This dataset has none, or the filters exclude "
-            "them all."
-        )
-        return
-    # The bundled demo's raw gaze is synthesized from the fixation
-    # report — a table that looks like recorded samples must say it isn't.
-    # The catalogue's flag decides it, as it does at the plot.
-    if _synthesized_raw_gaze_note(st.session_state.get("data_source_choice")):
-        st.caption(
-            f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
-            "illustration. It is not recorded eye-tracker output."
-        )
-    _render_raw_table(raw_gaze_filtered, table="raw_gaze")
+# Display order also determines the links at the top of Tables.
+_RECORDING_TABLES = {
+    "fixations": ("Fixations", "One row per fixation, with its position and duration."),
+    "words": (
+        "Words",
+        "One row per word area, with its position and any supplied reading measures.",
+    ),
+    "raw_gaze": (
+        "Raw gaze samples",
+        "One row per eye-tracker sample.",
+    ),
+}
+_ENTITY_TABLES = {
+    "participant": (
+        "Participants",
+        "One row per participant, with counts from their recordings.",
+    ),
+    "trial": (
+        "Trials",
+        "One row per participant and trial, with counts from that reading.",
+    ),
+    "text": (
+        "Texts",
+        "One row per text. Passages are assembled from the words when available.",
+    ),
+}
 
 
 def _entity_counts(frames: list[pd.DataFrame], keys: list[str]) -> pd.DataFrame:
@@ -13684,8 +13676,14 @@ def _with_constants(
         if not candidates:
             continue
         grouped = frame.groupby(keys, dropna=True, sort=False)
-        varies = grouped[candidates].nunique(dropna=True).max() > 1
-        constant = [c for c in candidates if not varies.get(c, True)]
+        constant = []
+        for column in candidates:
+            try:
+                if grouped[column].nunique(dropna=True).max() <= 1:
+                    constant.append(column)
+            except TypeError:
+                # Nested values in an extra Parquet column have no scalar group count.
+                continue
         if not constant:
             continue
         values = strip_local_paths(grouped[constant].first().reset_index())
@@ -13722,7 +13720,9 @@ def _ids_from_data(
     recordings = [_fixations, _words]
     frames = [*recordings, _raw_gaze] if _raw_gaze is not None else recordings
     pid, tid, xid = "participant_id", "trial_id", "text_id"
-    reading_texts = _metadata_mod.recording_keys(*frames).dropna(subset=[xid])
+    reading_texts = metadata_readings(_words, _fixations, _raw_gaze).dropna(
+        subset=[xid]
+    )
     if kind == "participant":
         out = _entity_counts(frames, [pid])
         if out.empty:
@@ -13781,72 +13781,44 @@ def _ids_from_data(
     return out
 
 
-#: How the attach screen is named in the fallback caption.
-_ATTACH_HINT = (
-    "Attach a {grain} table (one row per {unit}) under ✏️ **Edit dataset → "
-    "Data tables & column mapping → Metadata** to add your own columns."
-)
-
-
 def _render_raw_metadata_tab(
-    label: str,
-    attached,
-    id_note: str,
-    *,
-    kind: str,
-    unit: str,
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    raw_gaze: pd.DataFrame,
-    scope: str | None = None,
+    kind, attached, words, fixations, raw_gaze, *, filtered: bool
 ) -> None:
-    """One of the Participants/Trials/Texts sub-tabs — always present,
-    even when nothing is attached, so the Raw Data section is always the same
-    six tables rather than some appearing only once uploaded.
-
-    Without an attached table it lists the ids the fixation and AOI rows
-    carry, with counts (:func:`_ids_from_data`) — the dataset has readers,
-    trials and texts whether or not a separate table describes them.
-    """
-    if attached is None or attached.frame.empty:
-        derived = _ids_from_data(
+    """Show the supplied metadata file, or summarize the IDs in the recordings."""
+    label, description = _ENTITY_TABLES[kind]
+    if attached is not None and not attached.frame.empty:
+        note = f"From **{md_literal(attached.source_name)}**. One row per {kind}."
+        if filtered:
+            note += " This file includes all rows, regardless of the Scanpath filters."
+        st.caption(note)
+        _render_raw_table(attached.frame)
+        return
+    derived = _ids_from_data(
+        kind,
+        words,
+        fixations,
+        _raw_gaze=raw_gaze,
+        cache_key=(
             kind,
-            words,
-            fixations,
-            _raw_gaze=raw_gaze,
-            cache_key=(
-                kind,
-                frame_fingerprint(words),
-                frame_fingerprint(fixations),
-                frame_fingerprint(raw_gaze),
-            ),
-        )
-        if derived.empty:
-            st.caption(f"No {label.lower()} found in the data.")
-            return
-        render_data_scope(scope, key=f"data_scope_{kind}_ids")
+            *(frame_fingerprint(frame) for frame in (words, fixations, raw_gaze)),
+        ),
+    )
+    if derived.empty:
         st.caption(
-            f"{len(derived):,} {kind if len(derived) == 1 else label.lower()}, "
-            "in the recording tables"
-            + (
-                f", with every column that holds one value per {unit}"
-                if kind != "text"
-                else ""
-            )
-            + ". "
-            + _ATTACH_HINT.format(grain=kind, unit=unit)
-        )
-        # A canonical column carried along is headed by the user's name.
-        names = active_column_names(st.session_state, "fixations")
-        st.dataframe(
-            derived,
-            hide_index=True,
-            width="stretch",
-            column_config=column_label_config(derived.columns, names),
+            f"No {label.lower()} in the selected trials."
+            if filtered
+            else f"No {label.lower()} found."
         )
         return
-    st.caption(f"From **{attached.source_name}**, joined on {id_note}.")
-    _render_raw_table(attached.frame)
+    st.caption(description)
+    names = active_column_names(st.session_state, "fixations")
+    st.dataframe(
+        derived,
+        hide_index=True,
+        width="stretch",
+        lazy=True,
+        column_config=column_label_config(derived.columns, names),
+    )
 
 
 @st.cache_data(show_spinner="Building stimuli list…", show_time=True)
@@ -14034,47 +14006,54 @@ def render_data_tables(
     raw_gaze: pd.DataFrame,
     *,
     scope: str | None,
+    whole_dataset: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
-    """Inspect one recording or metadata table at a time."""
+    """Show all six tables together with direct links to their headings."""
+    links = [
+        f"[{label}](#data-table-{key})"
+        for key, (label, _) in (*_RECORDING_TABLES.items(), *_ENTITY_TABLES.items())
+    ]
+    with st.container(key="data_table_links"):
+        st.markdown("  ·  ".join(links))
+    render_data_scope(scope, key="data_scope_tables")
+    all_words, all_fixations, all_gaze = whole_dataset
     recordings = {
-        "Fixations": (fixations, render_fixations_tab, "data_scope_fixations"),
-        "Words (interest areas)": (words, render_words_tab, "data_scope_words"),
-        "Raw gaze": (raw_gaze, render_raw_gaze_tab, "data_scope_raw_gaze"),
+        "fixations": (fixations, all_fixations),
+        "words": (words, all_words),
+        "raw_gaze": (raw_gaze, all_gaze),
     }
-    metadata = {
-        "Participants": ("participant", _metadata_mod.active),
-        "Trials": ("trial", _metadata_mod.active_trials),
-        "Texts": ("text", _metadata_mod.active_texts),
-    }
-    labels = [*recordings, *metadata]
-    first = next(
-        (i for i, (frame, _, _) in enumerate(recordings.values()) if not frame.empty), 0
+    for key, (label, description) in _RECORDING_TABLES.items():
+        frame, whole = recordings[key]
+        with st.container(key=f"data_table_{key}"):
+            st.subheader(label, anchor=f"data-table-{key}")
+            if frame.empty:
+                if whole.empty:
+                    forget_frame_cache(f"data_table_display_{key}")
+                st.caption(
+                    "No rows match the Scanpath filters."
+                    if not whole.empty
+                    else "This dataset has no rows in this table."
+                )
+                continue
+            if key == "raw_gaze" and _synthesized_raw_gaze_note(
+                st.session_state.get("data_source_choice")
+            ):
+                description = "These example gaze samples are synthesized from the demo’s fixations."
+            st.caption(description)
+            _render_raw_table(frame, table=key)
+    attachments = (
+        _metadata_mod.active(),
+        _metadata_mod.active_trials(),
+        _metadata_mod.active_texts(),
     )
-    label = st.selectbox(
-        "Table",
-        labels,
-        index=first,
-        key="data_table_choice",
-        width=320,
-        persist_state="session",
-    )
-    if label in recordings:
-        frame, render, key = recordings[label]
-        render_data_scope(scope, key=key)
-        render(frame)
-    else:
-        grain, attached = metadata[label]
-        _render_raw_metadata_tab(
-            label,
-            attached(),
-            f"the {grain} id",
-            kind=grain,
-            unit=grain,
-            words=words,
-            fixations=fixations,
-            raw_gaze=raw_gaze,
-            scope=scope,
-        )
+    for (key, (label, _)), attached in zip(
+        _ENTITY_TABLES.items(), attachments, strict=True
+    ):
+        with st.container(key=f"data_table_{key}"):
+            st.subheader(label, anchor=f"data-table-{key}")
+            _render_raw_metadata_tab(
+                key, attached, words, fixations, raw_gaze, filtered=bool(scope)
+            )
     if derived_analysis_tables_enabled():
         _render_derived_tables(words, fixations, raw_gaze)
 
@@ -14099,54 +14078,36 @@ def _dataset_statistics(
     _raw_gaze: pd.DataFrame,
     cache_key,
 ) -> dict:
-    """Compute the Data Inspection tab's summary aggregates.
-
-    Pure function of the (filtered) frames, cached on a cheap fingerprint so the
-    full-corpus ``groupby``/``unique``/``mean`` scans don't re-run on every rerun
-    (e.g. when the user merely selects a different trial)."""
-    trial_ids = trial_keys(_words) | trial_keys(_fixations) | trial_keys(_raw_gaze)
-    trials_per_participant = pd.Series(Counter(pid for pid, _ in trial_ids), dtype=int)
-    texts = text_ids(_words, _fixations, _raw_gaze)
-    fixations_per_trial = (
-        _fixations.groupby(["participant_id", "trial_id"]).size()
-        if not _fixations.empty
-        else pd.Series(dtype=float)
-    )
-    words_per_trial = (
-        _words.groupby(["participant_id", "trial_id"]).size()
-        if not _words.empty
-        else pd.Series(dtype=float)
-    )
-    stats_df = pd.DataFrame(
-        [
-            {
-                "Metric": "Trials per participant",
-                **safe_summary(trials_per_participant),
-            },
-            {"Metric": "Fixations per trial", **safe_summary(fixations_per_trial)},
-            {"Metric": "Words per trial", **safe_summary(words_per_trial)},
-        ]
-    ).rename(
-        columns={
-            "mean": "Mean",
-            "std": "Std",
-            "min": "Min",
-            "median": "Median",
-            "max": "Max",
-        }
-    )
-
+    """Compute counts and averages for the same filtered set of readings."""
+    frames = {"fixations": _fixations, "words": _words, "raw_gaze": _raw_gaze}
+    keys = {table: trial_keys(frame) for table, frame in frames.items()}
+    trials = set.union(*keys.values())
+    per_reader = pd.Series(Counter(pid for pid, _ in trials), dtype=int)
+    spread = []
+    if trials:
+        spread.append({"Metric": "Trials per participant", **safe_summary(per_reader)})
+    for table, label in (
+        ("fixations", "Fixations per trial"),
+        ("words", "Words per trial"),
+        ("raw_gaze", "Gaze samples per trial"),
+    ):
+        if not keys[table] or (table == "raw_gaze" and keys["fixations"]):
+            continue
+        # Average among trials with this table. The coverage column shows that denominator.
+        counts = frames[table].groupby(["participant_id", "trial_id"]).size()
+        spread.append({"Metric": label, **safe_summary(counts)})
     parts, screen_error = _inspection_screens(_words, _fixations, _raw_gaze)
     return {
         "parts": parts,
         "screen_error": screen_error,
-        "n_participants": len(trials_per_participant),
-        "n_texts": len(texts),
-        "n_trials": len(trial_ids),
-        "n_fixations": len(_fixations),
-        "n_words": len(_words),
-        "n_gaze": len(_raw_gaze),
-        "stats_df": stats_df,
+        "n_participants": len(per_reader),
+        "n_trials": len(trials),
+        "n_texts": len(text_ids(_words, _fixations, _raw_gaze)),
+        "recordings": {k: (len(frame), len(keys[k])) for k, frame in frames.items()},
+        "fixations_without_words": len(keys["fixations"] - keys["words"]),
+        "stats_df": pd.DataFrame(spread).rename(
+            columns={"mean": "Mean", "std": "Std", "min": "Min", "max": "Max"}
+        ),
     }
 
 
@@ -16628,32 +16589,30 @@ def _spread_help(row: dict) -> str | None:
         pieces.append(f"± {std} SD")
     if low != high and "—" not in (low, high):
         pieces.append(f"range {low}–{high}")
-    spread = " · ".join(pieces) if pieces else "The same for every row"
-    return f"{spread}. Computed after the current filters."
+    spread = " · ".join(pieces) if pieces else "Same count in each group"
+    grouping = {
+        "Trials per participant": "Includes participants with a selected trial.",
+        "Fixations per trial": "Includes trials with fixation rows.",
+        "Words per trial": "Includes trials with word rows.",
+        "Gaze samples per trial": "Includes trials with gaze samples.",
+    }
+    return f"{spread}. {grouping[row['Metric']]}"
 
 
 def _render_spread_cards(spread: pd.DataFrame) -> None:
-    """The per-metric spread, as metrics beside the counts they explain.
-
-    Each metric is an ``st.metric``, the same widget as the headline counts
-    directly above, so the two rows read as one block, with the mean — the
-    number anyone actually reads first ("how long is a trial in this
-    corpus?") — on its face; the standard deviation and the range are on the
-    metric's own ❔.
-    """
     if spread is None or spread.empty:
         return
-    rows = spread.to_dict("records")
-    for row, cell in zip(rows, st.columns(len(rows), gap="small")):
-        cell.metric(
-            str(row.get("Metric", "")),
-            _format_spread_mean(row.get("Mean")),
-            help=_spread_help(row),
-        )
+    with st.container(key="data_averages"):
+        st.markdown("#### Averages")
+        grid = st.grid(3, min_column_width=135, gap="small")
+        for row in spread.to_dict("records"):
+            grid.metric(
+                row["Metric"], _format_spread_mean(row["Mean"]), help=_spread_help(row)
+            )
 
 
-def _inspect_recording_table(label: str) -> None:
-    st.session_state["data_table_choice"] = label
+def _inspect_recording_table(table: str) -> None:
+    st.session_state["_data_table_target"] = table
     st.session_state[DATA_INSPECTION_KEY] = "Tables"
 
 
@@ -16662,11 +16621,9 @@ def render_dataset_summary(
     fixations: pd.DataFrame,
     raw_gaze: pd.DataFrame,
     *,
-    whole_dataset: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     scope: str | None,
-    filtered: bool,
 ) -> None:
-    """Counts for the current trial filters, with their distributions on demand."""
+    """Overview of the selected trials, their typical size and their source tables."""
     stats = _dataset_statistics(
         words,
         fixations,
@@ -16676,163 +16633,49 @@ def render_dataset_summary(
         ),
     )
     render_data_scope(scope, key="data_scope_stats")
-    parts = stats["parts"]
-    if stats["screen_error"]:
-        screen_metric = ("Screens", "—", "screens")
-    elif parts.empty:
-        screen_metric = (
-            "Screens per trial",
-            "1" if stats["n_trials"] else "—",
-            "screens",
-        )
-    else:
-        screen_metric = ("Screens", f"{len(parts):,}", "screens")
-    size = st.grid(4, min_column_width=140, gap="small")
-    for label, value, icon in (
-        ("Participants", f"{stats['n_participants']:,}", "participants"),
-        ("Trials", f"{stats['n_trials']:,}", "trials"),
-        ("Texts", f"{stats['n_texts']:,}", "texts"),
-        screen_metric,
-    ):
-        size.metric(label, value, icon=ICONS[icon], border=True)
-
-    tables, coverage = st.columns([2, 3], gap="medium")
-    with tables.container(border=True, key="data_recording_tables"):
-        st.markdown("#### Recording tables")
+    with st.container(key="data_totals"):
+        size = st.grid(3, min_column_width=100, gap="small")
         for label, field, icon in (
-            ("Fixations", "n_fixations", "fixations"),
-            ("Words (interest areas)", "n_words", "words"),
-            ("Raw gaze", "n_gaze", "raw_gaze"),
+            ("Participants", "n_participants", "participants"),
+            ("Trials", "n_trials", "trials"),
+            ("Texts", "n_texts", "texts"),
         ):
+            size.metric(label, f"{stats[field]:,}", icon=ICONS[icon], border=True)
+    _render_spread_cards(stats["stats_df"])
+    with st.container(key="data_recording_tables"):
+        st.markdown("#### Eye-tracking data")
+        with st.container(key="data_recording_header"):
+            st.markdown("**Table** :gray[Rows] :gray[Trials with data]")
+        for table, (label, _) in _RECORDING_TABLES.items():
+            rows, covered = stats["recordings"][table]
+            coverage = (
+                f"{covered:,} of {stats['n_trials']:,}" if stats["n_trials"] else "—"
+            )
             st.button(
-                f"**{label}** :gray[{plural(stats[field], 'row')}]",
-                icon=ICONS[icon],
+                f"**{label}** :gray[{rows:,}] :gray[{coverage}]",
                 type="tertiary",
                 width="stretch",
-                key=f"data_inspect_{icon}",
+                key=f"data_inspect_{table}",
                 on_click=_inspect_recording_table,
-                args=(label,),
+                args=(table,),
+                help=f"Open the {label} table",
             )
-    with coverage.container(border=True):
-        render_dataset_capabilities(*whole_dataset, filtered=filtered)
-
-    with st.expander("Per-participant and per-trial statistics"):
-        _render_spread_cards(stats["stats_df"])
-
+        missing = stats["fixations_without_words"]
+        if missing and stats["recordings"]["words"][1]:
+            st.caption(f"{plural(missing, 'trial')} with fixations but no word rows.")
+        measures = brought_reading_measures(words)
+        if measures:
+            labels = {column: label for _, column, label, *_ in READING_MEASURE_FIELDS}
+            labels.update((m.column, m.label) for m in MEASURES.values())
+            with st.expander(f"Reading measures in the Words table ({len(measures)})"):
+                st.markdown("\n".join(f"- {labels[column]}" for column in measures))
     if stats["screen_error"]:
         st.warning(stats["screen_error"])
-    elif not parts.empty:
-        with st.expander("Multipart trial screens", expanded=False):
-            st.caption(
-                "One row per screen of each trial, with that screen's size. "
-                "Analysis and export keep each screen apart."
-            )
-            st.dataframe(parts, hide_index=True, width="stretch")
-
-    # Provenance is a fact about the *dataset*, so it sits with the counts.
-    # Silent for every source but a OneStop local export.
+    elif not stats["parts"].empty:
+        with st.expander(f"Trial screens ({len(stats['parts']):,})"):
+            st.caption("One row per screen within a participant’s trial.")
+            st.dataframe(stats["parts"], hide_index=True, width="stretch")
     _render_data_provenance()
-
-
-#: A reading measure's short label (``"TFD"``) by canonical column.
-_MEASURE_SHORT_LABELS = {
-    column: label for _k, column, label, *_ in READING_MEASURE_FIELDS
-}
-
-
-@dataclass(frozen=True)
-class DatasetCoverage:
-    scanpaths: str
-    raw_gaze: str
-    screens: str
-    reading_measures: tuple[str, ...]
-
-
-def dataset_capabilities(
-    words: pd.DataFrame | None,
-    fixations: pd.DataFrame | None,
-    raw_gaze: pd.DataFrame | None,
-) -> DatasetCoverage:
-    """What the whole dataset can show, including trials with only gaze samples."""
-    word_trials, fix_trials, gaze_trials = (
-        trial_keys(f) for f in (words, fixations, raw_gaze)
-    )
-    all_trials = word_trials | fix_trials | gaze_trials
-    with_text = fix_trials & word_trials
-    if not fix_trials:
-        scanpaths = "No fixations recorded"
-    elif with_text == fix_trials:
-        scanpaths = f"{plural(len(fix_trials), 'trial')} over text"
-    elif with_text:
-        scanpaths = f"{plural(len(fix_trials), 'trial')} with fixations, {len(with_text):,} over text"
-    else:
-        scanpaths = (
-            f"{plural(len(fix_trials), 'trial')} with fixations and no word boxes"
-        )
-    measures = {m.column: m.label for m in MEASURES.values()}
-    brought = tuple(
-        measures.get(column, _MEASURE_SHORT_LABELS[column])
-        for column in brought_reading_measures(words)
-    )
-    gaze = (
-        f"{len(gaze_trials):,} of {plural(len(all_trials), 'trial')}"
-        if gaze_trials
-        else "None recorded"
-    )
-    parts, screen_error = _inspection_screens(words, fixations, raw_gaze)
-    screens = "One per trial" if all_trials else "No trials recorded"
-    if screen_error:
-        screens = "Unavailable because screen metadata conflicts"
-    elif not parts.empty:
-        parents = len(parts[["participant_id", "trial_id"]].drop_duplicates())
-        screens = f"{plural(len(parts), 'screen')} across {plural(parents, 'trial')}"
-    return DatasetCoverage(scanpaths, gaze, screens, brought)
-
-
-@st.cache_data(show_spinner=False)
-def _c_dataset_capabilities(_words, _fixations, _raw_gaze, key) -> DatasetCoverage:
-    """`dataset_capabilities`, keyed on the three frames' fingerprints.
-
-    The Data page draws it on every rerun, and on a corpus it scans every
-    trial key of the raw gaze samples.
-    """
-    return dataset_capabilities(_words, _fixations, _raw_gaze)
-
-
-def render_dataset_capabilities(
-    words: pd.DataFrame | None,
-    fixations: pd.DataFrame | None,
-    raw_gaze: pd.DataFrame | None,
-    *,
-    filtered: bool = False,
-) -> None:
-    """Coverage and supplied reading measures, before trial filters."""
-    coverage = _c_dataset_capabilities(
-        words,
-        fixations,
-        raw_gaze,
-        (
-            frame_fingerprint(words),
-            frame_fingerprint(fixations),
-            frame_fingerprint(raw_gaze),
-        ),
-    )
-    with st.container(key="dataset_capabilities"):
-        st.markdown("#### Dataset coverage")
-        if filtered:
-            st.caption("Whole dataset, before the trial filters.")
-        st.caption(
-            f"{ICONS['view_scanpath']} **Scanpaths** · {coverage.scanpaths}  \n"
-            f"{ICONS['raw_gaze']} **Raw gaze** · {coverage.raw_gaze}  \n"
-            f"{ICONS['screens']} **Screens** · {coverage.screens}"
-        )
-        if coverage.reading_measures:
-            with st.expander(plural(len(coverage.reading_measures), "reading measure")):
-                st.markdown(
-                    "\n".join(f"- {name}" for name in coverage.reading_measures)
-                )
-        else:
-            st.caption("No reading measures supplied in the Words table.")
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -16942,16 +16785,20 @@ def _render_run_sheet(sheet, dataset: str, frames: dict) -> None:
 
     sheets = st.session_state.setdefault(DATA_RUN_SHEETS_KEY, {})
     if dataset not in sheets:
-        sheet.caption(
-            "Upload a CSV with participant_id and trial_id. Add screen_id for individual screens "
-            "and a planned_omission reason for readings you intended to omit."
+        sheet.markdown(
+            "Compare the trials you planned with the ones in this dataset to find missing or unexpected recordings."
         )
+        sheet.caption(
+            "Upload a CSV with one row per planned trial and these two column names."
+        )
+        sheet.code("participant_id,trial_id\nP01,T01\nP01,T02", language="csv")
         widget = f"expected_readings_{dataset}"
         sheet.file_uploader(
-            "Expected readings (CSV)",
+            "Planned trials (CSV)",
             type=["csv"],
             key=widget,
             max_upload_size=upload_limit_mb(),
+            help="For individual screens, add `screen_id`. For trials you planned to omit, add a reason in `planned_omission`.",
             on_change=_attach_run_sheet,
             args=(dataset, widget),
         )
@@ -16963,16 +16810,21 @@ def _render_run_sheet(sheet, dataset: str, frames: dict) -> None:
         "Remove run sheet", key="remove_run_sheet", on_click=sheets.pop, args=(dataset,)
     )
     if isinstance(expected, str):
-        sheet.error(expected)
+        sheet.error(f"Couldn’t read this CSV. {expected}")
         return
     try:
         report = reconcile_run_sheet(expected, frames)
     except ValueError as exc:
         sheet.error(str(exc))
         return
+    counts = report["status"].value_counts()
+    if not counts.empty:
+        sheet.caption(
+            " · ".join(f"{label} ({count:,})" for label, count in counts.items())
+        )
     sheet.dataframe(report, hide_index=True)
     sheet.download_button(
-        "Download run sheet reconciliation",
+        "Download comparison (CSV)",
         data=report.to_csv(index=False),
         file_name="run_sheet_reconciliation.csv",
         mime="text/csv",
@@ -16999,12 +16851,15 @@ def render_data_health(
     the app does with them. Nothing is removed or changed.
     """
     from .column_names import active
+    from .data_health import applicable_checks
 
+    frames = {"words": words, "fixations": fixations, "raw_gaze": raw_gaze}
+    checked = list(dict.fromkeys(c.topic for c in applicable_checks(frames)))
     findings = _dataset_health_findings(words, fixations, raw_gaze)
     with st.container(key="dataset_health"):
         results = st.container()
         sheet = st.expander(
-            "Compare with the experiment run sheet",
+            "Compare with planned trials (optional)",
             key="data_run_sheet",
             on_change="rerun",
         )
@@ -17012,15 +16867,29 @@ def render_data_health(
             _render_run_sheet(
                 sheet,
                 dataset,
-                {"words": words, "fixations": fixations, "raw_gaze": raw_gaze},
+                frames,
             )
     with results:
+        st.subheader("Recording quality checks", anchor=False)
+        if not checked:
+            st.info(
+                "The available tables have no recording values that these checks can test."
+            )
+            return
+        scope_note = (
+            " These checks include trials hidden by the Scanpath filters."
+            if filtered
+            else ""
+        )
         st.caption(
-            "**Data checks**"
-            + (" · whole dataset, before the trial filters" if filtered else "")
+            "Checked "
+            + (", ".join(checked[:-1]) + " and " if len(checked) > 1 else "")
+            + checked[-1]
+            + "."
+            + scope_note
         )
         if not findings:
-            st.caption("No issues found in the data checks.")
+            st.success("No issues found in the values checked.")
             return
         lines: dict[str, list[str]] = {"warning": [], "note": []}
         for finding in findings:
@@ -17031,14 +16900,16 @@ def render_data_health(
             trials = f"{finding.trials:,} trial" + ("" if finding.trials == 1 else "s")
             lines[finding.severity].append(
                 f"**{finding.title}**: {finding.rows:,} of {finding.total_rows:,} "
-                f"{noun} rows, in {trials} ({kinds}); from {columns}."
+                f"{noun} rows in {trials} ({kinds}). Columns: {columns}."
             )
         if lines["warning"]:
             st.warning("  \n".join(lines["warning"]), icon=ICONS["warning"])
         if lines["note"]:
             st.caption("  \n".join(lines["note"]))
-        with st.expander("What the data checks found", expanded=False):
-            st.caption("Flagged rows are kept. Details and examples:")
+        with st.expander("Examples and effects on the figure"):
+            st.caption(
+                "Flagged rows stay in the data. The examples show how each issue affects the figure."
+            )
             for finding in findings:
                 names = active(st.session_state, finding.table)
                 st.markdown(f"**{finding.title}**")

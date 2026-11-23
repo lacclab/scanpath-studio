@@ -126,22 +126,55 @@ def get_app_css() -> str:
     }
     .st-key-data_identity h3 { overflow-wrap: anywhere; }
     .st-key-data_inspection_panel { margin-block: 0.65rem 0.35rem; }
-    .st-key-data_recording_tables button {
+    .st-key-data_totals { margin-top: 0.35rem; }
+    .st-key-data_averages, .st-key-data_recording_tables {
+        margin-block-start: 0.9rem;
+    }
+    .st-key-data_averages [data-testid="stMetric"] {
+        padding-inline: 0.85rem;
+        border-inline-start: 2px solid var(--sps-border);
+    }
+    .st-key-data_averages [data-testid="stMetricValue"] { font-size: 1.35rem; }
+    .st-key-data_recording_tables {
+        gap: 0 !important;
+    }
+    .st-key-data_recording_tables h4 { margin-bottom: 0.4rem; }
+    .st-key-data_recording_header, .st-key-data_recording_tables button[kind="tertiary"] {
+        padding-inline: 0.75rem;
+        border-bottom: 1px solid var(--sps-border);
+        border-radius: 0;
+    }
+    .st-key-data_recording_header { padding-block: 0.25rem; }
+    .st-key-data_recording_header p { font-size: 0.85rem; }
+    .st-key-data_recording_tables button[kind="tertiary"] {
         justify-content: start; color: var(--sps-accent);
+        min-height: 2.5rem;
     }
     .st-key-data_recording_tables button [data-has-shortcut],
     .st-key-data_recording_tables button [data-testid="stMarkdownContainer"] {
         flex: 1; min-width: 0;
     }
-    .st-key-data_recording_tables button p {
-        display: flex; justify-content: space-between; gap: 0.5rem; text-align: start;
+    .st-key-data_recording_header p, .st-key-data_recording_tables button[kind="tertiary"] p {
+        display: grid; grid-template-columns: minmax(0, 2fr) minmax(3.5rem, 1fr) minmax(5rem, 1fr);
+        align-items: baseline; column-gap: 0.65rem; text-align: end;
+        font-variant-numeric: tabular-nums;
+    }
+    .st-key-data_recording_header strong, .st-key-data_recording_tables button strong { text-align: start; }
+    .st-key-data_recording_tables [data-testid="stExpander"] { margin-top: 0.6rem; }
+    .st-key-data_table_links { margin-block: 0.45rem; }
+    .st-key-data_table_links a { white-space: nowrap; }
+    .st-key-tutorial_data_inspection [id^="data-table-"] { scroll-margin-top: 4rem; }
+    .st-key-tutorial_data_inspection [class*="st-key-data_table_"]:not(.st-key-data_table_links) {
+        margin-block: 0.6rem 0.35rem;
     }
     .sps-ds-mobile-status { display: none; }
     @media (max-width: 640px) {
         .sps-ds-mobile-status { display: block; font-size: 0.8rem; }
         .st-key-data_inspection_panel button { padding-inline: 0.45rem; }
         .st-key-data_workspace [role="tablist"] { gap: 0; }
-        .st-key-data_workspace [role="tab"] { padding-inline: 0.55rem; }
+        .st-key-data_workspace [role="tab"] { padding-inline: 0.4rem; }
+        .st-key-data_totals [data-testid="stMetric"] { padding: 0.65rem; }
+        .st-key-data_totals [data-testid="stMetricLabel"] span:has(> span > [data-testid="stMetricIcon"]) { display: none; }
     }
 
     /* The add-dataset wizard's watcher (`wizard_watch`): a script with

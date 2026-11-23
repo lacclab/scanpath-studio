@@ -65,7 +65,7 @@ def test_the_data_page_box_follows_the_folder_until_edited(tmp_path):
     at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
     at.session_state["public_dataset_choice"] = "PoTeC — Potsdam Textbook Corpus"
     at.session_state[DOWNLOAD_DIR_KEY] = str(tmp_path / "first")
-    pin_data_view(at, section="Storage")
+    pin_data_view(at, section="Saved work")
     at.run()
     assert not at.exception, at.exception
     assert at.text_input(key="potec_dir").value == str(tmp_path / "first" / "PoTeC")
@@ -75,15 +75,15 @@ def test_the_data_page_box_follows_the_folder_until_edited(tmp_path):
         f"saves it to `{tmp_path / 'first' / 'PoTeC'}`" in str(i.value) for i in at.info
     )
 
-    pin_data_view(at, section="Storage")  # AppTest forgets the page between runs
+    pin_data_view(at, section="Saved work")  # AppTest forgets the page between runs
     folder.set_value(str(tmp_path / "second")).run()
     assert not at.exception, at.exception
     assert at.text_input(key="potec_dir").value == str(tmp_path / "second" / "PoTeC")
 
     mine = str(tmp_path / "mine")
-    pin_data_view(at, section="Storage")
+    pin_data_view(at, section="Saved work")
     at.text_input(key="potec_dir").set_value(mine).run()
-    pin_data_view(at, section="Storage")
+    pin_data_view(at, section="Saved work")
     at.text_input(key=DOWNLOAD_DIR_KEY).set_value(str(tmp_path / "third")).run()
     assert not at.exception, at.exception
     assert at.text_input(key="potec_dir").value == mine

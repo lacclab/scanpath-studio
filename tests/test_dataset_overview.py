@@ -1,13 +1,4 @@
-"""What the 🗂️ Data page says about the open dataset, and how loudly.
-
-No **ℹ️ About** section stands above the counts that are the reason to visit:
-the overview is one sentence under the heading, with the corpus home page on the
-same line.
-
-The per-metric spread is three `st.metric`s matching the headline counts
-directly above them, with Mean, Std, Min and Max on each metric's own hover
-rather than in a table of equal weight.
-"""
+"""The dataset description, headline counts, and averages on Overview."""
 
 from __future__ import annotations
 
@@ -133,7 +124,7 @@ class TestTheSpreadMetrics:
         help_text = _spread_help(self._spread())
         assert "± 69.57 SD" in help_text
         assert "range 35–311" in help_text
-        assert "Computed after the current filters." in help_text
+        assert "Includes trials with fixation rows." in help_text
 
     def test_a_constant_metric_says_so_rather_than_printing_zeros(self):
         from scanpath_studio.tabs import _spread_help
@@ -143,7 +134,7 @@ class TestTheSpreadMetrics:
                 Metric="Trials per participant", Mean=12, Std=0, Min=12, Max=12
             )
         )
-        assert "The same for every row" in help_text
+        assert "Same count in each group" in help_text
         assert "±" not in help_text
 
     def test_they_are_metrics_beside_the_counts_not_a_table(self):

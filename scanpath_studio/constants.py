@@ -1023,7 +1023,7 @@ DATA_WORKSPACE_KEY = "data_workspace"
 DATA_WORKSPACE_REQUEST = "_requested_data_workspace"
 DATA_CURRENT = "Current dataset"
 DATA_LIBRARY = "Dataset library"
-DATA_STORAGE = "Storage"
+DATA_STORAGE = "Saved work"
 DATA_INSPECTION_KEY = "data_inspection_panel"
 DATA_RUN_SHEETS_KEY = "_data_run_sheets"
 DATASET_EDITOR_OPEN_KEY = "_dataset_editor_open"
@@ -1256,7 +1256,7 @@ ICONS: dict[str, str] = {
     "close": ":material/close:",
     "open": ":material/open_in_new:",
     "mute": ":material/notifications_off:",
-    # Data → Saved on this computer, and ❓ Help → About → Debug.
+    # Data → Saved work, and ❓ Help → About → Debug.
     "recovery": ":material/history:",
     "debug": ":material/bug_report:",
     # Data page and the add-dataset wizard.

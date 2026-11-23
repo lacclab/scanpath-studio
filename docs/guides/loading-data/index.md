@@ -8,7 +8,7 @@ description: "Load your own eye-tracking data from EyeLink, Tobii, Gazepoint, SM
 Load your own data, open a public dataset, or try the bundled demo.
 
 <figure class="sps-screenshot" markdown>
-![The bundled demo in Data Management, with trial counts, recording tables and dataset coverage](../../assets/screenshots/data-page.webp)
+![The bundled demo in Data Management, with participant and trial counts, averages and the number of trials containing each type of data](../../assets/screenshots/data-page.webp)
 </figure>
 
 ## Choose a dataset
@@ -164,19 +164,24 @@ the app does.
 
 ## Manage datasets
 
-**Current dataset** opens on **Overview**. Its counts reflect the trial filters
-set in Scanpath. Click a recording table’s row count to inspect its rows, or
-choose **Tables** to browse participants, trials and texts. **Dataset coverage**
-shows how many trials have scanpaths or raw gaze and which reading measures came
-with the dataset.
+**Current dataset** opens on **Overview**. It shows how many participants, trials
+and texts are in your selection and the average number of trials per participant.
+Fixation and word averages count trials that contain those rows. **Eye-tracking
+data** shows the row and trial counts for each table. Scanpath trial filters
+apply to these counts.
 
-**Data checks** examines the whole dataset. A warning above the Scanpath plot
-opens the findings when a check flags more than half a table. **Annotations**
-lets you review, import and export the dataset’s favorites, tags and notes.
+Click a table name to jump to its rows. **Tables** shows fixations, words, raw
+gaze samples, participants, trials and texts on one page. When you attach a
+participant, trial or text metadata file, that table shows the complete file.
+
+**Data checks** looks for unusable values in the whole dataset, including trials
+outside the filters. **Annotations** lets you review, import and export the
+dataset’s favorites, tags and notes.
 
 To switch datasets, open **Dataset library**. Search by name or filter by
-source, then click a dataset to open its overview. The library counts whole
-datasets. **Storage** lists saved work and downloaded corpora on this computer.
+source, then click a dataset to open its overview. **Saved work** shows what
+will reopen next time. On a local install, **Dataset downloads** lists the
+public datasets on disk and lets you choose where future downloads go.
 
 Use :material/edit: **Edit dataset** to change its name, column mapping,
 recording setup or metadata, then click :material/check: **Save changes**.
@@ -187,7 +192,7 @@ The editor offers only the columns kept when the dataset was added. To use a
 column that isn't listed, remove the dataset and add it again from its files,
 mapping the column or keeping it under **Extra fields to keep**.
 
-Under **Data checks**, **Compare with the experiment run sheet** accepts a
+Under **Data checks**, **Compare with planned trials (optional)** accepts a
 CSV with `participant_id` and `trial_id`. Add `screen_id` to check an
 individual screen. Enter a reason in `planned_omission` for readings you
 intended to omit and leave it blank for the rest. The report distinguishes

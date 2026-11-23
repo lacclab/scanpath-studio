@@ -10986,7 +10986,7 @@ def _participant_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
 
 
 def metadata_readings(words, fixations, raw_gaze=None) -> pd.DataFrame:
-    """The unfiltered dataset's recording identities, shared by joins and filters."""
+    """Recording identities for these frames, shared by metadata filters and tables."""
     from . import metadata as md
     from .data import frame_cache
 

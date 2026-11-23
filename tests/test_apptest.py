@@ -568,9 +568,7 @@ class TestDataInspectionTab:
         at.run(timeout=60)
         assert not at.exception, at.exception
         assert "Synthetic test trial" in [h.value for h in at.subheader]
-        assert {"Participants", "Trials", "Texts", "Screens per trial"} <= {
-            m.label for m in at.metric
-        }
+        assert {"Participants", "Trials", "Texts"} <= {m.label for m in at.metric}
         assert not any(w.key == "data_table_choice" for w in at.selectbox)
         assert not any(getattr(w, "key", None) == "dataset_table_grid" for w in at.main)
 
@@ -579,16 +577,16 @@ class TestDataInspectionTab:
         at.run(timeout=60)
         assert not at.exception, at.exception
         assert at.session_state["data_inspection_panel"] == "Tables"
-        chooser = at.selectbox(key="data_table_choice")
-        assert chooser.value == "Words (interest areas)"
-        assert chooser.options == [
+        headings = [h.value for h in at.subheader]
+        assert headings[-6:] == [
             "Fixations",
-            "Words (interest areas)",
-            "Raw gaze",
+            "Words",
+            "Raw gaze samples",
             "Participants",
             "Trials",
             "Texts",
         ]
+        assert any("data_table_words" in str(item.proto) for item in at.get("iframe"))
         assert "Participants" not in [m.label for m in at.metric]
 
     def test_column_mapping_uses_the_setup_field_grid(self):
@@ -4562,7 +4560,7 @@ class TestLazySubtabBodiesStillRender:
         at.button(key="data_inspect_fixations").click()
         pin_data_view(at)
         at.run(timeout=120)
-        assert at.selectbox(key="data_table_choice").value == "Fixations"
+        assert "Fixations" in [h.value for h in at.subheader]
         assert at.dataframe
 
 

@@ -4412,7 +4412,7 @@ def cache_status() -> dict:
     settings, saved designs, metadata tables and annotations under your cache folder, so
     a refresh or a restart resumes where it left off. A hosted deployment, such as the
     online demo, keeps none. The same information is on the app's **Data Management**
-    page under *Saved on this computer*, and in ``scanpath-studio cache``.
+    page under *Saved work*, and in ``scanpath-studio cache``.
 
     | Key | What it holds |
     | --- | --- |

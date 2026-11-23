@@ -35,7 +35,7 @@ scanpath_studio/
 ├─ App shell
 │  ├─ app.py             entry point: page config, the data-source registry and loaders (`prepare_data`,
 │  │                     `_normalize_pair`), trial filters, view dispatch, and the 🗂️ Data Management page
-│  │                     (Current dataset and its editor, Dataset library, Storage)
+│  │                     (Current dataset and its editor, Dataset library, Saved work)
 │  ├─ menu.py            the header: Streamlit's `st.navigation(position="top")` with three views
 │  │                     (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management) and ❓ Help's action
 │  │                     entries, which arm a dialog and bounce back to the current view

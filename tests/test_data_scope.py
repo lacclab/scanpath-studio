@@ -22,7 +22,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    assert _captions(at, "24 trials · 2 participants · whole dataset")
+    assert not _captions(at, "whole dataset")
     assert not _captions(at, "before the trial filters")
 
     # Set on the Scanpath view, where the filter panel publishes the result
@@ -35,21 +35,23 @@ def test_the_data_page_names_the_scope_of_its_counts():
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    scope = "12 of 24 trials · 1 of 2 participants · filtered"
+    scope = "Scanpath filters include 12 of 24 trials."
     assert _captions(at, scope)
-    assert _captions(at, "Whole dataset, before the trial filters.")
+    assert "12 of 12" in at.button(key="data_inspect_fixations").label
     at.button(key="data_inspect_fixations").click()
     pin_data_view(at)
     at.run(timeout=90)
-    for label in at.selectbox(key="data_table_choice").options:
-        at.selectbox(key="data_table_choice").select(label)
-        pin_data_view(at)
-        at.run(timeout=90)
-        assert not at.exception, at.exception
-        captions = _captions(at, scope)
-        assert (
-            len(captions) == 1 and md_literal("Participant: l7_1090") in captions[0]
-        ), label
+    assert not at.exception, at.exception
+    captions = _captions(at, scope)
+    assert len(captions) == 1 and md_literal("Participant: l7_1090") in captions[0]
+    assert {
+        "Fixations",
+        "Words",
+        "Raw gaze samples",
+        "Participants",
+        "Trials",
+        "Texts",
+    } <= {h.value for h in at.subheader}
 
     pin_data_view(at, section="Dataset library")
     at.run(timeout=90)
@@ -71,7 +73,7 @@ def test_empty_trial_filters_leave_the_dataset_open_for_inspection():
     pin_data_view(at)
     at.run(timeout=90)
     assert not at.exception, at.exception
-    assert any("Compare with the experiment run sheet" in e.label for e in at.expander)
+    assert any("Compare with planned trials" in e.label for e in at.expander)
     assert not at.button(key="data_edit_current").disabled
 
 

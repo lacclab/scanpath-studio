@@ -293,6 +293,7 @@ from scanpath_studio.multipart import SCREEN_ID, extract_part
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
     SAVE_CONFLICT_KEY,
+    SAVE_FAILED_KEY,
     cache_failure,
     cache_status,
     clear_local_state,
@@ -1073,7 +1074,7 @@ def _render_empty_after_filtering(
 
 
 #: The kinds `persistence.restored_summary` counts, in the order the
-#: *Saved on this computer* section lists them, with their singular/plural nouns.
+#: *Saved work* section lists them, with their singular/plural nouns.
 _RESTORED_KIND_NOUNS = (
     ("datasets", "dataset", "datasets"),
     ("annotations", "annotation", "annotations"),
@@ -1113,7 +1114,7 @@ def _pick_download_folder() -> None:
 
 
 def _render_download_folder_section(host) -> None:
-    """🗂️ Data Management → Storage → **Download folder**.
+    """🗂️ Data Management → Saved work → **Download folder**.
 
     One folder for every ⬇ Download, so a user chooses where the corpora go once
     rather than per dataset — the per-dataset Data directory box still
@@ -1127,11 +1128,9 @@ def _render_download_folder_section(host) -> None:
     if picked:
         st.session_state[DOWNLOAD_DIR_KEY] = picked
     st.session_state.setdefault(DOWNLOAD_DIR_KEY, "")
-    host.divider()
-    host.subheader(f"{ICONS['download']} Download folder")
+    host = host.expander("Download folder", key="data_download_folder")
     host.caption(
-        "Where **Download** saves public datasets, one subfolder each. Leave it "
-        "blank for the default. A dataset's *Data directory* box overrides it."
+        "New downloads go here unless you choose a folder for a particular dataset. Clear the field to use the default."
     )
     text_col, browse_col = host.columns([4, 1])
     text_col.text_input(
@@ -1153,7 +1152,6 @@ def _render_download_folder_section(host) -> None:
     )
     if st.session_state.pop(f"{DOWNLOAD_DIR_KEY}_no_picker", False):
         host.caption("Enter or paste the folder path.")
-    host.markdown(f"**Saving to:** `{download_folder()}`")
 
 
 def _retry_cached_datasets() -> None:
@@ -1190,7 +1188,7 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     """What of the recovery cache this session could not restore, with actions.
 
     Drawn where the recovery notices go (the page's notices) and again in
-    🗂️ Data → *Saved on this computer*, with ``key`` keeping the two sets of
+    🗂️ Data → *Saved work*, with ``key`` keeping the two sets of
     buttons apart. Two cases, never the third — a cache that is absent, or was
     cleared on purpose, is not a failure and says nothing:
 
@@ -1435,190 +1433,153 @@ def _delete_download_dialog(choice: str) -> None:
         st.rerun()  # the whole page, which closes this dialog
 
 
-def _render_datasets_here(
-    host, added: list[dict], downloads: list[DownloadedDataset]
-) -> None:
-    """*Saved on this computer* → **Datasets on this computer**, one list.
+def _show_dataset_library() -> None:
+    st.session_state[DATA_WORKSPACE_REQUEST] = DATA_LIBRARY
 
-    A dataset you added is here as the copy the saved session keeps of it; a
-    public one as the files its download wrote, in its own folder. Both are on
-    this computer, so both are listed, each with where it is and its size. What
-    differs is how each goes: **Clear what is saved…** deletes the copies,
-    while a download is deleted only from its own row, after a confirmation —
-    clearing a session must never cost a corpus that takes an hour to fetch.
-    """
-    host.markdown("**Datasets on this computer**")
-    if not added and not downloads:
+
+def _render_downloads(host) -> None:
+    """The files installed for public datasets have their own location and lifetime."""
+    downloads = downloaded_public_datasets()
+    host.subheader("Dataset downloads", anchor=False)
+    if not downloads:
         host.caption(
-            "None yet. A dataset you add, or a public dataset you download, "
-            "is listed here."
-        )
-        return
-    for entry in added:
-        host.markdown(
-            f"- **{md_literal(entry['name'])}** · added · "
-            f"{human_size(int(entry.get('bytes') or 0))} · a copy in the session "
-            "folder"
+            "No public datasets downloaded here yet. Open the library to choose one."
         )
     for index, row in enumerate(downloads):
+        line = host.container(horizontal=True, vertical_alignment="center")
+        info = line.container(width="stretch")
+        info.markdown(f"**{md_literal(row.name)}**")
         size = human_size(_files_bytes(row.own))
         if row.shared:
-            size += (
-                f", plus {human_size(_files_bytes(row.shared))} shared with other "
-                "downloaded datasets"
-            )
-        line = host.container(horizontal=True, vertical_alignment="center")
-        line.markdown(
-            f"- **{md_literal(row.name)}** · downloaded · {size} · `{row.folder}`"
-        )
+            size += f" plus {human_size(_files_bytes(row.shared))} shared with other datasets"
+        info.caption(f"{size} · `{row.folder}`")
         line.button(
-            # Named for screen readers; the bin is all that shows.
             f"{ICONS['delete']} {spoken(f'Delete the downloaded {row.name}')}",
             key=f"saved_here_delete_{index}",
-            help="Delete this download's files, after a confirmation.",
+            help="Delete this download",
             on_click=_arm_delete_download,
             args=(row.choice,),
         )
-    if downloads:
-        host.caption(
-            "**Clear what is saved…** deletes the copies of datasets you added. "
-            "Downloads stay until you delete one here."
-        )
+    host.button(
+        "Browse dataset library",
+        key="storage_browse_library",
+        on_click=_show_dataset_library,
+    )
+    _render_download_folder_section(host)
     requested = st.session_state.pop(DELETE_DOWNLOAD_REQUEST_KEY, None)
     if requested:
         _delete_download_dialog(requested)
 
 
 def _render_saved_here_section(app_url: str, host) -> None:
-    """🗂️ Data → **Saved on this computer**.
-
-    The Storage tab lists the datasets on this computer — the
-    copies the recovery cache keeps of the ones you added and the public ones
-    you downloaded (:func:`_render_datasets_here`) — then the rest of the
-    cache and the folder it is in.
-
-    Opting out is a launch choice (``run --no-persist`` /
-    ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ), so the cache's one control is
-    **Clear what is saved…**, behind a confirmation listing what goes
-    (``persistence.clear_saved_work``) — the same as the CLI's
-    ``scanpath-studio cache --clear``. The pause after a restore that crashed
-    is the other in-session state it names.
-
-    Drawn *after* this run's ``save_local_state`` (``main``'s
-    ``_finish_page``), so the status line reports the write that just happened.
-    ``cache_status`` re-reads the manifest each run — a few ``stat`` calls and a
-    small JSON — rather than being cached: a status line that lags what it
-    reports is worse than none.
-    """
+    """Show what will reopen next time, separately from the public datasets on disk."""
     status = cache_status(url=app_url)
-    downloads = downloaded_public_datasets()
-    host.subheader(f"{ICONS['recovery']} Saved on this computer")
     _announce_download_deleted()
+    local_files = local_filesystem_enabled()
+    layout = host.grid(2, min_column_width=320, gap="medium") if local_files else host
+    session = layout.container(
+        border=True,
+        key="storage_session",
+        height="stretch" if local_files else "content",
+    )
+    if local_files:
+        _render_downloads(
+            layout.container(border=True, key="storage_downloads", height="stretch")
+        )
+    session.subheader("Your session", anchor=False)
     if not status["enabled"]:
-        turned_off = status["override"] == "off"
-        host.caption(
-            (
-                "**Turned off.** Scanpath Studio was started with saving "
-                "switched off, so your work is kept in memory only"
-                if turned_off
-                else (
-                    "**Not saved between visits.** This server keeps your work only for the "
-                    "current session"
-                )
-            )
-            + ". Closing or refreshing the tab loses the datasets you uploaded, "
-            "their column mappings, your annotations and designs. Export the "
-            "annotations from **Current dataset → Annotations**, and the figure's settings "
-            f"from {ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → **Settings file**."
+        off = status["override"] == "off"
+        session.markdown(
+            "**Automatic saving is off.**"
+            if off
+            else "**This session ends when you close or refresh the tab.**"
         )
-        if turned_off:
-            # The switch itself, for whoever launches the app — kept out of the
-            # sentence above, which is for everyone.
-            host.caption(
-                f"Started with `--no-persist` or `{PERSIST_ENV_VAR}=0`; start "
-                "it without either to save again."
+        if off:
+            session.caption(
+                "Closing or refreshing the tab clears the work in this session."
             )
-        # Nothing is copied while saving is off, but a download is on disk all
-        # the same.
-        if downloads:
-            _render_datasets_here(host, [], downloads)
+        session.caption(
+            "To keep your work, keep the files you imported and download anything you want to reuse."
+        )
+        session.markdown(
+            "Download favorites, tags and notes under **Current dataset → Annotations**. "
+            "For figure settings, use **Scanpath → Share → Settings file**."
+        )
+        if off:
+            session.expander("How to enable saving").caption(
+                f"Restart the local app without `--no-persist` or `{PERSIST_ENV_VAR}=0`."
+            )
         return
-
-    # "Nothing leaves" holds only where browser and server are one machine; a
-    # network server opted in with SCANPATH_STUDIO_PERSIST=1 got the files
-    # over the network.
+    failure = cache_failure(st.session_state)
     if st.session_state.get(SAVE_CONFLICT_KEY):
-        host.caption(
-            "This list shows the saved copy. Your unsaved edits are still in this tab."
-        )
-    else:
-        host.caption(
-            "Your added datasets, annotations, designs, and your view, trial and "
-            "plot settings are saved as you work and restored next time."
-            + (" Nothing leaves this computer." if server_bound_to_loopback() else "")
-        )
-    if restored_from_cache(st.session_state):
-        host.success("Recovered when the app opened.", icon=ICONS["recovery"])
-    readable = status["exists"] and status["readable"]
-    if readable or downloads:
-        _render_datasets_here(
-            host, list(status["datasets"]) if readable else [], downloads
-        )
-    if readable:
-        # The rest of the saved session; its datasets are the list above.
-        host.markdown(
-            "**Also saved:** "
-            + " · ".join(
-                [
-                    plural(int(status["annotations"]), "annotation"),
-                    plural(int(status["designs"]), "design"),
-                ]
-                # Metadata tables are named only when there are any, so the
-                # common line keeps its length.
-                + (
-                    [plural(int(status["metadata"]), "metadata table")]
-                    if status.get("metadata")
-                    else []
-                )
-                + ["your view, trial and plot settings"]
-            )
-        )
-    elif status["exists"] and not cache_failure(st.session_state):
-        host.warning(
-            "What was saved here can't be read. It may have been written by a "
-            "different version, or be incomplete.",
+        session.warning(
+            "This tab has unsaved changes. The details below describe the saved copy.",
             icon=ICONS["warning"],
         )
-    elif not status["exists"]:
-        host.caption("Nothing is saved in this folder.")
-    render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
-    host.markdown(
-        f"**Session folder:** `{status['directory']}`"
-        + (f" · {human_size(status['bytes'])}" if status["exists"] else "")
-    )
-    # Not offered for an unreadable cache: that box has its own Delete button.
-    if status["exists"] and not cache_failure(st.session_state):
-        host.button(
-            "Clear what is saved…",
-            icon=ICONS["delete"],
-            key="saved_here_clear",
-            help="Delete everything listed above from this computer and start "
-            "over, after a confirmation.",
-            on_click=_arm_clear_saved,
+    elif st.session_state.get(SAVE_FAILED_KEY):
+        session.warning(
+            "The latest changes could not be saved. Keep this tab open and check the session folder and available disk space.",
+            icon=ICONS["warning"],
         )
-        if st.session_state.pop(CLEAR_SAVED_REQUEST_KEY, False):
-            _clear_saved_dialog(app_url)
-    if persistence_paused(st.session_state) and not cache_failure(st.session_state):
-        # The last launch never finished opening with this cache, so this
-        # session neither restored nor overwrites it.
-        host.caption(
-            "Saving is paused for this session, so the saved copy stays as it "
-            "is. Reload to try restoring it again, or delete it with "
-            "`scanpath-studio cache --clear`."
+    elif persistence_paused(st.session_state):
+        if not failure:
+            session.warning(
+                "Automatic saving is paused. Reload to try reopening the saved session.",
+                icon=ICONS["warning"],
+            )
+    elif status["exists"] and not status["readable"]:
+        if not failure:
+            session.warning(
+                "The saved session could not be read. It may be incomplete or from another app version.",
+                icon=ICONS["warning"],
+            )
+    else:
+        location = "this computer" if server_bound_to_loopback() else "this server"
+        session.markdown(
+            f"**Automatic saving is on.** Your work reopens on {location}."
         )
+        session.caption(
+            "The app saves datasets you add, annotations, designs, and your view and plot settings."
+        )
+    if restored_from_cache(st.session_state):
+        session.caption("Your previous session was restored.")
+    render_cache_recovery_notice(session, app_url, key="saved_here_recovery")
+    readable = status["exists"] and status["readable"]
+    if readable:
+        for entry in status["datasets"]:
+            session.markdown(
+                f"**{md_literal(entry['name'])}** · {human_size(int(entry.get('bytes') or 0))}"
+            )
+        counts = [
+            plural(int(status[name]), unit)
+            for name, unit in (
+                ("annotations", "annotation"),
+                ("designs", "design"),
+                ("metadata", "metadata table"),
+            )
+            if status.get(name)
+        ]
+        if counts:
+            session.caption(" · ".join(counts))
+    elif not status["exists"] and not st.session_state.get(SAVE_FAILED_KEY):
+        session.caption("Your first saved session will appear here.")
+    details = session.expander("Saved session details")
+    details.caption(f"Session folder · `{status['directory']}`")
+    if status["exists"]:
+        details.caption(f"Space used · {human_size(status['bytes'])}")
+        if not failure:
+            details.button(
+                "Clear saved session…",
+                icon=ICONS["delete"],
+                key="saved_here_clear",
+                help="Review what will be deleted before clearing your session.",
+                on_click=_arm_clear_saved,
+            )
+    if st.session_state.pop(CLEAR_SAVED_REQUEST_KEY, False):
+        _clear_saved_dialog(app_url)
 
 
-#: *Clear what is saved…*'s request flag, served right under the
+#: *Clear saved session…*'s request flag, served right under the
 #: button (the section is the last thing a run draws, so nothing waits on it).
 CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
 #: Set by :func:`_clear_and_start_over` on the emptied session, so the first run
@@ -1638,7 +1599,7 @@ _KEPT_ON_START_OVER = (
 
 
 def _clear_and_start_over() -> None:
-    """*Clear what is saved…* → Delete: the files, then the session.
+    """*Clear saved session…* → Delete: the files, then the session.
 
     A callback, so it runs before anything else in the rerun. The link's
     parameters go too, or they would seed the fresh session again."""
@@ -1652,7 +1613,7 @@ def _clear_and_start_over() -> None:
 
 
 def announce_start_over() -> None:
-    """Say, once, that the app started over after *Clear what is saved…*."""
+    """Say, once, that the app started over after *Clear saved session…*."""
     if st.session_state.pop(STARTED_OVER_KEY, False):
         st.toast(
             "Cleared what was saved on this computer. The app started over.",
@@ -1665,7 +1626,7 @@ def _arm_clear_saved() -> None:
 
 
 def saved_items(status: dict) -> list[str]:
-    """What *Clear what is saved…* deletes, one line each."""
+    """What *Clear saved session…* deletes, one line each."""
     names = [str(entry["name"]) for entry in status.get("datasets") or []]
     names += [str(entry["name"]) for entry in status.get("damaged") or []]
     items = []
@@ -1682,10 +1643,10 @@ def saved_items(status: dict) -> list[str]:
     return items
 
 
-@st.dialog(f"{ICONS['delete']} Clear what is saved?")
+@st.dialog(f"{ICONS['delete']} Clear saved session?")
 @guarded()
 def _clear_saved_dialog(app_url: str) -> None:
-    """Confirm *Clear what is saved…*, listing what it deletes."""
+    """Confirm *Clear saved session…*, listing what it deletes."""
     st.markdown(
         "This deletes from this computer:\n\n"
         + "\n".join(f"- {item}" for item in saved_items(cache_status(url=app_url)))
@@ -3012,7 +2973,7 @@ def _onestop_regime_entry(regime: str) -> dict:
         loader=partial(_load_onestop_regime_source, regime=regime),
         # The dataset table's Status, for a row that is not open.
         files_present=partial(_onestop_files_present, regime),
-        # Where those files are, and which they are: *Saved on this computer*
+        # Where those files are, and which they are: *Saved work*
         # lists the download and can delete it.
         folder=_onestop_public_folder,
         download_files=partial(_onestop_download_files, regime),
@@ -6326,10 +6287,10 @@ def _render_current_dataset(
     """Render the selected task with the trial pool it describes."""
     render_dataset_inspection_head(token)
     with st.container(key="tutorial_data_inspection"):
+        st.session_state.setdefault(DATA_INSPECTION_KEY, "Overview")
         panel = st.segmented_control(
             "Inspect dataset",
             ["Overview", "Tables", "Data checks", "Annotations"],
-            default="Overview",
             required=True,
             label_visibility="collapsed",
             key=DATA_INSPECTION_KEY,
@@ -6353,15 +6314,24 @@ def _render_current_dataset(
         else:
             scope = data_scope_text(combos, combos_all, words_all, fixations_all)
             if panel == "Tables":
-                render_data_tables(words, fixations, raw_gaze, scope=scope)
+                render_data_tables(
+                    words,
+                    fixations,
+                    raw_gaze,
+                    scope=scope,
+                    whole_dataset=(words_all, fixations_all, raw_gaze_all),
+                )
+                target = st.session_state.pop("_data_table_target", None)
+                if target in ("fixations", "words", "raw_gaze"):
+                    embed_html_iframe(
+                        _scroll_to_section_script(f"data_table_{target}"), height=0
+                    )
             else:
                 render_dataset_summary(
                     words,
                     fixations,
                     raw_gaze,
-                    whole_dataset=(words_all, fixations_all, raw_gaze_all),
                     scope=scope,
-                    filtered=has_active_trial_filters(),
                 )
 
 
@@ -9267,8 +9237,8 @@ BACKUP_GUIDE_URL = (
 def arm_backup_reminder() -> None:
     """Ask for the backup reminder after an upload, where nothing is saved.
 
-    Called from the wizard's ✅ Add dataset callback. *Saved on this computer*
-    says the same thing under 🗂️ Data Management → Storage, where a hosted user
+    Called from the wizard's ✅ Add dataset callback. *Saved work*
+    says the same thing under 🗂️ Data Management → Saved work, where a hosted user
     working in Scanpath may never look — so the first upload, the moment there
     is something to lose, says it in the notices strip on every view.
     """
@@ -9581,7 +9551,7 @@ def _run_app() -> None:
         # what makes the claim checkable against the section it points at.
         st.toast(
             f"Recovered {_restored_recap()} from this computer. See {ICONS['view_data']} Data Management → "
-            "Storage → Saved on this computer.",
+            "Saved work → Your session.",
             icon=ICONS["recovery"],
         )
     elif consume_restore_skipped(st.session_state):
@@ -9755,19 +9725,18 @@ def _run_app() -> None:
     def _finish_page() -> None:
         """The run's last UI, once, on whichever path ``main`` leaves by.
 
-        🗂️ Data → *Saved on this computer* reports what **this run** just
+        🗂️ Data → *Saved work* reports what **this run** just
         persisted, so it has to come after `save_local_state` — which the early
         returns never reach. Each of them calls this instead, and the epilogue
         calls it for the ordinary path, so exactly one runs per script run.
         That is what keeps its widgets single.
 
-        Only the Storage tab renders these controls.
+        Only the Saved work tab renders these controls.
         """
         if conflict := st.session_state.get(SAVE_CONFLICT_KEY):
             page_notices.warning(conflict, icon=ICONS["warning"])
         if workspace_open and storage_page.open:
             _render_saved_here_section(app_url, saved_here_slot)
-            _render_download_folder_section(download_folder_slot)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
@@ -9874,6 +9843,8 @@ def _run_app() -> None:
         title.header("Data Management", anchor=False, width="stretch")
         if not editing:
             add_dataset_slot = title.container(key="data_page_add", width="content")
+        if st.session_state.get(DATA_WORKSPACE_KEY) == "Storage":
+            st.session_state[DATA_WORKSPACE_KEY] = DATA_STORAGE
         current_page, library_page, storage_page = setup_page.tabs(
             [DATA_CURRENT, DATA_LIBRARY, DATA_STORAGE],
             key=DATA_WORKSPACE_KEY,
@@ -9922,7 +9893,6 @@ def _run_app() -> None:
     setup_body_slot = overview_page.container()
     # Saved state is reported after this run's persistence write.
     saved_here_slot = storage_page.container(key="data_saved_here")
-    download_folder_slot = storage_page.container(key="data_download_folder")
     # The one-run script that brings the page back to its top after ✅ Add
     # dataset. A slot of its own, last on the page and held on every run, so
     # the script coming and going moves nothing above it.
@@ -11205,7 +11175,7 @@ def _run_app() -> None:
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
-    # …then draw *Saved on this computer*, so it reports the write that just
+    # …then draw *Saved work*, so it reports the write that just
     # happened rather than the previous run's.
     _finish_page()
 

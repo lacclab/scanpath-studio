@@ -203,6 +203,35 @@ def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
         sync_api.expect(counts.first).to_have_text(largest)
 
 
+def test_overview_opens_the_right_table_and_all_six_stay_on_the_page(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name=re.compile(r"^Words 2,614")).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Words", exact=True)
+        ).to_be_in_viewport()
+        links = page.locator(".st-key-data_table_links")
+        for label in (
+            "Fixations",
+            "Words",
+            "Raw gaze samples",
+            "Participants",
+            "Trials",
+            "Texts",
+        ):
+            sync_api.expect(
+                links.get_by_role("link", name=label, exact=True)
+            ).to_have_count(1)
+            sync_api.expect(
+                page.get_by_role("heading", name=label, exact=True)
+            ).to_have_count(1)
+        links.get_by_role("link", name="Texts", exact=True).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Texts", exact=True)
+        ).to_be_in_viewport()
+
+
 def test_dataset_editor_can_remove_an_uploaded_metadata_file_by_name(app_url, browser):
     with browser.new_context() as context:
         page = context.new_page()

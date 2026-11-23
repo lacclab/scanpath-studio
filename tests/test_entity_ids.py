@@ -40,6 +40,17 @@ def test_participants() -> None:
     }
 
 
+def test_nested_extra_columns_leave_the_recording_and_its_entity_summaries_accessible():
+    words, fixations = _frames()
+    fixations["spans"] = [[1, 2]] * len(fixations)
+    fixations["condition"] = ["first", "first", "second", "second", "second"]
+    for kind in ("participant", "trial"):
+        result = _ids_from_data(kind, words, fixations, cache_key=("nested", kind))
+        assert set(result["condition"]) == {"first", "second"}
+        assert "spans" not in result
+    assert fixations["spans"].iloc[0] == [1, 2]
+
+
 def test_trials() -> None:
     words, fixations = _frames()
     out = _ids_from_data("trial", words, fixations, cache_key="t")

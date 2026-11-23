@@ -179,4 +179,4 @@ You can save each of these to a file and load it again:
 Keep your source data alongside these files, and load the same dataset before
 restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See :material/database: **Data
-Management** → **Storage** → :material/history: **Saved on this computer**.
+Management** → **Saved work → Your session**.

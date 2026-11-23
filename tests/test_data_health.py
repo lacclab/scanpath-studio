@@ -196,13 +196,16 @@ def test_the_data_page_names_the_dataset_s_own_columns(clean):
     assert not at.exception
     if clean:
         assert not at.warning
-        assert any("No issues found" in c.value for c in at.caption)
+        assert any("No issues found" in c.value for c in at.success)
+        assert any(
+            "fixation durations and fixation positions" in c.value for c in at.caption
+        )
         return
     (warning,) = at.warning
     assert "Fixations lasting 0 ms or less" in warning.value
-    assert "1 of 2 fixation rows, in 1 trial (1 negative)" in warning.value
+    assert "1 of 2 fixation rows in 1 trial (1 negative)" in warning.value
     assert "`CURRENT_FIX_DURATION`" in warning.value
-    assert any("Flagged rows are kept" in c.value for c in at.caption)
+    assert any("Flagged rows stay" in c.value for c in at.caption)
 
 
 def _run_sheet_navigation_app():
@@ -223,11 +226,12 @@ def test_run_sheet_survives_navigation_and_belongs_to_its_dataset():
         at.run()
         assert not at.exception, at.exception
 
+    at.run()
+    assert not at.success and not at.file_uploader
+    assert any("no recording values" in item.value for item in at.info)
     show_sheet()
     at.file_uploader[0].upload("roster.csv", b"participant_id,trial_id\np,t\n").run()
-    assert any(
-        b.label == "Download run sheet reconciliation" for b in at.download_button
-    )
+    assert any(b.label == "Download comparison (CSV)" for b in at.download_button)
     at.radio[0].set_value("Tables").run()
     at.radio[0].set_value("Data checks").run()
     show_sheet()

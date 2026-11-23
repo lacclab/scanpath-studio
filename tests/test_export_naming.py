@@ -426,12 +426,18 @@ def _real_bundle_panel():
     )
 
 
-def test_invalid_pattern_disables_build_and_preview_matches_real_html_and_table_files():
-    import io
+@pytest.mark.parametrize("disk_download", [True, False])
+def test_invalid_pattern_disables_build_and_preview_matches_real_html_and_table_files(
+    disk_download, monkeypatch
+):
     import zipfile
 
     from streamlit.testing.v1 import AppTest
 
+    from scanpath_studio import export_archive
+
+    if disk_download:
+        monkeypatch.setattr(export_archive, "_SMALL_ZIP", 0)
     at = AppTest.from_function(_real_bundle_panel).run()
     assert not at.exception
 
@@ -442,9 +448,16 @@ def test_invalid_pattern_disables_build_and_preview_matches_real_html_and_table_
         assert any(c.value.startswith(f"Example: `{expected}`") for c in at.caption)
         build().click().run()
         assert not at.exception
-        with zipfile.ZipFile(
-            io.BytesIO(at.session_state["_bulk_export_cache"]["data"])
-        ) as archive:
+        data = at.session_state["_bulk_export_cache"]["data"]
+        if disk_download:
+            assert isinstance(data, export_archive.DiskBundle)
+            assert any(
+                data.folder.name in link.proto.url for link in at.get("link_button")
+            )
+        with (
+            export_archive.open_bundle(data) as stream,
+            zipfile.ZipFile(stream) as archive,
+        ):
             assert expected in archive.namelist()
 
     at.pills(key="bulk_export_figfmts").set_value(["HTML"]).run()

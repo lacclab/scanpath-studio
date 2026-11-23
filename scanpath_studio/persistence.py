@@ -11,7 +11,7 @@ is comes from its own bind address, never from the browser — see
 Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
-in-app 🗂️ Data → *Saved on this computer* section
+in-app 🗂️ Data → *Saved work* section
 (``app._render_saved_here_section``), the ``scanpath-studio cache`` CLI
 subcommand and ``api.cache_status``. The stored files are deleted from outside
 the app — ``scanpath-studio cache --clear`` / ``api.clear_cache``, both
@@ -66,6 +66,7 @@ from .constants import (
     DATASET_SETUP_OVERRIDES_KEY,
     DATASET_STIMULUS_IMAGES_KEY,
     DOWNLOAD_DIR_KEY,
+    GUIDE_RETURN_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
     SETUP_OVERRIDE_FOR_KEY,
@@ -107,6 +108,7 @@ _PAUSED_KEY = "_local_persistence_paused"
 _ANNOTATION_BASE_KEY = "_local_annotation_base"
 _MANIFEST_BASE_KEY = "_local_persistence_manifest_base"
 SAVE_CONFLICT_KEY = "_local_persistence_save_conflict"
+SAVE_FAILED_KEY = "_local_persistence_save_failed"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -355,6 +357,19 @@ def _dataset_identity(session: MutableMapping[str, Any]) -> list:
     return datasets
 
 
+def _durable_settings(session: MutableMapping[str, Any]) -> dict:
+    """Recover the viewer's own settings when the app closes during a guide."""
+    values = {
+        key: _json_safe(value)
+        for key, value in session.items()
+        if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
+    }
+    for key, original in session.get(GUIDE_RETURN_KEY, {}).items():
+        if key in _SESSION_KEYS:
+            values[key] = _json_safe(original)
+    return values
+
+
 def _state_fingerprint(
     session: MutableMapping[str, Any], metadata_signature: list | None = None
 ) -> str:
@@ -362,11 +377,7 @@ def _state_fingerprint(
     if metadata_signature is None:
         metadata_signature = _metadata_signature(session)
     datasets = _dataset_identity(session)
-    values = {
-        key: _json_safe(value)
-        for key, value in session.items()
-        if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
-    }
+    values = _durable_settings(session)
     # Annotations: the live store by content, every other dataset's by revision.
     annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
@@ -523,17 +534,10 @@ def _manifest_for(
     for name, record in _failed(session).items():
         datasets.setdefault(name, record["entry"])
 
-    values = {key: _json_safe(session[key]) for key in _SESSION_KEYS if key in session}
+    values = _durable_settings(session)
     if values.get(COMPARE_SOURCE_STATE_KEY) == "This dataset":
         # A literal upload ID. Older manifests used this text for A's source.
         values[COMPARE_SOURCE_STATE_KEY] = {"dataset": "This dataset"}
-    values.update(
-        {
-            key: _json_safe(value)
-            for key, value in session.items()
-            if str(key).startswith(COLUMN_MAPPING_PREFIX)
-        }
-    )
     return {
         "schema": SCHEMA_VERSION,
         "datasets": datasets,
@@ -1629,7 +1633,7 @@ def restored_summary(session) -> dict:
     """How much of *what* this session got back from the cache, by kind.
 
     ``{"datasets": n, "annotations": n, "designs": n, "metadata": n}`` — what
-    the *Saved on this computer* section counts, and what a user would recognise as
+    the *Saved work* section counts, and what a user would recognise as
     their last session (``metadata`` is the number of attached participant /
     trial / text tables). View settings are deliberately absent: they restore, but
     silently (see :func:`restore_local_state`). Empty when no restore
@@ -1691,6 +1695,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             _MANIFEST_BASE_KEY,
             _ANNOTATION_BASE_KEY,
             SAVE_CONFLICT_KEY,
+            SAVE_FAILED_KEY,
             _LAST_DATASET_IDENTITY_KEY,
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
@@ -1714,7 +1719,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
 def clear_saved_work(session) -> bool:
     """Delete what is saved on this computer and start over.
 
-    The Data page's *Clear what is saved…*. Deleting the files alone
+    The Data page's *Clear saved session…*. Deleting the files alone
     would be undone within a click, because every run ends in
     ``save_local_state`` and this tab still holds the datasets, annotations and
     settings. So the session is emptied too: the next run is a first visit (the
@@ -1906,7 +1911,9 @@ def save_local_state(session, url: str) -> bool:
     if not persistence_enabled(url) or persistence_paused(session):
         return False
     try:
-        return save_state(session, state_directory())
+        written = save_state(session, state_directory())
+        session.pop(SAVE_FAILED_KEY, None)
+        return written
     except RecoveryConflictError as exc:
         session[SAVE_CONFLICT_KEY] = str(exc)
         return False
@@ -1914,6 +1921,7 @@ def save_local_state(session, url: str) -> bool:
         # Persistence is a recovery convenience, never a reason for the app to
         # stop rendering (read-only homes, full disks, or unsupported Parquet
         # values are all recoverable by continuing without this save).
+        session[SAVE_FAILED_KEY] = True
         _LOGGER.warning(
             "Could not persist the local Scanpath Studio session.", exc_info=True
         )

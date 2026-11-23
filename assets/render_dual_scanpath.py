@@ -31,11 +31,11 @@ from scanpath_studio.plots import (
     make_scanpath_animation,
 )
 
-# Two readers of the same bundled-demo paragraph, ~150 fixations each.
-A = ("l37_1129", "l37_1129_2_1_1_Ele")
-B = ("l7_1090", "l7_1090_2_1_1_Ele")
-LABEL_A = "Reader A · l37_1129"
-LABEL_B = "Reader B · l7_1090"
+# Two readers of the same bundled-demo paragraph.
+A = ("l37_273", "l37_273_2_1_1_Ele")
+B = ("l7_183", "l7_183_2_1_1_Ele")
+LABEL_A = "Reader A · l37_273"
+LABEL_B = "Reader B · l7_183"
 STILL_OUT = "assets/demo_dual_scanpath.png"
 GIF_OUT = "docs/assets/demo_dual_scanpath.gif"
 

@@ -4,8 +4,7 @@ EyeLink-style exports tile the line: each box is one character cell wider than
 its word and carries the following space as trailing padding. The boxes are
 ``x .. x + width`` everywhere a point is tested against one or one is drawn, and
 a fixation on the space after a word belongs to that word, as in EyeLink's own
-interest-area assignment. Pulling every such boundary back half a space would
-reassign 7.4% of the demo's fixations relative to EyeLink's.
+interest-area assignment.
 
 The layout's *shape* still matters inside a word: `word_box_space_px` detects the
 trailing space so the letter scale and the glyph run stay on the letters, which
@@ -379,9 +378,7 @@ class TestTheBundledDemoAgreesWithEyeLink:
 
     def test_geometry_assigns_fixations_as_eyelink_did(self, demo):
         """`CURRENT_FIX_INTEREST_AREA_ID` is EyeLink's own assignment against the
-        same rectangles. A half-space shift would disagree on 7.4% of them, and
-        a closed containment test on the 0.9% that sit exactly on a shared
-        edge."""
+        same rectangles, including fixations on shared edges."""
         words, fix = demo
         eyelink = pd.to_numeric(fix["word_id"], errors="coerce")
         ours = pd.to_numeric(
@@ -389,13 +386,13 @@ class TestTheBundledDemoAgreesWithEyeLink:
             errors="coerce",
         )
         assigned = eyelink.notna()
-        assert assigned.sum() > 3000
+        assert assigned.any() and (~assigned).any()
+        assert ours.notna().equals(assigned)
         assert (ours[assigned] == eyelink[assigned]).all()
 
     def test_no_landing_fraction_piles_up_at_the_end_of_the_word(self, demo):
-        """Measured over the glyph run, 15% of the demo's first-fixation
-        landings would read exactly 1.0 — the trailing space, clipped onto the
-        last letter's edge."""
+        """A landing in the trailing space must not be clipped onto the last
+        letter's edge."""
         from scanpath_studio.aggregation import landing_positions
         from scanpath_studio.measures import compute_per_word_measures
 

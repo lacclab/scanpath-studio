@@ -30,8 +30,8 @@ def test_comparison_contains_every_fixation_for_both_readers():
     figure = gallery._build("comparison")["fig"]
     _, fixations = sps.load_sample_data(names="canonical")
     for label, participant in (
-        ("Participant A", "l37_1129"),
-        ("Participant B", "l7_1090"),
+        ("Participant A", "l37_273"),
+        ("Participant B", "l7_183"),
     ):
         expected = fixations[
             (fixations.participant_id == participant)

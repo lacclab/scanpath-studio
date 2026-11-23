@@ -57,7 +57,7 @@ GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
 GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
-#: The note naming the highlighted words (Figure & canvas → Legends).
+#: The note naming the highlighted words (Figure → Legends).
 GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
 # Snap to line and where on the line. The older "Snap above words" key,
 # `global_fixation_snap_to_word`, is still read — see `LEGACY_SESSION_KEYS`.
@@ -143,7 +143,7 @@ GLOBAL_MARKER_SIZE_RANGE = "global_marker_size_range"
 GLOBAL_MARKER_SIZE_SCALE = "global_marker_size_scale"
 GLOBAL_MARKER_DURATION_RANGE = "global_marker_duration_range"
 GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
-# 📐 Figure & canvas → Legends: where each legend sits. One key per legend and
+# Figure → Legends: where each legend sits. One key per legend and
 # part, ``global_legend_<kind>_{position,arrangement,size}``, for the kinds in
 # `constants.LEGEND_KINDS` (spelled out here, as everything in this file is).
 LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key", "highlight")
@@ -1084,7 +1084,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         *DESIGN_COLOR_PARAMS.values(),
         *DESIGN_INT_PARAMS.values(),
         *DESIGN_FLOAT_PARAMS.values(),
-        # Figure & canvas → Legends.
+        # Figure → Legends.
         *LEGEND_STATE_KEYS,
         # layers
         GLOBAL_SHOW_WORDS,

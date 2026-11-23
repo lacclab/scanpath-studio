@@ -429,7 +429,7 @@ class TestWizardWording:
         assert "**Name**" in bodies
         assert "**Extra fields to keep**" in bodies
         assert "*I know it*" in bodies
-        assert "**Skip guide**" in bodies
+        assert "at least one table" in bodies
 
     def test_the_guide_and_the_start_from_line_say_it_literally(self):
         """Read by people with intermediate English: no idioms."""
@@ -455,7 +455,7 @@ class TestWizardWording:
 
         assert any(label == "Skip" for _k, _c, label, *_ in READING_MEASURE_FIELDS)
         source = inspect.getsource(tour._wizard_guide_buttons)
-        assert '"Skip guide"' in source
+        assert '"Close guide"' in source
         assert '"Skip",' not in source
 
     def test_the_add_screen_titles_the_name_field(self):

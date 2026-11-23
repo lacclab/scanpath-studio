@@ -178,23 +178,17 @@ def test_without_text_ids_participants_open_first_and_one_reading_can_still_be_i
     assert at.selectbox(key="ptext_text").value
 
 
-def test_tutorial_can_open_the_participant_profile_and_step_back_to_its_summary(
-    experimental_off,
-):
-    at = _bookmarked(corpus_subtab="Groups").run()
-    at.session_state["tutorial_active"] = "explore_corpus"
-    at.session_state["tutorial_progress"] = {"explore_corpus": 1}
+def test_corpus_tutorial_opens_a_word_profile_and_returns_to_texts(experimental_off):
+    at = _bookmarked(corpus_subtab="Groups")
+    at.session_state["_tutorial_library_requested"] = True
     at.run()
-    at.button(key="tutorial_open_surface").click().run()
-    assert not at.exception
-    assert at.segmented_control(key="corpus_destination").value == "Participants"
+    at.button(key="tutorial_start_explore_corpus").click().run()
+    assert at.segmented_control(key="corpus_destination").value == "Texts"
     assert at.session_state["corpus_subtab"] == "Overview"
     at.button(key="tutorial_next").click().run()
-    at.button(key="tutorial_open_surface").click().run()
-    assert at.selectbox(key="prdr_pid").value
-    assert at.query_params["corpus_subtab"] == "Per participant"
+    assert at.selectbox(key="ptext_text").value
+    assert at.query_params["corpus_subtab"] == "Per text"
     at.button(key="tutorial_back").click().run()
-    at.button(key="tutorial_open_surface").click().run()
     assert not at.exception
     assert at.session_state["corpus_subtab"] == "Overview"
-    assert at.query_params["corpus_group_by"] == "Participant"
+    assert at.segmented_control(key="corpus_destination").value == "Texts"

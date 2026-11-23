@@ -194,11 +194,17 @@ def _loader_columns() -> frozenset:
     the builders compute — plus the two non-column ``color_by`` values."""
     from .chart_axes import ELAPSED
     from .constants import UNIFORM_COLOR_FIELD
-    from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
+    from .data import (
+        FIX_OPTIONAL_FIELDS,
+        WORD_OPTIONAL_FIELDS,
+        empty_fixations_frame,
+        empty_words_frame,
+    )
 
     return frozenset(
         {
             *empty_fixations_frame().columns,
+            *empty_words_frame().columns,
             ELAPSED,
             *(entry[1] for entry in (*FIX_OPTIONAL_FIELDS, *WORD_OPTIONAL_FIELDS)),
             "order_in_trial",
@@ -1870,13 +1876,14 @@ def _second_dataset_tables(compare: CompareTarget) -> tuple[list, list]:
     return [B_WORDS_PLACEHOLDER], [B_FIXATIONS_PLACEHOLDER]
 
 
-def _second_dataset_python(compare: CompareTarget) -> list[str]:
+def _second_dataset_python(compare: CompareTarget, keep: list[str]) -> list[str]:
     words, fixations = _second_dataset_tables(compare)
     lines = [
         f"# Scanpath B is from a second dataset, {compare.dataset}.",
         "words_b, fixations_b = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
+        *([f"    keep_columns={_py(keep)},"] if keep else []),
         ")",
     ]
     if compare.canvas:
@@ -1949,7 +1956,7 @@ def python_snippet(
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
     if other is not None:
-        lines += _second_dataset_python(other)
+        lines += _second_dataset_python(other, _kept_columns(state.settings))
     raw_gaze_b = _second_raw_gaze(state)
     if raw_gaze_b is not None:
         lines.append(f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))})")
@@ -2071,6 +2078,10 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
+    if other is not None and "--keep-columns" not in argv:
+        keep = _kept_columns(state.settings)
+        if keep:
+            argv += ["--keep-columns", *keep]
     if _writes_image_folder(source, state):
         argv += _image_folder_cli(source)
 

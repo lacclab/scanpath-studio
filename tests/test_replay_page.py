@@ -34,8 +34,8 @@ needs_node = pytest.mark.skipif(
     NODE is None, reason="needs node to run the replay page's JavaScript"
 )
 
-# The demo's longest reading (311 fixations, 81.6 s): 360 frames at the default grid.
-LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv")
+# The longest recorded paragraph reading in the bundled demo.
+LONGEST = ("l7_183", "l7_183_2_1_5_Adv")
 
 
 @functools.cache
@@ -48,7 +48,9 @@ def _replay(kind: str):
     words, fixations = _demo()
     pid, tid = LONGEST
     if kind == "longest":
-        return api.animate_scanpath(words, fixations, pid, tid)
+        return api.animate_scanpath(
+            words, fixations, pid, tid, anim_grid_step_ms=50, anim_max_frames=360
+        )
     if kind == "single":
         # Every layer the single replay animates: the trail (coloured by a
         # metric), index labels, saccades + arrowheads, the current-fixation ring
@@ -115,10 +117,54 @@ def _as_written(frames) -> list:
     return json.loads(to_json_plotly(frames))
 
 
+@pytest.mark.parametrize("show_saccades", [True, False])
+def test_replay_with_fixations_hidden(show_saccades):
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    pid, tid = fixations.iloc[0][["participant_id", "trial_id"]]
+    fig = api.animate_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        show_fixations=False,
+        show_saccades=show_saccades,
+        show_saccade_arrows=True,
+        show_order=True,
+        show_word_labels=False,
+        color_by="line",
+        fixation_symbol="heart",
+        duration_size_legend=True,
+        fixation_flags={"short": {"mode": "Highlight", "threshold_ms": 110}},
+        anim_grid_step_ms=100,
+    )
+    assert [t.name for t in fig.data] == (
+        ["saccades", "saccade direction"] if show_saccades else []
+    )
+    times = fig.layout.meta["scanpath_frame_times_ms"]
+    assert len(times) == len(fig.frames) > 1
+    assert times[-1] == fixations.timestamp_ms.iloc[-1] + fixations.duration_ms.iloc[-1]
+    for time_ms, frame in zip(times, fig.frames, strict=True):
+        if show_saccades:
+            lines, arrows = frame.data
+            reached = fixations[fixations.timestamp_ms <= time_ms]
+            segments = list(zip(reached.x, reached.x.iloc[1:]))
+            assert [x for x in lines.x if x is not None] == [
+                x for segment in segments for x in segment
+            ]
+            assert sum(x is not None for x in arrows.x) == len(segments)
+        else:
+            assert not frame.data
+
+
 class TestTheBrowserGetsTheSameFrames:
     @needs_node
     @pytest.mark.parametrize("dual", [False, True])
-    def test_compact_streamlit_frames_match_every_full_trace(self, dual, tmp_path):
+    @pytest.mark.parametrize("show_fixations", [True, False])
+    def test_compact_streamlit_frames_match_every_full_trace(
+        self, dual, show_fixations, tmp_path
+    ):
         from scanpath_studio import plots, replay_frames
         from scanpath_studio.synthetic import load_synthetic_data
 
@@ -133,6 +179,7 @@ class TestTheBrowserGetsTheSameFrames:
             autoplay=False,
             fixations_b=other if dual else None,
             words_b=words if dual else None,
+            show_fixations=show_fixations,
             show_order=True,
             show_saccade_arrows=True,
             fixation_symbol="heart",
@@ -267,8 +314,8 @@ class TestValuesTheEncoderMustNotMisjudge:
 
 class TestThePageIsSmall:
     def test_the_longest_demo_trial_is_a_small_page(self):
-        # 12 MB unpacked (361 frames × ~33 KB). The bound leaves room for
-        # a layer or two more, not for frames that restate their traces again.
+        # Exercise the full 360-frame budget on a real reading. Repeating each
+        # frame's unchanged traces would push the page well above this limit.
         fig = _replay("longest")
         assert len(fig.frames) == 360
         markup = tabs._true_scale_plot_html(fig, key="k", figure_dict=fig.to_dict())
@@ -380,7 +427,7 @@ class TestThePageDrawsTheToolbarAboveTheFigure:
         # A legend moved above the plot grows the figure past the controls'
         # band, so the page, which takes the band back, still has room for it.
         words, fixations = _demo()
-        pid_b, tid_b = "l7_1090", "l7_1090_2_2_2_Adv"
+        pid_b, tid_b = "l7_183", "l7_183_2_2_2_Adv"
         kwargs = dict(trial_b=(pid_b, tid_b), fix_index_range=(1, 20))
         plain = api.animate_scanpath(words, fixations, *LONGEST, **kwargs)
         above = api.animate_scanpath(

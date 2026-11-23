@@ -42,12 +42,8 @@ STYLE_KEYS_FOR_TWO_SCANPATHS = {
 # Compare uses spatial axes, per-reading box outlines and word-box heatmaps.
 _INACTIVE_IN_COMPARISON = frozenset(
     {
-        "x_field",
-        "y_field",
         "raw_gaze_color",
         "word_box_color",
-        "critical_span_style",
-        "span_border_color",
         "saccade_render_mode",
         "saccade_color_mode",
         "saccade_class_colors",

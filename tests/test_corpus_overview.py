@@ -148,7 +148,7 @@ def test_filtered_overview_replays_and_opens_selected_profile(
 
     monkeypatch.setattr(tabs, "partial", capture)
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run()
     pin_view(at, "Corpus Analysis")
     at.run()
@@ -165,7 +165,7 @@ def test_filtered_overview_replays_and_opens_selected_profile(
     saved.write_text(captured["recipe"]())
     recipe = json.loads(saved.read_bytes())
     assert recipe["analysis"]["group_by"] == group.lower()
-    assert recipe["selection"]["participants"] == ["l7_1090"]
+    assert recipe["selection"]["participants"] == ["l7_183"]
     expected = captured["csv"]()
     assert (
         api.run_analysis_recipe(saved, *api.load_sample_data())

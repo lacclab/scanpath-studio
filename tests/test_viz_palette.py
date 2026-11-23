@@ -703,7 +703,7 @@ class TestALayerSwitchFlippedAfterAPreset:
         at.toggle(key="single_compare_toggle").set_value(True).run()
         drawn |= _design_keys_outside_popovers(at)
         at.toggle(key="single_compare_toggle").set_value(False).run()
-        at.button(key="viz_view_animation").click().run()
+        at.toggle(key="single_animate").set_value(True).run()
         drawn |= _design_keys_outside_popovers(at)
         assert not at.exception
         assert drawn == controls._MOUNTED_VIEW_KEYS, (

@@ -1839,12 +1839,135 @@ def test_a_figure_only_or_empty_bundle_has_no_csv_reader_or_schema(
         assert {"columns.json", "read_csv.R"}.isdisjoint(archive.namelist())
 
 
-def test_retry_renders_only_failed_formats_and_reuses_successful_contents(
-    minimal_combos, minimal_words, minimal_fixations, base_settings, monkeypatch
+@pytest.mark.parametrize(("png_scale", "build_ahead"), [(2, True), (4, False)])
+def test_bulk_png_bounds_figure_preparation_and_attributes_build_failures(
+    minimal_combos,
+    minimal_words,
+    minimal_fixations,
+    base_settings,
+    monkeypatch,
+    png_scale,
+    build_ahead,
 ):
     from contextlib import contextmanager
+    from threading import get_ident
 
     from scanpath_studio import export
+
+    caller = get_ident()
+    builders = []
+    make = export.make_scanpath_figure
+
+    def build(words, fixations, **kwargs):
+        builders.append(get_ident())
+        if words.trial_id.iloc[0] == "t2":
+            raise ValueError("Cannot draw this trial")
+        return make(words, fixations, **kwargs)
+
+    @contextmanager
+    def renderer(_enabled):
+        def render(_fig, _fmt, *_dimensions):
+            assert get_ident() == caller
+            return b"drawn"
+
+        yield render
+
+    monkeypatch.setattr(export, "make_scanpath_figure", build)
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+    data, progress = bulk_export(
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        canvas_width=2560,
+        canvas_height=1440,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=ExportOptions(include_svg=False, png_scale=png_scale),
+    )
+    assert len(builders) == 2 and len(set(builders)) == 1
+    assert (builders[0] != caller) == build_ahead
+    assert progress.figures_written == progress.retryable_figures == 1
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        rows = pd.read_csv(archive.open("index.csv")).query("artifact == 'figure'")
+        assert list(zip(rows.trial_id, rows.status)) == [
+            ("t1", "written"),
+            ("t2", "failed"),
+        ]
+
+
+def test_pngs_above_the_memory_budget_keep_the_browser_encoding(monkeypatch):
+    from PIL import Image
+
+    from scanpath_studio import export_png
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (32, 32)).save(buffer, "PNG", compress_level=0)
+    original = buffer.getvalue()
+    monkeypatch.setattr(export_png, "MAX_RGBA_PIXELS", 1023)
+    monkeypatch.setattr(Image, "open", lambda *_: pytest.fail("decoded a large PNG"))
+    assert export_png.compact_png(original) is original
+
+
+def test_an_interrupted_download_discards_its_disk_parts(
+    minimal_combos,
+    minimal_words,
+    minimal_fixations,
+    base_settings,
+    monkeypatch,
+    tmp_path,
+):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from scanpath_studio import export, export_archive, progress
+
+    monkeypatch.setattr(
+        export_archive, "_download_root", lambda: SimpleNamespace(name=str(tmp_path))
+    )
+    monkeypatch.setattr(export_archive, "_PART_BYTES", 48)
+
+    @contextmanager
+    def stop_during_render(_enabled):
+        def stop(*_args):
+            raise progress.Cancelled("stop")
+
+        yield stop
+
+    monkeypatch.setattr(export, "_figure_renderer", stop_during_render)
+    with pytest.raises(progress.Cancelled):
+        export_archive.build_download(
+            bulk_export,
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="Arial",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=ExportOptions(),
+        )
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("disk_download", [False, True])
+def test_retry_renders_only_failed_formats_and_reuses_successful_contents(
+    minimal_combos,
+    minimal_words,
+    minimal_fixations,
+    base_settings,
+    monkeypatch,
+    disk_download,
+):
+    from contextlib import contextmanager
+    from functools import partial
+
+    from scanpath_studio import export, export_archive
     from scanpath_studio.export_retry import retry_failed_figures
 
     calls = []
@@ -1879,15 +2002,26 @@ def test_retry_renders_only_failed_formats_and_reuses_successful_contents(
         options=options,
     )
     frames = minimal_combos, minimal_words, minimal_fixations
-    original, partial = bulk_export(*frames, **args)
+    build = bulk_export
+    retry = retry_failed_figures
+    if disk_download:
+        monkeypatch.setattr(export_archive, "_SMALL_ZIP", 0)
+        monkeypatch.setattr(export_archive, "_PART_BYTES", 113)
+        build = partial(export_archive.build_download, build)
+        retry = partial(export_archive.build_download, retry)
+    original, partial_progress = build(*frames, **args)
     assert calls == ["png", "pdf", "png", "pdf"]
-    assert partial.retryable_figures == 2
-    cache = {"data": original, "sig": ("frames", "settings"), "progress": partial}
+    assert partial_progress.retryable_figures == 2
+    cache = {
+        "data": original,
+        "sig": ("frames", "settings"),
+        "progress": partial_progress,
+    }
     with pytest.raises(ValueError, match="changed"):
-        retry_failed_figures(cache, ("changed data", "settings"), *frames, **args)
+        retry(cache, ("changed data", "settings"), *frames, **args)
     assert len(calls) == 4
     fail = False
-    repaired, progress = retry_failed_figures(cache, cache["sig"], *frames, **args)
+    repaired, progress = retry(cache, cache["sig"], *frames, **args)
     assert calls[4:] == ["pdf", "pdf"]
     assert (
         progress.figures_written,
@@ -1895,8 +2029,10 @@ def test_retry_renders_only_failed_formats_and_reuses_successful_contents(
         progress.retryable_figures,
     ) == (4, 0, 0)
     with (
-        zipfile.ZipFile(io.BytesIO(original)) as before,
-        zipfile.ZipFile(io.BytesIO(repaired)) as after,
+        export_archive.open_bundle(original) as original_stream,
+        export_archive.open_bundle(repaired) as repaired_stream,
+        zipfile.ZipFile(original_stream) as before,
+        zipfile.ZipFile(repaired_stream) as after,
     ):
         inventory = pd.read_csv(before.open("index.csv"))
         previously_failed = set(inventory.loc[inventory.status == "failed", "path"])

@@ -1373,7 +1373,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--x-field",
         metavar="FIELD",
         help="Horizontal axis of the static chart (default: x). Choose a numeric fixation "
-        "column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.",
+        "field, @elapsed_seconds from the first recorded fixation, or a raw sample field "
+        "such as timestamp_ms, sample_index, pupil_area or pupil_diameter.",
     )
     viz.add_argument(
         "--y-field",
@@ -1516,8 +1517,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--sample-raw-gaze",
         action="store_true",
-        help="With --sample: draw the bundled demo's raw gaze. It is "
-        "synthesized, and covers one trial only.",
+        help="With --sample, draw the recorded EyeLink gaze samples for the selected reading.",
     )
     viz.add_argument(
         "--raw-gaze-schema",
@@ -2103,7 +2103,10 @@ def _compare_second_dataset(api, args, words, fixations):
     try:
         return (
             *api.load_scanpath_data(
-                args.compare_words, args.compare_fixations, names="canonical"
+                args.compare_words,
+                args.compare_fixations,
+                keep_columns=args.keep_columns,
+                names="canonical",
             ),
             True,
         )
@@ -4148,7 +4151,7 @@ def _count(n: int, noun: str) -> str:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache.
 
-    The terminal counterpart of the app's 🗂️ Data Management → *Saved on this computer*
+    The terminal counterpart of the app's 🗂️ Data Management → *Saved work*
     section, so the storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """
@@ -4254,7 +4257,7 @@ def _version_parser() -> argparse.ArgumentParser:
 def version(argv: list[str]) -> None:
     """Print which build this is, and with ``--check`` whether a newer release is out.
 
-    The terminal counterpart of Help → About and ``api.check_for_updates``.
+    The terminal counterpart of Help → About & citation and ``api.check_for_updates``.
     Exits 1 only when the check itself could not be made.
     """
     args = _version_parser().parse_args(argv)
@@ -4447,11 +4450,12 @@ def check(argv: list[str]) -> None:
     # The findings-only JSON response keeps its established list shape.
     counts = None if args.json else {}
     if args.sample:
-        from .data import read_sample_tables
+        from .data import read_sample_raw_gaze, read_sample_tables
 
         words, fixations = api.load_scanpath_data(
             *read_sample_tables(), _row_counts=counts
         )
+        raw_gaze = api.load_raw_gaze(read_sample_raw_gaze(), _row_counts=counts)
     elif args.words or args.fixations:
         manifest = _trial_parts_manifest(args.trial_parts_manifest)
         try:

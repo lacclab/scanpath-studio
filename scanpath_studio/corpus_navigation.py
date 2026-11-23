@@ -71,6 +71,11 @@ def _detail_measure_key(section: str) -> str | None:
     return {"Per text": "ptext_measure", "Per participant": "prdr_measure"}.get(section)
 
 
+def request_route() -> None:
+    """Apply a guide's explicit section even when the page URL also changed."""
+    st.session_state["_corpus_route_requested"] = True
+
+
 def render_chooser(host, *, has_text: bool, measures: list[Measure]) -> tuple[str, str]:
     """Draw one destination control and return the legacy section and summary unit.
 
@@ -86,7 +91,10 @@ def render_chooser(host, *, has_text: bool, measures: list[Measure]) -> tuple[st
     restoring = (
         last_address is not None and query != last_address and local == last_state
     )
-    if last_address is None:
+    if state.pop("_corpus_route_requested", False):
+        section, group, measure = local
+        restoring = False
+    elif last_address is None:
         section, group, measure = (q or s for q, s in zip(query, local, strict=True))
     elif restoring:
         # Browser history changed the address; a tutorial or widget callback

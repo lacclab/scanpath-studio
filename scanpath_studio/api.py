@@ -92,6 +92,7 @@ from .multipart import (  # noqa: E402
     extract_part,
     part_catalog,
     screen_canvas_size,
+    screen_rows,
 )
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
@@ -1382,8 +1383,10 @@ def load_raw_gaze(
 
     Raw gaze is the third table [`plot_scanpath`][scanpath_studio.api.plot_scanpath] can
     draw, under the fixations: one row per eye-tracker sample, with a participant, a
-    trial, ``x`` / ``y`` and usually a timestamp. ``plot_scanpath`` keeps only the
-    plotted trial's (and screen's) samples, so one table can serve a whole corpus.
+    trial, ``x`` / ``y`` and usually a timestamp. Optional fields include the
+    tracked eye, pupil area and pupil diameter in the recording's own units.
+    ``plot_scanpath`` keeps the selected reading's samples. Use
+    ``x_field="timestamp_ms", y_field="pupil_area"`` to inspect pupil area over time.
 
     Args:
         table: A DataFrame, path, glob or list of paths, as
@@ -1428,10 +1431,12 @@ def load_raw_gaze(
 
 
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
-    """Load synthesized raw gaze samples for one trial in the bundled demo.
+    """Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-    OneStop ships no sample-level gaze, so this is **synthesized** from one of the
-    demo's real trials, and covers that trial alone.
+    The table includes each sample during paragraph reading, with screen x/y in
+    pixels, the tracked eye and pupil area in the tracker's units. Timestamps
+    are milliseconds from trial recording start on the fixation report's clock.
+    Samples with missing positions keep their timestamps and recorded pupil values.
 
     Args:
         names: ``"source"`` or ``"canonical"``, as
@@ -1440,7 +1445,11 @@ def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     Returns:
         The normalized samples.
     """
-    return load_raw_gaze(_data.read_sample_raw_gaze(), names=names)
+    from .code_snippet import SOURCE_DEMO, source_canvas
+
+    samples = load_raw_gaze(_data.read_sample_raw_gaze(), names=names)
+    samples.attrs[RECORDED_SCREEN_ATTR] = source_canvas(SOURCE_DEMO)
+    return samples
 
 
 def check_data_health(
@@ -2018,9 +2027,8 @@ def list_parts(
 ) -> pd.DataFrame:
     """List the ordered screens of multipart data, optionally for one trial.
 
-    A trial recorded as raw gaze alone takes its screens from ``raw_gaze`` (its
-    ``screen_id``). That is decided per trial, so a samples-only trial keeps its screens
-    in a dataset whose other trials have fixations.
+    Screens can come from any of the three tables, including a screen on which
+    the tracker recorded samples and no fixations.
 
     Args:
         words: The words frame, or ``None``.
@@ -2038,18 +2046,7 @@ def list_parts(
     if raw_gaze is not None:
         raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
     names = _call_names(fixations=fix_names, words=word_names, raw_gaze=gaze_names)
-    catalog = part_catalog(words, fixations)
-    if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
-        # Per trial, as `_select_part` and the app decide it: a trial neither
-        # words nor fixations cover takes its screens from its samples.
-        samples = part_catalog(raw_gaze)
-        covered = _data.trial_keys(words) | _data.trial_keys(fixations)
-        own = [
-            (str(p), str(t)) not in covered
-            for p, t in zip(samples["participant_id"], samples["trial_id"])
-        ]
-        if any(own):
-            catalog = pd.concat([catalog, samples[own]], ignore_index=True)
+    catalog = _data.dataset_part_catalog(words, fixations, raw_gaze)
     if participant is not None or trial is not None:
         # An id spelled before composite ids escaped a `_` inside a part.
         participant, trial = (
@@ -2218,18 +2215,12 @@ def _select_part(
     )
     if elapsed_axis:
         trial_fixations = chart_axes.with_origin(trial_fixations)
-    catalog = part_catalog(trial_words, trial_fixations)
-    if (
-        catalog.empty
-        and trial_words.empty
-        and trial_fixations.empty
-        and raw_gaze is not None
-        and SCREEN_ID in raw_gaze.columns
-    ):
-        # A trial recorded as raw gaze alone takes its screens from the
-        # samples, so one screen's coordinate space is drawn at a time — as for
-        # words and fixations — rather than every screen stacked into one.
-        catalog = part_catalog(_data.filter_raw_gaze(raw_gaze, [pid], [tid]))
+    trial_samples = (
+        _data.filter_raw_gaze(raw_gaze, [pid], [tid])
+        if raw_gaze is not None and SCREEN_ID in raw_gaze
+        else None
+    )
+    catalog = part_catalog(trial_words, trial_fixations, trial_samples)
     if catalog.empty:
         if screen is not None:
             raise ValueError(
@@ -2246,8 +2237,8 @@ def _select_part(
             f"Available: {', '.join(repr(value) for value in available)}."
         )
     return (
-        extract_part(trial_words, pid, tid, selected),
-        extract_part(trial_fixations, pid, tid, selected),
+        screen_rows(trial_words, selected),
+        screen_rows(trial_fixations, selected),
         pid,
         tid,
         selected,
@@ -2463,6 +2454,7 @@ def _canonical_options(
     names: ColumnNames | None,
     *,
     words: ColumnNames | None = None,
+    raw_gaze: ColumnNames | None = None,
 ) -> dict:
     """``overrides`` with every column it names in the internal vocabulary —
     a word option in the words table's names (``words``) before the merged
@@ -2478,9 +2470,12 @@ def _canonical_options(
             found = words.to_canonical(value)
             if found != str(value):
                 return found
-        return names.to_canonical(value) if names is not None else value
+        found = names.to_canonical(value) if names is not None else value
+        if found == value and raw_gaze is not None and option in ("x_field", "y_field"):
+            return raw_gaze.to_canonical(value)
+        return found
 
-    if names is not None or words is not None:
+    if names is not None or words is not None or raw_gaze is not None:
         for option in _ONE_COLUMN_OPTIONS:
             if isinstance(out.get(option), str):
                 out[option] = canonical(option, out[option])
@@ -2506,6 +2501,8 @@ def _column_labels(
     word_frame,
     fixation_frame,
     *,
+    raw_gaze: pd.DataFrame | None = None,
+    sample_names: ColumnNames | None = None,
     words: ColumnNames | None = None,
 ) -> dict | None:
     """`FigureSettings.column_labels` for frames that carried names — the
@@ -2513,19 +2510,22 @@ def _column_labels(
     column also under the words table's own name (`table_figure_labels`)."""
     if names is None:
         return None
-    labels = names.figure_labels(
-        [
-            column
-            for frame in (word_frame, fixation_frame)
+    return _cn.table_figure_labels(
+        {
+            "fixations": names,
+            "words": words or names,
+            "raw_gaze": sample_names or names,
+        },
+        {
+            table: frame.columns
+            for table, frame in (
+                ("fixations", fixation_frame),
+                ("words", word_frame),
+                ("raw_gaze", raw_gaze),
+            )
             if frame is not None
-            for column in frame
-        ]
+        },
     )
-    if words is not None and word_frame is not None:
-        for column, label in words.figure_labels(word_frame.columns).items():
-            if labels.get(column) != label:
-                labels[f"words:{column}"] = label
-    return labels
 
 
 def _check_column_options(
@@ -2831,7 +2831,10 @@ def plot_scanpath(
         column_names, fixations=fix_names, words=word_names, raw_gaze=gaze_names
     )
     word_side = _table_names(column_names, "words", word_names)
-    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
+    sample_side = _table_names(column_names, "raw_gaze", gaze_names)
+    figure_overrides = _canonical_options(
+        figure_overrides, names, words=word_side, raw_gaze=sample_side
+    )
     axes = (figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y"))
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
         words,
@@ -2844,12 +2847,7 @@ def plot_scanpath(
     )
     if raw_gaze is not None:
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
-        if selected_screen is not None:
-            raw_gaze = (
-                extract_part(raw_gaze, pid, tid, selected_screen)
-                if SCREEN_ID in raw_gaze.columns
-                else raw_gaze.iloc[:0]
-            )
+        raw_gaze = screen_rows(raw_gaze, selected_screen)
     _check_column_options(
         figure_overrides, words=trial_words, fixations=trial_fixations
     )
@@ -2864,8 +2862,10 @@ def plot_scanpath(
         canvas_size = screen_canvas_size(trial_words)
         if canvas_size is None:
             canvas_size = screen_canvas_size(trial_fixations)
+        if canvas_size is None and raw_gaze is not None:
+            canvas_size = screen_canvas_size(raw_gaze)
         if canvas_size is None:
-            canvas_size = _recorded_screen(words, fixations)
+            canvas_size = _recorded_screen(words, fixations, raw_gaze)
         if canvas_size is None:
             # A trial with no fixations is sized from its samples, as the
             # app sizes a raw-gaze-only dataset's canvas.
@@ -2916,7 +2916,12 @@ def plot_scanpath(
         x_field=x_field,
         y_field=y_field,
         column_labels=_column_labels(
-            names, trial_words, trial_fixations, words=word_side
+            names,
+            trial_words,
+            trial_fixations,
+            words=word_side,
+            raw_gaze=raw_gaze,
+            sample_names=sample_side,
         ),
     )
     fig = make_scanpath_figure(
@@ -2965,8 +2970,9 @@ def animate_scanpath(
 
     The replay takes a subset of [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s
     options (``figure_options("animation")``), and the ones they share default alike, so
-    the replay matches the static figure. The replay is made of fixations: it draws no
-    raw gaze, and nothing detects fixations from samples.
+    the replay matches the static figure. Set ``show_fixations=False`` to replay the
+    saccades alone. The replay uses fixation times and positions and has no raw-gaze
+    layer.
 
     **Two scanpaths.** ``trial_b`` co-animates a second trial, like the app's Animate +
     Compare. Both readings are drawn in A's coordinates, so a co-animation is an
@@ -3635,7 +3641,12 @@ def compare_scanpaths(
     figure could draw the wrong reading, or rows of both mixed into one. The frames you
     pass in are not modified, and only the trace labels show the prefix.
 
-    **The overlay gate.** An overlay needs both readings on screens of the same size, or
+    **Numeric axes.** Set ``x_field`` and ``y_field`` to compare index, position,
+    duration or other numeric fields in panels with matching ranges. An overlay
+    request uses side-by-side panels on these axes. Elapsed seconds start at
+    each full reading's first recorded fixation onset.
+
+    **The overlay gate.** A spatial overlay needs both readings on screens of the same size, or
     it raises ``ValueError`` (the app falls back to side by side). That holds across
     datasets, and within one when the two screens carry different ``canvas_width`` /
     ``canvas_height`` or ``setup_b`` states another screen. Pass
@@ -3753,12 +3764,22 @@ def compare_scanpaths(
     # A's or B's, is processed under the internal names.
     carried = {
         table: found[1]
-        for table, frame in (("fixations", fixations), ("words", words))
+        for table, frame in (
+            ("fixations", fixations),
+            ("words", words),
+            ("raw_gaze", raw_gaze if raw_gaze is not None else raw_gaze_b),
+        )
         if (found := _cn.frame_names(frame)) is not None
     }
     names = _call_names(column_names, **carried)
     word_side = _table_names(column_names, "words", carried.get("words"))
-    figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
+    sample_side = _table_names(column_names, "raw_gaze", carried.get("raw_gaze"))
+    figure_overrides = _canonical_options(
+        figure_overrides, names, words=word_side, raw_gaze=sample_side
+    )
+    fields = figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y")
+    if fields != ("x", "y") and resolved_layout == "overlay":
+        resolved_layout = "side_by_side"
     words, fixations, words_b, fixations_b = (
         _cn.to_canonical_frame(frame)
         for frame in (words, fixations, words_b, fixations_b)
@@ -3776,7 +3797,7 @@ def compare_scanpaths(
         if isinstance(pair, str) or len(tuple(pair)) != 2:
             raise ValueError(
                 f"{side} must be a (participant, trial) pair, e.g. "
-                f"('l37_1129', 'l37_1129_2_1_1_Ele'); got {pair!r}. "
+                f"('l37_273', 'l37_273_2_1_1_Ele'); got {pair!r}. "
                 "list_trials(words, fixations) lists the pairs."
             )
     # Ids written before composite ids escaped a `_` inside a part still name
@@ -3787,19 +3808,27 @@ def compare_scanpaths(
     # as `plot_scanpath`'s `screen`. Extracting whole parent trials would pool
     # every page of a multipart reading into one scanpath, saccades across pages
     # and all.
-    trial_words_a, trial_fix_a, pid_a, tid_a, _screen_a = _select_part(
-        words, fixations, str(pid_a), str(tid_a), screen
+    trial_words_a, trial_fix_a, pid_a, tid_a, selected_a = _select_part(
+        words,
+        fixations,
+        str(pid_a),
+        str(tid_a),
+        screen,
+        raw_gaze=raw_gaze,
+        elapsed_axis=chart_axes.ELAPSED in fields,
     )
-    trial_words_b, trial_fix_b, pid_b, tid_b, _screen_b = _select_part(
+    trial_words_b, trial_fix_b, pid_b, tid_b, selected_b = _select_part(
         words_b,
         fixations_b,
         str(pid_b),
         str(tid_b),
         screen_b,
+        raw_gaze=raw_gaze_b,
         screen_param="screen_b",
+        elapsed_axis=chart_axes.ELAPSED in fields,
     )
-    trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, trial_fix_a)
-    trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, trial_fix_b)
+    trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, selected_a)
+    trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, selected_b)
     for frame, (pid, tid) in ((trial_fix_a, trial_a), (trial_fix_b, trial_b)):
         if frame.empty:
             raise ValueError(
@@ -3816,18 +3845,28 @@ def compare_scanpaths(
         fixations=pd.concat([trial_fix_a, trial_fix_b], ignore_index=True),
     )
 
+    own_a = (
+        screen_canvas_size(trial_words_a)
+        or screen_canvas_size(trial_fix_a)
+        or screen_canvas_size(trial_raw_a)
+    )
+    own_b = (
+        screen_canvas_size(trial_words_b)
+        or screen_canvas_size(trial_fix_b)
+        or screen_canvas_size(trial_raw_b)
+    )
     setup_a = _compare_setup(
-        setup, canvas_size, trial_words_a, trial_fix_a, side="setup"
+        setup, canvas_size or own_a, trial_words_a, trial_fix_a, side="setup"
     )
     resolved_setup_b = _compare_setup(
-        setup_b, None, trial_words_b, trial_fix_b, side="setup_b"
+        setup_b, own_b, trial_words_b, trial_fix_b, side="setup_b"
     )
     gate = cross_dataset
     if not cross_dataset:
         same_b = _same_dataset_setup_b(
             setup_a,
-            setup_b,
-            a_known=setup is not None or canvas_size is not None,
+            resolved_setup_b if own_b is not None else setup_b,
+            a_known=setup is not None or canvas_size is not None or own_a is not None,
             words_a=trial_words_a,
             fixations_a=trial_fix_a,
             words_b=trial_words_b,
@@ -3839,12 +3878,8 @@ def compare_scanpaths(
         elif setup_b is None:
             # Not refused: B's split panel is drawn to its own screen's canvas,
             # else A's known one, else (neither known) its own data's extent.
-            own_b = screen_canvas_size(trial_words_b) or screen_canvas_size(trial_fix_b)
             if own_b is None and (
-                setup is not None
-                or canvas_size is not None
-                or screen_canvas_size(trial_words_a) is not None
-                or screen_canvas_size(trial_fix_a) is not None
+                setup is not None or canvas_size is not None or own_a is not None
             ):
                 resolved_setup_b = setup_a
             elif own_b is not None:
@@ -3921,6 +3956,12 @@ def compare_scanpaths(
         trial_fix_b = separate_self_compare(trial_fix_b, pid_b)
         trial_raw_b = separate_self_compare(trial_raw_b, pid_b)
         figure_pid_b = self_compare_participant(pid_b)
+    trial_fix_a, trial_raw_a = chart_axes.comparison_coordinates(
+        trial_fix_a, trial_raw_a, fields
+    )
+    trial_fix_b, trial_raw_b = chart_axes.comparison_coordinates(
+        trial_fix_b, trial_raw_b, fields
+    )
     merged_words, merged_words_b, _ = align_compare_columns(
         trial_words_a, trial_words_b
     )
@@ -3958,7 +3999,12 @@ def compare_scanpaths(
         compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
         column_labels=_column_labels(
-            names, trial_words_a, trial_fix_a, words=word_side
+            names,
+            trial_words_a,
+            trial_fix_a,
+            words=word_side,
+            raw_gaze=merged_raw,
+            sample_names=sample_side,
         ),
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.
@@ -3980,18 +4026,14 @@ def compare_scanpaths(
 
 
 def _compare_raw_gaze(
-    raw_gaze: pd.DataFrame | None, pid: str, tid: str, trial_fix: pd.DataFrame
+    raw_gaze: pd.DataFrame | None, pid: str, tid: str, screen: str | None
 ) -> pd.DataFrame:
     """One comparison reading's samples — its trial's, and its screen's when the
     reading is one screen of a multipart trial."""
     if raw_gaze is None or raw_gaze.empty:
         return pd.DataFrame()
     samples = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
-    if SCREEN_ID in samples.columns and SCREEN_ID in trial_fix.columns:
-        screens = trial_fix[SCREEN_ID].dropna().unique()
-        if len(screens) == 1:
-            samples = extract_part(samples, pid, tid, screens[0])
-    return samples
+    return screen_rows(samples, screen)
 
 
 def save_panel_proof(fig: go.Figure, path: str | Path, *, width_mm: float) -> Path:
@@ -4349,8 +4391,8 @@ def figure_code(
         ```python
         print(
             sps.figure_code(
-                participant="l7_1090",
-                trial="l7_1090_2_1_1_Ele",
+                participant="l7_183",
+                trial="l7_183_2_1_1_Ele",
                 show_heatmap=True,
                 flavor="cli",
             )
@@ -4445,7 +4487,7 @@ def cache_status() -> dict:
     settings, saved designs, metadata tables and annotations under your cache folder, so
     a refresh or a restart resumes where it left off. A hosted deployment, such as the
     online demo, keeps none. The same information is on the app's **Data Management**
-    page under *Saved on this computer*, and in ``scanpath-studio cache``.
+    page under *Saved work*, and in ``scanpath-studio cache``.
 
     | Key | What it holds |
     | --- | --- |
@@ -4487,7 +4529,7 @@ def clear_cache() -> dict:
 def version_info() -> BuildInfo:
     """Return version and installation details without a network request.
 
-    The same is in the app's Help → About, and in ``scanpath-studio version``.
+    The same is in the app's Help → About & citation, and in ``scanpath-studio version``.
 
     | Field | What it holds |
     | --- | --- |
@@ -4512,8 +4554,8 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
     The one call here that uses the network, and only when made. It reads the latest
     release from ``api.github.com`` (drafts and pre-releases excluded), compares it with
     [`version_info`][scanpath_studio.api.version_info], and never raises. The same check
-    is the app's Help → About → *Check for updates*, and ``scanpath-studio version
-    --check``.
+    is available under Help → About & citation → App details → *Check for updates* in a
+    local install or the desktop app, and from ``scanpath-studio version --check``.
 
     | Field | What it holds |
     | --- | --- |
@@ -4537,7 +4579,7 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
 def cite(format: str = "bibtex", corpus: str | None = None) -> str:
     """Return a citation for Scanpath Studio and, optionally, a public corpus.
 
-    The same entries as the app's Help → About and *Cite* buttons, and
+    The same entries as the app's Help → About & citation and *Cite* buttons, and
     ``scanpath-studio cite``. Every figure, replay and page `save_figure` writes
     also carries the citation in its file metadata.
 

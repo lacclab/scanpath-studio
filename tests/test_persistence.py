@@ -8,6 +8,7 @@ import pytest
 
 from scanpath_studio import persistence
 from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH, GUIDE_RETURN_KEY
 from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,
@@ -23,7 +24,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     save_state,
 )
-from scanpath_studio.session_keys import DESIGN_PRESETS
+from scanpath_studio.session_keys import DESIGN_PRESETS, SINGLE_COMPARE_TOGGLE
 
 
 def _dataset():
@@ -163,6 +164,36 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["trial_annotations"] == {}
     annotations_mod.activate_dataset(restored, "Bundled demo")
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
+
+
+def test_closing_during_a_guide_restores_original_view_and_keeps_user_edits(tmp_path):
+    original = {
+        "main_nav": _VIEW_CORPUS,
+        "single_animate": False,
+        SINGLE_COMPARE_TOGGLE: True,
+        "global_anim_autoplay": False,
+    }
+    session = original.copy()
+    assert save_state(session, tmp_path)
+    session.update(
+        {
+            GUIDE_RETURN_KEY: original,
+            "main_nav": _VIEW_SCANPATH,
+            "single_animate": True,
+            SINGLE_COMPARE_TOGGLE: False,
+            "global_anim_autoplay": True,
+        }
+    )
+    assert not save_state(session, tmp_path)
+
+    session["single_trial_id"] = "second reading"
+    assert save_state(session, tmp_path)
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert {key: restored[key] for key in original} == original
+    assert restored["single_trial_id"] == "second reading"
+    assert GUIDE_RETURN_KEY not in restored
+    assert session["main_nav"] == _VIEW_SCANPATH
 
 
 class TestADatasetWithoutRawGaze:
@@ -635,11 +666,19 @@ def test_an_open_tab_cannot_recreate_work_cleared_from_another_session(tmp_path)
 
 
 def test_local_save_failure_does_not_escape_into_the_app(tmp_path, monkeypatch):
+    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
     invalid_root = tmp_path / "not-a-directory"
     invalid_root.write_text("occupied", encoding="utf-8")
     monkeypatch.setattr(persistence, "state_directory", lambda: invalid_root)
 
-    assert not save_local_state({}, "http://localhost:8501")
+    session = {}
+    assert not save_local_state(session, "http://localhost:8501")
+    assert session[persistence.SAVE_FAILED_KEY]
+    monkeypatch.setattr(
+        persistence, "state_directory", lambda: tmp_path / "working-cache"
+    )
+    assert save_local_state(session, "http://localhost:8501")
+    assert persistence.SAVE_FAILED_KEY not in session
 
 
 def test_forget_removes_only_known_cache_files(tmp_path):
@@ -1145,8 +1184,7 @@ class TestRememberedDatasetCounts:
 
 
 class TestTheRecoveryToastPhrase:
-    """The toast names what came back, so the claim can be checked
-    against the *Saved on this computer* section it points at."""
+    """The toast names what came back and points to its details in Saved work."""
 
     @staticmethod
     def _recap(**counts):
@@ -1956,11 +1994,9 @@ class TestEachCachedDatasetRestoresOnItsOwn:
 
 
 def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
-    """End to end: the full app restores the healthy dataset, says which one did
-    not come back (with Retry / Remove from cache, on the page and on the Data
-    page's *Saved on this computer*), and its next save keeps the damaged entry."""
+    """A damaged entry survives the next save and has recovery actions in Saved work."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-    from tests.conftest import APP_SCRIPT, open_data_view
+    from tests.conftest import APP_SCRIPT, pin_data_view
 
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
@@ -1978,7 +2014,8 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["datasets"]) == {"good", "damaged"}
 
-    open_data_view(at)
+    pin_data_view(at, section="Saved work")
+    at.run()
     assert not at.exception, [e.message for e in at.exception]
     keys = {b.key for b in at.button}
     assert "saved_here_recovery_remove_0" in keys

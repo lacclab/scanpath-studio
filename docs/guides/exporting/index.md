@@ -36,14 +36,14 @@ the original release lets the recipient verify the table byte for byte.
 ## Cite what you export { #cite }
 
 Files saved through **Export** include citation information in their metadata.
-To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
+To add a visible credit to the figure, use **Figure** → **Title & labels** → **Credit**.
 
 - :material/format_quote: **Cite**, under each download and in
   :material/share: **Share** → **Code**, gives a one-line figure credit, the
   APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or
   EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
 - Each export bundle includes `CITATION.bib` and citation instructions in `README.md`.
-- **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio*
+- **Figure** → **Title & labels** → **Credit** adds a small *Made with Scanpath Studio*
   line under the plot, for a figure shared without its caption. In code, pass
   `show_credit=True`, or `--credit` to `render`.
 - In code, [`cite`][scanpath_studio.api.cite] and `scanpath-studio cite` print
@@ -87,6 +87,10 @@ bundle contents** to see the selected readings, their filenames and the columns
 in their tables. A word-measures CSV can contain the original stimulus words
 even when the figure masks them. When you select specific screens, the bundle
 includes notes on those screens and their parent trials.
+
+When you export all screens, rows with no Screen ID are included once in the
+trial’s tables. Selecting specific screens includes only rows assigned to those
+screens. A screen with raw gaze alone has its own sample table.
 
 If a figure fails, the download includes the files that succeeded. With the same data
 and settings still open, choose **Retry failed figure files**. The app retries each
@@ -140,7 +144,7 @@ The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Pytho
     from scanpath_studio.animation_export import export_animation
 
     words, fixations = sps.load_sample_data()
-    replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
+    replay = sps.animate_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
     Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
     ```
 

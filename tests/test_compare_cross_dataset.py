@@ -757,8 +757,8 @@ def _synthetic_vs_demo():
     at.session_state[COMPARE_SOURCE_STATE_KEY] = "Bundled demo"
     at.session_state["trial_chip_fields"] = ["@gaze_sample_count"]
     at.run()
-    at.session_state["single_compare_trial"] = "l37_1129_2_2_2_Adv"
-    at.session_state["single_compare_pos"] = "l37_1129_2_2_2_Adv"
+    at.session_state["single_compare_trial"] = "l37_273_2_2_2_Adv"
+    at.session_state["single_compare_pos"] = "l37_273_2_2_2_Adv"
     at.run()
     assert not at.exception, at.exception
     texts = [
@@ -776,7 +776,7 @@ def test_the_uniform_colour_is_not_reported_missing(_synthetic_vs_demo):
 def test_a_cross_dataset_b_counts_its_own_gaze_samples(_synthetic_vs_demo):
     """B's samples are drawn, so B's chip counts them too."""
     table = next(t for t in _synthetic_vs_demo if "Number of gaze samples" in t)
-    assert "2,233" in table, table
+    assert "18,583" in table, table
 
 
 def test_compare_qualification_preserves_the_labs_dataset_column_through_export():

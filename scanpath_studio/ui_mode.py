@@ -81,14 +81,18 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
         ("🎬 Animation settings", "Speed and frame rate."),
         ("👥 Compare readings", "Two readings, overlaid or side by side."),
         (
-            "🎨 Layer style",
+            "🎨 Layers",
             "Colour fixations by a measure; sizes, word boxes and raw gaze.",
         ),
         (
             "🎯 Filters & highlights",
             "A fixation window, short or long fixations, saccade types.",
         ),
-        ("🖼 Figure & canvas", "The screen, axes, titles and legends."),
+        (
+            "📈 Axes",
+            "Plot screen position, fixation order, elapsed time or another field.",
+        ),
+        ("🖼 Figure", "Framing, titles, hover fields and legends."),
         ("💾 Saved designs", "Keep your own figure designs and reuse them."),
     ),
     "subtabs": (
@@ -254,29 +258,16 @@ def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
 def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
-    Marks it chosen, which is what lets the cookie script remember it. Choosing
-    Essentials ends a running tutorial, and a change of mode ends a running welcome
-    tour. Anything that is not a mode (a deselected switch) changes nothing.
+    Marks it chosen so the cookie remembers it. A deselected switch changes nothing.
     """
     import streamlit as st
 
     chosen = parse_mode(mode)
     if chosen is not None:
-        if chosen == SIMPLE and st.session_state.get("tutorial_active"):
-            # The tutorials spotlight Full-only controls: leave the one
-            # running the way its Exit does.
+        if chosen != current_mode() and st.session_state.get("tutorial_active"):
             from scanpath_studio import tour
 
-            tour._restore_tutorial_return()
-        if (
-            chosen != current_mode()
-            and st.session_state.get("tour_mode") == "spotlight"
-        ):
-            # Each mode has its own welcome tour, and a step number means a
-            # different step in the other one: end it, as Done would.
-            from scanpath_studio import tour
-
-            tour._exit_spotlight()
+            tour.change_tutorial_mode(chosen)
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
         st.session_state[COOKIE_MODE_KEY] = chosen
@@ -427,10 +418,11 @@ def hidden_settings_reasons(
         "custom_view": custom_view and axes == ("x", "y"),
     }
     reasons = [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
-    if axes != ("x", "y"):
+    from .chart_axes import ELAPSED, ELAPSED_LABEL, GAZE_OVER_TIME
+
+    if axes != ("x", "y") and (custom_view or axes != GAZE_OVER_TIME):
         import streamlit as st
 
-        from .chart_axes import ELAPSED, ELAPSED_LABEL
         from .column_names import active as active_column_names
 
         labels = active_column_names(st.session_state, "fixations").option_labels(

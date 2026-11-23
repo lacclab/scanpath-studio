@@ -96,13 +96,13 @@ def browser():
 
 def _open(browser, url: str):
     """A fresh browser context's page on ``url``, its uncaught errors collected,
-    settled and with the first-visit tour closed."""
+    settled and with the sample invitation dismissed."""
     page = browser.new_context(viewport={"width": 1440, "height": 900}).new_page()
     page.errors = []
     page.on("pageerror", lambda exc: page.errors.append(str(exc)))
     page.goto(url)
     _settle(page)
-    _close_tour(page)
+    _dismiss_sample_invitation(page)
     return page
 
 
@@ -137,19 +137,10 @@ def _settle(page, quiet_ms: int = 1500, timeout_s: float = 150) -> None:
     pytest.fail("the app never stopped running")
 
 
-def _close_tour(page) -> None:
-    """Dismiss the first-visit tour card, which covers the page."""
-    for _ in range(3):
-        buttons = [
-            button
-            for button in page.locator(
-                '.st-key-tour_sp_close button, .st-key-tour_card button:has-text("Skip")'
-            ).all()
-            if button.is_visible()
-        ]
-        if not buttons:
-            return
-        buttons[0].click()
+def _dismiss_sample_invitation(page) -> None:
+    button = page.locator(".st-key-sample_invitation_dismiss button")
+    if button.is_visible():
+        button.click()
         _settle(page)
 
 
@@ -167,30 +158,86 @@ def _plot_frame(page, key: str):
     pytest.fail(f"no plot iframe holds #truescale-{key}")
 
 
-@pytest.mark.parametrize("path", ["data", "corpus-analysis", "help-faq"])
+@pytest.mark.parametrize(
+    "path", ["data", "corpus-analysis", "help-faq", "help-feedback", "help-tutorials"]
+)
 def test_first_visit_respects_the_requested_page(app_url, browser, path):
     with browser.new_context() as context:
         page = context.new_page()
         page.goto(f"{app_url}/{path}")
-        if path == "help-faq":
-            page.get_by_role("dialog").wait_for()
+        if path.startswith("help-"):
+            title = (
+                "Task guides"
+                if path == "help-tutorials"
+                else "Troubleshooting & feedback"
+            )
+            page.get_by_role("dialog", name=title).wait_for()
         else:
             target = (
-                ".st-key-dataset_table_grid"
-                if path == "data"
-                else ".st-key-corpus_pool_bar"
+                ".st-key-data_identity" if path == "data" else ".st-key-corpus_pool_bar"
             )
             page.locator(target).wait_for()
         _settle(page)
-        assert not page.locator(".st-key-tour_sp_close button:visible").count()
-        if path != "help-faq":
+        assert not page.locator(".st-key-sample_invitation_replay button").is_visible()
+        if not path.startswith("help-"):
             assert page.url.split("?")[0] == f"{app_url}/{path}"
+
+
+def test_help_menu_opens_four_destinations_over_the_current_view(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/corpus-analysis")
+        trigger = page.get_by_role("button", name=re.compile("Help · (Dev|Stable)"))
+        trigger.click()
+        items = page.get_by_role("menu").get_by_role("menuitem")
+        expected = [
+            "Task guides",
+            "Troubleshooting & feedback",
+            "Documentation ↗",
+            "About & citation",
+        ]
+        sync_api.expect(items).to_have_count(len(expected))
+        for index, name in enumerate(expected):
+            sync_api.expect(items.nth(index)).to_have_accessible_name(
+                re.compile("^" + re.escape(name) + r"( \(opens in new tab\))?$")
+            )
+        docs = items.filter(has_text="Documentation ↗")
+        sync_api.expect(docs).to_have_attribute("target", "_blank")
+        items.first.click()
+        dialog = page.get_by_role("dialog", name="Task guides")
+        sync_api.expect(dialog).to_be_visible()
+        page.keyboard.press("Escape")
+        sync_api.expect(dialog).to_have_count(0)
+        sync_api.expect(trigger).to_be_focused()
+        assert page.url.split("?")[0] == f"{app_url}/corpus-analysis"
+
+
+def test_import_walkthrough_returns_to_the_data_tab_that_opened_help(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data")
+        saved = page.get_by_role("tab", name="Saved work", exact=True)
+        saved.click()
+        heading = page.get_by_role("heading", name="Your session", exact=True)
+        sync_api.expect(heading).to_be_visible()
+        page.get_by_role("button", name=re.compile("Help · (Dev|Stable)")).click()
+        page.get_by_role("menuitem", name="Task guides", exact=True).click()
+        chooser = page.get_by_role("dialog", name="Task guides", exact=True)
+        chooser.get_by_text("Import and check a recording", exact=True).click()
+        chooser.get_by_role("button", name="Show me in the app", exact=True).click()
+        library = page.get_by_role("tab", name="Dataset library", exact=True)
+        sync_api.expect(library).to_have_attribute("aria-selected", "true")
+        guide = page.locator(".st-key-tour_card")
+        guide.get_by_role("button", name="Exit", exact=True).click()
+        sync_api.expect(saved).to_have_attribute("aria-selected", "true")
+        sync_api.expect(heading).to_be_visible()
 
 
 def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
         page.goto(f"{app_url}/data")
+        page.get_by_role("tab", name="Dataset library").click()
         grid = page.locator(".st-key-dataset_table_grid")
         counts = grid.locator(
             '[class*="st-key-dsc_participants_"] .sps-ds-num:not(.sps-ds-gap)'
@@ -204,13 +251,64 @@ def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
         sync_api.expect(counts.first).to_have_text(largest)
 
 
+def test_overview_opens_the_right_table_and_all_six_stay_on_the_page(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name=re.compile(r"^Words 2,614")).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Words", exact=True)
+        ).to_be_in_viewport()
+        links = page.locator(".st-key-data_table_links")
+        for label in (
+            "Fixations",
+            "Words",
+            "Raw gaze samples",
+            "Participants",
+            "Trials",
+            "Texts",
+        ):
+            sync_api.expect(
+                links.get_by_role("link", name=label, exact=True)
+            ).to_have_count(1)
+            sync_api.expect(
+                page.get_by_role("heading", name=label, exact=True)
+            ).to_have_count(1)
+        links.get_by_role("link", name="Texts", exact=True).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Texts", exact=True)
+        ).to_be_in_viewport()
+
+
+def test_dataset_editor_can_remove_an_uploaded_metadata_file_by_name(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name="Edit dataset", exact=True).click()
+        upload = page.get_by_role(
+            "region", name="Participant metadata table (optional)"
+        )
+        upload.locator('input[type="file"]').set_input_files(
+            {
+                "name": "readers.csv",
+                "mimeType": "text/csv",
+                "buffer": b"participant_id,reader_group\nl7_183,first\n",
+            }
+        )
+        column = page.get_by_text("reader_group", exact=True)
+        sync_api.expect(column.first).to_be_visible()
+        _settle(page)
+        upload.get_by_role("button", name="Remove readers.csv", exact=True).click()
+        sync_api.expect(column).to_have_count(0)
+
+
 def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
         page.goto(f"{app_url}/?source=demo&ui=essentials&animate=0")
         _plot_frame(page, "single").locator(".scatterlayer .trace").first.wait_for()
         _settle(page)
-        _close_tour(page)
+        _dismiss_sample_invitation(page)
 
         def box(key):
             return page.locator(f".st-key-{key}").bounding_box()
@@ -242,10 +340,20 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
 def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
     page = _open(browser, f"{app_url}/?ui=full&source=demo&animate=0")
     try:
-        names = ("animation", "scanpath", "heatmap", "illustration")
+        grid = page.locator(".st-key-tour_grp_views")
+        switch = grid.locator(".st-key-single_animate label")
         tiles = [
-            page.locator(f".st-key-viz_view_{name}").get_by_role("button")
-            for name in names
+            switch,
+            *(
+                grid.get_by_role("button", name=name, exact=True)
+                for name in (
+                    "Scanpath",
+                    "Heatmap",
+                    "Illustration",
+                    "Gaze over time",
+                    "Custom",
+                )
+            ),
         ]
         palette = page.locator(".st-key-global_palette")
 
@@ -269,8 +377,12 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         _settle(page)
         expected = positions()
         x, _, width, _ = expected[-1]
-        for left, _, tile_width, _ in expected[:-1]:
+        for left, _, tile_width, height in expected[:-1]:
             assert x <= left and left + tile_width <= x + width + 1
+            assert 44 <= height < 64
+        for left, right in zip(expected[:6:2], expected[1:6:2], strict=True):
+            assert left[1] == right[1] and left[0] + left[2] <= right[0]
+        assert expected[0][1] < expected[2][1] < expected[4][1] < expected[-1][1]
         for mode in ("Essentials", "Full"):
             page.locator(".st-key-ui_mode_switch").get_by_text(mode, exact=True).click()
             _settle(page)
@@ -295,6 +407,68 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         assert not compare.is_visible()
         assert tiles[2].get_attribute("kind") == "primary"
         assert not page.locator('[data-testid="stException"]').count()
+        assert page.errors == []
+    finally:
+        page.context.close()
+
+
+def test_finding_a_setting_opens_its_editor_and_keeps_the_chart(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full&source=demo")
+    try:
+        page.get_by_role("button", name="Gaze over time", exact=True).click()
+        _settle(page)
+        plot = _plot_frame(page, "single").locator(".js-plotly-plot")
+
+        def axes():
+            return plot.evaluate(
+                "p => [p.layout.xaxis.title.text, p.layout.yaxis.title.text]"
+            )
+
+        expected = [
+            "Seconds since first fixation onset",
+            "Horizontal screen position (px)",
+        ]
+        assert axes() == expected
+        playback = page.get_by_role("switch", name="Animation", exact=True)
+        for enabled in (True, False):
+            playback.focus()
+            playback.press("Space")
+            _settle(page)
+            assert playback.is_checked() == enabled
+        assert axes() == expected
+
+        finder = page.get_by_role("combobox", name="Find a plot setting")
+        finder.fill("legend")
+        page.get_by_role(
+            "option", name="Legend position, arrangement and text size"
+        ).click()
+        body = page.locator('[data-testid="stPopoverBody"]:visible')
+        body.locator(".st-key-rail_rows_legends").wait_for()
+        assert (
+            body.locator(".st-key-plot_detail_legend_layout details").get_attribute(
+                "open"
+            )
+            is not None
+        )
+        assert (
+            page.get_by_role("tab", name="Figure", exact=True).get_attribute(
+                "aria-selected"
+            )
+            == "true"
+        )
+        page.keyboard.press("Escape")
+        finder.fill("fixation index")
+        page.get_by_role(
+            "option", name="Axes · fixation index, time and position"
+        ).click()
+        _settle(page)
+        assert (
+            page.get_by_role("tab", name="Axes", exact=True).get_attribute(
+                "aria-selected"
+            )
+            == "true"
+        )
+        assert axes() == expected
         assert page.errors == []
     finally:
         page.context.close()
@@ -329,12 +503,69 @@ def test_the_scanpath_figure_draws(page):
     assert frame.locator("#truescale-single .scatterlayer .trace").count() >= 1
 
 
-def test_a_rail_popover_opens(page):
-    page.locator(".st-key-split_mode_rail_fix_popover button").first.click()
+def test_fixation_settings_and_visibility_are_independent(page):
+    row = page.locator(".st-key-plot_layer_fix")
+    switch = row.get_by_role("switch", name="Fixations")
+    sync_api.expect(switch).to_be_checked()
+    row.get_by_role("button", name="Fixations", exact=True).click()
     body = page.locator('[data-testid="stPopoverBody"]')
     body.first.wait_for(state="visible", timeout=15_000)
     assert "Size" in body.first.inner_text()
+    sync_api.expect(switch).to_be_checked()
     page.keyboard.press("Escape")
+    for shown in (False, True):
+        switch.press("Space")
+        _settle(page)
+        assert switch.is_checked() == shown
+        frame = _plot_frame(page, "single")
+        assert (
+            frame.locator("#truescale-single").evaluate(
+                "plot => plot.data.some(t => t.name === 'Fixations')"
+            )
+            == shown
+        )
+
+
+def test_figure_and_filter_menus_stay_editable_after_undo(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full&source=synthetic")
+    try:
+        editor = page.locator(".st-key-plot_editor_tabs")
+        editor.get_by_role("tab", name="Figure", exact=True).click()
+        labels = editor.get_by_role("button", name="Title & labels")
+        labels.click()
+        title = page.locator(".st-key-global_show_title")
+        title.locator("label").click()
+        _settle(page)
+        page.keyboard.press("Escape")
+        page.locator(".st-key-viz_undo").get_by_role("button").click()
+        _settle(page)
+        labels.click()
+        sync_api.expect(title.get_by_role("checkbox")).not_to_be_checked()
+        title.locator("label").click()
+        _settle(page)
+        sync_api.expect(title.get_by_role("checkbox")).to_be_checked()
+        page.keyboard.press("Escape")
+
+        editor.get_by_role("tab", name="Layers", exact=True).click()
+        row = editor.locator(".st-key-plot_filter_row")
+        filters = row.get_by_role("button", name="Filters & highlights")
+        button_height = filters.bounding_box()["height"]
+        filters.click()
+        short = page.locator(".st-key-global_fixclass_short_mode").get_by_role(
+            "combobox"
+        )
+        for mode in ("Hide", "Show"):
+            short.click()
+            page.get_by_role("option", name=mode, exact=True).click()
+            _settle(page)
+            sync_api.expect(short).to_be_visible()
+            assert row.get_by_text("Active", exact=True).is_visible() == (
+                mode == "Hide"
+            )
+            assert filters.bounding_box()["height"] == button_height
+        assert page.errors == []
+    finally:
+        page.context.close()
 
 
 def test_a_trial_change_covers_the_figure_until_the_next_one_draws(page):
@@ -441,7 +672,7 @@ def test_keyboard_steps_comparison_b_at_a_boundary(app_url, browser):
         page.context.close()
 
 
-def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
+def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(app_url, browser):
     """Streamlit draws a markdown block's raw HTML — the card's stylesheet —
     only once it has fetched its HTML renderer, a script of its own. Without
     it, the card must stay clipped to its 1px slot, not show its text and
@@ -452,14 +683,15 @@ def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
         blocked.append(route.request.url)
         route.abort()
 
-    context = page.context.browser.new_context(viewport={"width": 1440, "height": 900})
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
     other = context.new_page()
     try:
         other.route(re.compile(r"/rehype-raw[^/]*\.js"), block)
-        other.goto(page.url)
+        other.goto(app_url)
         _settle(other)
         if not blocked:
             pytest.skip("this Streamlit fetches no separate rehype-raw script")
+        other.locator(".st-key-sample_invitation_replay button").click()
         card = other.locator(".st-key-tour_card")
         card.wait_for(state="attached", timeout=30_000)
         assert card.bounding_box()["height"] <= 1
@@ -549,12 +781,13 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
 
     try:
         default = chart()
-        click("split_mode_rail_figure_popover")
+        editor = page.locator(".st-key-plot_editor_tabs")
+        editor.get_by_role("tab", name="Axes", exact=True).click()
         page.get_by_role("combobox", name="Axis preset").click()
         page.get_by_role("option", name="Elapsed time by fixation index").click()
         _settle(page)
-        page.keyboard.press("Escape")
-        click("split_mode_rail_fix_popover")
+        editor.get_by_role("tab", name="Layers", exact=True).click()
+        click("plot_menu_fix")
         page.locator(".st-key-global_show_order label").click()
         _settle(page)
         page.keyboard.press("Escape")
@@ -563,7 +796,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         assert first["mode"] == "markers+text"
         click("viz_undo")
         assert chart()["mode"] == "markers"
-        click("split_mode_rail_fix_popover")
+        click("plot_menu_fix")
         page.locator(".st-key-global_show_order label").click()
         _settle(page)
         page.keyboard.press("Escape")
@@ -584,7 +817,6 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         switch("Essentials")
         assert chart() == heatmap
         switch("Full")
-        page.locator(".st-key-design_shell summary").click()
         click("viz_view_custom")
         assert chart() == second
         click("single_prev_trial")
@@ -628,7 +860,7 @@ def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
     frame.locator("#truescale-single_anim.js-plotly-plot").wait_for(timeout=60_000)
     assert frame.locator("#truescale-single_anim .main-svg").count() >= 1
     assert page.locator(".st-key-tour_grp_ui_mode").first.is_visible()
-    assert not page.locator(".st-key-split_mode_rail_fix_popover").first.is_visible()
+    assert not page.locator(".st-key-plot_menu_fix").first.is_visible()
     page.locator(".st-key-iconpop_more_picker button").first.click()
     body = page.locator('[data-testid="stPopoverBody"]')
     body.first.wait_for(state="visible", timeout=15_000)
@@ -860,7 +1092,7 @@ def test_clicking_a_fixation_keeps_the_trial_tabs_available(app_url, browser, mo
         page = context.new_page()
         page.goto(f"{app_url}/?ui={mode}&source=synthetic&animate=0")
         _settle(page)
-        _close_tour(page)
+        _dismiss_sample_invitation(page)
         assert not page.locator('[data-testid="stException"]').count()
         frame = _plot_frame(page, "single")
         uid = frame.evaluate(
@@ -892,7 +1124,7 @@ def test_live_comparison_exports_a_physical_svg_and_reopenable_panel_settings(
             f"{app_url}/?ui=full&source=synthetic&compare=synthetic:synthetic_2line_demo&cmp_layout=Side+by+side"
         )
         _settle(page)
-        _close_tour(page)
+        _dismiss_sample_invitation(page)
         page.get_by_role("tab", name=re.compile("Export")).click()
         page.get_by_text("Manuscript panel proof", exact=True).click()
         page.get_by_text(re.compile("Stimulus words · .* pt")).wait_for()
@@ -950,10 +1182,13 @@ def test_reduced_motion_keeps_a_steady_tour_target_as_the_keyboard_advances(
     with browser.new_context(reduced_motion="reduce") as context:
         page = context.new_page()
         page.goto(f"{app_url}/?ui=full")
-        advance = page.locator(".st-key-tour_sp_next button")
-        for target in ("plot", "data_source", "trial_picker"):
-            advance.focus()
-            advance.press("Enter")
+        for key, target in (
+            ("sample_invitation_replay", "plot"),
+            ("tour_sp_next", "trial_picker"),
+        ):
+            action = page.locator(f".st-key-{key} button")
+            action.focus()
+            action.press("Enter")
             page.wait_for_function(
                 """selector => {
                     const el = document.querySelector(selector);

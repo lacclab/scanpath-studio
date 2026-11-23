@@ -160,7 +160,7 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
 
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run(timeout=90)
     bound.clear()
     pin_view(at, "Corpus Analysis")
@@ -176,7 +176,7 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
 
     recipe = json.loads(tabs._recipe_json(*bound[-1]))
     assert recipe["dataset"]["source"] == "Bundled demo"
-    assert recipe["trial_filters"] == [{"field": "Participant", "values": ["l7_1090"]}]
+    assert recipe["trial_filters"] == [{"field": "Participant", "values": ["l7_183"]}]
     assert recipe["pool"] == {
         "trials": 12,
         "trials_in_dataset": 24,
@@ -210,7 +210,7 @@ def test_downloaded_filtered_profile_replays_through_cli_and_api(monkeypatch, tm
 
     monkeypatch.setattr(tabs, "partial", capture)
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT).run(timeout=90)
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run(timeout=90)
     pin_view(at, "Corpus Analysis")
     at.session_state["corpus_subtab"] = "Per text"
@@ -222,7 +222,7 @@ def test_downloaded_filtered_profile_replays_through_cli_and_api(monkeypatch, tm
     saved = tmp_path / "profile.recipe.json"
     saved.write_text(captured["recipe"](), encoding="utf-8-sig")
     spec = json.loads(saved.read_bytes())
-    assert spec["selection"]["participants"] == ["l7_1090"]
+    assert spec["selection"]["participants"] == ["l7_183"]
     assert (
         api.run_analysis_recipe(saved, *api.load_sample_data())
         .to_csv(index=False)

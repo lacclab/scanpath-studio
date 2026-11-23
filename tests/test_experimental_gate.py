@@ -17,7 +17,7 @@ import argparse
 import pandas as pd
 import pytest
 
-from scanpath_studio import api, constants, controls, tabs, tour
+from scanpath_studio import api, constants, controls, feedback, tabs
 from tests.conftest import APP_SCRIPT, SUBTAB_KEY, pin_view
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -194,13 +194,13 @@ class TestTheUiSurfacesAreAbsent:
 
 
 class TestTheGuidanceMatchesTheBuild:
-    def test_the_faq_drops_the_drift_correction_entry(self):
-        questions = [q for q, _ in tour.faq_items()]
+    def test_troubleshooting_hides_the_drift_correction_entry(self):
+        questions = [q for q, _ in feedback.troubleshooting_items()]
         assert not any("drift correction" in q.lower() for q in questions)
 
     def test_it_comes_back_with_the_flag_on(self, monkeypatch):
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
-        questions = [q for q, _ in tour.faq_items()]
+        questions = [q for q, _ in feedback.troubleshooting_items()]
         assert any("drift correction" in q.lower() for q in questions)
 
 
@@ -337,6 +337,7 @@ class TestDerivedAnalysisTablesGate:
 
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
 
         def _must_not_run(*_a, **_k):
@@ -358,6 +359,7 @@ class TestDerivedAnalysisTablesGate:
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, at.exception

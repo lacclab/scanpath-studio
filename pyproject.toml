@@ -49,6 +49,8 @@ dependencies = [
     "scipy>=1.17",
     "pyarrow>=26.0",
     "kaleido>=1.5.2",
+    # Run Kaleido's async browser throughout a synchronous bulk export.
+    "anyio>=4",
     # Optional Streamlit runtime dep: enables fast event-based file-watching
     # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
     # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
@@ -140,6 +142,8 @@ include = ["scanpath_studio", "scanpath_studio.*"]
     # because only this list ships — a logo outside it would leave every
     # pip-installed copy with an empty header.
     "assets/*.png",
+    "assets/bundle_download/*.html",
+    "assets/bundle_download/*.js",
     "sample_data/*.csv",
     "sample_data/*.parquet",
     "sample_data/images/*.png",

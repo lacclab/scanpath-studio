@@ -355,7 +355,7 @@ def build_plot_config(
             },
             "base_font_size": int(base_font_size),
         },
-        # Figure & canvas → Legends: every legend, Auto included, so a file
+        # Figure → Legends: every legend, Auto included, so a file
         # restores the placement it was saved with rather than leaving a
         # moved legend where the receiving session had it.
         "legends": normalize_legend_layout(figure_settings.get("legend_layout")),
@@ -412,8 +412,7 @@ def build_plot_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
-            # The dataset's samples are made up (the bundled demo's) —
-            # provenance, like the two keys above, and not read back.
+            # Records the origin of the samples on the saved trial.
             "synthesized": raw_gaze_synthesized,
             # The layer's own style — the keys above describe the trial the
             # config was saved on and are not read back.

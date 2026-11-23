@@ -118,22 +118,22 @@ at the last colon.
 
 ```bash
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -214,12 +214,18 @@ ignores the `box_*` keys and `raw_gaze_color`.
 `--fixations`, and draws the plotted trial's samples under the fixations. With
 `--compare-with` it covers both scanpaths, each in its scanpath's color.
 `--compare-raw-gaze PATH…` gives B's samples when B comes from another
-dataset. `--animate` ignores raw gaze with a warning.
+dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples
+for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```bash
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
+
+To plot the same reading's pupil area over its recorded clock, use
+`--x-field timestamp_ms --y-field pupil_area` with `--sample-raw-gaze`.
+`scanpath-studio check --sample` includes the raw table and reports how many
+samples have missing positions.
 
 When `--raw-gaze` is the only input, it is the dataset. `--list-trials` lists
 its trials, and `render` draws the chosen trial's samples as recorded. No
@@ -381,8 +387,7 @@ from docs_support import cli_reference
 print(cli_reference("cache"))
 ```
 
-The same information is at the foot of the **:material/database: Data
-Management** page, under **:material/history: Saved on this computer**. A
+Open **:material/database: Data Management → Saved work → Your session** to see the same information. A
 running app writes a new copy at its next change, so clear the cache with the
 app closed.
 
@@ -412,10 +417,10 @@ print(cli_reference("version"))
 ```
 
 Between releases the version names the build: `0.35.0.post3+g8f18219` is three
-commits after 0.35.0, at commit `8f18219`. The same check is
-**:material/help: Help → :material/info: About → :material/update: Check for
-updates** in the app, and
-[`check_for_updates`][scanpath_studio.api.check_for_updates] in Python.
+commits after 0.35.0, at commit `8f18219`. In a local install or the desktop
+app, open **:material/help: Help → :material/info: About & citation → App details →
+:material:update: Check for updates**. In Python, call
+[`check_for_updates`][scanpath_studio.api.check_for_updates].
 
 ## cite
 

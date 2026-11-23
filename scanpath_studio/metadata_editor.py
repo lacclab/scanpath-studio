@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from . import metadata as md
-from .constants import ICONS, UPLOAD_FILE_TYPES, plural, upload_limit_mb
+from .constants import ICONS, UPLOAD_FILE_TYPES, md_literal, plural, upload_limit_mb
 from .data import (
     explain_read_error,
     header_only_error,
@@ -30,21 +30,17 @@ def _clear_metadata(grain: str) -> None:
         st.session_state.pop(key, None)
 
 
-def _restored_metadata_note(host, attached, *, grain: str) -> None:
-    """The uploader-side line for a table with no file behind it.
+def _on_metadata_file_change(grain: str, widget: str) -> None:
+    """Detach only when the user removes the last file from the uploader."""
+    if not st.session_state.get(widget):
+        _clear_metadata(grain)
 
-    A table that came back from the recovery cache or a saved config has
-    nothing in its uploader, so the file chip that normally *is* the detach
-    control is not there to press. This says where the table came from
-    and puts a ✕ Detach back, for this case only. Changing its key or its
-    fields means uploading the file again — the raw table it was cut from is
-    not part of what is restored.
-    """
-    n_fields = len(attached.fields)
+
+def _attached_metadata_note(host, attached, *, grain: str) -> None:
+    """Offer a detach action when the table outlives the file picker."""
     host.caption(
-        f"↩️ **{attached.source_name}** restored, with "
-        f"{plural(n_fields, 'field')}. Upload the file again to change its id "
-        "column or its fields."
+        f"**{md_literal(attached.source_name)}** · {plural(len(attached.fields), 'field')}. "
+        "Upload the file again to change its ID column or fields."
     )
     host.button(
         "✕ Detach",
@@ -132,10 +128,13 @@ def _metadata_upload(grain: str, help_text: str, upload_host) -> pd.DataFrame | 
         help_text,
         emphasis=True,
     )
+    widget = md.upload_key(grain)
     uploads = host.file_uploader(
         title,
         type=list(UPLOAD_FILE_TYPES),
-        key=md.upload_key(grain),
+        key=widget,
+        on_change=_on_metadata_file_change,
+        args=(grain, widget),
         accept_multiple_files=True,
         help=help_text,
         label_visibility="collapsed",
@@ -144,10 +143,8 @@ def _metadata_upload(grain: str, help_text: str, upload_host) -> pd.DataFrame | 
     attached_key, raw_key, file_key = md.grain_keys(grain)
     if not uploads:
         attached = st.session_state.get(attached_key)
-        if attached is not None and md.is_restored(st.session_state, grain):
-            _restored_metadata_note(host, attached, grain=grain)
-        elif attached is not None or st.session_state.get(file_key) is not None:
-            _clear_metadata(grain)
+        if attached is not None:
+            _attached_metadata_note(host, attached, grain=grain)
         return None
 
     signature = _metadata_upload_signature(uploads)

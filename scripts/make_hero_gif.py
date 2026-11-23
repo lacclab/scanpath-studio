@@ -12,7 +12,7 @@ Usage::
     python scripts/make_hero_gif.py       # writes assets/scanpath_animation.gif
 
 The trial is the bundled OneStop demo's "Polish government / wolf" elementary
-paragraph (35 fixations) — short enough for a snappy loop.
+paragraph.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from pathlib import Path
 import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
-PARTICIPANT = "l7_1090"
-PARAGRAPH = "l7_1090_2_2_4_Ele"
+PARTICIPANT = "l7_183"
+PARAGRAPH = "l7_183_2_2_4_Ele"
 PLAYBACK_SPEED = 3.0  # the Animated Scanpath tab's default
 
 

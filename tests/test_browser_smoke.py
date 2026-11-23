@@ -292,7 +292,7 @@ def test_dataset_editor_can_remove_an_uploaded_metadata_file_by_name(app_url, br
             {
                 "name": "readers.csv",
                 "mimeType": "text/csv",
-                "buffer": b"participant_id,reader_group\nl7_1090,first\n",
+                "buffer": b"participant_id,reader_group\nl7_183,first\n",
             }
         )
         column = page.get_by_text("reader_group", exact=True)

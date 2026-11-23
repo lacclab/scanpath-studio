@@ -2699,7 +2699,10 @@ def _restore_window(
 
 
 def _restore_plot_config(
-    config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
+    config: dict,
+    combos: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[int, list]:
     """Seed session_state from an uploaded plot-config dict so the rail
     widgets render with the saved settings. Returns ``(applied, skipped)`` where
@@ -3243,7 +3246,7 @@ def _restore_plot_config(
             )
 
     axes = section("axes")
-    numeric = numeric_field_options(fixations)
+    numeric = numeric_field_options(fixations, raw_gaze)
     for cfg_key, state_key, label in (
         ("x_field", "global_x_field", "X axis field"),
         ("y_field", "global_y_field", "Y axis field"),
@@ -3682,7 +3685,9 @@ def _restore_figure_mode(
         st.session_state.pop(SINGLE_COMPARE_SCREEN_ID, None)
 
 
-def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
+def _apply_uploaded_plot_config(
+    combos: pd.DataFrame, fixations: pd.DataFrame, raw_gaze: pd.DataFrame | None = None
+) -> None:
     """Restore settings from a freshly uploaded plot-config JSON, once per file.
 
     Reads the file captured by 🔗 Share → File's ``plot_config_upload``
@@ -3715,7 +3720,7 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
         st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     try:
-        applied, skipped = _restore_plot_config(config, combos, fixations)
+        applied, skipped = _restore_plot_config(config, combos, fixations, raw_gaze)
     except Exception as exc:  # backstop for an unexpectedly shaped config
         st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return

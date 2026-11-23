@@ -995,9 +995,9 @@ def test_python_dash_m_reaches_the_cli(tmp_path):
 # These pin the headless spelling of compare mode. `_SAMPLE_TRIAL_*` are two real trials of the bundled demo — a
 # renamed sample would break these loudly rather than silently comparing a
 # trial against itself.
-_SAMPLE_PARTICIPANT = "l37_1129"
-_SAMPLE_TRIAL_A = "l37_1129_2_1_1_Ele"
-_SAMPLE_TRIAL_B = "l37_1129_2_1_3_Adv"
+_SAMPLE_PARTICIPANT = "l37_273"
+_SAMPLE_TRIAL_A = "l37_273_2_1_1_Ele"
+_SAMPLE_TRIAL_B = "l37_273_2_1_3_Adv"
 
 
 def test_render_compare_with_writes_a_figure(tmp_path):
@@ -2223,9 +2223,11 @@ def test_check_json_preserves_missing_and_infinite_coordinates(tmp_path, capsys)
     assert records[0]["rows"] == 3
 
 
-def test_check_passes_the_sample(capsys):
+def test_check_counts_every_demo_sample_and_reports_recorded_position_gaps(capsys):
     cli.main(["check", "--sample"])
-    assert "every check passed" in capsys.readouterr().out
+    report = capsys.readouterr().out
+    assert "[note] Raw-gaze samples" in report
+    assert "14,628 of 401,200 rows in 18 trials" in report
 
 
 def test_check_needs_an_input():

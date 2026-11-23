@@ -29,7 +29,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     # `app.main` filters with on the following run.
     pin_view(at, "Scanpath")
     at.run(timeout=90)
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run(timeout=90)
     pin_data_view(at)
     at.run(timeout=90)
@@ -43,7 +43,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     at.run(timeout=90)
     assert not at.exception, at.exception
     captions = _captions(at, scope)
-    assert len(captions) == 1 and md_literal("Participant: l7_1090") in captions[0]
+    assert len(captions) == 1 and md_literal("Participant: l7_183") in captions[0]
     assert {
         "Fixations",
         "Words",

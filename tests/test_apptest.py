@@ -17,6 +17,7 @@ import pytest
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
 from scanpath_studio.constants import DATASET_NAME_MAX_CHARS, DEMO_CHOICE, ICONS
+from scanpath_studio.data import read_sample_raw_gaze
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -484,8 +485,8 @@ class TestSingleReportDatasets:
         from scanpath_studio import app, data
 
         words_raw, fix_raw = data.load_sample_data()
-        words_raw = words_raw[words_raw["participant_id"] == "l37_1129"]
-        fix_raw = fix_raw[fix_raw["participant_id"] == "l37_1129"]
+        words_raw = words_raw[words_raw["participant_id"] == "l37_273"]
+        fix_raw = fix_raw[fix_raw["participant_id"] == "l37_273"]
         override = make_frames(words_raw, fix_raw, pd.DataFrame())
         monkeypatch.setattr(app, "load_sample_data", lambda *a, **k: override)
 
@@ -1300,9 +1301,7 @@ class TestDatasetTable:
         )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
-        """No *About this dataset* popover — the description, the home
-        page on its line, and a note only where it changes how a figure is
-        read (PoTeC's positions are reconstructed)."""
+        """An unavailable PoTeC keeps its home page and identifies the demo recordings on display."""
         from scanpath_studio import datasets
 
         token = "PoTeC — Potsdam Textbook Corpus"
@@ -1317,7 +1316,10 @@ class TestDatasetTable:
         assert any(
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
-        assert any("raw-gaze samples are synthesized" in c for c in captions)
+        assert any(
+            "EyeLink recordings for all 24 paragraph readings" in c for c in captions
+        )
+        assert all("Fixation positions are reconstructed" not in c for c in captions)
         assert any("belong to the bundled demo" in msg.value for msg in at.info)
         # What an *About this dataset* popover would write (its own label is
         # not in the tree).
@@ -2309,7 +2311,7 @@ class TestGroupedUploadMapping:
 
         # Inject the bundled raw frames through the per-table upload seam.
         sample_words, sample_fix = app.load_sample_data()
-        sample_rg = app.load_sample_raw_gaze()
+        sample_rg = read_sample_raw_gaze().head(100)
         frames = {
             "col_map_words": sample_words,
             "col_map_fix": sample_fix,
@@ -2384,7 +2386,7 @@ class TestGroupedUploadMapping:
 
         from scanpath_studio import app
 
-        sample_rg = app.load_sample_raw_gaze()
+        sample_rg = read_sample_raw_gaze().head(100)
         monkeypatch.setattr(
             app,
             "_read_uploaded_frame",
@@ -3137,8 +3139,8 @@ class TestSetupWizard:
             {
                 "participant_id": ["l37", "l37", "l42", "l42"],
                 "unique_trial_id": [
-                    "l37_1129_1_1_Ele",
-                    "l37_1129_1_2_Adv",
+                    "l37_273_1_1_Ele",
+                    "l37_273_1_2_Adv",
                     "l42_1129_1_1_Ele",
                     "l42_1129_1_2_Adv",
                 ],
@@ -4323,7 +4325,7 @@ class TestOpenTrialFromCorpusTable:
         at.session_state["main_nav"] = "Corpus Analysis"
         at.run(timeout=60)
 
-        target = "l7_1090_2_1_1_Ele"
+        target = "l7_183_2_1_1_Ele"
         assert target != picked_trial_id(booted_on)
         at.session_state[PENDING_TRIAL_KEY] = {
             "participant_id": None,
@@ -4622,8 +4624,8 @@ class TestDeepLinkToAFilteredOutReader:
     """
 
     def test_reports_once_and_does_not_fire_when_the_reader_returns(self):
-        participant = "l37_1129"
-        trial = "l37_1129_2_2_2_Adv"
+        participant = "l37_273"
+        trial = "l37_273_2_2_2_Adv"
         at = _make_apptest()
         at.run(timeout=180)
         assert not at.exception, at.exception

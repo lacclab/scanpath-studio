@@ -125,3 +125,47 @@ def test_the_cli_refuses_a_replay_with_nothing_to_draw(tmp_path):
             ]
         )
     assert not (tmp_path / "replay.html").exists()
+
+
+def _replay_app(query: dict):
+    from streamlit.testing.v1 import AppTest
+
+    from tests.conftest import APP_SCRIPT
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    for key, value in query.items():
+        at.query_params[key] = value
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+def test_a_replay_opened_with_both_layers_off_shows_its_fixations():
+    """A link the API would refuse (both layers off, no legacy reading) opens
+    with fixations, so the replay draws and Share → Code stays runnable."""
+    at = _replay_app(
+        {
+            "show_fixations": "0",
+            "show_saccades": "0",
+            "replay_fixations": "0",
+            "tab": "animation",
+        }
+    )
+    assert at.session_state["single_animate"] is True
+    assert at.session_state["global_show_fix"] is True
+
+
+def test_the_last_layer_of_a_replay_cannot_be_switched_off():
+    at = _replay_app({"show_saccades": "0", "tab": "animation"})
+    fixations = at.toggle(key="global_show_fix")
+    assert fixations.value is True
+    assert fixations.disabled
+    assert "A replay draws fixations or saccades" in (fixations.help or "")
+    # With both on, either can go; then the other is the one left.
+    at.toggle(key="global_show_saccades").set_value(True).run()
+    assert not at.toggle(key="global_show_fix").disabled
+    at.toggle(key="global_show_fix").set_value(False).run()
+    assert at.toggle(key="global_show_saccades").disabled
+    # A static figure may hide both.
+    at.toggle(key="single_animate").set_value(False).run()
+    assert not at.toggle(key="global_show_saccades").disabled

@@ -7405,6 +7405,20 @@ def render_plot_controls(
             else ""
         )
     )
+    # A replay draws only fixations and saccades, so it always keeps one of
+    # them: a replay opened with both off (a link, a settings file or a saved
+    # session) shows fixations, as switching Animation on does, and the switch
+    # of the one layer left is greyed while the replay runs. The API and CLI
+    # refuse a replay with both off, so Share → Code stays runnable.
+    ss = st.session_state
+    if animating and not (
+        ss.get("global_show_fix", True) or ss.get("global_show_saccades", True)
+    ):
+        ss["global_show_fix"] = True
+        ss[_AUTO_REPLAY_FIXATIONS] = True
+    replay_layer_help = "A replay draws fixations or saccades. Turn the other on first."
+    last_replay_fix = animating and not ss.get("global_show_saccades", True)
+    last_replay_sac = animating and not ss.get("global_show_fix", True)
     show_fix, fix_grp = _layer_row(
         layers,
         "Fixations",
@@ -7412,10 +7426,11 @@ def render_plot_controls(
         slug="fix",
         visibility_key="global_show_fix",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or not has_markers,
+        disabled=not has_fixations or not has_markers or last_replay_fix,
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
             (not has_markers, fix_axis_help),
+            (last_replay_fix, replay_layer_help),
         ),
     )
     show_saccades, sac_grp = _layer_row(
@@ -7425,10 +7440,11 @@ def render_plot_controls(
         slug="sac",
         visibility_key="global_show_saccades",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or (chart_axes and not sequence),
+        disabled=not has_fixations or (chart_axes and not sequence) or last_replay_sac,
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
             (chart_axes and not sequence, screen_help),
+            (last_replay_sac, replay_layer_help),
             (sequence, "Connect successive fixation indices in reading order."),
         ),
     )

@@ -2516,6 +2516,29 @@ class TestSampleReading:
         assert at.session_state["main_nav"] == view
         assert not at.session_state["single_animate"]
 
+    @pytest.mark.parametrize("start", ["heatmap", "saccades_only"])
+    def test_sample_replay_shows_fixations_and_restores_the_original_layers(
+        self, start
+    ):
+        at = _make_apptest().run(timeout=45)
+        if start == "heatmap":
+            at.button(key="viz_view_heatmap").click().run(timeout=45)
+        else:
+            at.button(key="viz_view_animation").click().run(timeout=45)
+            at.toggle(key="global_show_fix").set_value(False).run(timeout=45)
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value == (start == "saccades_only")
+
+        _replay_tour(at)
+        assert not at.exception, at.exception
+        assert at.session_state["single_animate"]
+        assert at.toggle(key="global_show_fix").value
+        at.button(key="tour_sp_close").click().run(timeout=45)
+        assert not at.exception, at.exception
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value == (start == "saccades_only")
+        assert at.session_state["single_animate"] == (start == "saccades_only")
+
     def test_switching_datasets_ends_the_sample_guide(self):
         from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
 

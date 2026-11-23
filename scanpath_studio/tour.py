@@ -1004,18 +1004,18 @@ def _arm_tour() -> None:
         elif view == _VIEW_DATA:
             original.update(_data_location())
         state[GUIDE_RETURN_KEY] = original
-    # A sample guide follows one reading even if a comparison or a static
-    # view was open. An explicit request to replay also takes effect when the
-    # viewer switched automatic playback off.
+    # This guide follows one reader's fixation markers, including when the
+    # original view was a heatmap or a replay showing only saccades.
     from .controls import write_through
 
     desired = {
         SINGLE_ANIMATE: True,
         SINGLE_COMPARE_TOGGLE: False,
+        "global_show_fix": True,
         "global_anim_autoplay": True,
     }
     for key, value in desired.items():
-        previous = state.get(key, key == "global_anim_autoplay")
+        previous = state.get(key, key in {"global_show_fix", "global_anim_autoplay"})
         if previous != value:
             state[GUIDE_RETURN_KEY].setdefault(key, previous)
             if key == "global_anim_autoplay":

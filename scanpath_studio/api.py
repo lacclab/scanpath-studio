@@ -4126,6 +4126,7 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
     proof_width_mm: float | None = None,
+    compact_png: bool = False,
 ) -> Path:
     """Save a figure as HTML, PNG, SVG or PDF.
 
@@ -4153,10 +4154,15 @@ def save_figure(
         dpi: The resolution for ``width_mm`` / ``width_in``. Default 300.
         proof_width_mm: Total manuscript width of a split comparison SVG, as in
             [`save_panel_proof`][scanpath_studio.api.save_panel_proof].
+        compact_png: Compress the PNG losslessly, as the app's Export bundle does
+            under *Smaller PNG files*: the same pixels and metadata in a smaller file,
+            for a little more time. Only for ``.png``.
 
     Returns:
         The path written.
     """
+    if compact_png and not str(path).lower().endswith(".png"):
+        raise ValueError("compact_png compresses a PNG; save as .png.")
     if str(path).lower().endswith((".publication.json", ".publication.html")):
         if any(v is not None for v in (width, height, proof_width_mm)) or scale != 2:
             raise ValueError("Use width_mm or width_in to size a publication figure.")
@@ -4248,6 +4254,11 @@ def save_figure(
                 _export.set_png_dpi(staged, dpi)
         if suffix == ".html" or dpi is not None:
             stamp_file(staged)
+        if compact_png:
+            # Last, over the finished file: it keeps the dpi and the citation.
+            from .export_png import compact_png as compress
+
+            staged.write_bytes(compress(staged.read_bytes()))
         staged.replace(path)
     return path
 
@@ -4302,6 +4313,7 @@ def save_figure_layers(
     width_mm: float | None = None,
     width_in: float | None = None,
     dpi: int | None = None,
+    compact_png: bool = False,
 ) -> dict[str, Path]:
     """Save a scanpath figure as one file per layer, for editing.
 
@@ -4324,6 +4336,8 @@ def save_figure_layers(
         width_mm: PNG print width in millimetres.
         width_in: PNG print width in inches.
         dpi: Resolution for the print width, shared by every layer.
+        compact_png: Compress each PNG layer losslessly, as
+            [`save_figure`][scanpath_studio.api.save_figure] does. Only for ``png``.
 
     Returns:
         ``{layer: Path}`` for each file written.
@@ -4332,6 +4346,8 @@ def save_figure_layers(
     fmt = fmt.lstrip(".").lower()
     if fmt not in {"html", "png", "svg", "pdf"}:
         raise ValueError("Choose html, png, svg or pdf for the layer format.")
+    if compact_png and fmt != "png":
+        raise ValueError("compact_png compresses PNG layers; choose fmt='png'.")
     created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -4349,6 +4365,7 @@ def save_figure_layers(
                     width_mm=width_mm,
                     width_in=width_in,
                     dpi=dpi,
+                    compact_png=compact_png,
                 )
                 written[layer] = directory / name
             _publish_layers(directory, staged, [p.name for p in written.values()], fmt)

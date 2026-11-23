@@ -95,3 +95,22 @@ def test_render_passes_compact_png_and_prints_it(monkeypatch, capsys):
 def test_render_refuses_compact_png_for_other_outputs(monkeypatch):
     with pytest.raises(SystemExit):
         _render(monkeypatch, ["--compact-png", "-o", "a.svg"])
+
+
+def test_a_print_dpi_is_stamped_without_re_encoding_the_pixels():
+    """The dpi goes into a pHYs chunk; the compressed image data is copied
+    byte for byte, so `compact_png` still has the browser's encoding to
+    improve on, whatever Pillow's own encoder would do."""
+    from scanpath_studio.export import png_with_dpi
+
+    data = _uncompressed_png(go.Figure(), fmt="png", width=40, height=30, scale=1)
+    stamped = png_with_dpi(png_with_dpi(data, 300), 150)
+
+    def idat(png: bytes) -> bytes:
+        start = png.find(b"IDAT") - 4
+        return png[start : png.find(b"IEND") - 4]
+
+    assert idat(stamped) == idat(data)
+    assert stamped.count(b"pHYs") == 1
+    with Image.open(io.BytesIO(stamped)) as image:
+        assert round(image.info["dpi"][0]) == 150

@@ -31,7 +31,9 @@ from __future__ import annotations
 import io
 import json
 import re
+import struct
 import zipfile
+import zlib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, nullcontext, suppress
@@ -39,7 +41,7 @@ from contextvars import copy_context
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from time import localtime, perf_counter
 
 import pandas as pd
@@ -165,11 +167,38 @@ def png_save_kwargs(
 def set_png_dpi(path, dpi: int) -> None:
     """Stamp ``dpi`` into a PNG's header (``pHYs``), so a layout program
     places it at its print size. The pixels are untouched."""
-    from PIL import Image
+    path = Path(path)
+    path.write_bytes(png_with_dpi(path.read_bytes(), dpi))
 
-    with Image.open(path) as image:
-        image.load()
-        image.save(path, format="PNG", dpi=(dpi, dpi))
+
+def png_with_dpi(data: bytes, dpi: int) -> bytes:
+    """``data`` with a ``pHYs`` chunk for ``dpi`` before its image data,
+    replacing one already there. Every other chunk, the compressed pixels
+    included, is copied byte for byte, so stamping costs no re-encoding and
+    leaves the image's own compression to `export_png.compact_png`."""
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("not a PNG")
+    per_metre = int(dpi / 0.0254 + 0.5)
+    body = struct.pack(">IIB", per_metre, per_metre, 1)
+    chunk = (
+        struct.pack(">I", len(body))
+        + b"pHYs"
+        + body
+        + struct.pack(">I", zlib.crc32(b"pHYs" + body) & 0xFFFFFFFF)
+    )
+    parts, offset, placed = [data[:8]], 8, False
+    while offset + 8 <= len(data):
+        kind = data[offset + 4 : offset + 8]
+        end = offset + 12 + int.from_bytes(data[offset : offset + 4], "big")
+        if kind != b"pHYs":
+            if kind == b"IDAT" and not placed:
+                parts.append(chunk)
+                placed = True
+            parts.append(data[offset:end])
+        offset = end
+    if not placed:
+        raise ValueError("no IDAT chunk")
+    return b"".join(parts)
 
 
 # --- Customizable export paths -----------------------------------------------

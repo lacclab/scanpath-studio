@@ -5,7 +5,7 @@ A figure ready for a slide or a paper. It has a title above the plot, a caption 
 1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
 1. In **Saccades** ▾ → **Line** → **Color**, choose **By type**.
 1. In **Figure & canvas** ▾ → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Set each one's **Size**, here 34 px and 20 px.
-1. Under **Legends**, set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
+1. Under **Legends**, tick **Show** for **Fixation sizes**. Set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
 1. Under **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 60 px.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
@@ -16,7 +16,7 @@ scanpath-studio render --sample \
   --saccade-color-by-type \
   --title "One participant, one article" --title-size 34 \
   --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
-  --legend saccades=right-outside,,18 --legend size-key=bottom-right-outside,,18 \
+  --duration-size-legend --legend saccades=right-outside,,18 --legend size-key=bottom-right-outside,,18 \
   --crop-to-data --crop-margin 60 \
   --highlight-column '' \
   -o title-caption-legend.html
@@ -37,6 +37,7 @@ fig = sps.plot_scanpath(
     title_font_size=34,
     caption="Marker size: fixation duration. Line color: saccade type.",
     caption_font_size=20,
+    duration_size_legend=True,
     legend_layout={
         "saccades": {"position": "right-outside", "size": 18},
         "size_key": {"position": "bottom-right-outside", "size": 18},

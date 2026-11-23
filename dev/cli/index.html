@@ -3289,7 +3289,7 @@ has a flag.</p>
 </tr>
 <tr>
 <td>size fixations by duration</td>
-<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--no-duration-size-legend</code></td>
+<td><code>--marker-size-scale sqrt\|linear\|log\|relative</code> (default <code>sqrt</code>), <code>--marker-duration-range LO HI</code> (ms, default <code>50 600</code>), <code>--marker-size-range MIN MAX</code> (px), <code>--duration-size-legend</code> (show the optional size key)</td>
 </tr>
 <tr>
 <td>draw only part of a trial</td>
@@ -4637,10 +4637,10 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Place one legend. Repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE]. KIND is compare (Compare (A/B)), saccades (Saccade types), colors (Fixation colors), size-key (Fixation sizes) or highlight (Text highlight). POSITION is auto, or SPOT-outside or SPOT-inside, with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right. Outside grows the figure, and left and right run down the side. ARRANGEMENT is stacked or side-by-side, and SIZE the text size in px. E.g. <code>--legend</code> saccades=right-outside,stacked,14. Each legend's switch still decides whether it is drawn.</td>
 </tr>
 <tr>
-<td><code>--no-duration-size-legend</code></td>
+<td><code>--duration-size-legend</code><br><code>--no-duration-size-legend</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Hide the Fixation sizes legend, reference circles labeled in ms. It is drawn when <code>--marker-size-scale</code> is sqrt, linear or log.</td>
+<td>Show reference circles labeled in milliseconds for the sqrt, linear or log fixation size scale (off by default).</td>
 </tr>
 </tbody>
 </table>

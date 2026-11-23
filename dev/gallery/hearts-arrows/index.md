@@ -5,7 +5,7 @@ Make a figure for a talk or teaching: pink hearts for fixations, purple arrows f
 1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
 1. In **Fixations** ▾ → **Marker**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Tick **Snap** → **To line**, and leave **Fixation index** → **Show** unticked.
 1. In **Saccades** ▾, set **Shape** to **Arc**. Under **Line**, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Arrow size** to **12**.
-1. In **Figure & canvas** ▾ → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave **Stimulus** ▾ → **Highlight words** unticked.
+1. In **Figure & canvas** ▾ → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave **Stimulus** ▾ → **Highlight words** unticked.
 
 Save the look under **My designs** to apply it to your own data.
 
@@ -20,7 +20,7 @@ scanpath-studio render --words words.csv --fixations fixations.csv \
   --marker-size-range 18 30 --fixation-opacity 0.85 --snap-fixations \
   --saccade-arcs --saccade-arrows --saccade-color '#4f46a5' \
   --saccade-width 2.5 --saccade-arrow-size 12 \
-  --no-fixation-index --no-duration-size-legend --highlight-column '' \
+  --no-fixation-index --highlight-column '' \
   --illustration-text "Illustration · hand-drawn" -o hearts-arrows.html
 ```
 

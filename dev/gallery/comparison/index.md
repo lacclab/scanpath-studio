@@ -6,7 +6,7 @@ Two complete readings of a shorter text, labeled Participant A and Participant B
 1. Turn on **Compare**. In **Trial B**, choose another participant's reading of the same text.
 1. In **Compare** ▾, set **View** to **Overlay**, and name the two readings in **Label A** and **Label B**. To compare the complete readings, keep the **Index range** of both scanpaths at the full range, under **Filters & highlights** ▾ → **Fixations · A** and **Fixations · B**.
 1. In **Figure & canvas** ▾ → **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 50 px.
-1. Under **Legends**, set **Compare (A/B)** to **Top center, outside** and **Side by side**, with text size 24. Untick **Show** for **Fixation sizes**.
+1. Under **Legends**, set **Compare (A/B)** to **Top center, outside** and **Side by side**, with text size 24.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
 
@@ -14,7 +14,7 @@ Two complete readings of a shorter text, labeled Participant A and Participant B
 scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_2_4_Ele \
   --compare-with l7_1090:l7_1090_2_2_4_Ele --compare-legend --label-a "Participant A" --label-b "Participant B" \
-  --legend compare=top-center-outside,side-by-side,24 --no-duration-size-legend \
+  --legend compare=top-center-outside,side-by-side,24 \
   --crop-to-data --crop-margin 50 \
   --highlight-column '' \
   -o comparison.html

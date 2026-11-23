@@ -422,6 +422,41 @@ def test_annotations_only_file_gains_no_plot_section(config):
 
 
 @given(
+    st.lists(
+        st.tuples(
+            st.sampled_from(["t1", "t2"]),
+            st.sampled_from(["a", "b"]),
+            st.sampled_from(["L", "R", None]),
+            st.one_of(st.none(), st.integers(min_value=0, max_value=5)),
+        ),
+        min_size=1,
+        max_size=30,
+    )
+)
+def test_samples_are_numbered_in_recorded_order_within_their_group(rows):
+    """Each reading, screen and eye numbers its samples 1 … n, in the order
+    of their clock, every sample counted, whatever order the table holds."""
+    from scanpath_studio.chart_axes import with_sample_index
+    from scanpath_studio.constants import SAMPLE_INDEX
+
+    samples = pd.DataFrame(
+        rows, columns=["trial_id", "screen_id", "eye", "timestamp_ms"]
+    ).assign(participant_id="p", x=np.nan)
+    samples["timestamp_ms"] = samples["timestamp_ms"].astype(float)
+    numbered = with_sample_index(samples)
+    keys = ["participant_id", "trial_id", "screen_id", "eye"]
+    for _, group in numbered.groupby(keys, dropna=False):
+        assert sorted(group[SAMPLE_INDEX]) == list(range(1, len(group) + 1))
+        clock = group["timestamp_ms"].fillna(np.inf).to_numpy()
+        ranked = group[SAMPLE_INDEX].to_numpy()
+        assert all(
+            (clock[i] < clock[j]) <= (ranked[i] < ranked[j])
+            for i in range(len(group))
+            for j in range(len(group))
+        )
+
+
+@given(
     st.lists(st.integers(min_value=1, max_value=200), min_size=1, max_size=12),
     st.integers(min_value=0, max_value=400),
     st.integers(min_value=10, max_value=60),

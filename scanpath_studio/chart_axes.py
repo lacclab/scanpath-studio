@@ -66,10 +66,44 @@ def with_origin(fixations: pd.DataFrame) -> pd.DataFrame:
     return view
 
 
+#: What numbers a sample: its reading, screen and eye, where the table has them.
+_SAMPLE_GROUPS = ("participant_id", "trial_id", "screen_id", "eye")
+
+
+def with_sample_index(samples: pd.DataFrame | None) -> pd.DataFrame | None:
+    """``samples`` with each one's ``sample_index`` for a chart axis.
+
+    Samples imported without a clock already carry it. Otherwise each sample
+    is numbered 1, 2, … within its reading, screen and eye, in the order it
+    was recorded: by its timestamp, a tie or a missing one keeping table order.
+    Every sample is counted, including those without a gaze position."""
+    if samples is None or samples.empty or SAMPLE_INDEX in samples:
+        return samples
+    if "timestamp_ms" in samples:
+        clock = pd.to_numeric(samples["timestamp_ms"], errors="coerce").to_numpy(
+            dtype=float
+        )
+        order = np.argsort(clock, kind="stable")  # missing times sort last
+    else:
+        order = np.arange(len(samples))
+    recorded = samples.iloc[order]
+    keys = [key for key in _SAMPLE_GROUPS if key in recorded]
+    counts = (
+        recorded.groupby(keys, sort=False, dropna=False).cumcount().to_numpy() + 1
+        if keys
+        else np.arange(1, len(recorded) + 1)
+    )
+    number = np.empty(len(samples), dtype=np.int64)
+    number[order] = counts
+    return samples.assign(**{SAMPLE_INDEX: number})
+
+
 def comparison_coordinates(
     fixations: pd.DataFrame, samples: pd.DataFrame | None, fields: tuple[str, str]
 ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
     """Materialize a reading's recorded clock before combining its rows with another."""
+    if SAMPLE_INDEX in fields:
+        samples = with_sample_index(samples)
     if not any(field in CLOCK_FIELDS for field in fields):
         return fixations, samples
     if ELAPSED in fields and ELAPSED in fixations:

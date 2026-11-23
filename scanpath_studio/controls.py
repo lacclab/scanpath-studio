@@ -6253,16 +6253,20 @@ def _seed_viz_state(
     numeric_fields = numeric_field_options(trial_fixations, raw_gaze)
     if numeric_fields:
         ss = st.session_state
-        if (
-            charts.ELAPSED not in numeric_fields
-            and (ss.get("global_x_field"), ss.get("global_y_field"))
-            == charts.GAZE_OVER_TIME
+        axes = (ss.get("global_x_field"), ss.get("global_y_field"))
+        if any(
+            key in ss and ss[key] not in numeric_fields
+            for key in ("global_x_field", "global_y_field")
         ):
-            # Both fields belong to this preset. Falling back one field at a
-            # time would leave horizontal position plotted against itself.
+            # The two fields make one chart. Falling back one field at a time
+            # would plot the other against a default it was never paired
+            # with, such as horizontal position against itself.
             ss.pop("global_x_field", None)
             ss.pop("global_y_field", None)
-            if ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time":
+            if (
+                axes == charts.GAZE_OVER_TIME
+                and ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time"
+            ):
                 forget_design_selection(ss)
         x_default = "x" if "x" in numeric_fields else numeric_fields[0]
         y_default = (
@@ -6270,9 +6274,7 @@ def _seed_viz_state(
             if "y" in numeric_fields
             else numeric_fields[min(1, len(numeric_fields) - 1)]
         )
-        _drop_stale("global_x_field", numeric_fields)
         _pin("global_x_field", x_default)
-        _drop_stale("global_y_field", numeric_fields)
         _pin("global_y_field", y_default)
 
     # Highlight-column default + stale-clear run every time (even when the Text

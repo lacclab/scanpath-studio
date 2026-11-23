@@ -11150,6 +11150,8 @@ def make_scanpath_figure(
     if resolved.redact_text:
         words, fixations = redact_word_text(words), without_word_keys(fixations)
     fixations = _finite_for_plotting(fixations, fields_xy)
+    if SAMPLE_INDEX in fields_xy:
+        raw_gaze = chart_axes.with_sample_index(raw_gaze)
     raw_gaze = _finite_for_plotting(raw_gaze, fields_xy)
     if any(f in chart_axes.SAMPLE_FIELDS and f not in fixations for f in fields_xy):
         if chart_axes.ELAPSED in fields_xy:

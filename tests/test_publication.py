@@ -414,25 +414,27 @@ def _corpus_chart_app():
     st.session_state.setdefault("corpus_subtab", "Per text")
     if st.session_state.get("note"):
         st.info("A note drawn above the chart.")
-    measure = st.session_state.get("measure", "Skip rate")
-    tabs._chart(
-        go.Figure(
-            go.Bar(x=["a", "b"], y=[1, 2]),
-            layout=dict(title=measure, xaxis_title="Word", yaxis_title=measure),
+    for measure in st.session_state.get("measures", ["Skip rate"]):
+        tabs._chart(
+            go.Figure(
+                go.Bar(x=["a", "b"], y=[1, 2]),
+                layout=dict(title=measure, xaxis_title="Word", yaxis_title=measure),
+            )
         )
-    )
+
+
+def _chart_workspaces(at) -> dict:
+    return {
+        k: at.session_state[k]
+        for k in at.session_state
+        if str(k).startswith("prepare_figure_chart_")
+    }
 
 
 def test_corpus_chart_workspace_stays_open_when_a_note_appears_above():
     from streamlit.testing.v1 import AppTest
 
-    def workspaces(at):
-        return {
-            k: at.session_state[k]
-            for k in at.session_state
-            if str(k).startswith("prepare_figure_chart_")
-        }
-
+    workspaces = _chart_workspaces
     at = AppTest.from_function(_corpus_chart_app).run()
     assert not at.exception
     (key,) = workspaces(at)
@@ -446,9 +448,43 @@ def test_corpus_chart_workspace_stays_open_when_a_note_appears_above():
     assert group.proto.expanded
 
     # Another chart, here another measure, has a workspace of its own.
-    at.session_state["measure"] = "Regression rate"
+    at.session_state["measures"] = ["Regression rate"]
     at.run()
     assert set(workspaces(at)) - {key}
+
+
+def test_open_workspaces_keep_their_own_editor_pages(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    built = []
+    editor_html = publication.editor_html
+
+    def counted(doc, **kwargs):
+        built.append(kwargs["import_id"])
+        return editor_html(doc, **kwargs)
+
+    monkeypatch.setattr(publication, "editor_html", counted)
+    at = AppTest.from_function(_corpus_chart_app)
+    at.session_state["measures"] = ["Skip rate", "Regression rate"]
+    at.run()
+    for key in _chart_workspaces(at):
+        at.session_state[key] = True
+    at.run()
+    assert len(built) == 2
+    at.run()
+    at.run()
+    assert not at.exception
+    assert len(built) == 2, "an open workspace rebuilt its editor page"
+
+    # The pages kept stay bounded however many workspaces were opened.
+    measures = [f"Measure {i}" for i in range(6)]
+    at.session_state["measures"] = measures
+    at.run()
+    for key in _chart_workspaces(at):
+        at.session_state[key] = True
+    at.run()
+    assert not at.exception
+    assert len(at.session_state["_publication_markup"]) == 4
 
 
 def test_clip_frames_of_different_sizes_are_refused(monkeypatch):

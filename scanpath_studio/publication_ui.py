@@ -29,6 +29,10 @@ export default function({data,parentElement,setTriggerValue}){
 """
 
 
+#: How many workspaces' editor pages a session keeps between reruns.
+_MARKUP_PAGES = 4
+
+
 @st.fragment
 @guarded()
 def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
@@ -37,8 +41,11 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     session = st.session_state.setdefault("_publication_session", uuid.uuid4().hex)
     batch = key == "scanpath" and not ui_mode.is_simple()
     rev = json.dumps([key, revision, doc["width"], doc["dpi"], plot_id, batch])
-    cached = st.session_state.get("_publication_markup", {})
-    if cached.get("rev") != rev:
+    # Each workspace keeps its own editor page, most recently drawn last, so two
+    # open on one page don't rebuild each other's on every rerun.
+    pages = st.session_state.setdefault("_publication_markup", {})
+    cached = pages.pop(key, None)
+    if cached is None or cached["rev"] != rev:
         cached = {
             "rev": rev,
             "html": publication.editor_html(
@@ -50,7 +57,9 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
                 batch=batch,
             ),
         }
-        st.session_state["_publication_markup"] = cached
+    pages[key] = cached
+    while len(pages) > _MARKUP_PAGES:
+        del pages[next(iter(pages))]
     widget = st.components.v2.component(
         "publication_workspace",
         html='<iframe title="Publication figure workspace" style="display:block;width:100%;height:460px;border:0"></iframe>',

@@ -22,6 +22,7 @@ from .constants import (
     spoken,
 )
 from .data import (
+    assign_derived,
     assign_fingerprint,
     distinct_key_codes,
     frame_fingerprint,
@@ -323,18 +324,22 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 
     Slice contiguous rows so Arrow can reuse their buffers. Gathering the
     same rows by integer position can copy whole chunks of a string column.
+    The slice is named by its source and reading (`assign_derived`): it is a
+    new object on every rerun, and a 1 kHz recording's trial is tens of
+    thousands of samples to hash for each cache key it feeds.
     """
     if frame is None or getattr(frame, "empty", True):
         return frame
     positions = _trial_positions(frame)
-    pos = positions.get((str(participant_id), str(trial_id)))
+    key = (str(participant_id), str(trial_id))
+    pos = positions.get(key)
     if pos is None or len(pos) == 0:
         return frame.iloc[0:0]
     # Group positions are unique and in source order.
     start, stop = pos[0], pos[-1] + 1
-    if stop - start == len(pos):
-        return frame.iloc[start:stop]
-    return frame.iloc[pos]
+    rows = frame.iloc[start:stop] if stop - start == len(pos) else frame.iloc[pos]
+    assign_derived(rows, "extract_trial", frame, key)
+    return rows
 
 
 # -----------------------------------------------------------------------------

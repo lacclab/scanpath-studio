@@ -279,6 +279,39 @@ def test_copies_with_one_assigned_fingerprint_share_one_trial_index():
     assert utils.extract_trial(copy, "p", "b").value.to_list() == [10]
 
 
+def test_a_trial_slice_is_named_by_its_source_and_reading(monkeypatch):
+    """A rerun slices the reading again, so hashing the slice to key a cache
+    would cost a full pass over its samples every time."""
+    from scanpath_studio import data
+    from scanpath_studio.data import assign_fingerprint, frame_fingerprint
+
+    frame = pd.DataFrame(
+        {"participant_id": ["p", "p", "q"], "trial_id": ["a", "a", "a"], "x": [1, 2, 3]}
+    )
+    assign_fingerprint(frame, ("test", "named slices"))
+    edited = frame.assign(x=[1, 2, 30])
+    assign_fingerprint(edited, ("test", "named slices, edited"))
+    hashed = []
+    real = data._compute_frame_fingerprint
+    monkeypatch.setattr(
+        data, "_compute_frame_fingerprint", lambda df: hashed.append(df) or real(df)
+    )
+    slices = {
+        name: utils.extract_trial(source, participant, "a")
+        for name, source, participant in (
+            ("p", frame, "p"),
+            ("p again", frame, "p"),
+            ("q", frame, "q"),
+            ("q edited", edited, "q"),
+        )
+    }
+    keys = {name: frame_fingerprint(rows) for name, rows in slices.items()}
+    assert not hashed
+    assert keys["p"][0] == "assigned"
+    assert keys["p"] == keys["p again"]
+    assert len({keys["p"], keys["q"], keys["q edited"]}) == 3
+
+
 @pytest.mark.parametrize("width", [None, -1, float("inf")])
 def test_missing_measurements_are_not_resolved_as_measured(width):
     setup = SetupSnapshot.from_dict(

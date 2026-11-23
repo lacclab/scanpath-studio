@@ -6611,6 +6611,10 @@ def render_single_trial_tab(
         trial_words = screen_rows(parent_words, selected_screen)
         trial_fixations = screen_rows(parent_fixations, selected_screen)
         trial_raw_gaze = screen_rows(parent_raw_gaze, selected_screen)
+        # Named like the reading's slice, so its samples are not hashed per rerun.
+        assign_derived(
+            trial_raw_gaze, "screen_rows", parent_raw_gaze, str(selected_screen)
+        )
         for label, parent in (
             ("Words", parent_words),
             ("Fixations", parent_fixations),

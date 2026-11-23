@@ -68,6 +68,7 @@
 - Comparison links and generated Python and CLI commands preserve each reader’s marker fill, colors and line styles when using the print palette.
 - A tab with an older recovery copy warns you before it can overwrite newer saved work. Your edits stay available in the tab to export.
 - Saving a static figure uses the shared renderer and reports when an installed browser has not finished starting Kaleido. HTML, PNG, SVG and PDF retain their citation.
+- The replay timer is easier to read in dark mode.
 
 ## Release v0.47.0
 

@@ -291,8 +291,10 @@ async def _draw(doc: dict, fmt: str):
     path = chromium_browser_path()
     if path is None:
         raise RuntimeError(CHROME_INSTALL_HINT)
+    progress.report(detail="Starting the browser")
     async with Browser(path=path) as browser:
         tab = await browser.create_tab()
+        progress.report(detail="Drawing the figure")
 
         async def command(method, params=None):
             reply = await tab.send_command(method, params)
@@ -328,6 +330,7 @@ async def _draw(doc: dict, fmt: str):
 
         await evaluate("window.publicationReady")
         if fmt == "pdf":
+            progress.report(detail="Printing the PDF")
             await evaluate("publicationPrint()")
             result = await command(
                 "Page.printToPDF",

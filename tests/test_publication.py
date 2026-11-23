@@ -487,6 +487,79 @@ def test_open_workspaces_keep_their_own_editor_pages(monkeypatch):
     assert len(at.session_state["_publication_markup"]) == 4
 
 
+def _requested_export_app():
+    import streamlit as st
+
+    from scanpath_studio import publication, publication_ui
+
+    publication_ui.workspace("scanpath", publication.project([]), "draft")
+    st.write(st.session_state.get("rendered"))
+
+
+@pytest.mark.parametrize(
+    ("fmt", "title"),
+    [("pdf", "Preparing the PDF"), ("html", "Preparing the offline editor")],
+)
+def test_pdf_and_offline_editor_render_under_a_loading_card(monkeypatch, fmt, title):
+    from types import SimpleNamespace
+
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import progress
+
+    def widget(*args, **kwargs):
+        return lambda **kw: SimpleNamespace(action={"type": fmt, "value": {}})
+
+    def render(doc, requested):
+        task = progress.active()
+        st.session_state["rendered"] = [requested, task and task.snapshot().title]
+        return b"artwork"
+
+    monkeypatch.setattr(st.components.v2, "component", widget)
+    monkeypatch.setattr(publication, "render", render)
+    at = AppTest.from_function(_requested_export_app).run()
+    assert not at.exception
+    assert at.session_state["rendered"] == [fmt, title]
+
+
+def test_chromium_render_reports_each_stage(monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+
+    import choreographer
+
+    from scanpath_studio import progress
+
+    async def reply(method, params):
+        if method == "Page.getFrameTree":
+            return {"result": {"frameTree": {"frame": {"id": "main"}}}}
+        if method == "Page.printToPDF":
+            return {"result": {"data": base64.b64encode(b"%PDF-1.4").decode()}}
+        return {"result": {"result": {"type": "undefined"}}}
+
+    tab = MagicMock()
+    tab.send_command = reply
+    browser = MagicMock()
+    browser.__aenter__.return_value.create_tab = AsyncMock(return_value=tab)
+    monkeypatch.setattr(choreographer, "Browser", lambda **kwargs: browser)
+    monkeypatch.setattr(
+        "scanpath_studio.animation_export.chromium_browser_path", lambda: "test-browser"
+    )
+    monkeypatch.setattr(publication, "editor_html", lambda doc: "")
+    monkeypatch.setattr(publication.file_citation, "stamp", lambda data, fmt: data)
+    details = []
+    report = progress.Task.report
+
+    def record(self, *args, detail=None, **kwargs):
+        details.append(detail)
+        return report(self, *args, detail=detail, **kwargs)
+
+    monkeypatch.setattr(progress.Task, "report", record)
+    with progress.task("publication-test", title="Preparing the PDF"):
+        assert publication.render(publication.project([]), "pdf") == b"%PDF-1.4"
+    assert details == ["Starting the browser", "Drawing the figure", "Printing the PDF"]
+
+
 def test_clip_frames_of_different_sizes_are_refused(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock
 

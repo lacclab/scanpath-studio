@@ -10,7 +10,7 @@ import zipfile
 
 import streamlit as st
 
-from . import dataset_credit, publication, ui_mode
+from . import dataset_credit, loading, publication, ui_mode
 from .crash_report import guarded
 from .html_embed import plotlyjs_src
 
@@ -75,7 +75,14 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     if action and action.get("type") in {"pdf", "html"}:
         fmt = action["type"]
         try:
-            data = publication.render(action["value"], fmt)
+            with loading.card(
+                st.empty(),
+                key="publication_" + fmt,
+                title="Preparing the PDF"
+                if fmt == "pdf"
+                else "Preparing the offline editor",
+            ):
+                data = publication.render(action["value"], fmt)
         except (ValueError, RuntimeError, OSError) as exc:
             st.error(str(exc))
         else:
@@ -90,8 +97,6 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     if action and action.get("type") == "video":
         try:
             project = action["value"]
-            from . import loading
-
             with loading.card(
                 st.empty(), key="publication_movie", title="Rendering clip and poster"
             ):

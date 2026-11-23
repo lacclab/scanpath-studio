@@ -48,13 +48,19 @@ python -m pip install "git+https://github.com/lacclab/scanpath-studio.git@dev"
 scanpath-studio
 ```
 
-**Help** shows which channel you are running. **Help → What’s new** opens its release notes.
+**Help** shows which channel you are running. Its release notes are in **About & citation → App details**.
 
 For a Git installation, the update command keeps your repository, requested ref and package subdirectory. An install from an official release tag follows the Stable channel for updates. If you selected a commit hash, choose the new revision in your original install command when you are ready to move.
 
+## Replay a sample reading
+
+On your first visit, the app opens a reading from the [OneStop demo](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#onestop). Choose **Replay this reading** to follow the reader’s fixations over the text. Press **Pause**, then **Next fixation** to step through the recording. You can return to the sample walkthrough from **Help → Task guides**.
+
+To work with your own recording, choose **Import my data** or follow [Add your own data](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#add-your-own-data).
+
 ## Your first figure
 
-Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#onestop). You can explore it without preparing any files. Choose a view, then save an interactive figure.
+Choose a reading in the demo to explore and save as an interactive figure.
 
 \[!\[
 
@@ -118,7 +124,7 @@ Choose a task below. If you're new to the app, start with [Get started](https://
   - [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/compare-groups/index.md)
   - [Track changes over time](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/progression-over-time/index.md)
 
-In the app, open **Help** → **Tutorials** for guided tours of the controls. Starting a tutorial switches the app to Full for the current visit.
+In the app, **Help** → **Task guides** has short steps you can read offline. Open a task to follow it with your current data. If it needs controls in Full, choose **Open in Full**. Leaving the guide returns you to your previous view and mode.
 
 # Analyze a corpus
 
@@ -254,7 +260,7 @@ In **Annotations**, tag the trial `review` and write what you observed in **Note
 
 ## 5. Save the review
 
-Export favorites, tags and notes from **Data Management** → **Annotations** → **Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
+Export favorites, tags and notes from **Data Management** → **Current dataset → Annotations → Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
 
 To reconcile a second reviewer's notes, choose **Import**. The preview counts new, identical and differing entries. **Open disputed reading** displays both entries beside the scanpath for that reading. You can download the differences for discussion. **Apply import** adds new entries and keeps the current version of a differing note unless you select the replacement option.
 
@@ -715,6 +721,8 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 
 ## Add your own data
 
+For a walkthrough inside the import wizard, choose **Setup help → Show setup guide**.
+
 1. Choose **+** → **Import files** and name the dataset.
 1. Upload your tables and check the column mapping.
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
@@ -1161,26 +1169,26 @@ With **Compare** on, scanpath B gets a second row in the trial control bar, and 
 
 The tabs under the figure. Essentials has **Export**, for the current figure, and **Share**; the other tabs and the export bundle are in Full.
 
-| Tab                    | Control                                                          | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ---------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Annotations**        | **Favorite**                                                     | Star the trial as a favorite, to find it again with **Favorites only** in the trial filters.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|                        | **Tags** / **Add a tag**                                         | Tag the trial, with an existing tag or a new one, such as `exclude`. Tags let you filter the trial list later: the in the trial control bar keeps or hides trials by tag.                                                                                                                                                                                                                                                                                                                                                                                  |
-|                        | **Notes**                                                        | Write a free-text note on the trial.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Stimulus & context** | **Fields** → **Context fields**                                  | Choose the trial context to show, such as the text's title, a question or an answer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|                        | **Fields** → **Highlighted spans**                               | Choose true/false word columns to highlight in the text, each with a summary line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Comparisons**        | **Match field**                                                  | Compare with other trials: show the trials that share this trial's value of a field, such as the same text.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-|                        | **Columns**                                                      | Set how many comparison panels per row, from 1 to 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Export**             | **Download format**                                              | Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-|                        | **Width**, unit, **DPI**                                         | Set the PNG export size for print: width (mm or in) and resolution (DPI). A blank width writes the figure at three times its screen size.                                                                                                                                                                                                                                                                                                                                                                                                                  |
-|                        | **Trials to include**                                            | Choose which trials to export in the bundle: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text**, or **All trials, ignoring filters**.                                                                                                                                                                                                                                                                                                                                                                  |
-|                        | **Formats** / **Tabular data** / **Table format**                | Choose the bundle's figure formats, the data tables to include, and their format (CSV, Parquet or both).                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-|                        | **Layers as separate files**                                     | Export each visual layer (fixations, saccades, word boxes…) as a separate file, to stack in a vector editor.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|                        | **Annotations (JSON)** / **Settings file (JSON)**                | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which **Data Management** → **Annotations** can import again.                                                                                                                                                                                                               |
-|                        | **File path pattern**                                            | Set the file names inside the export bundle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|                        | **Build export**                                                 | Build the export bundle (a zip) to download.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Share**              | **Link**                                                         | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file ( **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
-|                        | **Code** → **Python** / **CLI**, **Show every option**           | Get the Python or command-line code that redraws this figure, for scripts and reproduction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-|                        | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Tab                    | Control                                                          | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Annotations**        | **Favorite**                                                     | Star the trial as a favorite, to find it again with **Favorites only** in the trial filters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|                        | **Tags** / **Add a tag**                                         | Tag the trial, with an existing tag or a new one, such as `exclude`. Tags let you filter the trial list later: the in the trial control bar keeps or hides trials by tag.                                                                                                                                                                                                                                                                                                                                                                                                       |
+|                        | **Notes**                                                        | Write a free-text note on the trial.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Stimulus & context** | **Fields** → **Context fields**                                  | Choose the trial context to show, such as the text's title, a question or an answer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+|                        | **Fields** → **Highlighted spans**                               | Choose true/false word columns to highlight in the text, each with a summary line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Comparisons**        | **Match field**                                                  | Compare with other trials: show the trials that share this trial's value of a field, such as the same text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|                        | **Columns**                                                      | Set how many comparison panels per row, from 1 to 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Export**             | **Download format**                                              | Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+|                        | **Width**, unit, **DPI**                                         | Set the PNG export size for print: width (mm or in) and resolution (DPI). A blank width writes the figure at three times its screen size.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|                        | **Trials to include**                                            | Choose which trials to export in the bundle: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text**, or **All trials, ignoring filters**.                                                                                                                                                                                                                                                                                                                                                                                       |
+|                        | **Formats** / **Tabular data** / **Table format**                | Choose the bundle's figure formats, the data tables to include, and their format (CSV, Parquet or both).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+|                        | **Layers as separate files**                                     | Export each visual layer (fixations, saccades, word boxes…) as a separate file, to stack in a vector editor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|                        | **Annotations (JSON)** / **Settings file (JSON)**                | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which **Data Management** → **Current dataset → Annotations** can import again.                                                                                                                                                                                                                  |
+|                        | **File path pattern**                                            | Set the file names inside the export bundle.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|                        | **Build export**                                                 | Build the export bundle (a zip) to download.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Share**              | **Link**                                                         | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (**Current dataset** → **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
+|                        | **Code** → **Python** / **CLI**, **Show every option**           | Get the Python or command-line code that redraws this figure, for scripts and reproduction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|                        | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 # FAQ
 
@@ -1190,7 +1198,7 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 
 Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled relative to the words, check that both tables use the same origin, units and offsets. Correct any coordinate differences before importing the tables ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#tables)).
 
-If the fixations sit on the words but the figure is framed or sized wrongly, set the screen resolution of the monitor used in the experiment. Open **Data Management** → **Edit dataset** → **Recording setup** and choose **Screen** → **I know it**. *Estimate from my data* gives only a lower bound.
+If the fixations sit on the words but the figure is framed or sized wrongly, set the screen resolution of the monitor used in the experiment. Open **Data Management** → **Current dataset** → **Edit dataset** → **Recording setup** and choose **Screen** → **I know it**. *Estimate from my data* gives only a lower bound.
 
 ### The text is too big or too small
 
@@ -1198,7 +1206,7 @@ The text is drawn to scale from the word boxes and the recording screen size. Se
 
 ### A column was detected wrongly
 
-The app guesses columns from their names. Pick the right one under **Data Management** → **Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
+The app guesses columns from their names. Pick the right one under **Data Management** → **Current dataset** → **Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
 
 ### Can I load only one table?
 
@@ -1244,7 +1252,7 @@ Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a r
 
 ### Will a refresh lose my work?
 
-When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved work → Your session** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
+Local and desktop installs normally save your datasets and settings between visits. Open **Data Management** → **Saved work → Your session** to check whether saving is on. The online demo keeps uploads only for the current session. Before refreshing, [export your annotations and settings](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work).
 
 If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
@@ -1252,19 +1260,17 @@ If two tabs use the same local recovery folder, edits to different trial annotat
 
 ### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button under **Dataset downloads**. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete your saved session, open **Data Management** → **Saved work → Your session → Saved session details → Clear saved session…**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button under **Dataset downloads**. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
 
 ## Help and versions
 
 ### Where do I ask a question, report a bug or send feedback?
 
-**Help** → **Send feedback** links each kind of feedback to its page on GitHub: **Report a bug**, **Suggest a feature**, **Share an idea** and **Ask a question**. It also shows the version and system details for a bug report, ready to copy. You can review and submit your message on GitHub.
-
-Ask questions in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help** → **About** shows the version and links to both. On the command line, run `scanpath-studio --version`.
+**Help** → **Troubleshooting & feedback** has short answers in the app. To contact the project, [ask a question in Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a), [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), or [suggest an improvement in Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas). **Report a bug** gives you the version and system details to copy. In a terminal, `scanpath-studio --version` prints the version.
 
 ### How do I update Scanpath Studio?
 
-Open **Help** → **About** → **Check for updates**. In the desktop app, choose **Update & restart**. For a Python install, run:
+In a local install or the desktop app, open **Help** → **About & citation** → **App details** → **Check for updates**. In the desktop app, choose **Update & restart**. For a Python install, run:
 
 ```
 pip install -U scanpath-studio
@@ -2720,7 +2726,7 @@ version_info()
 
 Return version and installation details without a network request.
 
-The same is in the app's Help → About, and in `scanpath-studio version`.
+The same is in the app's Help → About & citation, and in `scanpath-studio version`.
 
 | Field                 | What it holds                                                                                                                                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2743,7 +2749,7 @@ check_for_updates(timeout=5.0)
 
 Check GitHub for a newer release.
 
-The one call here that uses the network, and only when made. It reads the latest release from `api.github.com` (drafts and pre-releases excluded), compares it with version_info, and never raises. The same check is the app's Help → About → *Check for updates*, and `scanpath-studio version --check`.
+The one call here that uses the network, and only when made. It reads the latest release from `api.github.com` (drafts and pre-releases excluded), compares it with version_info, and never raises. The same check is available under Help → About & citation → App details → *Check for updates* in a local install or the desktop app, and from `scanpath-studio version --check`.
 
 | Field        | What it holds                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2771,7 +2777,7 @@ cite(format='bibtex', corpus=None)
 
 Return a citation for Scanpath Studio and, optionally, a public corpus.
 
-The same entries as the app's Help → About and *Cite* buttons, and `scanpath-studio cite`. Every figure, replay and page `save_figure` writes also carries the citation in its file metadata.
+The same entries as the app's Help → About & citation and *Cite* buttons, and `scanpath-studio cite`. Every figure, replay and page `save_figure` writes also carries the citation in its file metadata.
 
 ```
 print(sps.cite())                       # BibTeX
@@ -3393,7 +3399,7 @@ scanpath-studio version --check   # …and whether a newer release is out
 | `--check`   | switch    | —       | Ask GitHub for the latest release and say how to update this install. |
 | `--timeout` | `SECONDS` | `5.0`   | How long to wait for GitHub, in seconds (default: 5).                 |
 
-Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. The same check is **Help → About → Check for updates** in the app, and check_for_updates in Python.
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. In a local install or the desktop app, open **Help → About & citation → App details → :material:update: Check for updates**. In Python, call check_for_updates.
 
 ## cite
 
@@ -4007,13 +4013,13 @@ sps.save_figure(fig, "word-boxes.html")
 
 # About Scanpath Studio
 
-Scanpath Studio visualizes eye movements in reading. The **Help** menu shows your app’s channel and opens the matching documentation and [What’s new](https://lacclab.github.io/scanpath-studio/dev/whats-new/index.md).
+Scanpath Studio visualizes eye movements in reading. **Help** opens the documentation for your Stable or Dev build. **About & citation → App details** links to [what’s new in that build](https://lacclab.github.io/scanpath-studio/dev/whats-new/index.md).
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
 ## Cite Scanpath Studio
 
-Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884). Use `scanpath-studio cite` in a terminal or cite in Python to get the citation. Both also offer RIS and CSL-JSON formats.
+Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884). In the app, **Help** → **About & citation** → **Citation** gives the APA reference and a copyable BibTeX entry. Use `scanpath-studio cite` in a terminal or cite in Python to get the citation. Both also offer RIS and CSL-JSON formats.
 
 Show BibTeX and APA
 
@@ -4044,14 +4050,14 @@ The bundled demo is a subset of **OneStop Eye Movements**. If you use it, also c
 
 ## Privacy
 
-With the desktop app or a local install, your recordings stay on your computer and are processed locally. The online demo processes the files you upload on its hosted server. **Help** → **About** says which of the two you are using.
+With the desktop app or a local install, your recordings stay on your computer and are processed locally. The online demo processes the files you upload on its hosted server. **Help** → **About & citation** → **App details** shows where your files are processed and whether a recovery copy is saved.
 
 ### Your data
 
 A local install (`scanpath-studio`) and the desktop app save your work on your computer, so a refresh or a restart picks up where you left off.
 
 - **What is saved:** the datasets you added, with their column mappings, your annotations, your saved designs, attached metadata tables, and your view, trial and plot settings. The bundled demo and public datasets are not copied, since they reload from their source.
-- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved work → Your session** shows the folder and its contents. You can also check with `scanpath-studio cache`.
+- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved work → Your session** lists the saved items. Open **Saved session details** for the folder. You can also check with `scanpath-studio cache`.
 - **How long:** until you clear it. Removing a dataset from the app removes its saved copy.
 - **To clear it:** **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`.
@@ -4061,7 +4067,7 @@ The online demo processes uploads on Streamlit Community Cloud and does not save
 
 ## Questions and feedback
 
-[Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a), [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), or [request a feature](https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md). For a bug report, include the version, your operating system and how you run the app. The app shows its version in **Help** → **About**.
+[Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a), [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), or [suggest an improvement on GitHub Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas). In the app, **Help → Troubleshooting & feedback → Report a bug** gives you the app version and system details to copy into your report.
 
 Developed with AI assistance. Cross-check results before publishing.
 
@@ -4101,6 +4107,8 @@ Developed with AI assistance. Cross-check results before publishing.
 - Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
 - Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
 - Essentials and Full share the same four view tiles and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
+- About & citation opens with a short project overview. Citation has the APA and BibTeX references, and App details groups privacy, updates and support.
+- Help now offers offline task guides and troubleshooting. Start the sample replay or import guide when you need it, and send suggestions to GitHub Ideas. Documentation ↗ opens in a new tab.
 - Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.
 - The fixation size legend starts hidden. Turn on Fixation sizes under Figure & canvas → Legends to include it in a figure.
 - The bundled demo now uses two readers from the published OneStop L1 cohort and includes recorded EyeLink gaze samples for all 24 readings. Demo participant and trial IDs have changed.

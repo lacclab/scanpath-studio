@@ -9053,7 +9053,7 @@ session back out at its next change, so start it with <code>scanpath-studio run
     <div class="doc doc-contents first">
 
         <p>Return version and installation details without a network request.</p>
-<p>The same is in the app's Help → About, and in <code>scanpath-studio version</code>.</p>
+<p>The same is in the app's Help → About &amp; citation, and in <code>scanpath-studio version</code>.</p>
 <table>
 <thead>
 <tr>
@@ -9123,8 +9123,8 @@ session back out at its next change, so start it with <code>scanpath-studio run
 <p>The one call here that uses the network, and only when made. It reads the latest
 release from <code>api.github.com</code> (drafts and pre-releases excluded), compares it with
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;version_info&lt;/span&gt;" href="#scanpath_studio.api.version_info"><code>version_info</code></a>, and never raises. The same check
-is the app's Help → About → <em>Check for updates</em>, and <code>scanpath-studio version
---check</code>.</p>
+is available under Help → About &amp; citation → App details → <em>Check for updates</em> in a
+local install or the desktop app, and from <code>scanpath-studio version --check</code>.</p>
 <table>
 <thead>
 <tr>
@@ -9203,7 +9203,7 @@ is the app's Help → About → <em>Check for updates</em>, and <code>scanpath-s
     <div class="doc doc-contents first">
 
         <p>Return a citation for Scanpath Studio and, optionally, a public corpus.</p>
-<p>The same entries as the app's Help → About and <em>Cite</em> buttons, and
+<p>The same entries as the app's Help → About &amp; citation and <em>Cite</em> buttons, and
 <code>scanpath-studio cite</code>. Every figure, replay and page <code>save_figure</code> writes
 also carries the citation in its file metadata.</p>
 <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.cite--__codelineno-0-1" name="scanpath_studio.api.cite--__codelineno-0-1" href="#scanpath_studio.api.cite--__codelineno-0-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">cite</span><span class="p">())</span>                       <span class="c1"># BibTeX</span>

@@ -595,7 +595,7 @@ scanpath-studio version --check   # …and whether a newer release is out
 | `--check`   | switch    | —       | Ask GitHub for the latest release and say how to update this install. |
 | `--timeout` | `SECONDS` | `5.0`   | How long to wait for GitHub, in seconds (default: 5).                 |
 
-Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. The same check is **Help → About → Check for updates** in the app, and check_for_updates in Python.
+Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. In a local install or the desktop app, open **Help → About & citation → App details → :material:update: Check for updates**. In Python, call check_for_updates.
 
 ## cite
 

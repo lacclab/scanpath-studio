@@ -32,7 +32,7 @@ In **Annotations**, tag the trial `review` and write what you observed in **Note
 
 ## 5. Save the review
 
-Export favorites, tags and notes from **Data Management** → **Annotations** → **Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
+Export favorites, tags and notes from **Data Management** → **Current dataset → Annotations → Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
 
 To reconcile a second reviewer's notes, choose **Import**. The preview counts new, identical and differing entries. **Open disputed reading** displays both entries beside the scanpath for that reading. You can download the differences for discussion. **Apply import** adds new entries and keeps the current version of a differing note unless you select the replacement option.
 

@@ -1437,7 +1437,7 @@ version_info()
 
 Return version and installation details without a network request.
 
-The same is in the app's Help → About, and in `scanpath-studio version`.
+The same is in the app's Help → About & citation, and in `scanpath-studio version`.
 
 | Field                 | What it holds                                                                                                                                                                                                                                       |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1460,7 +1460,7 @@ check_for_updates(timeout=5.0)
 
 Check GitHub for a newer release.
 
-The one call here that uses the network, and only when made. It reads the latest release from `api.github.com` (drafts and pre-releases excluded), compares it with version_info, and never raises. The same check is the app's Help → About → *Check for updates*, and `scanpath-studio version --check`.
+The one call here that uses the network, and only when made. It reads the latest release from `api.github.com` (drafts and pre-releases excluded), compares it with version_info, and never raises. The same check is available under Help → About & citation → App details → *Check for updates* in a local install or the desktop app, and from `scanpath-studio version --check`.
 
 | Field        | What it holds                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1488,7 +1488,7 @@ cite(format='bibtex', corpus=None)
 
 Return a citation for Scanpath Studio and, optionally, a public corpus.
 
-The same entries as the app's Help → About and *Cite* buttons, and `scanpath-studio cite`. Every figure, replay and page `save_figure` writes also carries the citation in its file metadata.
+The same entries as the app's Help → About & citation and *Cite* buttons, and `scanpath-studio cite`. Every figure, replay and page `save_figure` writes also carries the citation in its file metadata.
 
 ```
 print(sps.cite())                       # BibTeX

@@ -6,7 +6,7 @@
 
 Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled relative to the words, check that both tables use the same origin, units and offsets. Correct any coordinate differences before importing the tables ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#tables)).
 
-If the fixations sit on the words but the figure is framed or sized wrongly, set the screen resolution of the monitor used in the experiment. Open **Data Management** → **Edit dataset** → **Recording setup** and choose **Screen** → **I know it**. *Estimate from my data* gives only a lower bound.
+If the fixations sit on the words but the figure is framed or sized wrongly, set the screen resolution of the monitor used in the experiment. Open **Data Management** → **Current dataset** → **Edit dataset** → **Recording setup** and choose **Screen** → **I know it**. *Estimate from my data* gives only a lower bound.
 
 ### The text is too big or too small
 
@@ -14,7 +14,7 @@ The text is drawn to scale from the word boxes and the recording screen size. Se
 
 ### A column was detected wrongly
 
-The app guesses columns from their names. Pick the right one under **Data Management** → **Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
+The app guesses columns from their names. Pick the right one under **Data Management** → **Current dataset** → **Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
 
 ### Can I load only one table?
 
@@ -60,7 +60,7 @@ Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a r
 
 ### Will a refresh lose my work?
 
-When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved work → Your session** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
+Local and desktop installs normally save your datasets and settings between visits. Open **Data Management** → **Saved work → Your session** to check whether saving is on. The online demo keeps uploads only for the current session. Before refreshing, [export your annotations and settings](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work).
 
 If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
@@ -68,19 +68,17 @@ If two tabs use the same local recovery folder, edits to different trial annotat
 
 ### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button under **Dataset downloads**. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete your saved session, open **Data Management** → **Saved work → Your session → Saved session details → Clear saved session…**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button under **Dataset downloads**. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
 
 ## Help and versions
 
 ### Where do I ask a question, report a bug or send feedback?
 
-**Help** → **Send feedback** links each kind of feedback to its page on GitHub: **Report a bug**, **Suggest a feature**, **Share an idea** and **Ask a question**. It also shows the version and system details for a bug report, ready to copy. You can review and submit your message on GitHub.
-
-Ask questions in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help** → **About** shows the version and links to both. On the command line, run `scanpath-studio --version`.
+**Help** → **Troubleshooting & feedback** has short answers in the app. To contact the project, [ask a question in Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a), [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), or [suggest an improvement in Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas). **Report a bug** gives you the version and system details to copy. In a terminal, `scanpath-studio --version` prints the version.
 
 ### How do I update Scanpath Studio?
 
-Open **Help** → **About** → **Check for updates**. In the desktop app, choose **Update & restart**. For a Python install, run:
+In a local install or the desktop app, open **Help** → **About & citation** → **App details** → **Check for updates**. In the desktop app, choose **Update & restart**. For a Python install, run:
 
 ```
 pip install -U scanpath-studio

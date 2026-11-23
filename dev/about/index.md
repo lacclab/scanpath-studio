@@ -1,12 +1,12 @@
 # About Scanpath Studio
 
-Scanpath Studio visualizes eye movements in reading. The **Help** menu shows your app’s channel and opens the matching documentation and [What’s new](https://lacclab.github.io/scanpath-studio/dev/whats-new/index.md).
+Scanpath Studio visualizes eye movements in reading. **Help** opens the documentation for your Stable or Dev build. **About & citation → App details** links to [what’s new in that build](https://lacclab.github.io/scanpath-studio/dev/whats-new/index.md).
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
 ## Cite Scanpath Studio
 
-Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884). Use `scanpath-studio cite` in a terminal or cite in Python to get the citation. Both also offer RIS and CSL-JSON formats.
+Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884). In the app, **Help** → **About & citation** → **Citation** gives the APA reference and a copyable BibTeX entry. Use `scanpath-studio cite` in a terminal or cite in Python to get the citation. Both also offer RIS and CSL-JSON formats.
 
 Show BibTeX and APA
 
@@ -37,14 +37,14 @@ The bundled demo is a subset of **OneStop Eye Movements**. If you use it, also c
 
 ## Privacy
 
-With the desktop app or a local install, your recordings stay on your computer and are processed locally. The online demo processes the files you upload on its hosted server. **Help** → **About** says which of the two you are using.
+With the desktop app or a local install, your recordings stay on your computer and are processed locally. The online demo processes the files you upload on its hosted server. **Help** → **About & citation** → **App details** shows where your files are processed and whether a recovery copy is saved.
 
 ### Your data
 
 A local install (`scanpath-studio`) and the desktop app save your work on your computer, so a refresh or a restart picks up where you left off.
 
 - **What is saved:** the datasets you added, with their column mappings, your annotations, your saved designs, attached metadata tables, and your view, trial and plot settings. The bundled demo and public datasets are not copied, since they reload from their source.
-- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved work → Your session** shows the folder and its contents. You can also check with `scanpath-studio cache`.
+- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved work → Your session** lists the saved items. Open **Saved session details** for the folder. You can also check with `scanpath-studio cache`.
 - **How long:** until you clear it. Removing a dataset from the app removes its saved copy.
 - **To clear it:** **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`.
@@ -54,6 +54,6 @@ The online demo processes uploads on Streamlit Community Cloud and does not save
 
 ## Questions and feedback
 
-[Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a), [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), or [request a feature](https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md). For a bug report, include the version, your operating system and how you run the app. The app shows its version in **Help** → **About**.
+[Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a), [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), or [suggest an improvement on GitHub Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas). In the app, **Help → Troubleshooting & feedback → Report a bug** gives you the app version and system details to copy into your report.
 
 Developed with AI assistance. Cross-check results before publishing.

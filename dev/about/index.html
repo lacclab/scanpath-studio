@@ -2506,8 +2506,9 @@
 
 
 <h1 id="about-scanpath-studio">About Scanpath Studio<a class="headerlink" href="#about-scanpath-studio" title="Permanent link">&para;</a></h1>
-<p>Scanpath Studio visualizes eye movements in reading. The <strong>Help</strong> menu shows
-your app’s channel and opens the matching documentation and <a href="../whats-new/">What’s new</a>.</p>
+<p>Scanpath Studio visualizes eye movements in reading. <strong>Help</strong> opens the
+documentation for your Stable or Dev build. <strong>About &amp; citation → App details</strong>
+links to <a href="../whats-new/">what’s new in that build</a>.</p>
 <p>Developed by <a href="https://omershubi.github.io/">Omer Shubi</a>,
 <a href="https://kerengruteke.github.io/">Keren Gruteke Klein</a>,
 <a href="https://www.linkedin.com/in/maya-grossman-32b547292/">Maya Grossman</a>,
@@ -2519,6 +2520,8 @@ your app’s channel and opens the matching documentation and <a href="../whats-
 at the Technion and the University of Zurich.</p>
 <h2 id="cite-scanpath-studio">Cite Scanpath Studio<a class="headerlink" href="#cite-scanpath-studio" title="Permanent link">&para;</a></h2>
 <p>Cite the software using its <a href="https://doi.org/10.5281/zenodo.22933884">Zenodo DOI</a>.
+In the app, <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> <strong>About &amp; citation</strong> → <strong>Citation</strong>
+gives the APA reference and a copyable BibTeX entry.
 Use <code>scanpath-studio cite</code> in a terminal or <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="../api/#scanpath_studio.api.cite"><code>cite</code></a>
 in Python to get the citation. Both also offer RIS and CSL-JSON formats.</p>
 <details class="quote">
@@ -2558,8 +2561,9 @@ with Different Reading Regimes</em>, Scientific Data.
 <h2 id="privacy">Privacy<a class="headerlink" href="#privacy" title="Permanent link">&para;</a></h2>
 <p>With the desktop app or a local install, your recordings stay on your computer
 and are processed locally. The online demo processes the files you upload on
-its hosted server. <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> <strong>About</strong> says
-which of the two you are using.</p>
+its hosted server. <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> <strong>About &amp; citation</strong> →
+<strong>App details</strong> shows where your files are processed and whether a recovery
+copy is saved.</p>
 <h3 id="your-data">Your data<a class="headerlink" href="#your-data" title="Permanent link">&para;</a></h3>
 <p>A local install (<code>scanpath-studio</code>) and the desktop app save your work on your
 computer, so a refresh or a restart picks up where you left off.</p>
@@ -2571,8 +2575,9 @@ computer, so a refresh or a restart picks up where you left off.</p>
 <li><strong>Where:</strong> <code>~/.cache/scanpath-studio/session-v1</code> in your home folder
   (<code>C:\Users\&lt;you&gt;\.cache\scanpath-studio\session-v1</code> on Windows), or the
   folder set by <code>SCANPATH_STUDIO_STATE_DIR</code>. <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data
-  Management</strong> → <strong>Saved work → Your session</strong> shows the
-  folder and its contents. You can also check with <code>scanpath-studio cache</code>.</li>
+  Management</strong> → <strong>Saved work → Your session</strong> lists the saved items.
+  Open <strong>Saved session details</strong> for the folder. You can also check with
+  <code>scanpath-studio cache</code>.</li>
 <li><strong>How long:</strong> until you clear it. Removing a dataset from the app removes
   its saved copy.</li>
 <li><strong>To clear it:</strong> <strong>Clear saved session…</strong> under <strong>Saved session details</strong>,
@@ -2594,9 +2599,9 @@ own analytics; see its <a href="https://streamlit.io/privacy-policy">privacy pol
 <h2 id="questions-and-feedback">Questions and feedback<a class="headerlink" href="#questions-and-feedback" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/lacclab/scanpath-studio/discussions/categories/q-a">Ask a question</a>,
 <a href="https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md">report a bug</a>,
-or <a href="https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md">request a feature</a>.
-For a bug report, include the version, your operating system and how you run
-the app. The app shows its version in <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> <strong>About</strong>.</p>
+or <a href="https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas">suggest an improvement on GitHub Ideas</a>.
+In the app, <strong>Help → Troubleshooting &amp; feedback → Report a bug</strong> gives you the
+app version and system details to copy into your report.</p>
 <div class="sps-development-note">
 <p>Developed with AI assistance. Cross-check results before publishing.</p>
 </div>

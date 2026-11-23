@@ -724,6 +724,9 @@ def get_app_css() -> str:
     [data-testid="stTab"]:hover { background: var(--sps-accent-soft); }
     [data-testid="stTab"] p { font-weight: 600; }
     [data-testid="stTab"][aria-selected="true"] p { color: var(--sps-accent); }
+    @media (max-width: 400px) {
+        .st-key-about_sections [role="tab"] { padding-inline: 0.375rem; }
+    }
 
     /* Inline code chips (Trial / Participant / Text ids, etc.) -> clean pill
        badges. `:not(pre code)` leaves multi-line code blocks (e.g. the BibTeX in

@@ -80,7 +80,12 @@ from scanpath_studio.annotations import (
     filter_keys,
     render_dataset_annotations,
 )
-from scanpath_studio.build_info import DEV_APP_URL, STABLE_APP_URL, build_info
+from scanpath_studio.build_info import (
+    DEV_APP_URL,
+    STABLE_APP_URL,
+    BuildInfo,
+    build_info,
+)
 from scanpath_studio.color_picker_commit import render_color_picker_commit
 from scanpath_studio.column_names import (
     ACTIVE_COLUMN_NAMES_KEY,
@@ -105,6 +110,7 @@ from scanpath_studio.constants import (
     DATA_PAGE_OFFSCREEN_KEY,
     DATA_STORAGE,
     DATA_WORKSPACE_KEY,
+    DATA_WORKSPACE_LAST,
     DATA_WORKSPACE_REQUEST,
     DATASET_ADDED_KEY,
     DATASET_ALIASES_KEY,
@@ -254,6 +260,7 @@ from scanpath_studio.datasets import (
     POTEC_WORD_SCHEMA,
 )
 from scanpath_studio.debug_log import (
+    _arm_debug,
     debug_enabled,
     install_log_capture,
     log_state_change,
@@ -275,7 +282,7 @@ from scanpath_studio.experimental_setup import (
     font_size_px,
     stimulus_font_css,
 )
-from scanpath_studio.feedback import maybe_show_feedback
+from scanpath_studio.feedback import _arm_feedback, maybe_show_feedback
 from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.keyboard import SCANPATH_SHORTCUTS
@@ -353,11 +360,12 @@ from scanpath_studio.tabs import (
 )
 from scanpath_studio.tour import (
     build_tutorial_context,
-    maybe_show_faq,
     maybe_show_tutorial_library,
     maybe_show_welcome_tour,
     render_spotlight_tour,
     render_use_case_tutorial,
+    restore_sample_on_rerun,
+    sample_replay_outside_scanpath,
     stash_tutorial_context,
 )
 from scanpath_studio.truncation_tooltip import render_truncation_tooltips
@@ -1585,11 +1593,8 @@ CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
 #: Set by :func:`_clear_and_start_over` on the emptied session, so the first run
 #: of the fresh start says what happened.
 STARTED_OVER_KEY = "_started_over"
-#: What survives starting over: having seen or dismissed the welcome tour is not
-#: "your work", and the tour reopening over a fresh start would be noise. Nor is
-#: the Essentials | Full choice, which the browser's cookie already holds; the
-#: session keeps it because the cookie Streamlit hands the app is the one read
-#: when the page connected, from before the choice.
+#: Starting over keeps the sample invitation dismissed and remembers the viewer's
+#: Essentials or Full choice until the browser next sends its updated cookie.
 _KEPT_ON_START_OVER = (
     "_tour_dismissed",
     "tour_seen",
@@ -1679,11 +1684,7 @@ def _clear_saved_dialog(app_url: str) -> None:
 
 
 def _arm_about() -> None:
-    """``on_click`` callback for the About button: request the dialog.
-
-    Same shape as ``tour._arm_faq`` — a dialog can't be opened from a callback,
-    so this only sets a flag :func:`maybe_show_about` serves early in ``main``.
-    """
+    """Request About & citation for the next app run."""
     st.session_state["_about_dialog_requested"] = True
 
 
@@ -1694,66 +1695,57 @@ _UPDATE_CHECK_KEY = "_about_update_check"
 
 
 def maybe_show_about() -> None:
-    """Open the About dialog if the ❓ Help menu button armed it.
-
-    Call from ``main()`` beside ``maybe_show_faq``, BEFORE the heavy data / plot
-    work, so the modal does not wait on the whole rerun (including the ~10 s
-    plot embeds).
-    """
+    """Open About & citation before the data and figures load."""
     if st.session_state.pop("_about_dialog_requested", False):
         st.session_state.pop(_UPDATE_CHECK_KEY, None)
         _about_dialog()
 
 
-def _about_privacy_line(*, local: bool, saving: bool) -> str:
-    """About's line on where the user's data goes, for this run alone.
-
-    ``local`` is the server's own bind address (``server_bound_to_loopback``)
-    and ``saving`` whether it keeps a recovery copy (``persistence_enabled``) —
-    the tests the FAQ's *Where does my data go?* answers by, which this line
-    points to. A server other machines reach is usually the online demo, but
-    can be anyone's deployment, so the hosted sentence names the demo's host
-    as an example rather than as a fact about this server.
-    """
+def _about_privacy_line(
+    *, local: bool, saving: bool, paused: bool = False, unsaved: bool = False
+) -> str:
+    """Where this instance processes uploads and whether it saves a recovery copy."""
     if local:
-        where = "It stays on this computer."
-        if saving:
-            where += " Your work is saved here until you clear it."
-    elif saving:
-        where = (
-            "Files you upload are processed on the server this app runs on, "
-            "and a recovery copy is kept there."
-        )
+        where = "Your files are processed on this computer."
+        saved = "Your work is saved here until you clear it."
     else:
-        where = (
-            "Files you upload are processed on the server this app runs on "
-            "(Streamlit Community Cloud, for the online demo) and not kept."
-        )
-    return (
-        f"**{ICONS['private']} Your data.** {where} More in {ICONS['help']} "
-        f"Help → {ICONS['faq']} FAQ → *Where does my data go?*"
-    )
+        where = "Your uploads are processed on this server."
+        saved = "The server keeps a recovery copy."
+    if not saving:
+        saved = "The app keeps no recovery copy."
+    elif paused:
+        saved = "Recovery saving is paused for this session."
+    elif unsaved:
+        saved = "Your latest changes haven’t been saved."
+    return f"{where} {saved}"
 
 
-@st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
+@st.dialog(f"{ICONS['about']} About Scanpath Studio", width="medium")
 @guarded()
 def _about_dialog() -> None:
-    """The About modal: version, authors, links, where your data goes,
-    citation, AI-assistance note."""
-    from scanpath_studio.citation import software_bibtex
+    """Project information, the software citation and details of this installation."""
+    from scanpath_studio.citation import CORPORA, software_apa, software_bibtex
 
-    # Triple-click the heading.
-    render_easter_egg()
+    info = build_info()
+    with st.container(gap=None):
+        st.markdown("Plot and replay eye movements over the text a participant read.")
+        release = f"v{info.release}"
+        if info.version != info.release:
+            release = f"Based on {release}"
+        st.caption(f"{info.channel.title()} · {release}")
+        render_easter_egg()
+    last = desktop_update.last_result()
+    if last is not None:
+        _render_last_update(last, info.version)
 
-    info = _build_info()
-    st.markdown(
-        f"**Scanpath Studio {info.channel.title()}** v{info.version} — interactive visualization of eye "
-        "movements in reading."
+    project, citation, details = st.tabs(
+        ["Project", "Citation", "App details"], key="about_sections"
     )
-    _render_build_and_updates()
-    st.markdown(
-        f"""
-Developed by [Omer Shubi](https://omershubi.github.io/),
+    with project:
+        st.markdown("Developed at the Technion and the University of Zurich.")
+        with st.expander("Project team"):
+            st.markdown(f"""
+[Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/),
 [Ella Lion](https://ella-lion.github.io/),
@@ -1761,69 +1753,58 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 [David R. Reich]({_DILI}/lab-members/reich.html),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
+""")
+        st.markdown(
+            f"[Documentation]({info.docs_url}) · [Source code]({CITATION['url']})"
+        )
+        st.caption("Built with AI assistance. Cross-check results before publishing.")
 
-[Open the Stable app]({STABLE_APP_URL}) · [Open the Dev app]({DEV_APP_URL})
+    with citation:
+        st.markdown(software_apa())
+        with st.expander("BibTeX"):
+            st.code(software_bibtex(), language="bibtex", wrap_lines=True)
+        demo = CORPORA["onestop"]
+        st.markdown(
+            f"If you use the bundled demo, also cite [{demo.name}](https://doi.org/{demo.doi}) "
+            f"(Berzak et al., {demo.year})."
+        )
 
-{ICONS["docs"]} [{info.channel.title()} documentation]({info.docs_url}) ↗ ·
-[Release notes for v{info.release}]({CITATION["url"]}/releases/tag/v{info.release}) ↗ ·
-{ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
-{ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
-"""
-    )
-    st.markdown(
-        _about_privacy_line(
+    with details:
+        privacy = _about_privacy_line(
             local=server_bound_to_loopback(),
             saving=persistence_enabled(str(getattr(st.context, "url", "") or "")),
+            paused=persistence_paused(st.session_state),
+            unsaved=bool(
+                st.session_state.get(SAVE_FAILED_KEY)
+                or st.session_state.get(SAVE_CONFLICT_KEY)
+            ),
         )
-    )
-    # The BibTeX block is tall enough to push everything above it out of view,
-    # so it opens on demand — but it stays a named section of its own (a bold
-    # label) rather than a footnote, since "how do I cite this?" is the single
-    # most common reason to open About. No dividers between the blocks: on a
-    # modal this short the bold headings already carry the split, and three
-    # rules in half a screen read as clutter.
-    st.markdown(
-        f"**{ICONS['docs']} Citing Scanpath Studio.** A paper is in preparation."
-    )
-    with st.expander("Show BibTeX", expanded=False):
-        st.code(software_bibtex(), language="bibtex", wrap_lines=True)
         st.markdown(
-            """
-If you use the bundled demo data, also cite
-[OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2)
-(Berzak et al., 2025, *Scientific Data*).
-"""
+            f"**Your data**  \n{privacy} [Privacy details]({info.docs_url}about/#privacy)"
         )
-    # A bare "built with AI, there may be bugs" is unfalsifiable, so this
-    # points at what the reader can verify — not at how much effort went in,
-    # which they have no way to check. Deliberately not a liability disclaimer
-    # either: MIT already carries that. The heading says the "built with AI
-    # assistance" half, so the prose does not repeat it.
-    st.markdown(f"**{ICONS['ai']} Built with AI assistance**")
-    st.markdown(
-        f"""
-Cross-check results before publishing.
-
-{ICONS["bug"]} Something looks wrong? [Report a bug]({CITATION["bug_report_url"]}) ↗
-with the version above, your operating system, and how you run the app.
-
-{ICONS["question"]} Questions go to [Discussions → Q&A]({CITATION["questions_url"]}) ↗,
-and feature requests to [an issue]({CITATION["feature_request_url"]}) ↗.
-"""
-    )
-    # The Debug drawer opens from here, not from the ❓ Help menu.
-    # A full rerun closes this dialog; `maybe_show_debug` then opens the drawer.
-    if st.button(
-        "Debug",
-        icon=ICONS["debug"],
-        type="tertiary",
-        key="about_open_debug",
-        help="The debug log and a snapshot of what's loaded, for a bug report.",
-    ):
-        from scanpath_studio.debug_log import _arm_debug
-
-        _arm_debug()
-        st.rerun()
+        st.markdown(
+            f"**Versions**  \n[What's new in {info.channel.title()}]({info.docs_url}whats-new/)"
+            f" · [Stable app]({STABLE_APP_URL}) · [Dev app]({DEV_APP_URL})"
+        )
+        _render_build_and_updates(info)
+        with st.container(horizontal=True):
+            if st.button(
+                "Troubleshooting & feedback",
+                icon=ICONS["faq"],
+                type="tertiary",
+                key="about_open_feedback",
+            ):
+                _arm_feedback()
+                st.rerun()
+            if st.button(
+                "Debug",
+                icon=ICONS["debug"],
+                type="tertiary",
+                key="about_open_debug",
+                help="Open the debug log and a snapshot of what's loaded.",
+            ):
+                _arm_debug()
+                st.rerun()
 
 
 def _update_check_offered() -> bool:
@@ -1839,11 +1820,6 @@ def _latest_release_cached() -> update_check.Release:
     session on this machine, doesn't spend another of the 60 anonymous requests
     an hour. A failure raises, and `st.cache_data` keeps no failed result."""
     return update_check.latest_release()
-
-
-def _build_info():
-    """This process's build (a seam the About tests pin)."""
-    return build_info()
 
 
 #: How long About goes on saying how the last update ended.
@@ -1880,15 +1856,10 @@ def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None
         )
 
 
-def _render_build_and_updates() -> None:
+def _render_build_and_updates(info: BuildInfo) -> None:
     """Which build this is, and — on a local run — *Check for updates*."""
-    info = _build_info()
     if info.version != info.release:
-        st.caption(info.describe())
-    # How the desktop app's last update ended — None anywhere else.
-    last = desktop_update.last_result()
-    if last is not None:
-        _render_last_update(last, info.version)
+        st.caption(f"Build `{info.version}`", help=info.describe())
     if not _update_check_offered():
         return
     if st.button(
@@ -3749,7 +3720,7 @@ def mapping_failure_problem(exc: Exception) -> str:
         # traceback is in the log above.
         return (
             f"{MAPPING_FAILURE_LEAD}: a mapped column holds values the app "
-            "can't read (details in Help → About → Debug)"
+            "can't read (details in Help → About & citation → App details → Debug)"
         )
     return f"{MAPPING_FAILURE_LEAD}: {exc}"
 
@@ -9385,6 +9356,7 @@ def _run_app() -> None:
     # Before any widget, so a write a closed popover would undo holds
     # (`controls.write_through`).
     reassert_pending_writes()
+    restore_sample_on_rerun()
     announce_start_over()
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
@@ -9560,8 +9532,8 @@ def _run_app() -> None:
         if "_show_upload_wizard" not in st.session_state:
             st.session_state["_show_upload_wizard"] = True
             st.session_state["main_nav"] = _VIEW_DATA
-            # Switching to Data clears the URL. Keep the deep link's welcome
-            # suppression so the tour cannot navigate back out of the wizard.
+            # Keep a direct import link from showing the sample invitation
+            # when the viewer later opens Scanpath.
             st.session_state["tour_seen"] = True
     elif private_choice is not None:
         linked_choice = private_choice
@@ -9649,7 +9621,27 @@ def _run_app() -> None:
     _render_cancelled_load_notice(notices)
     _render_backup_reminder(notices, active_view)
 
-    def _finish_page() -> None:
+    tutorial_context: dict[str, object] = {"n_trials": 0}
+    task_help_requested = bool(
+        st.session_state.get("_tutorial_library_requested")
+        or st.session_state.get("tutorial_active")
+    )
+
+    def _render_guides(
+        context: dict[str, object], selected_has_fixations: bool = False
+    ) -> None:
+        # Serve task help from this run's selection, including on a direct
+        # Help link, an unfinished import or an empty filter result.
+        context["wizard_open"] = wizard_owns_page
+        context["selected_has_fixations"] = selected_has_fixations
+        stash_tutorial_context(context)
+        with task_help_slot:
+            maybe_show_welcome_tour(active_view)
+            render_spotlight_tour()
+            render_use_case_tutorial()
+            maybe_show_tutorial_library()
+
+    def _finish_page(guide_context: dict[str, object] | None = None) -> None:
         """The run's last UI, once, on whichever path ``main`` leaves by.
 
         🗂️ Data → *Saved work* reports what **this run** just
@@ -9660,29 +9652,17 @@ def _run_app() -> None:
 
         Only the Saved work tab renders these controls.
         """
+        if guide_context is not None:
+            _render_guides(guide_context)
         if conflict := st.session_state.get(SAVE_CONFLICT_KEY):
             page_notices.warning(conflict, icon=ICONS["warning"])
         if workspace_open and storage_page.open:
             _render_saved_here_section(app_url, saved_here_slot)
 
-    # First-visit welcome tour. After the URL presets, so embeds and
-    # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
-    # work, so the welcome streams to the browser immediately instead of
-    # after the full first render. Replay clicks arm the tour in the button's
-    # on_click callback, which runs before this point in the rerun.
-    #
-    # One container for the whole block, so it always holds exactly one index
-    # below it — the tour and the tutorial draw only while active, so without
-    # the container the first run after one closes would remove an element
-    # above the view and shift it. See AGENTS.md → Gotchas.
+    # Reserve a single position for invitations, guides and dialogs before the
+    # figure loads. Opening or closing one must not shift the entire view.
     with st.container():
-        # The spotlight tour is about the Scanpath view; this is also where it
-        # switches there when it starts on another view.
-        maybe_show_welcome_tour(active_view)
-        render_spotlight_tour()
-        # Task-oriented tutorials share the spotlight mechanism but keep
-        # their own progress and do not inherit the welcome tour's opt-out.
-        render_use_case_tutorial()
+        task_help_slot = st.container()
         # A cut-off dropdown label shows in full on hover. Unconditional,
         # so it never moves the view's index.
         render_truncation_tooltips()
@@ -9690,14 +9670,10 @@ def _run_app() -> None:
         render_color_picker_commit()
         # In the desktop app's window, a download opens a Save-as dialog.
         render_save_dialog()
-        # The dialogs ❓ Help arms (FAQ, About, the tutorial library) are served
-        # here too, before the heavy data / plot work, so a modal never waits
-        # out the whole rerun.
-        maybe_show_faq()
+        # These Help dialogs can open before the figures and data tables load.
         maybe_show_about()
         maybe_show_feedback()
-        maybe_show_tutorial_library()
-        # ❓ Help → About → Debug, served early like its siblings.
+        # Debug opens from About & citation → App details.
         maybe_show_debug()
 
     # `active_view` was already resolved above (including the wizard
@@ -9777,6 +9753,7 @@ def _run_app() -> None:
             key=DATA_WORKSPACE_KEY,
             on_change="rerun",
         )
+        st.session_state[DATA_WORKSPACE_LAST] = st.session_state[DATA_WORKSPACE_KEY]
     else:
         current_page = library_page = storage_page = setup_page
     data_page_slot = current_page.empty()
@@ -10128,7 +10105,7 @@ def _run_app() -> None:
         mapping_problems = setup.problems
         if wizard_active:
             _render_offpage_setup_notice(data_view)
-            _finish_page()
+            _finish_page(tutorial_context)
             _end_loading(showing_dataset=False)
             return
     elif data_choice == MANUAL_SAMPLE_CHOICE and not _authoring_editor_open(
@@ -10144,7 +10121,7 @@ def _run_app() -> None:
             words_df, fixations_df = _render_authoring_source()
         if active_view == _VIEW_SCANPATH:
             # The authoring canvas is this screen's visualization.
-            _finish_page()
+            _finish_page(tutorial_context)
             _end_loading()
             return
         raw_words_df, raw_fixations_df = words_df, fixations_df
@@ -10315,7 +10292,7 @@ def _run_app() -> None:
         if data_view and editing and mapping_editor_rendered:
             _render_builtin_editor_footer(editor_footer_slot)
         _render_offpage_setup_notice(data_view)
-        _finish_page()
+        _finish_page(tutorial_context)
         _render_datasets_table(None, None, None)
         _end_loading()
         return
@@ -10448,9 +10425,8 @@ def _run_app() -> None:
             _trial_identity_alert_dialog(str(asked_by), identity_warning)
             identity_modal = True
         except StreamlitAPIException:
-            # Streamlit allows one dialog per script run, and ❓ Help's three
-            # (FAQ / About / Tutorials) and the welcome tour are served above
-            # this point. They cannot normally be armed on the same run as this
+            # Streamlit allows one dialog per script run. About or support may
+            # already be open. They cannot normally be armed on the same run as this
             # — the flag is set by a button on a screen with no nav reachable —
             # but a run that returned early with the flag still armed can. Put
             # it back rather than lose the verdict; the next run has no modal
@@ -10651,10 +10627,18 @@ def _run_app() -> None:
                 _render_inclusion_report(
                     words_all, fixations_all, raw_gaze_all, set(), trial_filters
                 )
-        if not data_view or (
-            words_all.empty and fixations_all.empty and raw_gaze_all.empty
-        ):
-            _finish_page()
+        dataset_has_rows = any(
+            not frame.empty for frame in (words_all, fixations_all, raw_gaze_all)
+        )
+        if not data_view or not dataset_has_rows:
+            if task_help_requested and dataset_has_rows:
+                before_filters, _, _ = build_combo_options(
+                    combo_source(fixations_all, words_all, raw_gaze_all)
+                )
+                tutorial_context["unfiltered"] = build_tutorial_context(
+                    words_all, fixations_all, before_filters
+                )
+            _finish_page(tutorial_context)
             _render_datasets_table(words_all, fixations_all, raw_gaze_all)
             _end_loading()
             return
@@ -10796,6 +10780,29 @@ def _run_app() -> None:
     combos_all, _, _ = build_combo_options(
         combo_source(fixations_all, words_all, raw_gaze_all)
     )
+
+    tutorial_context = {"n_trials": len(combos)}
+    if task_help_requested:
+        tutorial_context = build_tutorial_context(
+            words_filtered, fixations_filtered, combos
+        )
+        if len(combos) != len(combos_all):
+            tutorial_context["unfiltered"] = build_tutorial_context(
+                words_all, fixations_all, combos_all
+            )
+    if active_view != _VIEW_SCANPATH:
+        sample_requested = (
+            st.session_state.get("_tutorial_library_requested")
+            or st.session_state.get("tour_mode") == "spotlight"
+        )
+        _render_guides(
+            tutorial_context,
+            sample_requested
+            and data_choice == DEMO_CHOICE
+            and sample_replay_outside_scanpath(
+                words_filtered, fixations_filtered, combos
+            ),
+        )
 
     # The load is done; the skeleton stays until the view has drawn its
     # controls and its first slow region opens (see `loading.card`).
@@ -11077,33 +11084,15 @@ def _run_app() -> None:
                 ),
                 data_source_renderer=render_data_source_picker,
                 canvas_renderer=canvas_renderer,
+                on_reading_selected=lambda has_fixations: _render_guides(
+                    tutorial_context, has_fixations
+                ),
             )
 
     # A view that never reached a slow region (no trial selected, an
     # empty view) still takes the skeleton down.
     loading.release_page()
 
-    # ❓ Help is a *menu* in the nav: each entry arms a dialog
-    # (menu._arm_help_action). Nothing to fill here — only the tutorial
-    # chooser's context, which is data, not a widget, and has to be stashed on
-    # every run so the dialog can open over any view.
-    #
-    # Help has no 📚 Documentation entry: `st.Page` cannot be a URL, and the
-    # wordmark beside the nav opens the docs site.
-    tutorial_context = build_tutorial_context(
-        words_filtered, fixations_filtered, combos
-    )
-    if len(combos) != len(combos_all):
-        # While a filter narrows the pool, a cheap snapshot of the
-        # whole dataset lets the chooser say the filter is why a tutorial
-        # can't start (from the trial list alone — no frame is regrouped).
-        unfiltered = build_tutorial_context(None, None, combos_all)
-        unfiltered["has_words"] = words_all is not None and not words_all.empty
-        unfiltered["has_fixations"] = (
-            fixations_all is not None and not fixations_all.empty
-        )
-        tutorial_context["unfiltered"] = unfiltered
-    stash_tutorial_context(tutorial_context)
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)

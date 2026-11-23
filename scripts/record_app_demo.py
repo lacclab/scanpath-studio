@@ -320,21 +320,6 @@ def settle(page: Page, quiet: float = 1.5, timeout: float = 120) -> None:
     print("  ! the app never went idle", flush=True)
 
 
-def close_tour(page: Page) -> None:
-    """Dismiss the welcome tour's spotlight card."""
-    for _ in range(3):
-        btns = [
-            b
-            for b in page.locator(".st-key-tour_sp_close button").all()
-            + page.locator('.st-key-tour_card button:has-text("Skip")').all()
-            if b.is_visible()
-        ]
-        if not btns:
-            return
-        btns[0].click()
-        settle(page)
-
-
 def switch(page: Page, key: str) -> Locator:
     """The toggle rendered under Streamlit key ``key``."""
     return page.locator(f".st-key-{key} label")
@@ -646,7 +631,9 @@ def record(url: str, frames: Path) -> Path:
         page.goto(f"{url}/?playback_speed=3&ui=full", wait_until="domcontentloaded")
         settle(page, quiet=3.0)
         page.add_style_tag(content=HIDE_CSS + OVERLAY_CSS)
-        close_tour(page)
+        invitation = page.locator(".st-key-sample_invitation_dismiss button")
+        if invitation.is_visible():
+            invitation.click()
         settle(page, quiet=2.0)
         session.card(INTRO)
         page.wait_for_timeout(800)

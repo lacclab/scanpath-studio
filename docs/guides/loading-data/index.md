@@ -115,6 +115,8 @@ EyeLink's `IA_*` columns are detected.
 
 ## Add your own data
 
+For a walkthrough inside the import wizard, choose **Setup help → Show setup guide**.
+
 1. Choose **+** → :material/upload: **Import files** and name the dataset.
 2. Upload your tables and check the column mapping.
 3. Under **Recording setup**, enter the **Screen**, **Monitor width** and

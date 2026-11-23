@@ -95,7 +95,7 @@ keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Animatio
 | **Frame timing** → **Frame limit** | The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit. |
 | Frame count | Shows the number of frames in this replay and the reading time between them. |
 
-### :material/compare: Compare
+### :material/compare: Compare { #compare }
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a>
 
@@ -363,9 +363,9 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | | **Trials to include** | Choose which trials to export in the bundle: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text**, or **All trials, ignoring filters**. |
 | | **Formats** / **Tabular data** / **Table format** | Choose the bundle's figure formats, the data tables to include, and their format (CSV, Parquet or both). |
 | | **Layers as separate files** | Export each visual layer (fixations, saccades, word boxes…) as a separate file, to stack in a vector editor. |
-| | **Annotations (JSON)** / **Settings file (JSON)** | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which :material/database: **Data Management** → **Annotations** can import again. |
+| | **Annotations (JSON)** / **Settings file (JSON)** | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which :material/database: **Data Management** → **Current dataset → Annotations** can import again. |
 | | **File path pattern** | Set the file names inside the export bundle. |
 | | **Build export** | Build the export bundle (a zip) to download. |
-| :material/share: **Share** | **Link** | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
+| :material/share: **Share** | **Link** | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (**Current dataset** → :material/edit: **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
 | | **Code** → **Python** / **CLI**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
 | | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |

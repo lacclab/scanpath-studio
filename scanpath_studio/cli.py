@@ -4239,7 +4239,7 @@ def _version_parser() -> argparse.ArgumentParser:
 def version(argv: list[str]) -> None:
     """Print which build this is, and with ``--check`` whether a newer release is out.
 
-    The terminal counterpart of Help → About and ``api.check_for_updates``.
+    The terminal counterpart of Help → About & citation and ``api.check_for_updates``.
     Exits 1 only when the check itself could not be made.
     """
     args = _version_parser().parse_args(argv)

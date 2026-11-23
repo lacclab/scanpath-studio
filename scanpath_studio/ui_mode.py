@@ -258,29 +258,16 @@ def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
 def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
-    Marks it chosen, which is what lets the cookie script remember it. Choosing
-    Essentials ends a running tutorial, and a change of mode ends a running welcome
-    tour. Anything that is not a mode (a deselected switch) changes nothing.
+    Marks it chosen so the cookie remembers it. A deselected switch changes nothing.
     """
     import streamlit as st
 
     chosen = parse_mode(mode)
     if chosen is not None:
-        if chosen == SIMPLE and st.session_state.get("tutorial_active"):
-            # The tutorials spotlight Full-only controls: leave the one
-            # running the way its Exit does.
+        if chosen != current_mode() and st.session_state.get("tutorial_active"):
             from scanpath_studio import tour
 
-            tour._restore_tutorial_return()
-        if (
-            chosen != current_mode()
-            and st.session_state.get("tour_mode") == "spotlight"
-        ):
-            # Each mode has its own welcome tour, and a step number means a
-            # different step in the other one: end it, as Done would.
-            from scanpath_studio import tour
-
-            tour._exit_spotlight()
+            tour.change_tutorial_mode(chosen)
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
         st.session_state[COOKIE_MODE_KEY] = chosen

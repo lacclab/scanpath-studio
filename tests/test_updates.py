@@ -359,6 +359,20 @@ def test_about_offers_check_for_updates_on_a_local_run(monkeypatch):
     assert any("What's new in v99.0.0" in md.value for md in at.markdown)
 
 
+def test_about_names_the_release_and_identifies_the_exact_dev_build(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+
+    monkeypatch.setattr(app, "build_info", lambda: DEV)
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception
+    assert f"Dev · Based on v{DEV.release}" in [caption.value for caption in at.caption]
+    details = next(tab for tab in at.tabs if tab.label == "App details")
+    assert any(DEV.version in caption.value for caption in details.caption)
+    assert any(f"({DEV.docs_url}whats-new/)" in row.value for row in details.markdown)
+
+
 def test_about_says_when_this_is_the_latest(monkeypatch):
     from streamlit.testing.v1 import AppTest
 
@@ -573,7 +587,7 @@ def _about_with_last_update(monkeypatch, result, build, at=None):
         "last_result",
         lambda: desktop_update.UpdateResult(status, "0.36.0", "0.35.0", reason, at=at),
     )
-    monkeypatch.setattr(app, "_build_info", lambda: BuildInfo(build, build))
+    monkeypatch.setattr(app, "build_info", lambda: BuildInfo(build, build))
     at = AppTest.from_function(_about_script).run()
     assert not at.exception, at.exception
     return at

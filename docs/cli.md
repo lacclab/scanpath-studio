@@ -408,10 +408,10 @@ print(cli_reference("version"))
 ```
 
 Between releases the version names the build: `0.35.0.post3+g8f18219` is three
-commits after 0.35.0, at commit `8f18219`. The same check is
-**:material/help: Help → :material/info: About → :material/update: Check for
-updates** in the app, and
-[`check_for_updates`][scanpath_studio.api.check_for_updates] in Python.
+commits after 0.35.0, at commit `8f18219`. In a local install or the desktop
+app, open **:material/help: Help → :material/info: About & citation → App details →
+:material:update: Check for updates**. In Python, call
+[`check_for_updates`][scanpath_studio.api.check_for_updates].
 
 ## cite
 

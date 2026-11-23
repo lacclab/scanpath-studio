@@ -88,6 +88,7 @@ def test_about_shows_the_docs_bibtex(monkeypatch):
     from streamlit.testing.v1 import AppTest
 
     from scanpath_studio import app
+    from scanpath_studio.citation import CORPORA, software_apa
 
     sys.path.insert(0, str(CFF_PATH.parent / "scripts"))
     import docs_support
@@ -99,7 +100,10 @@ def test_about_shows_the_docs_bibtex(monkeypatch):
     monkeypatch.setattr(app, "server_bound_to_loopback", lambda: False)
     at = AppTest.from_function(_about_script).run()
     assert not at.exception, at.exception
-    shown = [code.value for code in at.code if code.language == "bibtex"]
+    citation = next(tab for tab in at.tabs if tab.label == "Citation")
+    assert software_apa() in [md.value for md in citation.markdown]
+    assert any(CORPORA["onestop"].doi in md.value for md in citation.markdown)
+    shown = [code.value for code in citation.code if code.language == "bibtex"]
     assert shown == [docs_bibtex]
     assert f"version = {{{__release__}}}" in docs_bibtex
     assert f"url     = {{https://doi.org/{CITATION['doi']}}}" in docs_bibtex

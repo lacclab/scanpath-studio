@@ -1038,7 +1038,7 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "`SD` → ±1 sample std (ddof=1) · `SEM` → ±std/√n · `IQR` → the 25th "
             "and 75th percentiles · `Bootstrap CI` → `agg.bootstrap_ci`. With "
-            "`agg='sum'`, SD/SEM fall back to the bootstrap: the spread of "
+            "`agg='sum'`, SD/SEM/IQR fall back to the bootstrap: the spread of "
             "individual observations does not bracket a total."
         ),
         code="scanpath_studio/aggregation.py:spread_bounds",

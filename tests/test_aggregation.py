@@ -29,6 +29,7 @@ from scanpath_studio.aggregation import (
     bootstrap_ci,
     cohort_summary_table,
     cohort_word_profile,
+    effective_spread,
     ensure_fixation_enrichment,
     group_mask,
     group_mean_difference,
@@ -371,6 +372,17 @@ class TestPrimitives:
         # `sum` bootstraps the aggregate instead.
         lo, hi = spread_bounds(np.array([100.0, 200.0, 300.0]), 600.0, "SD", agg="sum")
         assert lo <= 600.0 <= hi
+
+    @pytest.mark.parametrize("spread", ["SD", "SEM", "IQR", "Bootstrap CI"])
+    def test_every_sum_band_is_the_bootstrap_of_the_total(self, spread):
+        # The quartiles of the individual values (115–145) say nothing about
+        # where a total of 520 lies.
+        vals = np.array([100.0, 120.0, 140.0, 160.0])
+        band = spread_bounds(vals, 520.0, spread, agg="sum")
+        assert band == bootstrap_ci(vals, agg="sum")
+        assert band[0] <= 520.0 <= band[1]
+        assert effective_spread(spread, "sum") == "Bootstrap CI"
+        assert effective_spread(spread, "mean") == spread
 
     def test_bootstrap_ci(self):
         vals = np.arange(50, dtype=float)

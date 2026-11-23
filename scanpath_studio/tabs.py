@@ -9420,11 +9420,14 @@ _SPREAD_NOTES = {
 def _spread_note(host, spread: str, agg: str | None = None) -> None:
     """One caption under an error-bar selector saying what the choice shows.
 
-    With Aggregate = sum, SD and SEM are drawn as a bootstrap interval of the
-    sum (`aggregation.spread_bounds`), so the note says that instead."""
+    With Aggregate = sum, SD, SEM and IQR are drawn as a bootstrap interval of
+    the sum (`aggregation.spread_bounds`), so the note says that instead."""
     note = _SPREAD_NOTES.get(spread)
-    if agg == "sum" and spread in ("SD", "SEM"):
-        note = "With Sum, SD and SEM are drawn as a 95% bootstrap interval of the sum."
+    if effective_spread(spread, agg) != spread:
+        note = (
+            "With Sum, SD, SEM and IQR are drawn as a 95% bootstrap interval "
+            "of the sum."
+        )
     if note:
         host.caption(note)
 

@@ -301,16 +301,22 @@ def bootstrap_ci(
     return (lo, hi)
 
 
+#: Spreads that describe individual values, which cannot bracket a total.
+_VALUE_SPREADS = ("SD", "SEM", "IQR")
+
+
 def effective_spread(spread: str, agg: str | None) -> str:
     """The interval drawn around the selected aggregate."""
-    return "Bootstrap CI" if agg == "sum" and spread in ("SEM", "SD") else spread
+    return "Bootstrap CI" if agg == "sum" and spread in _VALUE_SPREADS else spread
 
 
 def spread_bounds(values: np.ndarray, center: float, spread: str, *, agg: str = "mean"):
     """``(lo, hi)`` band for ``values`` around ``center`` under ``spread``.
 
     ``SD`` → ±1 std · ``SEM`` → ±std/√n · ``IQR`` → 25th/75th percentiles ·
-    ``Bootstrap CI`` → 95 % percentile bootstrap of the aggregate.
+    ``Bootstrap CI`` → 95 % percentile bootstrap of the aggregate. With
+    ``agg="sum"`` every spread is the bootstrap interval of the sum, since the
+    spread of the individual values says nothing about where a total lies.
     """
     arr = np.asarray(values, dtype="float64")
     arr = arr[np.isfinite(arr)]

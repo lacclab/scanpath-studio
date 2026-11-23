@@ -246,14 +246,29 @@ def _popover_rows(slug: str):
     ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
     for every popover.
     """
-    # Remember which menu rendered each pending value. Its open event and
-    # the user's first edit can reach the server together on the next run.
+    with (
+        _menu_draws_pending_writes(slug),
+        _rail_label_width(_POPOVER_LABEL_W),
+        st.container(key=f"rail_rows_{slug}"),
+    ):
+        yield
+
+
+@contextmanager
+def _menu_draws_pending_writes(slug: str):
+    """Remember which menu draws each pending value (`write_through`) inside.
+
+    The menu's open event and the user's first edit can reach the server
+    together on the next run, so `reassert_pending_writes` releases the value
+    of a menu that is open. `_popover_rows` does this for a menu's own rows;
+    rows drawn into a menu's container after its block has closed need it
+    around them too.
+    """
     pending = st.session_state.get(_PENDING_WRITES_KEY)
     ctx = get_script_run_ctx() if pending else None
     drawn = ctx.shared.widget_user_keys_this_run if ctx else None
     waiting = [key for key in pending if key not in drawn] if drawn is not None else []
-    with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
-        yield
+    yield
     if waiting:
         section = slug.split("_", 1)[0]
         menu_key = (
@@ -8938,7 +8953,7 @@ def render_plot_controls(
         # The typography rows always draw, greyed while *Text* is off
         # (`text_disabled`), at the popovers' label width. They belong to
         # 📄 Stimulus → Text and must never fall back into this one.
-        with _rail_label_width(_POPOVER_LABEL_W):
+        with _rail_label_width(_POPOVER_LABEL_W), _menu_draws_pending_writes("stim"):
             canvas_renderer(
                 screen_rows,
                 text_host=stim_text_slot,

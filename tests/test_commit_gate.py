@@ -10,6 +10,7 @@ count only the commands the session ran.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -40,27 +41,41 @@ def _bash_call(command: str) -> dict:
     }
 
 
-def _run_gate(tmp_path: Path, events: list[dict], command: str) -> str:
+def _write_transcript(path: Path, events: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+
+
+def _run_gate(
+    tmp_path: Path,
+    events: list[dict],
+    command: str,
+    *,
+    subagent_events: list[dict] | None = None,
+) -> str:
     """Run the hook on ``command`` with ``events`` as the transcript; return the log line."""
     (tmp_path / ".claude").mkdir(exist_ok=True)
-    transcript = tmp_path / "transcript.jsonl"
-    transcript.write_text(
-        "\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8"
-    )
+    transcript = tmp_path / "session.jsonl"
+    _write_transcript(transcript, events)
+    if subagent_events is not None:
+        _write_transcript(
+            tmp_path / "session" / "subagents" / "agent-1.jsonl", subagent_events
+        )
     payload = {
         "session_id": "test-session",
         "transcript_path": str(transcript),
         "tool_input": {"command": command},
     }
+    # The hook needs jq wherever this machine keeps it.
+    path = os.pathsep.join(
+        [os.path.dirname(shutil.which("jq")), "/usr/bin", "/bin", "/usr/local/bin"]
+    )
     subprocess.run(
         ["sh", str(HOOK)],
         input=json.dumps(payload),
         text=True,
         check=True,
-        env={
-            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
-            "CLAUDE_PROJECT_DIR": str(tmp_path),
-        },
+        env={"PATH": path, "CLAUDE_PROJECT_DIR": str(tmp_path)},
     )
     return (
         (tmp_path / ".claude" / "commit-gate.log")
@@ -101,10 +116,28 @@ def test_a_harness_command_counts(tmp_path, command):
         "SCANPATH_STUDIO_PERSIST=0 /usr/bin/time -p uv run --extra test pytest -n auto",
         ".venv/bin/python -m pytest tests/test_data.py",
         "pytest -q",
+        'S="$(mktemp -d)" uv run --extra test pytest -q',
+        "uv run --extra=test pytest",
+        "timeout 900 uv run pytest -x",
+        "python -X dev -m pytest",
+        "uv run --env-file .env pytest",
+        "uv --directory app run pytest",
+        "cd app\nuv run --extra test \\\n  pytest -n auto",
     ],
 )
 def test_a_pytest_command_counts_as_tests(tmp_path, command):
     assert _run_gate(tmp_path, [_bash_call(command)], COMMIT).endswith("ran=tests")
+
+
+def test_a_run_in_a_subagent_counts(tmp_path):
+    """A subagent's commands are in its own transcript, beside the session's."""
+    line = _run_gate(
+        tmp_path,
+        [_user_text(INSTRUCTIONS)],
+        COMMIT,
+        subagent_events=[_bash_call("uv run --extra test pytest tests/x.py")],
+    )
+    assert line.endswith("ran=tests")
 
 
 @pytest.mark.parametrize(
@@ -114,17 +147,28 @@ def test_a_pytest_command_counts_as_tests(tmp_path, command):
         'grep -n "pytest\\|ruff" .github/workflows/ci.yml',
         "sed -n 1,40p tests/conftest.py | grep pytest",
         "cat .claude/skills/verify/SKILL.md",
+        "grep -E 'foo|pytest -n auto' notes.md",
+        "cat > run.sh <<'EOF'\npytest -q\nEOF",
+        "gh pr create --title t --body 'Ran:\npytest -n auto'",
+        "cat \\\n  scripts/verify_change.py",
+        "printf '%s\\n' 'x' '(pytest -q)' > msg.txt",
     ],
 )
 def test_reading_about_a_tool_is_not_running_it(tmp_path, command):
     assert _run_gate(tmp_path, [_bash_call(command)], COMMIT).endswith("ran=none")
 
 
-def test_the_commit_command_itself_is_not_a_run(tmp_path):
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit -m 'x\n\nVerified: pytest, verify_change.py'",
+        "git -C app commit -m 'x\npytest -n auto'",
+    ],
+)
+def test_the_commit_command_itself_is_not_a_run(tmp_path, command):
     """The commit being checked is already in the transcript, and its message
     may name what ran."""
-    events = [_bash_call("git commit -m 'x\n\nVerified: pytest, verify_change.py'")]
-    assert _run_gate(tmp_path, events, COMMIT).endswith("ran=none")
+    assert _run_gate(tmp_path, [_bash_call(command)], COMMIT).endswith("ran=none")
 
 
 @pytest.mark.parametrize(

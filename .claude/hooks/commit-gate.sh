@@ -57,24 +57,18 @@ else
   trailer=no
 fi
 
-# Did the session run anything? Only the shell commands it issued count: the
-# project instructions name `verify_change.py` and `pytest` and sit in every
-# transcript. Each command is cut at its `git commit` (the message may name
-# them too) and split into the programs it chains; a program counts when, past
-# its environment assignments, `time` and `uv run` options, it is Python running
-# the harness, or pytest. Reading a file about either (`grep pytest …`) is not
-# a run.
-programs='select(.type == "assistant") | .message.content[]?
-  | select(.type == "tool_use" and .name == "Bash") | .input.command // empty
-  | sub("git commit[\\s\\S]*"; "")
-  | splits("[;&|()\\n]+")
-  | sub("^\\s+"; "")
-  | sub("^((\\w+=\\S*|env|(\\S*/)?time|-p)\\s+)*"; "")
-  | sub("^uv\\s+run\\s+((--(extra|with|python|group|package|directory|project)\\s+\\S+|--?[\\w-]+)\\s+)*"; "")
-  | sub("^(\\S*/)?python[\\d.]*\\s+((-[IuBO]|-m)\\s+)*"; "")'
+# Did the session run anything? Only the shell commands it (or one of its
+# subagents) issued count: the project instructions name `verify_change.py`
+# and `pytest` and sit in every transcript. commit-gate-runs.jq reduces each
+# command to the programs it ran, so a commit message, a PR body or a grep
+# pattern that names either is not a run.
 ran=none
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-  run=$(jq -r "$programs" "$transcript" 2>/dev/null)
+  set -- "$transcript"
+  for sub in "${transcript%.jsonl}"/subagents/*.jsonl; do
+    [ -f "$sub" ] && set -- "$@" "$sub"
+  done
+  run=$(jq -r -f "$(dirname "$0")/commit-gate-runs.jq" "$@" 2>/dev/null)
   if printf '%s\n' "$run" | grep -Eq '^(\S*/)?verify_change\.py([[:space:]]|$)'; then
     ran=harness
   elif printf '%s\n' "$run" | grep -Eq '^(\S*/)?pytest([[:space:]]|$)'; then

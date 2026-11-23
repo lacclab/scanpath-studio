@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
+import subprocess
 import zipfile
 
 import pandas as pd
@@ -371,3 +373,25 @@ def test_csv_dictionary_uses_the_written_types_units_and_missing_convention(tmp_
     )
     assert observed["RECORDING_SESSION_LABEL"].tolist() == ["01", "1", "NA"]
     assert observed["CURRENT_FIX_DURATION"].tolist() == ["0.0", "", "24.0"]
+    # The bundled R reader itself, where R and jsonlite are installed.
+    rscript = shutil.which("Rscript")
+    probe = [rscript, "-e", "library(jsonlite)"] if rscript else None
+    if probe and not subprocess.run(probe, capture_output=True).returncode:
+        script = f"""
+source("read_csv.R")
+d <- read_scanpath_csv("{path}")
+cat(d$RECORDING_SESSION_LABEL, is.na(d$CURRENT_FIX_DURATION), sep = ",")
+cat("\\n")
+for (p in list("missing.csv", NULL, c("{path}", "{path}"))) {{
+  cat(tryCatch(read_scanpath_csv(p), error = conditionMessage), "\\n")
+}}
+"""
+        lines = subprocess.run(
+            [rscript, "-e", script],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+        assert lines[0] == "01,1,NA,FALSE,TRUE,FALSE"
+        assert lines[1:] == ["Choose a CSV listed in dictionary$csv_files "] * 3

@@ -1025,9 +1025,9 @@ def _render_fixation_cleaning(
         else [label_w, rest * 0.5, rest * 0.5]
     )
     mode_help = _gated_help(
-        "**Highlight** marks these fixations. **Hide** hides their markers; "
-        "saccades and the heatmap still use them, and measures and exports "
-        "don't change.",
+        "**Highlight** marks these fixations. **Hide** hides their markers on static "
+        "plots. During replay, saccades connect the remaining fixations. "
+        "Both settings affect only the figure.",
         reason,
     )
     head = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
@@ -1676,6 +1676,7 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
+    ss.pop(_AUTO_REPLAY_FIXATIONS, None)
 
     # One of the user's own saved designs. Same shape as the built-in
     # branch below (clear, then write what the design owns), and deliberately
@@ -2126,6 +2127,8 @@ def _capture_quick_view_state() -> dict[str, object]:
         for key, value in ss.items()
         if _is_design_key(key) and str(key) not in _FIX_WINDOW_KEYS
     }
+    if ss.get(_AUTO_REPLAY_FIXATIONS):
+        state["global_show_fix"] = False  # The underlying static design.
     for window_key, user_set_key in _FIX_WINDOWS:
         window = ss.get(window_key)
         if (
@@ -2368,22 +2371,43 @@ def static_plot_view(*, comparing: bool = False) -> str | None:
     return None
 
 
+# When a static view has both gaze layers off, show fixations for playback
+# and switch them off again on return unless the user edits the layers.
+_AUTO_REPLAY_FIXATIONS = "_auto_replay_fixations"
+
+
+def clear_replay_layer_restore() -> None:
+    """Keep the newly chosen layers when leaving Animation."""
+    st.session_state.pop(_AUTO_REPLAY_FIXATIONS, None)
+
+
+def leave_animation() -> None:
+    """Return to the static layers, including a view with both gaze layers off."""
+    ss = st.session_state
+    if ss.pop(_AUTO_REPLAY_FIXATIONS, False):
+        ss["global_show_fix"] = False
+    ss[SINGLE_ANIMATE] = False
+
+
 def _choose_plot_view(name: str, comparing: bool) -> None:
     """Animation uses the current styling and comparison. Static presets keep the palette."""
     ss = st.session_state
-    if name == "animation":
-        # Selecting the active tile returns to any underlying figure, including
-        # a custom-axis chart that none of the static presets represents.
-        ss[SINGLE_ANIMATE] = not ss.get(SINGLE_ANIMATE, False)
+    if name == "animation" and not ss.get(SINGLE_ANIMATE, False):
+        if not (
+            ss.get("global_show_fix", True) or ss.get("global_show_saccades", True)
+        ):
+            ss["global_show_fix"] = True
+            ss[_AUTO_REPLAY_FIXATIONS] = True
+        ss[SINGLE_ANIMATE] = True
         return
-    if name != static_plot_view(comparing=comparing):
+    leave_animation()
+    if name != "animation" and name != static_plot_view(comparing=comparing):
         keep = (
             *_palette_keys(),
             "_palette_picked",
             *(k for k in _VIZ_WIDGET_DEFAULTS if k.startswith("global_anim_")),
         )
         _apply_view_preset(name, keep=keep)
-    ss[SINGLE_ANIMATE] = False
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
@@ -6794,10 +6818,8 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
-#: What a greyed rail switch says on hover, for the Animate gate. The
-#: replay has its own fixation layer and none for the heatmap or raw gaze.
+#: What an unavailable layer switch says during replay.
 _ANIMATE_GREYS = {
-    "fix": "Animation always draws fixations.",
     "heatmap": "Choose a static view to show the heatmap.",
     "rawgaze": "Choose a static view to show raw gaze.",
 }
@@ -7007,6 +7029,9 @@ def _record_plot_edit() -> PlotHistory:
         if not _is_drift_mirror(key)
     }
     settings["single_animate"] = bool(ss.get("single_animate"))
+    if ss.get(_AUTO_REPLAY_FIXATIONS):
+        settings["global_show_fix"] = True  # Undo restores the displayed replay.
+        settings[_AUTO_REPLAY_FIXATIONS] = True
     # Presets and Reset remove their incoming URL options. Record only those
     # plot parameters so undoing a change leaves the address's reading intact.
     for param in st.query_params:
@@ -7253,9 +7278,6 @@ def render_plot_controls(
     # children out in creation order and the switch has to precede the ▾; the
     # blocks below own everything inside the popovers. The preset row above
     # covers the common combinations without opening anything at all.
-    fix_off_disabled, _fix_off_reason = _mode_gate(
-        animating, comparing, in_animation=False, in_compare=True
-    )
     # A trial with no fixations (raw gaze only, or words only) has nothing for
     # the fixation-built controls to act on — Fixations, Saccades, Filters &
     # highlights and its index window — and the samples are never turned into
@@ -7278,20 +7300,9 @@ def render_plot_controls(
         name="Fixation",
         key="global_show_fix",
         persist_state="session",
-        disabled=fix_off_disabled or not has_fixations,
-        help=_greyed_help(
-            (not has_fixations, "This trial has no fixations."),
-            (fix_off_disabled, _ANIMATE_GREYS["fix"]),
-        ),
-        # No fixations: the popover body's own `_layer_off` caption says it.
-        note=""
-        if no_fixations_note
-        else (
-            f"{ICONS['warning']} **Animation** always draws fixations; this switch "
-            "applies to the other figures."
-            if fix_off_disabled
-            else ""
-        ),
+        on_change=clear_replay_layer_restore,
+        disabled=not has_fixations,
+        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
     )
     show_saccades, sac_grp = _rail_section(
         advanced_only(viz, "rail_sac"),
@@ -7300,6 +7311,7 @@ def render_plot_controls(
         name="Fixation sequence" if sequence else "Saccade",
         key="global_show_saccades",
         persist_state="session",
+        on_change=clear_replay_layer_restore,
         disabled=not has_fixations or (chart_axes and not sequence),
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
@@ -7438,14 +7450,6 @@ def render_plot_controls(
     )
 
     # --- Fixations --------------------------------------------------------
-    # The Fixations toggle reaches the static figure AND Compare (the
-    # comparison heatmap is unreadable under two full sets of markers). Only the
-    # animated replay ignores it: the replay *is* the fixation trail, so there is
-    # nothing left to draw with it off, and `make_scanpath_animation` takes no
-    # `show_fixations` argument.
-    # The toggle is on the section's row; the styling below is still
-    # (partly) live in Animate / Compare, so the popover stays reachable even
-    # when the (inert) layer toggle reads off.
     # Every title in this popover is short, so its label column is
     # narrower than the rail's, bringing the fields closer to their titles; the
     # keyed container is what `styles.py` spaces the rows apart by.
@@ -7453,7 +7457,7 @@ def render_plot_controls(
         fix_grp,
         _layer_off(
             f"{ICONS['fixations']} Fixations",
-            off=not (show_fix or fix_off_disabled) or not has_fixations,
+            off=not show_fix or not has_fixations,
             reason=no_fixations_note or None,
         ),
         _popover_rows("fix"),
@@ -7887,7 +7891,7 @@ def render_plot_controls(
         ),
         _layer_off(
             f"{ICONS['fixations']} Fixations",
-            off=not (show_fix or fix_off_disabled) or not has_fixations,
+            off=not (show_fix or (animating and show_saccades)) or not has_fixations,
             reason=no_fixations_note or None,
             # The Filters & highlights section's own note already said it.
             caption=has_fixations,
@@ -9708,6 +9712,7 @@ def reset_viz_settings() -> None:
         "single_fix_range",
         "single_fix_range_all_trials",
         _PRE_ILLUSTRATION_STATE,
+        _AUTO_REPLAY_FIXATIONS,
         _QUICK_VIEW_SELECTION_KEY,
         _QUICK_VIEW_CUSTOM_STATE,
         _QUICK_VIEW_APPLIED_STATE,

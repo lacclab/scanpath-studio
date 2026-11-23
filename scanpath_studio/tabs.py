@@ -215,6 +215,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    leave_animation,
     metadata_readings,
     pin_word_heatmap_range,
     plot_popover_on_change,
@@ -5203,7 +5204,7 @@ def _compare_dataset_name(compare_meta: dict | None) -> str:
 def _cancel_animation(task_key: tuple) -> None:
     """Cancel on the animation card — back to the static plot."""
     progress.cancel(task_key)
-    st.session_state["single_animate"] = False
+    leave_animation()
 
 
 #: The replay task this session's card was last opened for, held while
@@ -5570,7 +5571,7 @@ def _build_and_render_animation(
         # The frames were built at full opacity (`_plan_replay`).
         fig.update_traces(
             opacity=animation_settings.saccade_opacity,
-            selector=lambda trace: trace.name in ("saccades", "saccade direction"),
+            selector=dict(meta="saccades"),
         )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(

@@ -6208,8 +6208,9 @@ whose page keeps the replay's timing, or render it to GIF or MP4 with
 plays it on Plotly's frame queue, which runs slower than the reading did.</p>
 <p>The replay takes a subset of <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>'s
 options (<code>figure_options("animation")</code>), and the ones they share default alike, so
-the replay matches the static figure. The replay is made of fixations: it draws no
-raw gaze, and nothing detects fixations from samples.</p>
+the replay matches the static figure. Set <code>show_fixations=False</code> to replay the
+saccades alone. The replay uses fixation times and positions and has no raw-gaze
+layer.</p>
 <p><strong>Two scanpaths.</strong> <code>trial_b</code> co-animates a second trial, like the app's Animate +
 Compare. Both readings are drawn in A's coordinates, so a co-animation is an
 overlay, and a trial from another dataset has to share A's screen. Name that dataset
@@ -7421,7 +7422,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>show_fixations</code><br><code>--no-fixations</code></td>
 <td><code>True</code></td>
-<td>Hide the fixations.<br><em>Single plot, Compare.</em></td>
+<td>Hide the fixations.</td>
 </tr>
 <tr>
 <td><code>fixation_color</code><br><code>--fixation-color</code></td>

@@ -6161,8 +6161,17 @@ _REPLAY_PLAYER_JS = """(function () {
       }
       return lo;
     }
+    var latestDraw;
+    function animate(frame, options) {
+      var draw = Plotly.animate(gd, frame, options);
+      latestDraw = draw;
+      draw.catch(function (error) {
+        // Plotly rejects a queued frame without a reason when a newer draw replaces it.
+        if (draw === latestDraw || error !== undefined) { throw error; }
+      });
+    }
     function draw(k, options) {
-      Plotly.animate(gd, readFrame ? readFrame(k) : [String(k)], options);
+      animate(readFrame ? readFrame(k) : [String(k)], options);
       if (readFrame) {
         if (bar) { bar.at(k); }
         else if (gd.layout.sliders && gd.layout.sliders[0] && gd.layout.sliders[0].active !== k) {
@@ -6211,7 +6220,7 @@ _REPLAY_PLAYER_JS = """(function () {
       eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
       if (!template) { template = readFrame ? readFrame(last) : gd._transitionData._frames[last]; }
       var frame = frameAtTime(template, readings, e.ms, 'fixation-step');
-      Plotly.animate(gd, frame, leap);
+      animate(frame, leap);
       var words = r.words[j], duration = r.durations[j];
       var detail = (r.label ? r.label + ' · ' : '') + 'Fixation ' + (r.ids[j] || (j + 1)) +
         ', ' + (r.recorded ? 'onset ' : 'estimated onset ') + e.ms + ' ms' +

@@ -52,13 +52,14 @@ scanpath_studio/
 │  ├─ url_state.py       deep links, 🔗 Share (Link · Code · File), settings-file save/restore + migrations
 │  ├─ session_keys.py    the session keys / URL params that are a wire format, as constants
 │  ├─ plot_config.py     the settings-file serializer shared by Share and the export bundle
-│  ├─ tour.py            welcome tour, task tutorials and the setup guide
+│  ├─ tour.py            sample invitation, task guides and the optional import walkthrough
+│  ├─ feedback.py        offline troubleshooting, GitHub support links and bug-report details
 │  ├─ loading.py         loading cards (revealed by a timer thread) with Cancel
 │  ├─ progress.py        a Streamlit-free progress + cancel hook for loaders and builders
 │  ├─ constants.py       palette, defaults, `ICONS`, citation metadata, experimental-feature gates
 │  ├─ styles.py          injected CSS
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
-│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About → App details → Debug)
+│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About & citation → App details → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
 │  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
 │  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py

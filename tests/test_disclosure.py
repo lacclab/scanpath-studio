@@ -45,11 +45,12 @@ class TestTheNoteIsOnEverySurface:
         assert "scanpath-studio/issues" in _text(path), path
 
     @pytest.mark.parametrize("path", ["README.md", "docs/index.md"])
-    def test_the_surface_explicitly_welcomes_feature_requests(self, path):
-        body = _text(path).lower()
-        assert "feature request" in body or "request a feature" in body, path
+    def test_the_surface_accepts_suggestions_in_github_ideas(self, path):
+        from scanpath_studio.constants import CITATION
 
-    def test_about_opens_the_feedback_form_with_the_project_issue_templates(self):
+        assert CITATION["ideas_url"] in _text(path)
+
+    def test_about_opens_support_over_the_current_view(self):
         from streamlit.testing.v1 import AppTest
 
         from scanpath_studio.constants import CITATION
@@ -69,7 +70,15 @@ class TestTheNoteIsOnEverySurface:
         details.button(key="about_open_feedback").click().run()
         assert not at.exception
         urls = {button.proto.url for button in at.link_button}
-        assert {CITATION["bug_report_url"], CITATION["feature_request_url"]} <= urls
+        assert {CITATION["questions_url"], CITATION["ideas_url"]} <= urls
+        assert at.button(key="help_report_bug")
+
+    def test_about_identifies_a_paused_recovery_session(self):
+        from scanpath_studio.app import _about_privacy_line
+
+        assert "saving is paused" in _about_privacy_line(
+            local=True, saving=True, paused=True
+        )
 
     def test_no_liability_disclaimer_language(self):
         """Deliberately not a warranty notice — MIT already carries that, and

@@ -8,6 +8,7 @@ import pytest
 
 from scanpath_studio import persistence
 from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH, GUIDE_RETURN_KEY
 from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,
@@ -23,7 +24,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     save_state,
 )
-from scanpath_studio.session_keys import DESIGN_PRESETS
+from scanpath_studio.session_keys import DESIGN_PRESETS, SINGLE_COMPARE_TOGGLE
 
 
 def _dataset():
@@ -163,6 +164,36 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["trial_annotations"] == {}
     annotations_mod.activate_dataset(restored, "Bundled demo")
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
+
+
+def test_closing_during_a_guide_restores_original_view_and_keeps_user_edits(tmp_path):
+    original = {
+        "main_nav": _VIEW_CORPUS,
+        "single_animate": False,
+        SINGLE_COMPARE_TOGGLE: True,
+        "global_anim_autoplay": False,
+    }
+    session = original.copy()
+    assert save_state(session, tmp_path)
+    session.update(
+        {
+            GUIDE_RETURN_KEY: original,
+            "main_nav": _VIEW_SCANPATH,
+            "single_animate": True,
+            SINGLE_COMPARE_TOGGLE: False,
+            "global_anim_autoplay": True,
+        }
+    )
+    assert not save_state(session, tmp_path)
+
+    session["single_trial_id"] = "second reading"
+    assert save_state(session, tmp_path)
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert {key: restored[key] for key in original} == original
+    assert restored["single_trial_id"] == "second reading"
+    assert GUIDE_RETURN_KEY not in restored
+    assert session["main_nav"] == _VIEW_SCANPATH
 
 
 class TestADatasetWithoutRawGaze:

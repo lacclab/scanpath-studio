@@ -7,7 +7,7 @@ records into a capped buffer in ``st.session_state`` so they can be rendered
 inside the app, behind a debug toggle.
 
 Activation is a single toggle in the 🐛 **Debug** drawer under
-❓ Help → About → App details. Switching it on adds the log panel under it: a
+❓ Help → About & citation → App details. Switching it on adds the log panel under it: a
 level filter, an app/session-state snapshot, and a JSON export. A ``?debug=1``
 URL param is honoured as a *seed* of the toggle, so old links keep working.
 """

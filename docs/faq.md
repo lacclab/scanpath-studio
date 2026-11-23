@@ -141,24 +141,17 @@ See [Your data](about.md#your-data) and [Recovery cache](cli.md#cache).
 
 ### Where do I ask a question, report a bug or send feedback?
 
-:material/help: **Help** → :material/feedback: **Send feedback** links each
-kind of feedback to its page on GitHub: **Report a bug**, **Suggest a
-feature**, **Share an idea** and **Ask a question**. It also shows the version
-and system details for a bug report, ready to copy. You can review and submit
-your message on GitHub.
-
-Ask questions in
-[Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a).
-Report a bug as a
-[GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
-with the version, your operating system and how you run the app (pip, the
-desktop app or the online demo). On the command line, find the version with
-`scanpath-studio --version`.
+:material/help: **Help** → **Troubleshooting & feedback** has short answers
+in the app. To contact the project, [ask a question in Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a),
+[report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
+or [suggest an improvement in Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas).
+**Report a bug** gives you the version and system details to copy. In a
+terminal, `scanpath-studio --version` prints the version.
 
 ### How do I update Scanpath Studio? { #updating }
 
 In a local install or the desktop app, open :material/help: **Help** →
-:material/info: **About** → **App details** → :material/update: **Check for updates**.
+:material/info: **About & citation** → **App details** → :material/update: **Check for updates**.
 In the desktop app, choose
 **Update & restart**. For a Python install, run:
 

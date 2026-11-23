@@ -1,6 +1,6 @@
 """The app's one easter egg: triple-click the About heading and eyes pop up.
 
-Triple-click "About Scanpath Studio", the heading of ❓ Help → About, and a
+Triple-click "About Scanpath Studio", the heading of ❓ Help → About & citation, and a
 pair of oversized googly eyes pops up beside it, blinks once, follows the
 cursor for a few seconds, and fades out on its own. That is all it does.
 
@@ -258,12 +258,8 @@ def egg_script() -> str:
 def egg_suppressed(query_params, session_state=None) -> bool:
     """True when this session shouldn't arm the egg.
 
-    Embeds (``?embed=true``) are somebody else's UI — an external review tool
-    frames this app and owns the surrounding chrome. A running tour or tutorial
-    is mid-explanation, and the spotlight step that highlights the header would
-    be competing with a pair of eyes for the same corner of the screen. Takes the
-    params as a mapping (like :func:`tour.tour_suppressed`) because AppTest can't
-    inject query params.
+    An embed owns its surrounding chrome. An active guide uses the screen
+    to point out controls, so either case leaves the header alone.
     """
     if (query_params.get("embed") or "").lower() in {"true", "1"}:
         return True

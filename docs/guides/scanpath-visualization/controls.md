@@ -92,7 +92,7 @@ keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Animatio
 | **Frames** → **Limit** | The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit. |
 | **Frames** → **Result** | Shows the number of frames in this replay and the reading time between them. |
 
-### :material/compare: Compare
+### :material/compare: Compare { #compare }
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a>
 

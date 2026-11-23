@@ -213,8 +213,6 @@ def test_switch_stacks_between_the_header_and_the_tour():
     assert header < ui_mode.SWITCH_Z_INDEX < tour.GUIDE_Z_INDEX < 1000060
     assert f"z-index: {tour.GUIDE_Z_INDEX};" in tour._CARD_CSS
     assert f"z-index: {tour.GUIDE_Z_INDEX};" in tour._GUIDE_MOVE_CSS
-    # The welcome step's backdrop stays under the header, as the nav is.
-    assert "z-index: 999980;" in tour._WELCOME_CSS
 
 
 def test_the_status_widget_moves_out_from_under_the_switch():

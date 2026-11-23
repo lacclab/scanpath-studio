@@ -6,8 +6,9 @@ hide:
 
 # About Scanpath Studio
 
-Scanpath Studio visualizes eye movements in reading. The **Help** menu shows
-your app’s channel and opens the matching documentation and [What’s new](whats-new.md).
+Scanpath Studio visualizes eye movements in reading. **Help** opens the
+documentation for your Stable or Dev build. **About & citation → App details**
+links to [what’s new in that build](whats-new.md).
 
 Developed by [Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
@@ -22,7 +23,7 @@ at the Technion and the University of Zurich.
 ## Cite Scanpath Studio
 
 Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884).
-In the app, :material/help: **Help** → :material/info: **About** → **Citation**
+In the app, :material/help: **Help** → :material/info: **About & citation** → **Citation**
 gives the APA reference and a copyable BibTeX entry.
 Use `scanpath-studio cite` in a terminal or [`cite`][scanpath_studio.api.cite]
 in Python to get the citation. Both also offer RIS and CSL-JSON formats.
@@ -46,7 +47,7 @@ with Different Reading Regimes*, Scientific Data.
 
 With the desktop app or a local install, your recordings stay on your computer
 and are processed locally. The online demo processes the files you upload on
-its hosted server. :material/help: **Help** → :material/info: **About** →
+its hosted server. :material/help: **Help** → :material/info: **About & citation** →
 **App details** shows where your files are processed and whether a recovery
 copy is saved.
 
@@ -87,9 +88,9 @@ own analytics; see its [privacy policy](https://streamlit.io/privacy-policy).
 
 [Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a),
 [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
-or [request a feature](https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md).
-For a bug report, :material/help: **Help** → :material/feedback: **Send feedback**
-gives you the exact app version and system details to copy.
+or [suggest an improvement on GitHub Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas).
+In the app, **Help → Troubleshooting & feedback → Report a bug** gives you the
+app version and system details to copy into your report.
 
 <div class="sps-development-note" markdown>
 

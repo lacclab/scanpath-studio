@@ -404,7 +404,7 @@ print(cli_reference("version"))
 
 Between releases the version names the build: `0.35.0.post3+g8f18219` is three
 commits after 0.35.0, at commit `8f18219`. In a local install or the desktop
-app, open **:material/help: Help → :material/info: About → App details →
+app, open **:material/help: Help → :material/info: About & citation → App details →
 :material:update: Check for updates**. In Python, call
 [`check_for_updates`][scanpath_studio.api.check_for_updates].
 

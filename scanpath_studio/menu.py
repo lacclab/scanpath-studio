@@ -5,9 +5,9 @@ chrome and the main content gets the full page width.
 
 **The nav** (:func:`render_nav`) is Streamlit's own
 ``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
-Analysis · 🗂️ Data — and a ❓ Help section of **action** entries (Tutorials,
-FAQ, About, Send feedback) and links to the current edition’s documentation and
-What's new. Selecting a dialog action arms it and bounces the router
+Analysis · 🗂️ Data — and a ❓ Help section for task guides, troubleshooting
+and feedback, the current edition's documentation, and About & citation.
+Selecting a dialog action arms it and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
 Session-wide tools are not on the bar but where each is used: what the
@@ -41,11 +41,6 @@ from scanpath_studio.constants import (
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
 
-#: The spotlight tour's selector for the navigation. Streamlit's own top nav has
-#: no key of ours to hang a ``.st-key-*`` class on, so the step points at the
-#: frontend's stable test id instead.
-NAV_SELECTOR = '[data-testid="stTopNavLinkContainer"]'
-
 #: Nav entries: view constant → (label, icon, url path). The labels are short —
 #: "Scanpath", not "Scanpath Visualization" — because the nav sits in Streamlit's
 #: header strip beside the toolbar, where a long label crowds it. The exception
@@ -63,14 +58,11 @@ _NAV_PAGES = {
 #: These are not views. Each one opens a dialog over whatever you were already
 #: looking at — see :func:`render_nav` for the bounce that makes that work.
 _HELP_PAGES = {
-    "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
-    "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
-    "help_about": ("About", ICONS["about"], "help-about"),
-    # Last, where a help menu's *Send feedback* usually sits: it is where you
-    # go when the other entries haven't answered your question.
+    "help_tutorials": ("Task guides", ICONS["tutorials"], "help-tutorials"),
+    "help_faq": ("Troubleshooting & feedback", ICONS["faq"], "help-faq"),
+    "help_about": ("About & citation", ICONS["about"], "help-about"),
+    # A hidden page keeps existing feedback bookmarks working.
     "help_feedback": ("Send feedback", ICONS["feedback"], "help-feedback"),
-    # Debug is not listed here: it is a developer tool, opened from a small
-    # button under About → App details (`app._about_dialog`).
 }
 
 #: The nav section heading the entries above collapse under.
@@ -131,7 +123,9 @@ def switch_to_view(view: str) -> None:
     next run.
     """
     if view in _NAV_PAGES:
-        st.switch_page(_view_page(view))
+        # Replace the previous page's parameters explicitly. The Corpus subtab
+        # binds its selection to the URL, so the default clear can be refused.
+        st.switch_page(_view_page(view), query_params={})
 
 
 def _arm_help_action(entry: str) -> None:
@@ -141,17 +135,15 @@ def _arm_help_action(entry: str) -> None:
     ``app.main``; the dialog itself is drawn there. Imports are local because
     ``app`` imports this module.
     """
-    from scanpath_studio import tour
-
     if entry == "help_tutorials":
+        from scanpath_studio import tour
+
         tour._arm_tutorial_library()
-    elif entry == "help_faq":
-        tour._arm_faq()
     elif entry == "help_about":
         from scanpath_studio import app
 
         app._arm_about()
-    elif entry == "help_feedback":
+    elif entry in {"help_faq", "help_feedback"}:
         from scanpath_studio import feedback
 
         feedback._arm_feedback()
@@ -188,22 +180,26 @@ def render_nav() -> str:
     # — Streamlit's own documented behaviour for `position="top"`, so ❓ Help
     # opens a menu with no CSS of ours.
     action_pages = {
-        entry: st.Page(_unused_page_body, title=label, icon=icon, url_path=url_path)
+        entry: st.Page(
+            _unused_page_body,
+            title=label,
+            icon=icon,
+            url_path=url_path,
+            visibility="hidden" if entry == "help_feedback" else "visible",
+        )
         for entry, (label, icon, url_path) in _HELP_PAGES.items()
     }
     selected = st.navigation(
         {
             "": list(pages.values()),
             HELP_SECTION: [
+                action_pages["help_tutorials"],
+                action_pages["help_faq"],
                 st.Page(
                     build_info().docs_url, title="Documentation", icon=ICONS["docs"]
                 ),
-                st.Page(
-                    build_info().docs_url + "whats-new/",
-                    title="What's new",
-                    icon=ICONS["update"],
-                ),
-                *action_pages.values(),
+                action_pages["help_about"],
+                action_pages["help_feedback"],
             ],
         },
         position="top",

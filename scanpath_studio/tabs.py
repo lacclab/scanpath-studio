@@ -6357,6 +6357,7 @@ def render_single_trial_tab(
     # Passed by ``app.main`` (which owns the source list + wizard hooks).
     data_source_renderer: Callable[[object], None] | None = None,
     canvas_renderer: Callable[[Any], None] | None = None,
+    on_reading_selected: Callable[[bool], None] | None = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
@@ -6511,6 +6512,8 @@ def render_single_trial_tab(
     render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
 
     if not (selected_participant and selected_trial):
+        if on_reading_selected is not None:
+            on_reading_selected(False)
         return
 
     # Remember the resolved selection so the Share subtab can build a deep link
@@ -6583,6 +6586,8 @@ def render_single_trial_tab(
     # trial without them (raw gaze only, or words only) draws the static figure,
     # with those controls greyed and the reason said above the plot.
     trial_has_fixations = not trial_fixations.empty
+    if on_reading_selected is not None:
+        on_reading_selected(trial_has_fixations)
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
     # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.

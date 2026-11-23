@@ -370,6 +370,7 @@ def test_about_names_the_release_and_identifies_the_exact_dev_build(monkeypatch)
     assert f"Dev · Based on v{DEV.release}" in [caption.value for caption in at.caption]
     details = next(tab for tab in at.tabs if tab.label == "App details")
     assert any(DEV.version in caption.value for caption in details.caption)
+    assert any(f"({DEV.docs_url}whats-new/)" in row.value for row in details.markdown)
 
 
 def test_about_says_when_this_is_the_latest(monkeypatch):

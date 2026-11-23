@@ -113,8 +113,8 @@ def test_numbering_follows_the_clock_per_reading_screen_and_eye():
 
 
 def test_a_chart_field_the_reading_lacks_falls_back_with_its_pair():
-    """A link's sample-number chart on samples that carry no such column
-    opens on the screen axes, not horizontal position against itself."""
+    """A link's chart on a field the samples lack opens on the screen axes,
+    not horizontal position against itself."""
     import streamlit as st
 
     from scanpath_studio import controls
@@ -125,13 +125,23 @@ def test_a_chart_field_the_reading_lacks_falls_back_with_its_pair():
     trial_samples = samples[
         (samples.participant_id == TRIAL[0]) & (samples.trial_id == TRIAL[1])
     ]
+    assert "pupil_diameter" not in trial_samples
     st.session_state.clear()
-    st.session_state["global_x_field"] = SAMPLE_INDEX
+    st.session_state["global_x_field"] = "pupil_diameter"
     st.session_state["global_y_field"] = "x"
     controls._seed_viz_state(fixations[pick], 16, words, trial_samples)
     assert (st.session_state["global_x_field"], st.session_state["global_y_field"]) == (
         "x",
         "y",
+    )
+    # Timestamped samples are numbered when drawn, so a sample-number chart stays.
+    assert SAMPLE_INDEX not in trial_samples
+    st.session_state["global_x_field"] = SAMPLE_INDEX
+    st.session_state["global_y_field"] = "x"
+    controls._seed_viz_state(fixations[pick], 16, words, trial_samples)
+    assert (st.session_state["global_x_field"], st.session_state["global_y_field"]) == (
+        SAMPLE_INDEX,
+        "x",
     )
     # A chart the reading can draw is kept.
     st.session_state["global_x_field"] = "timestamp_ms"

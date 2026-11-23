@@ -4359,6 +4359,10 @@ def numeric_field_options(
         fields.extend(
             f for f in charts.SAMPLE_FIELDS if f in raw_gaze and f not in fields
         )
+        # Samples recorded with a clock are numbered when the chart is drawn
+        # (`chart_axes.with_sample_index`), so the sample number is always an axis.
+        if charts.SAMPLE_INDEX not in fields:
+            fields.append(charts.SAMPLE_INDEX)
     return fields
 
 
@@ -6094,8 +6098,9 @@ def _render_fix_range_slider(
     checkbox opts into the sticky behaviour (the window is re-applied to every
     trial, clamped to each one's length).
 
-    The settings file restores the window and its all-trials scope. A URL,
-    CLI command or API call addresses one reading and only carries its window.
+    The settings file and a Share link restore the window and its all-trials
+    scope. A CLI command or API call addresses one reading and only carries
+    its window.
 
     ``single_fix_range`` itself reaches all four surfaces: the
     ``?fix_range=lo,hi`` link param, ``render --fix-index-range`` and ``api``'s

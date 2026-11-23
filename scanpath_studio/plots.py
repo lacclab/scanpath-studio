@@ -10150,14 +10150,15 @@ def make_word_profile_figure(
                 ),
             )
         )
+    band = f", {spread_label} band" if any(t.fill == "toself" for t in fig.data) else ""
     fig.update_layout(
         height=height,
         width=canvas_width,
         autosize=False,
-        margin=dict(l=60, r=10, t=45, b=45),
+        margin=dict(l=60, r=10, t=65, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title=f"{measure_label} by word — cohort {aggregate}, {spread_label} band",
+        title=f"{measure_label}<br><sup>By word · cohort {aggregate}{band}</sup>",
         xaxis=dict(title="Word (reading order)"),
         yaxis=dict(title=measure_label),
         showlegend=not single,
@@ -10334,6 +10335,7 @@ def make_corpus_overview_figure(
     base_font_size: int,
     font_family: str,
     colors: Sequence[str] | None = None,
+    as_percent: bool = False,
 ) -> go.Figure:
     """Rank the measured groups by mean, with a line from minimum to maximum."""
     stats = [value_col, "lo", "hi"]
@@ -10351,6 +10353,10 @@ def make_corpus_overview_figure(
         raise ValueError(
             "Each measured overview row needs a finite mean, minimum (lo) and maximum (hi)."
         )
+    if as_percent and ((lo < 0).any() or (hi > 1).any()):
+        raise ValueError(
+            "Supply overview percentages as proportions from 0 to 1, including their bounds."
+        )
     if ((mean < lo) & ~np.isclose(mean, lo, rtol=1e-12, atol=0)).any() or (
         (mean > hi) & ~np.isclose(mean, hi, rtol=1e-12, atol=0)
     ).any():
@@ -10362,6 +10368,7 @@ def make_corpus_overview_figure(
     )
     names = rows[group_col].astype(str).tolist()
     color = colors[0] if colors else DEFAULT_FIXATION_COLOR
+    fmt = ".1%" if as_percent else ".4~g"
     fig = go.Figure(
         go.Scatter(
             x=rows[value_col],
@@ -10378,7 +10385,10 @@ def make_corpus_overview_figure(
                 width=4,
             ),
             customdata=list(zip(names, rows["lo"], rows["hi"], strict=True)),
-            hovertemplate="<b>%{customdata[0]}</b><br>Mean %{x:.4~g}<br>Range %{customdata[1]:.4~g} to %{customdata[2]:.4~g}<extra></extra>",
+            hovertemplate=(
+                "<b>%{customdata[0]}</b>"
+                f"<br>Mean %{{x:{fmt}}}<br>Range %{{customdata[1]:{fmt}}} to %{{customdata[2]:{fmt}}}<extra></extra>"
+            ),
         )
     )
     truncated = len(rows) < len(measured)
@@ -10405,7 +10415,11 @@ def make_corpus_overview_figure(
         showgrid=False,
         zeroline=False,
     )
-    fig.update_xaxes(title_text=measure_label, automargin=True)
+    fig.update_xaxes(
+        title_text=measure_label,
+        automargin=True,
+        tickformat="~%" if as_percent else None,
+    )
     return fig
 
 
@@ -10456,6 +10470,7 @@ def make_distribution_figure(
                     opacity=0.7,
                     box_visible=True,
                     meanline_visible=True,
+                    spanmode="hard",
                     points=False,
                 )
             )

@@ -399,9 +399,9 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Compare this participant with the others",
-                "Use **Distribution vs cohort** to compare this participant "
-                "with the others in the selection. Check the sample size "
-                "alongside the plotted values.",
+                "Choose **Compare with other participants**. For a duration, "
+                "compare where the two distributions fall. For a rate, use "
+                "the word counts beneath each percentage.",
                 ".st-key-tutorial_per_reader_view",
                 corpus_subtab="Per participant",
                 view=_VIEW_CORPUS,

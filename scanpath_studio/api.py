@@ -1857,6 +1857,7 @@ def plot_corpus_figure(
     measure_label: str = "Value",
     series_col: str = "series",
     value_col: str = "value",
+    as_percent: bool = False,
     colors: tuple[str, ...] | None = None,
     canvas_width: int = 1000,
     base_font_size: int = 14,
@@ -1877,6 +1878,8 @@ def plot_corpus_figure(
             ``series_col``.
         series_col: The group ID for an overview, or the column naming each overlaid series.
         value_col: The column holding the values.
+        as_percent: Display overview proportions as percentages on the axis and in
+            hover labels. Supply values and bounds on the 0–1 scale.
         colors: The series' colors, in order. Left out, the app's palette.
         canvas_width: The figure's width in px.
         base_font_size: The base font size in px.
@@ -1891,11 +1894,14 @@ def plot_corpus_figure(
     """
     kind = str(kind).lower()
     _require_corpus_columns(data, kind, value_col, series_col)
+    if as_percent and kind != "overview":
+        raise ValueError("Percentage formatting is available for overview figures.")
     if kind == "overview":
         return make_corpus_overview_figure(
             data,
             group_col=series_col,
             value_col=value_col,
+            as_percent=as_percent,
             measure_label=measure_label,
             canvas_width=canvas_width,
             base_font_size=base_font_size,

@@ -27,8 +27,10 @@ need [reading measures in the Words table](../../guides/loading-data/index.md#re
 the bundled demo includes them. To compare participants on one text, their
 trials of that text must share one text ID.
 
-In **Overview**, choose **Text** or **Participant** under **Summarize by**.
-Select a point to see its contributing readings and open the corresponding profile.
+In **Overview**, choose **Text** to compare passages or **Participant** to
+compare readers. Select a dot to see its mean, range and how many readings
+contributed. **Open word profile** shows where in a text the values change.
+**Open participant profile** compares one reader’s word values with the others.
 
 ## Keep the result
 

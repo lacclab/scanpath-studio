@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from streamlit.testing.v1 import AppTest
+from streamlit.util import calc_hash
 
-from scanpath_studio import tabs
+from scanpath_studio import api, tabs
 from scanpath_studio.aggregation import (
     MEASURES,
     READING_KEY,
@@ -22,6 +24,7 @@ from scanpath_studio.aggregation import (
     paired_group_summary,
     resolve_group_spec,
 )
+from tests.conftest import APP_SCRIPT
 
 ADV = {"difficulty_level": ["Adv"]}
 ELE = {"difficulty_level": ["Ele"]}
@@ -188,8 +191,6 @@ def _groups_app():
 
 @pytest.mark.parametrize("owner", ["words", "fixations"])
 def test_the_groups_view_compares_the_two_readings(owner):
-    from streamlit.testing.v1 import AppTest
-
     at = AppTest.from_function(_groups_app)
     at.session_state["_owner"] = owner
     at.session_state["cmp_mode"] = "Independent filter sets"
@@ -209,3 +210,114 @@ def test_the_groups_view_compares_the_two_readings(owner):
     bars = at.session_state["_bars"]
     by_group = {row["group"]: row["value"] for row in bars}
     assert by_group == {"Group A": 100.0, "Group B": 300.0}
+
+
+def _bookmarked_groups():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at._page_hash = calc_hash("corpus-analysis")
+    at.query_params["corpus_subtab"] = "Groups"
+    return at
+
+
+@pytest.mark.parametrize("owner", ["words", "fixations"])
+def test_a_field_on_one_table_can_split_both_groups(owner):
+    at = AppTest.from_function(_groups_app)
+    at.session_state["_owner"] = owner
+    at.session_state["cmp_view"] = "Side-by-side summary bars"
+    at.run(timeout=60)
+    assert not at.exception
+    assert at.selectbox(key="cmp_field").value == "difficulty_level"
+    assert [r["value"] for r in at.session_state["_bars"]] == [100.0, 300.0]
+
+
+def test_group_field_keeps_values_with_different_filter_spellings():
+    words = pd.DataFrame({"difficulty_level": [1, True, None]})
+    assert tabs._both_frame_values(words, pd.DataFrame(), "difficulty_level") == [
+        "1",
+        "True",
+    ]
+
+
+def test_profile_becomes_group_a_and_an_unfinished_split_has_no_result(
+    experimental_off,
+):
+    at = _bookmarked_groups().run()
+    at.multiselect(key="pgrp_g").set_value(["Ele"]).run()
+    at.toggle(key="groups_compare").set_value(True).run()
+    assert at.multiselect(key="cmp_a").value == ["Ele"]
+    assert at.multiselect(key="cmp_b").value == ["Adv"]
+    at.selectbox(key="cmp_view").select("Group means & difference").run()
+    downloads = {"dl_cmp21", "dl_cmp21_recipe"}
+    assert downloads <= {button.key for button in at.download_button}
+
+    # Either empty side or both together must hold back the result and its files.
+    for key, values in (("cmp_a", []), ("cmp_b", []), ("cmp_a", ["Adv"])):
+        at.multiselect(key=key).set_value(values).run()
+        assert not at.exception
+        assert any(
+            "at least one value for each group" in info.value for info in at.info
+        )
+        assert "Difference (A − B)" not in {metric.label for metric in at.metric}
+        assert downloads.isdisjoint(button.key for button in at.download_button)
+
+    at.multiselect(key="cmp_b").set_value(["Ele"]).run()
+    assert downloads <= {button.key for button in at.download_button}
+    at.toggle(key="groups_compare").set_value(False).run()
+    assert at.multiselect(key="pgrp_g").value == ["Adv"]
+
+
+def test_independent_filters_keep_the_named_group_and_allow_the_whole_pool(
+    experimental_off,
+):
+    at = _bookmarked_groups().run()
+    at.radio(key="pgrp_mode").set_value("Independent filter sets").run()
+    at.text_input(key="pgrp_set0_label").set_value("Elementary readings")
+    at.multiselect(key="pgrp_set0_difficulty_level").set_value(["Ele"]).run()
+    at.toggle(key="groups_compare").set_value(True).run()
+    assert at.radio(key="cmp_mode").value == "Independent filter sets"
+    assert at.multiselect(key="cmp_setA_difficulty_level").value == ["Ele"]
+    assert at.text_input(key="cmp_setA_label").value == "Elementary readings"
+    assert at.multiselect(key="cmp_setB_difficulty_level").value == []
+    at.selectbox(key="cmp_view").select("Group means & difference").run()
+    assert not at.exception
+    words = api.load_sample_data(names="canonical").words
+    for label, rows in (
+        ("Elementary readings mean", words[words["difficulty_level"] == "Ele"]),
+        ("Group B mean", words),
+    ):
+        mean = (
+            rows.groupby("participant_id")["total_fixation_duration_ms"].mean().mean()
+        )
+        assert next(m.value for m in at.metric if m.label == label) == f"{mean:.2f} ms"
+    assert any("all words with a value" in caption.value for caption in at.caption)
+    assert any("no filters includes all selected trials" in c.value for c in at.caption)
+
+
+def test_pool_without_a_split_field_shows_how_to_continue(experimental_off):
+    words, fix = api.load_sample_data(names="canonical")
+    reading = words.iloc[0]
+    selection = {"participant_id": reading.participant_id, "trial_id": reading.trial_id}
+    at = _bookmarked_groups()
+    at.session_state["data_source_choice"] = "One reading"
+    at.session_state["_datasets"] = {
+        "One reading": {
+            "words": words[words[list(selection)].eq(selection).all(axis=1)],
+            "fixations": fix[fix[list(selection)].eq(selection).all(axis=1)],
+            "raw_gaze": pd.DataFrame(),
+        }
+    }
+    at.run()
+    assert any("No field is available to split" in info.value for info in at.info)
+    assert not at.get("plotly_chart")
+    at.toggle(key="groups_compare").set_value(True).run()
+    at.selectbox(key="cmp_view").select("Group means & difference").run()
+    assert not at.exception
+    assert "dl_cmp21" not in {button.key for button in at.download_button}
+    at.radio(key="cmp_mode").set_value("Independent filter sets").run()
+    assert not at.exception
+    assert any(
+        "Both groups contain the same readings" in note.value for note in at.info
+    )
+    assert (
+        next(m.value for m in at.metric if m.label == "Difference (A − B)") == "0.00 ms"
+    )

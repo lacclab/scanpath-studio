@@ -29,16 +29,25 @@ are averaged before they contribute to the text mean.
 Comparisons across texts use the Text ID mapped in the Words table. Without
 one, the overview opens by participant. The summary needs measurements for
 individual readings. It excludes shared stimulus values copied across readers.
+Older saved datasets that predate this mapping information use their stored
+text IDs. If different passages share an ID, map the passage column before
+comparing readers word by word.
 
 Select a dot, or choose an ID in the inspector, to see how many readings and
 word rows contributed. **Open word profile** follows a text down to individual
-words. **Open participant profile** compares that reader’s distribution with
-the other selected readers. Both carry the chosen measure into the profile.
+words. **Open participant profile** compares that reader with the other
+selected participants. For a duration, the wider parts of a violin show where
+more observations fall. For a skip or regression rate, the profile shows a
+percentage and the word counts behind it. Every measured word counts equally
+in this comparison, so a longer reading can have more influence here than in
+the Overview. Both profiles open with the measure you selected.
 **Compare groups** takes the same measure into a two-group comparison.
 
-The chart shows up to 12 groups with the highest means. The **Summary table**
+The chart starts with the 12 highest means. Selecting another ID in the
+inspector moves the chart to its place in the ranking. The **Summary table**
 and CSV include every group with the required IDs, including those with no
-finite values. Their counts distinguish missing measurements from recorded zeros.
+recorded values. Rates appear as percentages on screen and as proportions
+from 0 to 1 in the CSV.
 
 ## Choose a view
 
@@ -74,8 +83,11 @@ time**, use the Fixations table.
 Under **Define groups by**, choose **Split a field** to group trials by the
 values of a column, or **Independent filter sets** to define a group using filters.
 Turn on **Compare a second group** to define group B. You can then compare
-the groups side by side, including their means and the difference between them.
-These views provide descriptive summaries; they do not run significance tests.
+the groups side by side and read descriptive statistics for their means and
+differences.
+For skip and regression rates, **Group means & difference** shows each mean
+as a percentage and their difference in percentage points. A word-by-word
+comparison across readings needs a shared Text ID in the Words table.
 
 For a repeated-measures design, **Within-participant contrast** shows each
 participant's mean in A and B and the difference A − B. The summary averages
@@ -126,6 +138,9 @@ Start from a tidy summary table, such as a **Cohort profile** table downloaded
 from Corpus Analysis. A word profile needs `word_id` and `value` columns, with
 optional `lo` and `hi` for a band. The downloaded table names the word ID column
 as your data does, so rename it to `word_id` if needed.
+For an Overview CSV of skip or regression rates, use `kind="overview"` with
+`as_percent=True` in Python, or `--kind overview --percent` with the CLI.
+Set `series_col` or `--series-col` to the CSV’s text or participant ID column.
 For a trend over trial order, see [Across the experiment](../../gallery/across-experiment.md).
 
 ??? example "Python and CLI: word profile"

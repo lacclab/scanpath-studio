@@ -92,7 +92,7 @@ def test_unmapped_trial_numbers_and_nullable_empty_readings():
     at.selectbox(key="corpus_inspect_participant").select("b").run()
     assert not at.exception
     assert at.metric[0].value == "—"
-    assert any("0 of 1 word rows" in c.value for c in at.caption)
+    assert any("no recorded values for this measure" in c.value for c in at.caption)
     # A mapped Text ID can legitimately equal a trial ID. Only that reader
     # belongs to text 1, even though the generated ID has the same spelling.
     mixed = words.assign(**{data.TEXT_ID_MAPPED: [True, False]})
@@ -260,6 +260,112 @@ def test_chart_preserves_large_numeric_ids_in_hover_labels():
     assert [p[0] for p in fig.data[0].customdata] == list(map(str, ids))
 
 
+def test_inspecting_a_lower_rank_moves_the_chart_to_that_participant():
+    at = AppTest.from_function(_overview_app)
+    ids = [f"reader-{n:02d}" for n in range(15)]
+    at.session_state["words"] = pd.DataFrame(
+        {
+            "participant_id": ids,
+            "trial_id": ["one"] * len(ids),
+            "total_fixation_duration_ms": list(range(15, 0, -1)),
+        }
+    )
+    at.run()
+    at.selectbox(key="corpus_inspect_participant").select(ids[-2]).run()
+    assert not at.exception
+    fig = json.loads(at.get("plotly_chart")[0].proto.spec)
+    assert fig["layout"]["yaxis"]["ticktext"] == ids[12:]
+    assert fig["data"][0]["marker"]["symbol"] == ["circle", "diamond", "circle"]
+    assert any("ranks 13–15 of 15" in c.value for c in at.caption)
+
+
+def test_rate_chart_and_table_display_the_underlying_proportions_as_percentages(
+    tmp_path, monkeypatch
+):
+    at = AppTest.from_function(_overview_app)
+    at.session_state["words"] = pd.DataFrame(
+        {
+            "participant_id": ["a", "a", "b"],
+            "trial_id": ["t"] * 3,
+            "skip_flag": [True, False, False],
+        }
+    )
+    at.session_state["corpus_summary_table"] = True
+    at.run()
+    assert not at.exception
+    assert at.metric[0].value == "50.0%"
+    assert at.dataframe[0].value["value"].tolist() == [0.5, 0.0]
+    assert (
+        json.loads(at.dataframe[0].proto.columns)["value"]["type_config"]["format"]
+        == "percent"
+    )
+    fig = json.loads(at.get("plotly_chart")[0].proto.spec)
+    csv = tmp_path / "skip.csv"
+    at.dataframe[0].value.to_csv(csv, index=False)
+    figures = []
+    monkeypatch.setattr(
+        api, "save_figure", lambda fig, path: figures.append(fig) or path
+    )
+    cli.main(
+        [
+            "corpus",
+            "--input",
+            str(csv),
+            "--kind",
+            "overview",
+            "--series-col",
+            "participant_id",
+            "--percent",
+            "-o",
+            str(tmp_path / "skip.html"),
+        ]
+    )
+    for output in (fig, figures[0].to_plotly_json()):
+        assert output["layout"]["xaxis"]["tickformat"].endswith("%")
+        assert "%{x:.1%}" in output["data"][0]["hovertemplate"]
+
+
+def _participant_app():
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.tabs import render_per_reader_tab
+
+    render_per_reader_tab(
+        st.session_state["words"],
+        pd.DataFrame(),
+        viz_settings={},
+        canvas_width=700,
+        canvas_height=500,
+        base_font_size=14,
+        font_family="Arial",
+    )
+
+
+def test_participant_profile_explains_missing_comparisons_and_counts_binary_words():
+    at = AppTest.from_function(_participant_app)
+    at.session_state["words"] = pd.DataFrame(
+        {
+            "participant_id": ["a", "a", "b"],
+            "trial_id": ["t"] * 3,
+            "skip_flag": [True, False, pd.NA],
+            "first_fixation_ms": [np.nan, np.nan, 200],
+        }
+    )
+    at.run()
+    assert not at.exception
+    assert any("Participant a has no recorded values" in s.value for s in at.info)
+    fig = json.loads(at.get("plotly_chart")[0].proto.spec)
+    assert [trace["name"] for trace in fig["data"]] == ["Other participants"]
+    assert fig["data"][0]["spanmode"] == "hard"
+    at.selectbox(key="prdr_measure").select(agg.MEASURES["skip"].label).run()
+    assert not at.exception
+    assert any("No other participant has a value" in s.value for s in at.info)
+    assert [(m.label, m.value) for m in at.metric] == [("Participant a", "50.0%")]
+    assert any("1 of 2 word observations" in c.value for c in at.caption)
+    assert not at.get("plotly_chart")
+
+
 def test_excluding_trial_fallbacks_preserves_distinct_large_numeric_text_ids():
     measure = agg.MEASURES["tfd"]
     ids = [2**60, 2**60 + 1, 2**60 + 2]
@@ -285,6 +391,26 @@ def test_overview_rejects_invalid_ranges(value, lo, hi):
     table = pd.DataFrame({"series": ["p1"], "value": [value], "lo": [lo], "hi": [hi]})
     with pytest.raises(ValueError):
         api.plot_corpus_figure(table, kind="overview")
+
+
+def test_percent_overview_requires_proportions():
+    counts = pd.DataFrame({"series": ["p1"], "value": [40], "lo": [15], "hi": [60]})
+    with pytest.raises(ValueError, match="proportions from 0 to 1"):
+        api.plot_corpus_figure(counts, kind="overview", as_percent=True)
+
+
+def test_compare_groups_shows_rate_changes_in_percentage_points():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    pin_view(at, "Corpus Analysis")
+    at.session_state["corpus_measure"] = "skip"
+    at.run()
+    at.button(key="corpus_open_groups").click().run()
+    assert not at.exception
+    means = [m.value for m in at.metric if m.label.endswith(" mean")]
+    assert len(means) == 2 and all(v.endswith("%") for v in means)
+    a, b = (float(v.removesuffix("%")) for v in means)
+    diff = next(m for m in at.metric if "percentage points" in m.label)
+    assert float(diff.value) == pytest.approx(a - b, abs=0.15)
 
 
 def test_deselection_after_leaving_the_chart_keeps_the_inspected_text(monkeypatch):

@@ -1,1 +1,1 @@
-Corpus Analysis opens with a comparison across texts or participants. Select a point to inspect its readings, open its profile, or save the full summary and its reproducible recipe.
+Corpus Analysis opens with a comparison across texts or participants. Select a point to see what its mean represents, inspect word values or compare readers, and download the full summary and its recipe.

@@ -4065,6 +4065,11 @@ def _corpus_parser() -> argparse.ArgumentParser:
         help="The value column (default: value).",
     )
     parser.add_argument(
+        "--percent",
+        action="store_true",
+        help="Show overview values and bounds stored as proportions (0–1) as percentages.",
+    )
+    parser.add_argument(
         "--primary-color",
         help=f"First series color (overview: {DEFAULT_FIXATION_COLOR}, other figures: #1f77b4).",
     )
@@ -4100,6 +4105,7 @@ def corpus(argv: list[str]) -> None:
             measure_label=args.measure_label,
             series_col=args.series_col,
             value_col=args.value_col,
+            as_percent=args.percent,
             colors=(
                 args.primary_color
                 or (DEFAULT_FIXATION_COLOR if args.kind == "overview" else "#1f77b4"),

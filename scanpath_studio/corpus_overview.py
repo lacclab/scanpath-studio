@@ -17,10 +17,11 @@ from .aggregation import (
 )
 from .analysis_recipe import OVERVIEW_VIEW
 from .column_names import active_all
+from .computations import measure_description
 from .constants import ICONS, PLOTLY_CONFIG, plural
 from .controls import _drop_stale
 from .data import AOI_TRIAL_ID, carries_mapped_text, frame_fingerprint
-from .plots import make_corpus_overview_figure
+from .plots import OVERVIEW_VISIBLE_ROWS, make_corpus_overview_figure
 from .session_keys import CORPUS_GROUP_BY, CORPUS_MEASURE, CORPUS_SUBTAB
 
 PENDING_TEXT = "_corpus_overview_open_text"
@@ -48,9 +49,38 @@ def _open_profile(group_by: str, identifier, measure_label: str) -> None:
         state["prdr_measure"] = measure_label
 
 
+def keep_first_group() -> None:
+    """Carry the first group's definition across the one- and two-group controls."""
+    state = st.session_state
+    adding = state["groups_compare"]
+    source, target = ("pgrp", "cmp") if adding else ("cmp", "pgrp")
+    mode = state.get(f"{source}_mode")
+    if mode is None:
+        return
+    state[f"{target}_mode"] = mode
+    if mode == "Split a field":
+        field = state.get(f"{source}_field")
+        if field is None:
+            return
+        if adding and field != state.get("cmp_field"):
+            state.pop("cmp_b", None)
+        state[f"{target}_field"] = field
+        old_values, new_values = ("pgrp_g", "cmp_a") if adding else ("cmp_a", "pgrp_g")
+        state[new_values] = state.get(old_values, [])
+    else:
+        old, new = (
+            ("pgrp_set0_", "cmp_setA_") if adding else ("cmp_setA_", "pgrp_set0_")
+        )
+        for key in state:
+            if key.startswith(old):
+                state[new + key.removeprefix(old)] = state[key]
+
+
 def _open_groups(measure_label: str) -> None:
     st.session_state[CORPUS_SUBTAB] = "Groups"
-    st.session_state["groups_compare"] = True
+    if not st.session_state.get("groups_compare"):
+        st.session_state["groups_compare"] = True
+        keep_first_group()
     st.session_state["cmp_view"] = GROUP_MEANS_VIEW
     st.session_state["cmp_measure"] = measure_label
 
@@ -79,19 +109,39 @@ def _inspector(table: pd.DataFrame, field: str, group_by: str, measure: Measure)
         label_visibility="collapsed",
     )
     row = table.loc[table[field].eq(identifier)].iloc[0]
-    st.metric("Mean", _format_value(row["value"], measure))
+    by_text = group_by == "text"
+    st.metric(
+        "Mean across participants" if by_text else "Mean across readings",
+        _format_value(row["value"], measure),
+        help=(
+            "Each reading is one participant’s trial. First, average the measured words "
+            "within each reading. "
+            + (
+                "Repeated readings of this text are averaged for each participant, "
+                "then each participant contributes equally."
+                if by_text
+                else "Each reading then contributes equally to this participant’s mean."
+            )
+        ),
+    )
     if pd.notna(row["hi"]) and row["hi"] > row["lo"]:
         unit = "Participant means" if group_by == "text" else "Reading means"
         st.write(
             f"{unit} ranged from **{_format_value(row['lo'], measure)}** to **{_format_value(row['hi'], measure)}**."
         )
-    contributors = plural(int(row["n_readings"]), "reading")
-    if group_by == "text":
-        contributors += f" from {plural(int(row['n_participants']), 'participant')}"
-    st.caption(
-        f"{contributors} contributed. {int(row['n_values']):,} of "
-        f"{int(row['n_word_rows']):,} word rows have a value."
-    )
+    if row["n_values"]:
+        contributors = plural(int(row["n_readings"]), "reading")
+        if by_text:
+            contributors += f" from {plural(int(row['n_participants']), 'participant')}"
+        st.caption(
+            f"{contributors} contributed. {int(row['n_values']):,} of "
+            f"{int(row['n_word_rows']):,} word observations had a recorded value."
+        )
+    else:
+        st.caption(
+            f"This {group_by} has no recorded values for this measure. "
+            f"Choose another {group_by} or reading measure."
+        )
     st.button(
         "Open word profile" if group_by == "text" else "Open participant profile",
         icon=ICONS["open"],
@@ -164,6 +214,7 @@ def render_corpus_overview(
         help="Compare this measure between two groups in the filtered trial pool.",
     )
     group_by = grouped.lower()
+    st.caption(measure_description(measure.column))
     if not has_text:
         st.caption(
             "Map a Text ID in the Words table to compare texts across participants."
@@ -183,29 +234,37 @@ def render_corpus_overview(
     with detail.container(border=True, key="corpus_overview_detail"):
         selected = _inspector(table, field, group_by, measure)
     with plot.container(border=True, key="corpus_overview_plot"):
-        st.markdown(f"#### Mean by {group_by}")
+        st.markdown(f"#### {measure.label.partition(' — ')[0]} by {group_by}")
         if group_by == "text":
-            explanation = "Dots show text means. Lines span the lowest to highest participant mean."
+            explanation = "Each dot is a text’s mean across participants. Its line spans their lowest and highest means."
         else:
-            explanation = "Dots show participant means. Lines span the lowest to highest reading mean."
-        st.caption(
-            explanation
-            + (" Rates are plotted from 0 to 1." if measure.is_rate else "")
-            + " Select a point to inspect it."
-        )
-        if table["value"].notna().any():
+            explanation = "Each dot is a participant’s mean across readings. Its line spans their lowest and highest reading means."
+        measured = table.loc[table["value"].notna()]
+        if not measured.empty:
+            st.caption(explanation + " Select a dot to inspect it.")
+            # The summary is ranked. Keep the selected ID visible even when
+            # the corpus is larger than one page of the chart.
+            selected_rank = pd.Index(measured[field]).get_indexer([selected])[0]
+            start = (
+                max(0, selected_rank) // OVERVIEW_VISIBLE_ROWS * OVERVIEW_VISIBLE_ROWS
+            )
+            page = measured.iloc[start : start + OVERVIEW_VISIBLE_ROWS]
+            if len(measured) > OVERVIEW_VISIBLE_ROWS:
+                st.caption(
+                    f"Showing ranks {start + 1:,}–{start + len(page):,} of {len(measured):,}. "
+                    f"Choose a {group_by} in the inspector to see its rank."
+                )
             fig = make_corpus_overview_figure(
-                table,
+                page,
                 group_col=field,
                 measure_label=measure.axis_label,
+                as_percent=measure.is_rate,
                 colors=colors,
                 canvas_width=canvas_width,
                 base_font_size=base_font_size,
                 font_family=font_family,
             )
-            # The chart shows the first measured rows of the ranked table. Keep
-            # their typed IDs for the picker; Plotly uses strings for display.
-            ids = table[field].iloc[: len(fig.data[0].x)].tolist()
+            ids = page[field].tolist()
             fig.update_traces(
                 marker_symbol=["diamond" if i == selected else "circle" for i in ids]
             )
@@ -227,15 +286,9 @@ def render_corpus_overview(
         on_change="rerun",
     ) as panel:
         if panel.open:
-            _show_table(table, field, grouped)
-    st.caption(
-        "Each reading contributes its mean across word rows with a finite value. "
-        + (
-            "When someone reads a text more than once, their readings are averaged first. Each participant then has equal weight."
-            if group_by == "text"
-            else "Each contributing reading has equal weight in its participant’s mean."
-        )
-    )
+            _show_table(table, field, grouped, measure)
+            if measure.is_rate:
+                st.caption("The CSV stores rates as proportions from 0 to 1.")
     download(
         st,
         table,
@@ -248,20 +301,27 @@ def render_corpus_overview(
     )
 
 
-def _show_table(table: pd.DataFrame, field: str, grouped: str) -> None:
+def _show_table(
+    table: pd.DataFrame, field: str, grouped: str, measure: Measure
+) -> None:
     names = active_all(st.session_state)
+    unit = f" ({measure.unit})" if measure.unit else ""
+    stats = {
+        col: st.column_config.NumberColumn(
+            label + unit, format="percent" if measure.is_rate else "%.2f"
+        )
+        for col, label in (("value", "Mean"), ("lo", "Minimum"), ("hi", "Maximum"))
+    }
     st.dataframe(
         table,
         hide_index=True,
         width="stretch",
         column_config={
             field: st.column_config.Column(grouped, help=names.display(field)),
-            "value": "Mean",
-            "lo": "Minimum",
-            "hi": "Maximum",
+            **stats,
             "n_readings": "Contributing readings",
             "n_participants": "Contributing participants",
-            "n_values": "Word rows with values",
-            "n_word_rows": "Word rows",
+            "n_values": "Words with a value",
+            "n_word_rows": "Word observations",
         },
     )

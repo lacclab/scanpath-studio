@@ -2,7 +2,7 @@
 
 Replay a reading in fixation order. Press **▶ Play** above the text to start this example, **⏸ Pause** to stop, or drag the time slider to inspect a moment. The example shows the first forty fixations at twice the recorded speed.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. Choose **Animation**. To replay part of the reading, set **Filters & highlights** ▾ → **Fixations** → **Index range**, here 1 to 40.
 1. In **Animation settings** → **Replay** → **Speed**, choose **×2**, then press **▶ Play** above the plot. Use **⏸ Pause** or the time slider to inspect the reading.
 1. Save the replay from **Export** → **Current figure**.

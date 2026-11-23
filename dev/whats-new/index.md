@@ -23,6 +23,7 @@
 - Bulk export can now use lossless compression for smaller PNG figures and layers.
 - Compare readings on shared numeric axes, highlight word borders in comparisons and replays, and use the fixation window and sequence line with markers hidden. Plot controls grey out when the selected view or data cannot use them.
 - Prepare the current scanpath, replay or corpus chart for a paper or slide. Download it directly, or crop it, label events and edit its caption. Print settings include journal and slide sizes.
+- Word highlights can now underline individual words in the current text color.
 
 ### Changed
 
@@ -48,6 +49,11 @@
 - Bulk PNG, SVG and PDF exports reuse the browser page across trials and prepare the next figure during rendering. Large bundles download from temporary disk in small pieces as one ZIP.
 - Bulk exports run faster on large datasets whose rows are grouped by trial.
 - Corpus Analysis opens with a chart of texts or participants. Select a dot for its readings, open a word or participant profile, or choose Groups to compare two conditions. Chart settings, tables and downloads open on demand.
+- Corpus Analysis places profile shortcuts beside Texts and Participants, groups the dataset counts with their filters, and brings the reading measure and figure style together above the chart.
+- Plot controls now show Colorblind-safe, Grayscale and High contrast as palette tiles with swatches, place My views below the view tiles, and put the Animation switch beside its playback settings.
+- The main navigation tab for inspecting a reading is now called Scanpath View.
+- The software credits and citations now include Carlson Büth and list Maya Grossman before Keren Gruteke Klein and Deborah N. Jakobi before Ella Lion.
+- Data Management now lists the dataset’s supplied reading measures under Tables → Words.
 
 ### Removed
 

@@ -2,7 +2,7 @@
 
 Two complete readings of a shorter text, labeled Participant A and Participant B.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. Turn on **Compare**. In **Trial B**, choose another participant's reading of the same text.
 1. In **Compare settings**, set **Layout** to **Overlay** and name the two readings under **Reading labels**. To compare the complete readings, keep the **Index range** of both scanpaths at the full range, under **Filters & highlights** ▾ → **Reading A** and **Reading B**.
 1. In **Figure** → **Screen & framing**, tick **Crop to data**. Under **Margins and border color**, untick the automatic margin and enter 50 px.

@@ -2,7 +2,7 @@
 
 Build a ZIP of static figures and data tables for a set of trials.
 
-Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
+Before you start, switch to **Full** at the top of the **Scanpath View** ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
 
 1. [Set the figure's design](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/export-one-figure/#1-choose-the-view) once. Each exported trial uses that design, without animation or a comparison partner.
 1. Open the **Export** tab. Under **Export bundle** → **Trials to include**, choose **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**.

@@ -2,7 +2,7 @@
 
 Highlight a selected text span alongside its fixations.
 
-1. Load a Words table with a true/false column that marks the words to highlight, and your Fixations table. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
+1. Load a Words table with a true/false column that marks the words to highlight, and your Fixations table. Open the dataset in the **Scanpath View** and pick a trial in **Select trial**.
 1. In **Stimulus** ▾, tick **Highlight words** and choose that column.
 1. Under **Style**, keep **Mark text** and pick the highlight color in the box beside it. To show only the highlighted text and the fixations, turn off **Saccades**.
 

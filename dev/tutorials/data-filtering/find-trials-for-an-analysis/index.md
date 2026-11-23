@@ -2,7 +2,7 @@
 
 Locate trials containing particular fixation patterns.
 
-Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
+Before you start, switch to **Full** at the top of the **Scanpath View** ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
 
 1. Open **Filters & highlights** ▾ → **Fixations**.
 

@@ -2,7 +2,7 @@
 
 Scanpath Studio visualizes eye movements in reading. **Help** opens the documentation for your Stable or Dev build. **About & citation → App details** links to [what’s new in that build](https://lacclab.github.io/scanpath-studio/dev/whats-new/index.md).
 
-Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
+Developed by [Omer Shubi](https://omershubi.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [Ella Lion](https://ella-lion.github.io/), [Carlson Büth](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/bueth.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
 ## Cite Scanpath Studio
 
@@ -13,10 +13,11 @@ Show BibTeX and APA
 ```
 @software{Shubi_Scanpath_Studio_2026,
   author  = {Shubi, Omer and
-             Gruteke Klein, Keren and
              Grossman, Maya and
-             Lion, Ella and
+             Gruteke Klein, Keren and
              Jakobi, Deborah N. and
+             Lion, Ella and
+             B{\"u}th, Carlson and
              Reich, David R. and
              J{\"a}ger, Lena and
              Berzak, Yevgeni},
@@ -29,7 +30,7 @@ Show BibTeX and APA
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.47.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Grossman, M., Gruteke Klein, K., Jakobi, D. N., Lion, E., Büth, C., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.47.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 

@@ -2,7 +2,7 @@
 
 A figure ready for a slide or a paper. It has a title above the plot, a caption below it, the **Saccade types** legend down the right side and the **Fixation sizes** legend below the plot.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. In **Saccades** → **Color**, choose **By type**.
 1. In **Figure** → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Under **Text size and color**, set each size, here 34 px and 20 px.
 1. Under **Legends**, tick **Show** for **Fixation sizes**. Open **Legend position and style** and set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.

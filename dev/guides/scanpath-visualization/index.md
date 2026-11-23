@@ -8,7 +8,7 @@
 1. Plot controls.
 1. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
 
-The **Scanpath** view draws one reading at a time, at the size of the screen it was recorded on.
+The **Scanpath View** draws one reading at a time, at the size of the screen it was recorded on.
 
 Looking for a specific button?
 
@@ -22,10 +22,10 @@ Essentials shows:
 
 - the dataset and trial pickers with **◀ ▶**;
 - the plot, which starts with a replay on a new visit;
-- the **Animation** switch, five static views and the **Palette**;
+- the **Animation** tile, five static views and the **Palette** tiles;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. The view controls and Palette stay in the same place when you switch modes. An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
+The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. Both modes keep the selected view and palette. An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
 
 To open a mode for one visit, add `?ui=full` or `?ui=essentials` to the app's address (use `&` if the address already has a `?`). This leaves your saved choice unchanged. Links created with **Share** use the recipient's own mode.
 
@@ -59,10 +59,10 @@ Both modes start with the same **View** tiles and **Palette**. In Full, use **Fi
 | Section                  | What it controls                                                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | **View**                 | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
-| **Palette**              | choose **Default (colorblind-safe)**, **Print / grayscale**, or **High contrast**                                       |
+| **My views**             | save a named view, apply it to another reading, or share it                                                             |
+| **Palette**              | choose **Colorblind-safe**, **Grayscale**, or **High contrast**                                                         |
 | **Compare readings**     | add a second reading over this one, beside it, or below it                                                              |
 | **Animation settings**   | set playback speed, autoplay, and frame quality                                                                         |
-| **My designs**           | save a named design, apply it to another reading, or share it                                                           |
 | **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                     |
 | **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                             |
 | **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                       |
@@ -129,6 +129,6 @@ You can save each of these to a file and load it again:
 | figure settings                    | **Share** → **Settings file**                                            |
 | favorites, tags and notes          | **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | **Edit dataset** → **Download setup file**                               |
-| saved figure designs               | **My designs** → **Export**                                              |
+| saved figure designs               | **My views** → **Export**                                                |
 
 Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved work → Your session**.

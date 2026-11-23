@@ -2,12 +2,12 @@
 
 Make a figure for a talk or teaching: pink hearts for fixations, purple arrows for the eye’s movements. This hand-drawn illustration follows The → cat → sat → on → the → mat, with one fixation per word.
 
-1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
+1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the **Scanpath View** and pick a trial in **Select trial**.
 1. In **Fixations** → **Marker appearance**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Under **Position on the text**, tick **Snap to line**, and leave **Fixation index** → **Show** unticked.
 1. In **Saccades** → **Line and arrow appearance**, set **Shape** to **Arc**. In the main Saccades menu, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Line and arrow appearance** → **Arrow size** to **12**.
 1. In **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave **Stimulus** ▾ → **Highlight words** unticked.
 
-Save the look under **My designs** to apply it to your own data.
+Save the look under **My views** to apply it to your own data.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
 

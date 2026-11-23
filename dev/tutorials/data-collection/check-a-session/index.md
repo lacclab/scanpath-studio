@@ -2,7 +2,7 @@
 
 Inspect a recording and save the trials that need attention.
 
-Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
+Before you start, switch to **Full** at the top of the **Scanpath View** ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
 
 ## 1. Open the session
 
@@ -10,7 +10,7 @@ Before you start, switch to **Full** at the top of the **Scanpath** view ([Essen
 
 ## 2. Inspect a trial
 
-In the **Scanpath** view, pick a trial in **Select trial**. Turn on **Word boxes** and check:
+In the **Scanpath View**, pick a trial in **Select trial**. Turn on **Word boxes** and check:
 
 - whether the boxes match the stimulus image, if you have one;
 - where the fixations sit relative to the words;

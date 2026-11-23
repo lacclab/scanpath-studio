@@ -2,7 +2,7 @@
 
 Where fixation time concentrates.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. Turn on **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Smoothed**. Keep **Color** → **By** at **Duration (ms)**.
 1. Turn off **Fixations** and **Saccades**, and keep **Stimulus** on.
 

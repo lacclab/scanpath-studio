@@ -2,7 +2,7 @@
 
 Fixations colored by their nearest text line.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. In **Fixations** → **Color**, choose **Text line (computed)**.
 1. Keep **Saccades** and **Stimulus** on. Each fixation takes the color of the nearest line of word boxes.
 

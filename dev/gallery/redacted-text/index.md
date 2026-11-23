@@ -2,7 +2,7 @@
 
 Show where the text was without showing what it said. Each word is drawn as a rounded block over its letters. Words are also hidden in tooltips.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. In **Stimulus** ▾ → **Text**, tick **Redact**. The blocks take the text color.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)

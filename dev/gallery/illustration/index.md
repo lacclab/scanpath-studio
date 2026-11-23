@@ -3,7 +3,7 @@
 A hand-drawn two-line text, with one fixation per word in reading order: The → cat → sat → on → the → mat. Fixations sit on the lines and saccades are arcs.
 
 1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/dev/gallery/illustration/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/dev/gallery/illustration/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 340 px.
-1. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open the dataset in the **Scanpath View** and pick a trial in **Select trial**.
 1. In **Fixations** ▾, open **Position on the text** and tick **Snap to line** and **Fixation index** → **Show**. In **Saccades** → **Line and arrow appearance** → **Shape**, choose **Arc**.
 1. In **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**.
 

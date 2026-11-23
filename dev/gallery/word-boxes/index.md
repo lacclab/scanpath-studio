@@ -2,7 +2,7 @@
 
 Fixation time within each word box.
 
-1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open your data in the **Scanpath View** and pick a trial in **Select trial**.
 1. Turn on **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Word boxes**. Keep **Color** → **By** at **Duration (ms)**.
 1. Turn off **Fixations** and **Saccades**, and keep **Stimulus** on.
 

@@ -124,7 +124,7 @@ For a walkthrough inside the import wizard, choose **Setup help → Show setup g
 4. Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.
 5. Click :material/check: **Add dataset**, then :material/route: **Open in
-   Scanpath view** to see its first trial. You can also open the figure from
+   Scanpath View** to see its first trial. You can also open the figure from
    **Data Management → Current dataset**.
 
 To import similar files again, click :material/download: **Download setup file**

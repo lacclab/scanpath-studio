@@ -4533,7 +4533,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     state = st.session_state.get(SNIPPET_STATE_KEY)
     if not isinstance(state, FigureState):
         st.caption(
-            f"Open a trial on the {ICONS['view_scanpath']} Scanpath view to see "
+            f"Open a trial on the {ICONS['view_scanpath']} Scanpath View to see "
             "the code that rebuilds its figure."
         )
         return

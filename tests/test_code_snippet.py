@@ -1005,7 +1005,7 @@ def _panel(**session):
 def test_the_panel_says_what_to_do_before_a_figure_exists():
     at = _panel()
     copy = " ".join(element.value for element in at.caption)
-    assert "Scanpath view" in copy
+    assert "Scanpath View" in copy
     assert "_snippet_code_current" not in at.session_state
 
 

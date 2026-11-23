@@ -1726,7 +1726,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['confirm']} Save it",
         "body": (
-            "Click **Add dataset**, then **Open in Scanpath view** or "
+            "Click **Add dataset**, then **Open in Scanpath View** or "
             "**Add another**. Use **Download setup file** to save the mapping "
             "and recording setup. When adding similar data, choose the saved "
             "file or this dataset under *Start from*."

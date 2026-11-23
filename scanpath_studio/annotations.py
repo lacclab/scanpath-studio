@@ -1398,7 +1398,7 @@ def render_dataset_annotations(
             "",
             type="tertiary",
             width="small",
-            help="Open this trial in the Scanpath view, on its screen for a "
+            help="Open this trial in the Scanpath View, on its screen for a "
             "screen annotation.",
             on_click=_open_annotation,
             args=(open_key, records, trials, _trial_set(open_trials)),

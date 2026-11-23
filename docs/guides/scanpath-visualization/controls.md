@@ -1,6 +1,6 @@
 ---
 title: "All scanpath controls"
-description: "Every control on Scanpath Studio's Scanpath view and what it does: fixations, saccades, stimulus, word boxes, heatmap, raw gaze, filters and figure layout."
+description: "Every control on Scanpath Studio's Scanpath View and what it does: fixations, saccades, stimulus, word boxes, heatmap, raw gaze, filters and figure layout."
 ---
 
 # All controls

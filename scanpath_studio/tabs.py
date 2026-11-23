@@ -9573,7 +9573,7 @@ def _render_trials_with_open_button(
                 "",
                 type="tertiary",
                 width="small",
-                help="Show this trial's scanpath in the Scanpath view.",
+                help="Show this trial's scanpath in the Scanpath View.",
                 on_click=_open,
                 key=click_key,
             ),
@@ -10321,7 +10321,7 @@ def render_analysis_pool_bar(
         "Edit filters",
         icon=ICONS["trial_filter"],
         width="content",
-        help="The same trial filters the Scanpath view uses.",
+        help="The same trial filters the Scanpath View uses.",
         key=_POOL_POPOVER_KEY,
         on_change="rerun",
     )
@@ -10342,7 +10342,7 @@ def render_analysis_pool_bar(
             key="corpus_pool_clear",
             on_click=_clear_pool_filters,
             width="content",
-            help="Clear all trial filters, here and on the Scanpath view.",
+            help="Clear all trial filters, here and on the Scanpath View.",
         )
     return {
         "trial_filters": items,

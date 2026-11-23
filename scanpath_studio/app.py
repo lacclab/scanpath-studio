@@ -6203,11 +6203,11 @@ def render_dataset_inspection_head(token: str) -> None:
                 kwargs={"settings_only": True},
             )
         actions.button(
-            "Open in Scanpath view",
+            "Open in Scanpath View",
             icon=ICONS["view_scanpath"],
             key="data_open_in_scanpath",
             on_click=_go_scanpath,
-            help=f"Show **{md_literal(name)}** in the Scanpath view.",
+            help=f"Show **{md_literal(name)}** in the Scanpath View.",
         )
         _render_dataset_overview(token, registry=registry)
 
@@ -6429,7 +6429,7 @@ def _dataset_added_dialog(message: str) -> None:
 
     Raised once by ``main`` on the run after ✅ Add dataset, once the new
     dataset's frames are loaded, so ``message`` carries its counts. Closing it
-    keeps the user on the current dataset, where **Open in Scanpath view**
+    keeps the user on the current dataset, where **Open in Scanpath View**
     opens the figure later. Buttons are handled by their return
     value, never ``on_click`` — a dialog body is a fragment (see
     ``_leave_dataset_editor_dialog``).
@@ -6437,11 +6437,11 @@ def _dataset_added_dialog(message: str) -> None:
     st.markdown(message)
     open_col, again_col = st.columns(2, gap="small")
     if open_col.button(
-        f"{ICONS['view_scanpath']} Open in Scanpath view",
+        f"{ICONS['view_scanpath']} Open in Scanpath View",
         key="dataset_added_open",
         type="primary",
         width="stretch",
-        help="Show the new dataset's first trial in the Scanpath view.",
+        help="Show the new dataset's first trial in the Scanpath View.",
     ):
         _go_scanpath()
         st.rerun(scope="app")
@@ -6457,7 +6457,7 @@ def _dataset_added_dialog(message: str) -> None:
         st.rerun(scope="app")
     st.caption(
         f"Close this to stay on {ICONS['view_data']} Data Management. "
-        "Choose **Open in Scanpath view** to open it later."
+        "Choose **Open in Scanpath View** to open it later."
     )
 
 
@@ -10440,10 +10440,10 @@ def _run_app() -> None:
             st.session_state[TRIAL_IDENTITY_CHECK_KEY] = asked_by
     if added:
         # Say what ✅ Add dataset brought in, and offer the next step: a
-        # dialog with Open in Scanpath view / Add another. The Trial ID verdict
+        # dialog with Open in Scanpath View / Add another. The Trial ID verdict
         # takes the run's one dialog when it has something to say, and any
         # other dialog already open wins too; the counts then go to a toast,
-        # and **Open in Scanpath view** above the list is the way on.
+        # and **Open in Scanpath View** above the list is the way on.
         message = dataset_added_message(
             _dataset_display_name(str(added)), words_all, fixations_all
         )

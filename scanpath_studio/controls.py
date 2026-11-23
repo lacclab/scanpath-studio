@@ -6933,7 +6933,7 @@ def corpus_style_controls(
             key="global_palette",
             persist_state="session",
             on_change=_on_palette_change,
-            help="Same palette as the Scanpath view; designs and Share links keep it.",
+            help="Same palette as the Scanpath View; designs and Share links keep it.",
         )
         columns = st.columns(2)
         columns[0].color_picker(

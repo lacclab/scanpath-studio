@@ -289,6 +289,44 @@ def test_a_shared_replay_reopens_with_its_layers(animate, fixations, saccades, a
 
 
 @given(
+    st.tuples(
+        st.integers(min_value=1, max_value=400), st.integers(min_value=1, max_value=400)
+    ),
+    st.tuples(
+        st.integers(min_value=1, max_value=400), st.integers(min_value=1, max_value=400)
+    ),
+    st.booleans(),
+    st.booleans(),
+)
+def test_a_shared_fixation_window_keeps_its_scope(window, full, chosen, all_trials):
+    """A link carries a chosen window and whether it is kept across trials;
+    a window kept across trials travels even when it spans this trial."""
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    window, full = tuple(sorted(window)), tuple(sorted(full))
+    sender = {
+        "_share_selection": {
+            "participant_id": "p",
+            "trial_id": "t",
+            "full_fix_range": full,
+        },
+        "single_fix_range": window,
+        "single_fix_range_user_set": chosen,
+        "single_fix_range_all_trials": all_trials,
+    }
+    recipient: dict = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", sender)
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        url_state._apply_url_preset()
+    assert bool(recipient.get("single_fix_range_all_trials")) == all_trials
+    travels = chosen and (all_trials or window != full)
+    assert recipient.get("single_fix_range") == (window if travels else None)
+
+
+@given(
     st.sampled_from([p for p in LEGEND_POSITIONS if p != "auto"]),
     st.sampled_from(LEGEND_ARRANGEMENTS),
     st.one_of(st.none(), st.integers(min_value=1, max_value=500)),

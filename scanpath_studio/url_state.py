@@ -151,6 +151,7 @@ from .session_keys import (
     COMPARE_STIMULUS_PARAM,
     COMPARE_STYLE_PARAMS,
     EXPORT_PARAMS,
+    FIX_RANGE_ALL_TRIALS_PARAM,
     FIX_RANGE_PARAM,
     GLOBAL_SHOW_FIX,
     LEGEND_PARAMS,
@@ -174,6 +175,7 @@ from .session_keys import (
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_FIX_RANGE,
+    SINGLE_FIX_RANGE_ALL_TRIALS,
 )
 from .utils import (
     combo_reading_keys,
@@ -623,6 +625,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     # The chips above the plot, shown or hidden. Not part of the figure, so
     # the settings file leaves it out — only the link carries it.
     "show_chips": "single_show_chips",
+    # *Keep this range across trials*, written only while it is on; see the
+    # `FIX_RANGE_PARAM` block in `_build_share_query`.
+    FIX_RANGE_ALL_TRIALS_PARAM: SINGLE_FIX_RANGE_ALL_TRIALS,
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     **_design_params("color"),
@@ -1405,12 +1410,13 @@ def _apply_url_preset() -> str | None:
     # relative scale. Share writes the scale beside the toggles, so such a link
     # predates the fixed duration scale and was drawn relative.
     # `duration_size_legend` is left out of the check: it only travels with the
-    # scale. A hand-written `?trial_id=` link carries no toggle and gets the
+    # scale. So are the chips and the window's scope, which are no part of the
+    # figure. A hand-written `?trial_id=` link carries no toggle and gets the
     # current default.
     if "marker_size_scale" not in qp and any(
         k in qp
         for k in _SHARE_TOGGLE_PARAMS
-        if k not in ("duration_size_legend", "show_chips")
+        if k not in ("duration_size_legend", "show_chips", FIX_RANGE_ALL_TRIALS_PARAM)
     ):
         st.session_state.setdefault(
             "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
@@ -4069,13 +4075,22 @@ def _build_share_query(
     # length — so a 509–540 window arriving at a 30-fixation trial silently
     # collapses to a single fixation. Only headless callers can reach this (the
     # UI has no identity-mode picker), which is what makes it worth stating.
+    #
+    # A window kept across trials travels even when it spans this trial, as
+    # the settings file keeps it: on a longer trial it still cuts. Its scope
+    # travels as `fix_range_all_trials=1`, only while on.
     window = st.session_state.get("single_fix_range")
+    all_trials = bool(st.session_state.get(SINGLE_FIX_RANGE_ALL_TRIALS))
+    if not all_trials:
+        params.pop(FIX_RANGE_ALL_TRIALS_PARAM, None)
     if not include_trial or not st.session_state.get("single_fix_range_user_set"):
         params.pop(FIX_RANGE_PARAM, None)
     elif isinstance(window, (list, tuple)) and len(window) == 2:
         full = (st.session_state.get("_share_selection") or {}).get("full_fix_range")
-        if full is not None and tuple(int(v) for v in window) == tuple(
-            int(v) for v in full
+        if (
+            not all_trials
+            and full is not None
+            and tuple(int(v) for v in window) == tuple(int(v) for v in full)
         ):
             params.pop(FIX_RANGE_PARAM, None)
     # B's window on exactly the terms of A's, against B's own flag and

@@ -42,11 +42,12 @@ def _share_app():
     st.session_state["_params"] = parse_qs(query)
 
 
-def _share(*, window, user_set, full=None, include_trial=True):
+def _share(*, window, user_set, full=None, include_trial=True, all_trials=False):
     at = AppTest.from_function(_share_app)
     at.session_state["_include_trial"] = include_trial
     at.session_state["single_fix_range"] = window
     at.session_state["single_fix_range_user_set"] = user_set
+    at.session_state["single_fix_range_all_trials"] = all_trials
     selection = {"participant_id": "p1", "trial_id": "t1"}
     if full is not None:
         selection["full_fix_range"] = full
@@ -95,6 +96,33 @@ class TestTheReader:
         assert st.session_state["single_fix_range"] == (5, 20)
         assert st.session_state["single_fix_range_user_set"] is True
 
+    def test_a_window_kept_across_trials_follows_the_next_trial(self, monkeypatch):
+        import pandas as pd
+        import streamlit as st
+
+        from scanpath_studio import url_state
+        from scanpath_studio.controls import _render_fix_range_slider
+
+        st.session_state.clear()
+        monkeypatch.setattr(
+            url_state.st,
+            "query_params",
+            {"fix_range": "5,20", "fix_range_all_trials": "1"},
+        )
+        url_state._apply_url_preset()
+        assert st.session_state["single_fix_range_all_trials"] is True
+        for trial in ("t1", "t2"):
+            fixations = pd.DataFrame(
+                {
+                    "participant_id": "p1",
+                    "trial_id": trial,
+                    "order_in_trial": list(range(1, 31)),
+                }
+            )
+            _render_fix_range_slider(fixations)
+            assert st.session_state["single_fix_range"] == (5, 20)
+        st.session_state.clear()
+
 
 class TestTheWriter:
     def test_a_chosen_window_travels(self):
@@ -110,6 +138,14 @@ class TestTheWriter:
         """It restores nothing, and would truncate a longer copy of the trial."""
         params = _share(window=(1, 30), user_set=True, full=(1, 30))
         assert "fix_range" not in params
+        assert "fix_range_all_trials" not in params
+
+    def test_a_window_kept_across_trials_travels_with_its_scope(self):
+        """Kept across trials, a window spanning this trial still cuts a
+        longer one, so it travels, as the settings file keeps it."""
+        params = _share(window=(1, 30), user_set=True, full=(1, 30), all_trials=True)
+        assert params["fix_range"] == ["1,30"]
+        assert params["fix_range_all_trials"] == ["1"]
 
     def test_a_multipart_screens_own_full_range_is_respected(self):
         """`order_in_trial` is parent-global, so a later screen's full

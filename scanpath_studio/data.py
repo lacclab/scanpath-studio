@@ -2400,10 +2400,12 @@ def _read_delimited(
     Planned reads check every record against the header. ``usecols`` stops the
     parser counting fields, so the read itself takes one column more than the
     header names (:func:`_with_extra_column`), which a record with a field too
-    many fills. Only then are the records scanned (:func:`_overflow_lines`) for
-    the lines to report: a projected read skips the overlong records and
-    reports their physical lines in `READ_NOTES_ATTR`, and a whole-table read
-    reports the first one as an error. A stream that cannot be rewound is
+    many fills. Only then are the records scanned (:func:`_scan_records`): a
+    table whose every row has one field more is read with the first as an
+    unnamed row label, as pandas reads it; otherwise a projected read skips
+    the overlong records and reports their physical lines in
+    `READ_NOTES_ATTR`, and a whole-table read reports the first one as an
+    error. A stream that cannot be rewound is
     scanned and read again through ``reopen``, which opens a fresh copy of it
     as a context manager; without one it is taken into memory first.
 
@@ -2443,24 +2445,30 @@ def _read_delimited(
     with contextlib.ExitStack() as stack:
         if rereadable:
             _rewind(buf)
-            skipped = _overflow_lines(buf, sep, len(header), bom)
+            scan = _scan_records(buf, sep, len(header), bom)
             source = buf
         else:
             scanned = stack.enter_context(reopen())
-            skipped = _overflow_lines(
+            scan = _scan_records(
                 scanned, sep, len(header), _bom_encoding(scanned.peek(4)[:4])
             )
             source = stack.enter_context(reopen())
-        name = getattr(buf, "name", buf)
-        if skipped and not plan.columns:
-            raise _overflow_error(name, skipped)
-        if skipped:
-            kwargs["skiprows"] = [record for record, _, _ in skipped]
+        if scan.row_labels:
+            # R's `write.table()` names every column but its row names: read
+            # as pandas does, the first field of each row is its label, and
+            # the label is left out.
+            kwargs.update(
+                header=0,
+                names=[probe, *header],
+                usecols=list(plan.columns or header),
+            )
+        elif scan.overlong and not plan.columns:
+            raise _overflow_error(getattr(buf, "name", buf), scan, len(header))
+        elif scan.overlong:
+            kwargs["skiprows"] = [record for record, _, _ in scan.overlong]
         frame = _parse_delimited(source, sep, bom, kwargs, filter_chunk)
-    if skipped:
-        frame.attrs[READ_NOTES_ATTR] = [
-            _skipped_rows_note([line for _, line, _ in skipped])
-        ]
+    if scan.overlong and not scan.row_labels:
+        frame.attrs[READ_NOTES_ATTR] = [_skipped_rows_note(scan)]
     return frame
 
 
@@ -2627,47 +2635,71 @@ def _with_extra_column(buf, sep: str, name: str):
     return io.BufferedReader(_Prefixed(prefix, source, owned=owned), 1 << 20)
 
 
-#: Records :func:`_overflow_lines` scans between progress checkpoints.
+#: Records :func:`_scan_records` scans between progress checkpoints.
 _SCAN_REPORT_EVERY = 1 << 16
 
 
-def _overflow_lines(
-    buf, sep: str, n_fields: int, bom: str | None
-) -> list[tuple[int, int, int]]:
-    """Overlong CSV records as (zero-based record, first physical line, last
-    occupied field).
+@dataclass(frozen=True)
+class _RecordScan:
+    """What :func:`_scan_records` found in a table's records, against a header
+    of ``n_fields`` columns."""
+
+    #: Records with a field past the header's last, as (zero-based record,
+    #: first physical line, last occupied field).
+    overlong: list[tuple[int, int, int]]
+    #: Data records, blank lines left out.
+    rows: int
+    #: Every data record has exactly one field more than the header, and some
+    #: hold text in it: the leading field is a row label the header leaves
+    #: unnamed (R's `write.table()` with its default row names).
+    row_labels: bool
+
+
+def _scan_records(buf, sep: str, n_fields: int, bom: str | None) -> _RecordScan:
+    """Each CSV record of ``buf`` checked against a header of ``n_fields``.
 
     The parser's skiprows counts records, while a researcher opening the file
     sees physical lines. Quoted separators and newlines are data. Empty extra
-    fields at the end of a record are common in exported spreadsheets.
+    fields at the end of a record are common in exported spreadsheets, so a
+    record is overlong only when it holds text past the header's last field.
+    A record of exactly one field more on every row is the row-label layout
+    instead, which a trailing delimiter on every row is not.
     """
     if isinstance(buf, (str, os.PathLike)):
         with open(buf, "rb") as source:
-            return _overflow_lines(source, sep, n_fields, bom)
+            return _scan_records(source, sep, n_fields, bom)
     # Only ASCII CSV syntax matters here. Latin-1 decodes every byte of both
     # UTF-8 and legacy exports without changing delimiters or quotes.
     text = isinstance(buf.read(0), str)
     lines = (
         buf if text else io.TextIOWrapper(buf, encoding=bom or "latin-1", newline="")
     )
+    overlong = []
+    rows = 0
+    labelled, filled = True, False
     try:
-        skipped = []
-        for record, (line, width) in enumerate(_record_widths(lines, sep)):
+        for record, (line, width, fields) in enumerate(_record_widths(lines, sep)):
             if not record % _SCAN_REPORT_EVERY:
                 # A checkpoint: the loading card stays live, and Cancel works.
                 progress.report()
-            if record and width > n_fields:
-                skipped.append((record, line, width))
+            if not record or not fields:
+                continue  # the header, or a blank line the parser skips
+            rows += 1
+            labelled = labelled and fields == n_fields + 1
+            filled = filled or width == n_fields + 1
+            if width > n_fields:
+                overlong.append((record, line, width))
     finally:
         if not text:
             lines.detach()
         if _can_reread(buf):
             _rewind(buf)
-    return skipped
+    return _RecordScan(overlong, rows, bool(rows) and labelled and filled)
 
 
 def _record_widths(lines, sep: str):
-    """Yield the first line and last occupied field of each logical CSV row."""
+    """Yield the first line, last occupied field and number of fields of each
+    logical CSV row."""
     quoted = False
     for line_number, line in enumerate(lines):
         line = line.rstrip("\r\n")
@@ -2675,7 +2707,11 @@ def _record_widths(lines, sep: str):
             first_line, field, width = line_number, 1, 0
             if '"' not in line:
                 occupied = line.rstrip(sep)
-                yield first_line, occupied.count(sep) + 1 if occupied else 0
+                yield (
+                    first_line,
+                    occupied.count(sep) + 1 if occupied else 0,
+                    line.count(sep) + 1 if line else 0,
+                )
                 continue
         offset = 0
         while offset < len(line):
@@ -2705,26 +2741,44 @@ def _record_widths(lines, sep: str):
             field += 1
             offset = delimiter + 1
         if not quoted:
-            yield first_line, width
+            yield first_line, width, field
 
 
-def _overflow_error(name, skipped) -> TableReadError:
-    line = skipped[0][1] + 1
+def _overflow_hint(scan: _RecordScan) -> str:
+    """What makes the records :func:`_scan_records` found overlong, likely."""
+    if len(scan.overlong) == scan.rows > 1:
+        return (
+            "Every row has more fields than the header: check that it names "
+            "every column"
+        )
+    return "A delimiter inside a value that isn't quoted does this"
+
+
+def _overflow_error(name, scan: _RecordScan, n_fields: int) -> TableReadError:
+    """A whole-table read's refusal of the overlong records in ``scan``."""
+    _, line, width = scan.overlong[0]
+    count = len(scan.overlong)
+    where = f"has a row with more fields than its header: line {line + 1}"
+    if count > 1:
+        where = (
+            f"has {count} rows with more fields than its header: line {line + 1}, "
+            "the first,"
+        )
     return TableReadError(
         str(name),
-        f"has more fields than its header at line {line}",
-        "Check for an unquoted delimiter in that record, then read the table again.",
+        f"{where} has {width}, the header {n_fields}",
+        f"{_overflow_hint(scan)}. Fix the file, then read the table again.",
     )
 
 
-def _skipped_rows_note(lines: list[int]) -> str:
-    """What a read says about the rows `_overflow_lines` found (0-based)."""
+def _skipped_rows_note(scan: _RecordScan) -> str:
+    """What a projected read says about the overlong records it skipped."""
+    lines = [line for _, line, _ in scan.overlong]
     shown = ", ".join(str(n + 1) for n in lines[:5]) + (" …" if len(lines) > 5 else "")
     one = len(lines) == 1
     return (
         f"Skipped {len(lines)} row{'' if one else 's'} with more fields than the "
-        f"header (line{'' if one else 's'} {shown}). A delimiter inside a value "
-        "that isn't quoted does this."
+        f"header (line{'' if one else 's'} {shown}). {_overflow_hint(scan)}."
     )
 
 

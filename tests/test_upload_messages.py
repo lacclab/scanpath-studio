@@ -274,7 +274,7 @@ def _no_scan(monkeypatch):
     def scan(*args, **kwargs):
         raise AssertionError("a clean file was scanned record by record")
 
-    monkeypatch.setattr(data_module, "_overflow_lines", scan)
+    monkeypatch.setattr(data_module, "_scan_records", scan)
 
 
 class TestOverlongRowsAreFoundByTheReadItself:
@@ -379,10 +379,110 @@ def test_record_widths_agree_with_the_csv_module(text):
     expected, line = [], 0
     for fields in reader:
         occupied = [i + 1 for i, value in enumerate(fields) if value != ""]
-        expected.append((line, occupied[-1] if occupied else 0))
+        expected.append((line, occupied[-1] if occupied else 0, len(fields)))
         line = reader.line_num
     got = list(data_module._record_widths(io.StringIO(text, newline=""), ","))
     assert got == expected
+
+
+class TestRowLabelsTheHeaderLeavesUnnamed:
+    """R's `write.table()` writes row names under no header: every row has one
+    field more than the header. pandas reads that first field as the index;
+    so does every planned read, and the labels are left out."""
+
+    ROWS = [
+        ("p1", "t1", 100, 50, 200),
+        ("p1", "t1", 200, 50, 210),
+        ("p1", "t2", 300, 60, 220),
+    ]
+    HEADER = ["participant_id", "trial_id", "x", "y", "duration_ms"]
+
+    def _r_table(self, sep: str = "\t", quote: bool = False) -> bytes:
+        def cell(value):
+            return f'"{value}"' if quote and isinstance(value, str) else str(value)
+
+        lines = [sep.join(cell(name) for name in self.HEADER)]
+        lines += [
+            sep.join(cell(value) for value in (str(i), *row))
+            for i, row in enumerate(self.ROWS, 1)
+        ]
+        return ("\n".join(lines) + "\n").encode()
+
+    def _assert_rows(self, frame: pd.DataFrame, columns=HEADER) -> None:
+        assert list(frame.columns) == list(columns)
+        expected = pd.DataFrame(self.ROWS, columns=self.HEADER)[list(columns)]
+        assert frame.astype(str).values.tolist() == expected.astype(str).values.tolist()
+        assert pop_read_notes(frame) == []
+
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    def test_planned_reads_drop_the_labels(self, tmp_path, route):
+        body = self._r_table()
+        path = tmp_path / "fix.tsv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "fix.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("fix.tsv", body)
+        source = _upload("fix.tsv", body) if route == "upload" else path
+        whole = ReadPlan(identity=("participant_id", "trial_id"))
+        self._assert_rows(read_table(source, plan=whole))
+        projected = ReadPlan(columns=("trial_id", "x"), identity=("trial_id",))
+        self._assert_rows(read_table(source, plan=projected), ["trial_id", "x"])
+
+    def test_the_headless_api_loads_them(self, tmp_path):
+        from scanpath_studio import api
+
+        path = tmp_path / "fix.tsv"
+        path.write_bytes(self._r_table())
+        fixations = api.load_scanpath_data(fixations=path, names="canonical").fixations
+        assert fixations["x"].tolist() == [100, 200, 300]
+        assert fixations["duration_ms"].tolist() == [200, 210, 220]
+        assert set(fixations["participant_id"]) == {"p1"}
+
+    def test_r_defaults_read_as_pandas_reads_them(self):
+        """R's own separator (a space, read once the delimiter is known),
+        strings and row names quoted, and an empty last value."""
+        body = self._r_table(sep=" ", quote=True) + b'"4" "p2" "t3" 1 2 ""\n'
+        expected = pd.read_csv(io.BytesIO(body), sep=" ").reset_index(drop=True)
+        frame = data_module._read_delimited(_upload("fix.txt", body), " ", ReadPlan())
+        pd.testing.assert_frame_equal(frame, expected)
+
+    def test_a_trailing_delimiter_on_every_row_is_not_a_label(self):
+        rows = [";".join(HEADER)] + [f"p1;t{i};{i};{i};{i};" for i in range(3)]
+        body = ("\n".join(rows) + "\n").encode()
+        frame = read_table(_upload("trailing.csv", body), plan=ReadPlan())
+        assert list(frame.columns) == HEADER
+        assert frame["trial"].tolist() == ["t0", "t1", "t2"]
+
+    def test_one_row_more_still_refuses_the_table(self):
+        body = self._r_table().replace(b"\t300\t", b"\t300\textra\t")
+        with pytest.raises(TableReadError) as raised:
+            read_table(_upload("fix.tsv", body), plan=ReadPlan())
+        message = raised.value.sentence()
+        assert "has 3 rows with more fields than its header: line 2, the first, " in (
+            message
+        )
+        assert "Every row has more fields than the header" in message
+        _plain(message)
+
+    def test_a_ragged_table_names_its_first_long_row(self):
+        body = _semicolon_table("p1;t1;1;2;3;4", at=3)
+        body = body.replace(b"p1;t2;111;211;161\n", b"p1;t2;111;211;161;9\n")
+        with pytest.raises(TableReadError) as raised:
+            read_table(_upload("bad.csv", body), plan=ReadPlan())
+        message = raised.value.sentence()
+        assert (
+            "has 2 rows with more fields than its header: line 4, the first, has "
+            "6, the header 5" in message
+        )
+        assert "A delimiter inside a value that isn't quoted does this." in message
+        _plain(message)
+        one = _semicolon_table("p1;t1;1;2;3;4", at=3)
+        with pytest.raises(TableReadError) as raised:
+            read_table(_upload("bad.csv", one), plan=ReadPlan())
+        assert "has a row with more fields than its header: line 4 has 6, " in str(
+            raised.value
+        )
 
 
 class TestTheUploadBoxSaysIt:

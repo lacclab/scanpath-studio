@@ -9323,7 +9323,7 @@ def _c_trial_summary(_words, _fix, fwkey, ffkey):
     return trial_summary_table(_words, _fix)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4)
 def _c_enrich_fix(_fix, _words, ffkey, fwkey):
     return ensure_fixation_enrichment(_fix, _words)
 
@@ -9377,7 +9377,7 @@ def _group_means_key(frame, readings, specs) -> tuple:
     return (frame_fingerprint(frame), groups)
 
 
-@st.cache_data(show_spinner=False, max_entries=32)
+@st.cache_data(show_spinner=False, max_entries=4)
 def _c_reader_vs_cohort(_frame, participant_id, mkey, normalize, fkey):
     return reader_vs_cohort_values(
         _frame, participant_id, MEASURES[mkey], normalize=normalize

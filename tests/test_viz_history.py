@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
+from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from tests.conftest import APP_SCRIPT
 
 
@@ -16,6 +18,37 @@ def _click(at, key):
 
 def _axis_pair(at):
     return tuple(at.selectbox(key=f"global_{axis}_field").value for axis in ("x", "y"))
+
+
+@pytest.mark.parametrize(
+    ("menu", "browser_title", "expected"),
+    [
+        pytest.param("grid", True, False, id="closed-title-menu-echo"),
+        pytest.param("labels", False, False, id="reopen-without-editing"),
+        pytest.param("labels", True, True, id="reopen-and-edit-together"),
+    ],
+)
+def test_title_edit_on_the_same_rerun_as_opening_a_menu(menu, browser_title, expected):
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at.query_params["source"] = "synthetic"
+    at.run()
+    at.checkbox(key="global_show_title").check().run()
+    pattern = at.text_input(key="global_title_pattern").value
+    title = at.session_state[SNIPPET_STATE_KEY].title
+    assert pattern and title
+    _click(at, "viz_undo")
+    assert not at.checkbox(key="global_show_title").value
+
+    # Streamlit can combine a menu opening and the next click into one
+    # rerun. A closed checkbox can send its old value on that same message.
+    at.session_state[f"plot_menu_{menu}"] = True
+    at.checkbox(key="global_show_title").set_value(browser_title).run()
+    assert not at.exception
+    assert at.checkbox(key="global_show_title").value is expected
+    assert at.text_input(key="global_title_pattern").value == (
+        pattern if expected else ""
+    )
+    assert at.session_state[SNIPPET_STATE_KEY].title == (title if expected else "")
 
 
 def test_undo_names_the_restored_value_after_navigating_to_another_trial():
@@ -98,9 +131,9 @@ def test_compare_and_animate_accept_an_edit_immediately_after_undo():
     assert at.toggle(key="single_compare_toggle").value
     assert not at.checkbox(key="global_show_order").value
     _click(at, "viz_undo")
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     _click(at, "viz_undo")
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert at.session_state["single_animate"] and at.button(key="viz_redo").disabled
 
 

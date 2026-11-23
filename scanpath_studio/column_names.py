@@ -645,11 +645,12 @@ def table_figure_labels(
     out = across_tables(drawn).figure_labels(
         [column for cols in columns.values() for column in cols]
     )
-    words = maps.get("words")
-    if words is not None and "words" in columns:
-        for column, label in words.figure_labels(columns["words"]).items():
+    for table in ("words", "raw_gaze"):
+        if table not in drawn:
+            continue
+        for column, label in drawn[table].figure_labels(columns[table]).items():
             if out.get(column) != label:
-                out[f"words:{column}"] = label
+                out[f"{table}:{column}"] = label
     return out
 
 
@@ -816,7 +817,7 @@ def from_schema(
         )
         _registry(out, data.FIX_OPTIONAL_FIELDS, present, keep)
     else:  # raw gaze
-        for key in ("x", "y", "text", "word_id"):
+        for key in ("x", "y", "text", "word_id", "eye", "pupil_area", "pupil_diameter"):
             if schema.get(key):
                 out[key] = SourceName((str(schema[key]),))
         if schema.get("timestamp"):

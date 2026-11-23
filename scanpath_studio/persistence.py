@@ -66,6 +66,7 @@ from .constants import (
     DATASET_SETUP_OVERRIDES_KEY,
     DATASET_STIMULUS_IMAGES_KEY,
     DOWNLOAD_DIR_KEY,
+    GUIDE_RETURN_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
     SETUP_OVERRIDE_FOR_KEY,
@@ -356,6 +357,19 @@ def _dataset_identity(session: MutableMapping[str, Any]) -> list:
     return datasets
 
 
+def _durable_settings(session: MutableMapping[str, Any]) -> dict:
+    """Recover the viewer's own settings when the app closes during a guide."""
+    values = {
+        key: _json_safe(value)
+        for key, value in session.items()
+        if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
+    }
+    for key, original in session.get(GUIDE_RETURN_KEY, {}).items():
+        if key in _SESSION_KEYS:
+            values[key] = _json_safe(original)
+    return values
+
+
 def _state_fingerprint(
     session: MutableMapping[str, Any], metadata_signature: list | None = None
 ) -> str:
@@ -363,11 +377,7 @@ def _state_fingerprint(
     if metadata_signature is None:
         metadata_signature = _metadata_signature(session)
     datasets = _dataset_identity(session)
-    values = {
-        key: _json_safe(value)
-        for key, value in session.items()
-        if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
-    }
+    values = _durable_settings(session)
     # Annotations: the live store by content, every other dataset's by revision.
     annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
@@ -524,17 +534,10 @@ def _manifest_for(
     for name, record in _failed(session).items():
         datasets.setdefault(name, record["entry"])
 
-    values = {key: _json_safe(session[key]) for key in _SESSION_KEYS if key in session}
+    values = _durable_settings(session)
     if values.get(COMPARE_SOURCE_STATE_KEY) == "This dataset":
         # A literal upload ID. Older manifests used this text for A's source.
         values[COMPARE_SOURCE_STATE_KEY] = {"dataset": "This dataset"}
-    values.update(
-        {
-            key: _json_safe(value)
-            for key, value in session.items()
-            if str(key).startswith(COLUMN_MAPPING_PREFIX)
-        }
-    )
     return {
         "schema": SCHEMA_VERSION,
         "datasets": datasets,

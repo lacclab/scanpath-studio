@@ -17,6 +17,7 @@ import pytest
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
 from scanpath_studio.constants import DATASET_NAME_MAX_CHARS, DEMO_CHOICE, ICONS
+from scanpath_studio.data import read_sample_raw_gaze
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -65,16 +66,10 @@ def _make_apptest(*, synthetic: bool = False) -> AppTest:
 
 
 def _replay_tour(at: AppTest) -> None:
-    """Invoke the same welcome-tour action as the Tutorials dialog."""
-    from unittest.mock import patch
-
-    import streamlit as st
-
-    from scanpath_studio import tour
-
-    with patch.object(st, "session_state", at.session_state):
-        tour._arm_tour()
+    """Open Task guides and start the sample from its action."""
+    at.session_state["_tutorial_library_requested"] = True
     at.run(timeout=30)
+    at.button(key="tutorial_start_welcome").click().run(timeout=30)
 
 
 def _enter_add_data(at: AppTest) -> None:
@@ -490,8 +485,8 @@ class TestSingleReportDatasets:
         from scanpath_studio import app, data
 
         words_raw, fix_raw = data.load_sample_data()
-        words_raw = words_raw[words_raw["participant_id"] == "l37_1129"]
-        fix_raw = fix_raw[fix_raw["participant_id"] == "l37_1129"]
+        words_raw = words_raw[words_raw["participant_id"] == "l37_273"]
+        fix_raw = fix_raw[fix_raw["participant_id"] == "l37_273"]
         override = make_frames(words_raw, fix_raw, pd.DataFrame())
         monkeypatch.setattr(app, "load_sample_data", lambda *a, **k: override)
 
@@ -1306,9 +1301,7 @@ class TestDatasetTable:
         )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
-        """No *About this dataset* popover — the description, the home
-        page on its line, and a note only where it changes how a figure is
-        read (PoTeC's positions are reconstructed)."""
+        """An unavailable PoTeC keeps its home page and identifies the demo recordings on display."""
         from scanpath_studio import datasets
 
         token = "PoTeC — Potsdam Textbook Corpus"
@@ -1323,7 +1316,10 @@ class TestDatasetTable:
         assert any(
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
-        assert any("raw-gaze samples are synthesized" in c for c in captions)
+        assert any(
+            "EyeLink recordings for all 24 paragraph readings" in c for c in captions
+        )
+        assert all("Fixation positions are reconstructed" not in c for c in captions)
         assert any("belong to the bundled demo" in msg.value for msg in at.info)
         # What an *About this dataset* popover would write (its own label is
         # not in the tree).
@@ -2315,7 +2311,7 @@ class TestGroupedUploadMapping:
 
         # Inject the bundled raw frames through the per-table upload seam.
         sample_words, sample_fix = app.load_sample_data()
-        sample_rg = app.load_sample_raw_gaze()
+        sample_rg = read_sample_raw_gaze().head(100)
         frames = {
             "col_map_words": sample_words,
             "col_map_fix": sample_fix,
@@ -2390,7 +2386,7 @@ class TestGroupedUploadMapping:
 
         from scanpath_studio import app
 
-        sample_rg = app.load_sample_raw_gaze()
+        sample_rg = read_sample_raw_gaze().head(100)
         monkeypatch.setattr(
             app,
             "_read_uploaded_frame",
@@ -2487,224 +2483,161 @@ class TestColumnMappingBoxWidget:
 
 
 @pytest.mark.timeout(90)
-class TestWelcomeTour:
-    """Dialog-style tour (TOUR_STYLE="dialog"): opens once per session,
-    navigates, and stays out of the way of embeds / deep links."""
+class TestSampleReading:
+    def test_import_from_the_invitation_opens_the_form_without_starting_a_guide(self):
+        at = _make_apptest().run(timeout=45)
+        assert not at.exception, at.exception
+        at.button(key="sample_invitation_import").click().run(timeout=45)
+        assert not at.exception, at.exception
+        assert at.session_state["_show_upload_wizard"]
+        assert not any(b.key == "wizard_sp_next" for b in at.button)
+        at.session_state["wizard_setup_help"] = True
+        at.run(timeout=45)
+        at.button(key="wizard_guide_replay").click().run(timeout=45)
+        assert not at.session_state["wizard_setup_help"]
+        assert at.session_state["tour_mode"] == "wizard"
+        assert at.button(key="wizard_sp_next")
+        at.button(key="wizard_sp_exit").click().run(timeout=45)
+        assert at.session_state["_show_upload_wizard"]
 
-    @staticmethod
-    def _tour_buttons(at):
-        return {b.key for b in at.button if b.key and b.key.startswith("tour_")}
-
-    @pytest.fixture(autouse=True)
-    def _dialog_style(self, monkeypatch):
-        from scanpath_studio import tour
-
-        monkeypatch.setattr(tour, "TOUR_STYLE", "dialog")
-
-    def test_tour_opens_on_first_run_only(self):
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        assert at.session_state["tour_seen"] is True
-        assert "tour_next" in self._tour_buttons(at)
-        # Any later full rerun must NOT reopen the dialog (e.g. after the
-        # user dismissed it with X) — only the replay button may.
-        at.run(timeout=30)
-        assert "tour_next" not in self._tour_buttons(at)
-
-    def test_tour_next_advances_step(self):
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        at.button(key="tour_next").click()
-        at.run(timeout=30)
-        assert at.session_state["tour_step"] == 1
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-    def test_tour_suppressed_for_embed_and_deep_link(self):
-        # AppTest can't inject query params into st.query_params, so the
-        # suppression predicate is tested directly (it takes a mapping).
-        from scanpath_studio.tour import tour_suppressed
-
-        assert tour_suppressed({"embed": "true"})
-        assert tour_suppressed({"embed": "1"})
-        assert tour_suppressed({"participant": "l37_1129"})
-        assert tour_suppressed({"source": "onestop"})
-        assert tour_suppressed({"trial": "3"})
-        assert tour_suppressed({"tab": "animation"})
-        assert not tour_suppressed({})
-        assert not tour_suppressed({"embed": "false"})
-
-    def test_tour_replay_button_reopens(self):
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)  # first run: auto-open, marks tour_seen
-        at.run(timeout=30)  # second run: dialog gone
-        at.session_state["tour_step"] = 3
-        _replay_tour(at)
-        assert "tour_next" in self._tour_buttons(at)
-        assert at.session_state["tour_step"] == 0  # replay restarts the tour
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-
-@pytest.mark.timeout(90)
-class TestSpotlightTour:
-    """Spotlight-style tour (the default): floating card + per-step highlight,
-    armed once per session via tour_mode, dismissed by Exit/Done."""
-
-    @staticmethod
-    def _sp_buttons(at):
-        return {b.key for b in at.button if b.key and b.key.startswith("tour_sp_")}
-
-    def test_spotlight_arms_on_first_run(self):
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        assert at.session_state["tour_seen"] is True
-        assert at.session_state["tour_mode"] == "spotlight"
-        assert "tour_sp_next" in self._sp_buttons(at)
-        # The dialog style must NOT also open.
-        assert not any(b.key == "tour_next" for b in at.button)
-        # The welcome step renders centered with a dimmed backdrop.
-        markdown = " ".join(m.value for m in at.markdown)
-        assert "tour-backdrop" in markdown
-
-    def test_spotlight_navigates_and_exits(self):
-        from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        at.button(key="tour_sp_next").click()
-        at.run(timeout=30)
-        assert at.session_state["tour_step"] == 1
-        # From step 2 on, the card drops to the corner: no backdrop.
-        markdown = " ".join(m.value for m in at.markdown)
-        assert "tour-backdrop" not in markdown
-        at.button(key="tour_sp_close").click()
-        at.run(timeout=30)
-        assert at.session_state["tour_mode"] is None
-        assert self._sp_buttons(at) == set(), "card must vanish after close"
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Step list sanity: every selector-bearing step targets a keyed
-        # wrapper (.st-key-*) or a stable testid that exists in the app.
-        selectors = [s["selector"] for s in _SPOTLIGHT_STEPS if s["selector"]]
-        assert all(
-            sel.startswith(".st-key-") or "data-testid" in sel for sel in selectors
-        )
-
-    def test_spotlight_welcome_skip_tour(self):
-        """The welcome offers a labelled Skip tour (not a disabled Back);
-        it closes the tour like ✕, and Back returns from step 2 on."""
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        buttons = self._sp_buttons(at)
-        assert {"tour_sp_skip", "tour_sp_next"} <= buttons
-        assert "tour_sp_back" not in buttons
-        assert at.button(key="tour_sp_skip").label == "Skip tour"
-        at.button(key="tour_sp_next").click()
-        at.run(timeout=30)
-        assert "tour_sp_back" in self._sp_buttons(at)
-        assert "tour_sp_skip" not in self._sp_buttons(at)
-        at.session_state["tour_step"] = 0
-        at.run(timeout=30)
-        at.button(key="tour_sp_skip").click()
-        at.run(timeout=30)
-        assert at.session_state["tour_mode"] is None
-        assert self._sp_buttons(at) == set()
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-    def test_spotlight_done_on_last_step(self):
-        from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        at.session_state["tour_step"] = len(_SPOTLIGHT_STEPS) - 1
-        at.run(timeout=30)
-        assert "tour_sp_done" in self._sp_buttons(at)
-        at.button(key="tour_sp_done").click()
-        at.run(timeout=30)
-        assert at.session_state["tour_mode"] is None
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-    def test_spotlight_replay(self):
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=30)
-        at.button(key="tour_sp_close").click()
-        at.run(timeout=30)
-        assert self._sp_buttons(at) == set()
-        _replay_tour(at)
-        assert "tour_sp_next" in self._sp_buttons(at)
-        assert at.session_state["tour_step"] == 0
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-    @pytest.mark.parametrize("view", ["data", "corpus"])
-    def test_started_from_another_view_it_opens_on_scanpath(self, view):
-        """Every step points at the Scanpath view, so starting the tour from
-        the Data page or Corpus Analysis switches there first."""
+    @pytest.mark.parametrize("start", ["data", "corpus"])
+    def test_replaying_a_sample_from_another_view_returns_to_that_view(self, start):
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 
-        start = {"data": _VIEW_DATA, "corpus": _VIEW_CORPUS}[view]
-        at = _make_apptest(synthetic=True)
-        at.session_state["tour_seen"] = True  # no first-visit tour
-        pin_view(at, start)
-        at.run(timeout=60)
-        assert at.session_state["main_nav"] == start
-        assert self._sp_buttons(at) == set()
-
-        # Tutorials → Welcome tour → Start arms the tour the same way; the run
-        # starts on the view the last one drew, as a browser's does.
+        view = _VIEW_DATA if start == "data" else _VIEW_CORPUS
+        at = _make_apptest()
+        pin_view(at, view)
+        at.run(timeout=45)
+        assert not at.exception, at.exception
+        assert not any(b.key == "sample_invitation_replay" for b in at.button)
         _replay_tour(at)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
-        assert at.session_state["tour_mode"] == "spotlight"
-        assert "tour_sp_next" in self._sp_buttons(at)
-        assert "guide_unfold_tour" not in {b.key for b in at.button}
-        # The view it opened on draws what the steps point at.
-        assert at.session_state.get("single_trial_id")
+        assert at.session_state["single_animate"]
+        at.button(key="tour_sp_close").click().run(timeout=45)
+        assert not at.exception, at.exception
+        assert at.session_state["main_nav"] == view
+        assert not at.session_state["single_animate"]
 
-    def test_first_visit_on_another_view_opens_on_scanpath(self):
+    @pytest.mark.parametrize("start", ["heatmap", "saccades_only"])
+    def test_sample_replay_shows_fixations_and_restores_the_original_layers(
+        self, start
+    ):
+        at = _make_apptest().run(timeout=45)
+        if start == "heatmap":
+            at.button(key="viz_view_heatmap").click().run(timeout=45)
+        else:
+            at.toggle(key="single_animate").set_value(True).run(timeout=45)
+            at.toggle(key="global_show_fix").set_value(False).run(timeout=45)
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value == (start == "saccades_only")
+
+        _replay_tour(at)
+        assert not at.exception, at.exception
+        assert at.session_state["single_animate"]
+        assert at.toggle(key="global_show_fix").value
+        at.button(key="tour_sp_close").click().run(timeout=45)
+        assert not at.exception, at.exception
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value == (start == "saccades_only")
+        assert at.session_state["single_animate"] == (start == "saccades_only")
+
+    def test_switching_datasets_ends_the_sample_guide(self):
+        from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
+
+        at = _make_apptest().run(timeout=45)
+        at.button(key="sample_invitation_replay").click().run(timeout=45)
+        at.selectbox(key="data_source_picker").select(MANUAL_SAMPLE_CHOICE).run(
+            timeout=45
+        )
+        assert not at.exception, at.exception
+        assert at.session_state["data_source_choice"] == MANUAL_SAMPLE_CHOICE
+        assert not any(b.key == "tour_sp_next" for b in at.button)
+
+    @pytest.mark.parametrize("replaying", [False, True])
+    def test_an_empty_filter_immediately_removes_the_invitation_or_replay(
+        self, replaying
+    ):
+        at = _make_apptest().run(timeout=45)
+        replay = at.button(key="sample_invitation_replay")
+        if replaying:
+            replay.click().run(timeout=45)
+            assert at.button(key="tour_sp_next")
+        at.checkbox(key="filter_favorites").check().run(timeout=45)
+        assert not at.exception, at.exception
+        body = " ".join(m.value for m in at.markdown)
+        assert "No trials match your filters" in body and "Favorites only" in body
+        assert at.session_state["_tutorial_context"]["n_trials"] == 0
+        assert not any(
+            b.key in {"sample_invitation_replay", "tour_sp_next"} for b in at.button
+        )
+        at.button(key="clear_all_trial_filters").click().run(timeout=45)
+        assert not at.exception, at.exception
+        assert at.session_state["_tutorial_context"]["n_trials"] > 0
+        assert not at.session_state["single_animate"]
+
+    def test_a_words_only_demo_reading_cannot_start_or_continue_the_replay(self):
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+        from scanpath_studio.utils import reading_key
+        from tests.conftest import edit_builtin_mapping
 
-        at = _make_apptest(synthetic=True)
-        # Landing on Corpus Analysis: `pin_view` without its "tour seen".
-        at.session_state["main_nav"] = _VIEW_CORPUS
-        at.session_state["_nav_mirrored"] = None
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["tour_mode"] == "spotlight"
-        assert at.session_state["main_nav"] == _VIEW_SCANPATH
-        assert "tour_sp_next" in self._sp_buttons(at)
+        at = _make_apptest().run(timeout=45)
+        selection = at.session_state["_share_selection"]
+        original = reading_key(selection["participant_id"], selection["trial_id"])
+        edit_builtin_mapping(at, {"col_map_fix_participant": "difficulty_level"})
+        pin_view(at, _VIEW_SCANPATH)
+        at.run(timeout=45)
+        picker = at.selectbox(key="single_trial_id")
+        replayable = next(
+            i
+            for i, label in enumerate(picker.options)
+            if "[Adv]" in label or "[Ele]" in label
+        )
+        picker.select_index(replayable).run(timeout=45)
+        _replay_tour(at)
+        assert at.button(key="tour_sp_next")
+        at.selectbox(key="single_trial_id").set_value(original).run(timeout=45)
+        assert not at.exception, at.exception
+        assert at.session_state["single_trial_id"] == original
+        assert not at.session_state["_tutorial_context"]["selected_has_fixations"]
+        assert not any(b.key == "tour_sp_next" for b in at.button)
 
-    def test_leaving_scanpath_mid_tour_folds_it(self):
-        """The card never opens over a view its steps are not about: leaving
-        Scanpath folds it to its tab, at the step it was on."""
-        from scanpath_studio.constants import _VIEW_DATA
+        for view in (_VIEW_SCANPATH, _VIEW_CORPUS):
+            pin_view(at, view)
+            at.session_state["_tutorial_library_requested"] = True
+            at.run(timeout=45)
+            assert not at.exception, at.exception
+            assert not any(b.key == "tutorial_start_welcome" for b in at.button)
+            selection = at.session_state["_share_selection"]
+            assert (
+                reading_key(selection["participant_id"], selection["trial_id"])
+                == original
+            )
 
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=60)
-        at.button(key="tour_sp_next").click()
-        at.run(timeout=60)
-        pin_view(at, _VIEW_DATA)
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["main_nav"] == _VIEW_DATA
-        assert at.session_state["tour_mode"] == "spotlight"
-        assert at.session_state["tour_step"] == 1
-        assert self._sp_buttons(at) == set()
-        assert "guide_unfold_tour" in {b.key for b in at.button}
+    @pytest.mark.parametrize(
+        "screen, expected", [(None, False), ("intro", False), ("question", True)]
+    )
+    def test_the_offscreen_replay_uses_fixations_on_the_selected_screen(
+        self, screen, expected
+    ):
+        from scanpath_studio import tour
+        from scanpath_studio.synthetic import make_multipart_synthetic_data
 
-    def test_leaving_scanpath_on_the_last_step_ends_it(self):
-        from scanpath_studio.constants import _VIEW_DATA
-        from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-        at = _make_apptest(synthetic=True)
-        at.run(timeout=60)
-        at.session_state["tour_step"] = len(_SPOTLIGHT_STEPS) - 1
-        at.run(timeout=60)
-        assert "tour_sp_done" in self._sp_buttons(at)
-        pin_view(at, _VIEW_DATA)
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["main_nav"] == _VIEW_DATA
-        assert at.session_state["tour_mode"] is None
-        keys = {b.key for b in at.button if b.key}
-        assert not keys & {"guide_unfold_tour", "guide_close_tour", "tour_sp_done"}
+        words, fixations = make_multipart_synthetic_data()
+        combos = words[["participant_id", "trial_id"]].drop_duplicates()
+        selection = {
+            "participant_id": "synthetic",
+            "trial_id": "multipart_demo",
+            "screen_id": screen,
+        }
+        with mock.patch.object(
+            tour.st, "session_state", {"_share_selection": selection}
+        ):
+            assert (
+                tour.sample_replay_outside_scanpath(
+                    words, fixations[fixations["screen_id"].eq("question")], combos
+                )
+                is expected
+            )
 
 
 class TestSetupWizard:
@@ -3206,8 +3139,8 @@ class TestSetupWizard:
             {
                 "participant_id": ["l37", "l37", "l42", "l42"],
                 "unique_trial_id": [
-                    "l37_1129_1_1_Ele",
-                    "l37_1129_1_2_Adv",
+                    "l37_273_1_1_Ele",
+                    "l37_273_1_2_Adv",
                     "l42_1129_1_1_Ele",
                     "l42_1129_1_2_Adv",
                 ],
@@ -3437,9 +3370,10 @@ class TestCorpusAnalysisTab:
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
         [
+            ("Overview", "corpus_measure"),
             ("Per text", "ptext_view"),
             ("Per participant", "prdr_view"),
-            ("Groups", "pgrp_view"),
+            ("Groups", "cmp_view"),
         ],
     )
     def test_analysis_sections_render(self, subtab, view_key):
@@ -3453,35 +3387,11 @@ class TestCorpusAnalysisTab:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         keys = {s.key for s in at.selectbox}
-        # The Groups tab defaults to a single group (compare toggle off), so its
-        # single-group view selector (pgrp_view) is present; cmp_view appears only
-        # when 'Compare a second group' is on (see test_each_analysis_view_renders).
         assert view_key in keys, f"{view_key} view selector not found"
         # The Screen picker is offered only by a multipart corpus. The demo
         # has no `screen_id`, so it must not appear — every single-screen
         # dataset is left as it is.
         assert "ptext_screen" not in keys
-
-    @pytest.mark.parametrize(
-        ("subtab", "view_key"),
-        [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
-    )
-    def test_the_section_caption_names_only_offered_views(self, subtab, view_key):
-        """The caption lists the views in the View list, no others."""
-        from scanpath_studio import tabs
-
-        at = _make_apptest()
-        pin_view(at, "Corpus Analysis")
-        at.session_state["corpus_subtab"] = subtab
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        offered = next(s for s in at.selectbox if s.key == view_key).options
-        captions = " ".join(c.value for c in at.caption)
-        for view, phrase in tabs._VIEW_PHRASES.items():
-            if view in offered:
-                assert phrase in captions, view
-            elif view in tabs._COMPUTED_READER_VIEWS:
-                assert phrase not in captions, view
 
     def test_per_text_opens_on_the_scanpath_trials_text(self):
         """Per text opens on the text of the trial the user has open in
@@ -3656,14 +3566,18 @@ class TestCorpusAnalysisTab:
         what one plotted value is; the error-bar choice says what it shows."""
         at = _make_apptest()
         pin_view(at, "Corpus Analysis")
+        at.session_state["corpus_subtab"] = "Per text"
         at.session_state["ptext_view"] = "Cohort profile"
         at.session_state["ptext3_spread"] = "SEM"
         at.run(timeout=60)
         assert not at.exception, at.exception
         captions = [c.value for c in at.caption]
-        note = next(c for c in captions if "All time spent on a word" in c)
+        note = at.selectbox(key="ptext_measure").proto.help
         assert "All time spent on a word" in note and "Unit: ms." in note
-        assert "Each word's value is the mean across its participants." in note
+        assert any(
+            "Each word's value is the mean across its participants." in c
+            for c in captions
+        )
         assert any(
             c.startswith("SEM: how precisely the center is known") for c in captions
         )
@@ -3675,6 +3589,7 @@ class TestCorpusAnalysisTab:
         single = _make_apptest()
         pin_view(single, "Corpus Analysis")
         single.session_state["corpus_subtab"] = "Groups"
+        single.session_state["groups_compare"] = False
         single.session_state["pgrp_mode"] = "Independent filter sets"
         single.run(timeout=60)
         assert not single.exception, f"Streamlit exceptions: {single.exception}"
@@ -4099,7 +4014,7 @@ class TestGenericFilenamePowers:
 
 @pytest.mark.timeout(120)
 class TestFigureAndCanvasSubGroups:
-    """The 📐 Figure & canvas group renders its sub-groups, settings intact.
+    """Figure, axes and layer settings render together with their stored values.
 
     Every conditional body in the group (the title/caption pattern boxes, the
     manual grid interval, the colour-bar styling, the custom background picker)
@@ -4137,49 +4052,32 @@ class TestFigureAndCanvasSubGroups:
             "Horizontal",
         )
 
-    def test_the_group_keeps_its_named_blocks(self):
-        """The shape itself: one disclosure, named blocks, nothing nested.
-
-        The group is a ``[name | ▾]`` row with named blocks inside it; the
-        typography is drawn in 📄 Stimulus → Text, and the physical-geometry
-        controls belong to the 🗂️ Data page's Recording setup. What this pins
-        is that the group does not collapse into one flat ~26-row run.
-        """
-        import inspect
-
-        from scanpath_studio import app, controls
-
-        control_source = inspect.getsource(controls.render_plot_controls)
-        canvas_source = inspect.getsource(app.render_canvas_controls)
-
-        # The first block opens the popover, so it draws no rule above it.
-        assert (
-            "_rail_subsection(\n"
-            "        figure_grp, f\"{ICONS['screen']} Screen & framing\", first=True\n"
-            "    )"
-        ) in control_source
-        assert (
-            "_rail_subsection(figure_grp, f\"{ICONS['axes']} Axes & grid\")"
-            in control_source
+    def test_axes_and_figure_put_each_setting_in_its_own_panel(self):
+        at = _make_apptest(synthetic=True).run(timeout=30)
+        assert not at.exception
+        editor = next(
+            bar for bar in at.get("tab_container") if bar.key == "plot_editor_tabs"
         )
-        assert (
-            "_rail_subsection(figure_grp, f\"{ICONS['labels']} Title & labels\")"
-            in control_source
-        )
-        # The typography half is drawn into the Stimulus section instead.
-        assert "text_host" in canvas_source
-        assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing switch leads the screen block: a `Frame | ☑ Crop to data`
-        # row, a shadow of `global_fit_to_monitor` (its inverse).
-        assert 'check_label="Crop to data"' in control_source
-        assert '"global_fit_to_monitor"' in control_source
-        assert "with screen_group, _popover_rows(" in control_source
-        # …and no flat captions.
-        assert 'figure_grp.caption("**Canvas & text**")' not in control_source
-        assert 'figure_grp.caption("**Axes & labels**")' not in control_source
+        layers, axes, figure = editor.tabs
+        assert [tab.label for tab in editor.tabs] == ["Layers", "Axes", "Figure"]
+        assert axes.selectbox(key="global_x_field").value == "x"
+        assert axes.selectbox(key="global_y_field").value == "y"
+        (grid,) = axes.get("popover")
+        assert grid.proto.popover.label == "Coordinate grid"
+        assert grid.checkbox(key="global_show_coordinate_grid") is not None
+        menus = {menu.proto.popover.label: menu for menu in figure.get("popover")}
+        assert list(menus) == [
+            "Screen & framing",
+            "Title & labels",
+            "Hover fields",
+            "Legends",
+        ]
+        assert menus["Screen & framing"].checkbox(key="_rail_crop_to_data") is not None
+        assert menus["Title & labels"].checkbox(key="global_show_title") is not None
+        assert layers.checkbox(key="global_show_labels") is not None
 
     def test_text_can_be_switched_off_without_crashing_the_figure_controls(self):
-        """Figure & canvas must not render into a missing Text slot."""
+        """Typography controls have a host even when the text is hidden."""
         at = _make_apptest(synthetic=True)
         at.session_state["global_show_labels"] = False
         at.run(timeout=30)
@@ -4392,7 +4290,7 @@ class TestOpenTrialFromCorpusTable:
         at.session_state["main_nav"] = "Corpus Analysis"
         at.run(timeout=60)
 
-        target = "l7_1090_2_1_1_Ele"
+        target = "l7_183_2_1_1_Ele"
         assert target != picked_trial_id(booted_on)
         at.session_state[PENDING_TRIAL_KEY] = {
             "participant_id": None,
@@ -4691,8 +4589,8 @@ class TestDeepLinkToAFilteredOutReader:
     """
 
     def test_reports_once_and_does_not_fire_when_the_reader_returns(self):
-        participant = "l37_1129"
-        trial = "l37_1129_2_2_2_Adv"
+        participant = "l37_273"
+        trial = "l37_273_2_2_2_Adv"
         at = _make_apptest()
         at.run(timeout=180)
         assert not at.exception, at.exception

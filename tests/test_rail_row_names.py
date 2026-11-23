@@ -1,113 +1,50 @@
-"""A split row's name is a click target.
-
-On a row with a switch the name is the switch's own label, so clicking the word
-flips the switch, as on 🎬 Animate and ⚖️ Compare. Every such toggle takes
-``wrap=True``: that switches off Streamlit's one-line "truncate" label mode, and
-with it the native ``title=`` tooltip that mode stamps (which repeats the label,
-icon ligature included: "compare Compare").
-
-On a name-only row (🧹 Filter, 📐 Figure & canvas) the name stays markdown,
-and CSS stretches the ▾ trigger's click target over it.
-
-The click itself happens in the browser, where AppTest cannot follow it. What
-is pinned here is the widget tree and the CSS that carries the behaviour.
-"""
+"""A layer's settings button and visibility switch are independent controls."""
 
 from __future__ import annotations
 
-import re
+from streamlit.testing.v1 import AppTest
 
-import pytest
-from streamlit.proto.LabelVisibility_pb2 import LabelVisibility
-
-from scanpath_studio.styles import get_app_css
 from tests.conftest import APP_SCRIPT
 
-streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-AppTest = streamlit_testing.AppTest
 
-VISIBLE = LabelVisibility.LabelVisibilityOptions.VISIBLE
-
-#: Every toggle that sits in a `split_mode_*` row once the app has booted.
-SPLIT_ROW_TOGGLES = (
-    "single_compare_toggle",
-    "global_show_fix",
-    "global_show_saccades",
-    "global_show_stimulus",
-    "global_show_words",
-    "global_show_heatmap",
-    "global_show_raw_gaze",
-)
-
-
-def _switch_row_app():
-    import streamlit as st
-
-    from scanpath_studio.controls import _rail_section
-
-    _rail_section(st, "**Fixations**", slug="fix", key="global_show_fix")
-
-
-def _name_only_row_app():
-    import streamlit as st
-
-    from scanpath_studio.controls import _rail_section
-
-    _rail_section(st, "**Filter**", slug="filter")
-
-
-def test_a_switch_row_names_its_switch():
-    at = AppTest.from_function(_switch_row_app)
-    at.run()
+def test_layers_pair_named_menus_with_their_own_visibility_switches():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
     assert not at.exception
-
-    toggle = at.toggle(key="global_show_fix")
-    assert toggle.label == "Fixations"
-    assert toggle.proto.label_visibility.value == VISIBLE
-    assert toggle.proto.wrap is True
-    # The name is not written a second time beside the switch.
-    assert "**Fixations**" not in [m.value for m in at.markdown]
-
-
-def test_a_name_only_row_keeps_its_name_as_text():
-    at = AppTest.from_function(_name_only_row_app)
-    at.run()
-    assert not at.exception
-
-    assert len(at.toggle) == 0
-    assert [m.value for m in at.markdown] == ["**Filter**"]
+    layers = next(tab for tab in at.tabs if tab.label == "Layers")
+    menus = {menu.key: menu.proto.popover.label for menu in layers.get("popover")}
+    for slug, key, label in (
+        ("fix", "global_show_fix", "Fixations"),
+        ("sac", "global_show_saccades", "Saccades"),
+        ("stim", "global_show_stimulus", "Stimulus"),
+        ("boxes", "global_show_words", "Word boxes"),
+        ("heatmap", "global_show_heatmap", "Heatmap"),
+        ("rawgaze", "global_show_raw_gaze", "Raw gaze"),
+    ):
+        switch = layers.toggle(key=key)
+        assert menus[f"plot_menu_{slug}"] == label
+        assert switch.label == label
+    assert menus["plot_menu_filter"] == "Filters & highlights"
 
 
-def test_every_split_row_toggle_opts_out_of_the_title_tooltip():
-    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
-    at.run()
-    assert not at.exception
+def test_filter_status_tracks_the_window_of_either_reading():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
 
-    for key in SPLIT_ROW_TOGGLES:
-        toggle = at.toggle(key=key)
-        assert toggle.proto.label_visibility.value == VISIBLE, key
-        assert toggle.proto.wrap is True, key
+    def active():
+        row = next(
+            block
+            for block in at.get("flex_container")
+            if block.key == "plot_filter_row"
+        )
+        return any(label.value == "Active" for label in row.caption)
 
-
-def _css() -> str:
-    return re.sub(r"\s+", " ", get_app_css())
-
-
-def test_the_name_only_rows_stretch_the_trigger_over_the_name():
-    css = _css()
-    name_only = (
-        '[data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not( '
-        ':has([data-testid="stCheckbox"]) )'
-    )
-    assert f"{name_only} {{ position: relative; }}" in css
-    assert f'{name_only} [data-testid="stPopover"] button::after {{' in css
-
-
-def test_the_switch_slot_is_flexible_again():
-    # The name sits inside the toggle, so a rule pinning the switch to its own
-    # width would leave no room for the label.
-    css = _css()
-    assert (
-        '[class*="st-key-split_mode_rail_"] > div:has([data-testid="stCheckbox"])'
-        not in css
-    )
+    assert not active()
+    for label in ("Fixation index range", "B fixation index range"):
+        slider = next(widget for widget in at.slider if widget.label == label)
+        lo, hi = slider.value
+        slider.set_range(lo + 1, hi).run()
+        assert active()
+        next(widget for widget in at.slider if widget.label == label).set_range(
+            lo, hi
+        ).run()
+        assert not active()

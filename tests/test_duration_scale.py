@@ -139,7 +139,8 @@ def contrasting_trials(sample):
     )
     low = spans.sort_values("max").iloc[0]
     high = spans.sort_values("max").iloc[-1]
-    assert high["max"] - low["max"] > 300  # the premise: very different ranges
+    # Only the high-duration reading crosses the filter exercised below.
+    assert low["max"] < 400 < high["max"]
     return (low["participant_id"], low["trial_id"]), (
         high["participant_id"],
         high["trial_id"],

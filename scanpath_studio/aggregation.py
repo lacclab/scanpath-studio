@@ -448,6 +448,85 @@ def _measure_series(frame: pd.DataFrame, measure: Measure) -> pd.Series:
     return values.where(np.isfinite(values))
 
 
+def corpus_text_column(frame: pd.DataFrame) -> str | None:
+    """The text identifier shared by the corpus overview and the word profiles."""
+    return next(
+        (
+            c
+            for c in (
+                "unique_text_id",
+                "text_id",
+                "unique_paragraph_id",
+                "paragraph_id",
+            )
+            if c in frame
+        ),
+        None,
+    )
+
+
+def corpus_overview(
+    words: pd.DataFrame, measure: Measure, group_by: str
+) -> pd.DataFrame:
+    """Mean and observed range by text or participant, with the contributing counts.
+
+    Each reading contributes its mean over finite word values across its screens.
+    For a text, repeated readings are averaged within participant before taking
+    the mean and range across participants. For a participant, the range spans
+    their readings. Shared stimulus copies do not represent observations.
+    Text comparisons require recorded text IDs. Groups with only missing
+    values keep their row and counts.
+    """
+    from .data import AOI_TRIAL_ID, TEXT_ID_MAPPED
+
+    if group_by not in ("text", "participant"):
+        raise ValueError("Choose text or participant for the corpus overview.")
+    field = corpus_text_column(words) if group_by == "text" else "participant_id"
+    keys = list(dict.fromkeys([field, "participant_id", "trial_id"]))
+    if not measure.per_word or measure.column not in words:
+        raise ValueError("The overview needs a mapped word-level measure.")
+    if field is None or not set(keys) <= set(words):
+        raise ValueError(
+            f"The Words table lacks the reading IDs needed to summarize by {group_by}."
+        )
+    eligible = None
+    if group_by == "text" and TEXT_ID_MAPPED in words:
+        mapped = words[TEXT_ID_MAPPED].fillna(False)
+        if not mapped.all():
+            if not mapped.any():
+                raise ValueError(
+                    "Comparing texts requires a mapped Text ID in the Words table."
+                )
+            eligible = mapped
+    if AOI_TRIAL_ID in words:
+        # A stimulus-level value copied onto each reading supplies no
+        # participant-specific observation, even for the word-row count.
+        own = words[AOI_TRIAL_ID].isna()
+        eligible = own if eligible is None else eligible & own
+    if eligible is not None:
+        words = words.loc[eligible, [*keys, measure.column]]
+    readings = (
+        _measure_series(words, measure)
+        .groupby([words[key] for key in keys])
+        .agg(["mean", "count", "size"])
+    )
+    counts = readings.groupby(level=field).agg(
+        n_readings=("mean", "count"),
+        n_values=("count", "sum"),
+        n_word_rows=("size", "sum"),
+    )
+    units = readings["mean"]
+    if group_by == "text":
+        units = units.groupby(level=[field, "participant_id"]).mean()
+        counts["n_participants"] = units.groupby(level=field).count()
+    summary = units.groupby(level=field).agg(value="mean", lo="min", hi="max")
+    return (
+        summary.join(counts)
+        .sort_values("value", ascending=False, kind="stable")
+        .reset_index()
+    )
+
+
 # --- Per text: one text, many readers ----------------------------------------
 
 
@@ -825,8 +904,7 @@ def reader_vs_cohort_values(
     """``{"This participant": …, "Cohort": …}`` value arrays for a measure."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
         return {}
-    work = frame.copy()
-    work["_m"] = _measure_series(work, measure).to_numpy()
+    work = frame[["participant_id"]].assign(_m=_measure_series(frame, measure))
     if normalize and not measure.is_rate:
         work = add_normalized_column(work, "_m")
     is_target = work["participant_id"].astype(str) == str(participant_id)

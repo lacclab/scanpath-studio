@@ -31,6 +31,133 @@ def _trace(figure, name):
     return next(trace for trace in figure.data if trace.name == name)
 
 
+def test_samples_keep_their_own_axes_during_tracking_loss_and_without_a_clock():
+    source = pd.DataFrame(
+        {
+            "trial_id": "t",
+            "x": [np.nan, np.nan],
+            "y": np.nan,
+            "Time": [100, 101],
+            "diameter from tracker": [2.1, 2.3],
+        }
+    )
+    schema = {
+        "trial": "trial_id",
+        "x": "x",
+        "y": "y",
+        "timestamp": "Time",
+        "pupil_diameter": "diameter from tracker",
+    }
+    samples = api.load_raw_gaze(source, raw_gaze_schema=schema)
+    assert not any(
+        t.name == "Raw gaze" for t in api.plot_scanpath(raw_gaze=samples).data
+    )
+    fig = api.plot_scanpath(
+        raw_gaze=samples, x_field="Time", y_field="diameter from tracker"
+    )
+    assert list(_trace(fig, "Raw gaze").x) == [100, 101]
+    assert list(_trace(fig, "Raw gaze").y) == [2.1, 2.3]
+    assert fig.layout.yaxis.title.text == "diameter from tracker"
+    untimed = api.load_raw_gaze(source, raw_gaze_schema={**schema, "timestamp": None})
+    chart = api.plot_scanpath(
+        raw_gaze=untimed, x_field="sample_index", y_field="pupil_diameter"
+    )
+    assert list(_trace(chart, "Raw gaze").x) == [1, 2]
+    assert "ms" not in _trace(chart, "Raw gaze").hovertemplate
+
+
+def test_fixation_and_sample_clocks_can_have_different_source_names():
+    words, events = example_import_tables()
+    events = events.rename(columns={"timestamp_ms": "Fix onset"})
+    schema = {**data.propose_fix_schema(events), "timestamp": "Fix onset"}
+    words, events = api.load_scanpath_data(words, events, fix_schema=schema)
+    key = api.list_trials(words, events).iloc[0]
+    source = pd.DataFrame(
+        {
+            "participant_id": key.participant_id,
+            "trial_id": key.trial_id,
+            "x": [10, 11],
+            "y": [20, 21],
+            "Sample clock": [123, 124],
+            "Area recording": [340, 341],
+        }
+    )
+    samples = api.load_raw_gaze(
+        source,
+        raw_gaze_schema={
+            **data.propose_raw_gaze_schema(source),
+            "timestamp": "Sample clock",
+            "pupil_area": "Area recording",
+        },
+    )
+    fig = api.plot_scanpath(
+        words,
+        events,
+        raw_gaze=samples,
+        x_field="Sample clock",
+        y_field="Area recording",
+    )
+    trace = _trace(fig, "Raw gaze")
+    assert list(trace.x) == [123, 124]
+    assert list(trace.y) == [340, 341]
+    assert fig.layout.xaxis.title.text == "Time (ms)"
+    assert fig.layout.yaxis.title.text == "Area recording"
+
+
+def test_captions_and_charts_require_drawable_samples_and_a_measured_elapsed_origin():
+    raw = api.load_raw_gaze(
+        pd.DataFrame(
+            {
+                "trial_id": "t",
+                "x": [1e8],
+                "y": 10,
+                "pupil_area": 130,
+                "timestamp_ms": 28,
+            }
+        ),
+        names="canonical",
+    )
+    for axes in (("x", "y"), (chart_axes.ELAPSED, "pupil_area")):
+        assert not chart_axes.drawable_raw_samples(
+            axes, raw, data.empty_fixations_frame()
+        )
+        fig = api.plot_scanpath(raw_gaze=raw, x_field=axes[0], y_field=axes[1])
+        assert not any(t.name == "Raw gaze" for t in fig.data)
+    assert chart_axes.drawable_raw_samples(("timestamp_ms", "pupil_area"), raw)
+
+
+def test_pupil_preset_enables_recorded_samples_and_round_trips_through_settings(
+    monkeypatch,
+):
+    from scanpath_studio import url_state
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
+        "Pupil area over recorded time"
+    ).run()
+    assert not at.exception
+    assert at.session_state["global_show_raw_gaze"]
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "timestamp_ms",
+        "pupil_area",
+    )
+
+    samples = api.load_sample_raw_gaze(names="canonical")
+    restored = {}
+    monkeypatch.setattr(url_state.st, "session_state", restored)
+    _, skipped = url_state._restore_plot_config(
+        {"axes": {"x_field": "timestamp_ms", "y_field": "pupil_area"}},
+        pd.DataFrame(),
+        data.empty_fixations_frame(),
+        samples,
+    )
+    assert not skipped
+    assert (restored["global_x_field"], restored["global_y_field"]) == (
+        "timestamp_ms",
+        "pupil_area",
+    )
+
+
 def test_missing_timestamps_never_supply_elapsed_seconds():
     w, f = example_import_tables()
     f = f.iloc[:3].copy()
@@ -316,6 +443,117 @@ def test_mode_round_trip_keeps_export_scope_and_artifacts():
         assert at.session_state["bulk_export_combine"]
 
 
+def test_time_view_replay_and_custom_restore():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.button(key="viz_view_custom").click().run()
+    assert at.button(key="viz_view_custom").proto.type == "primary"
+    at.checkbox(key="global_show_order").check().run()
+    initial_palette = at.selectbox(key="global_palette").value
+    at.button(key="viz_view_gaze_over_time").click().run()
+    assert tuple(at.session_state["global_marker_size_range"]) == (4, 4)
+    at.selectbox(key="global_palette").set_value("High contrast").run()
+    for mode, animate in (("essentials", True), ("full", False)):
+        at.segmented_control(key="ui_mode_switch").set_value(mode).run()
+        at.toggle(key="single_animate").set_value(animate).run()
+        assert not at.exception
+        assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"
+        assert (
+            at.session_state["global_x_field"],
+            at.session_state["global_y_field"],
+        ) == chart_axes.GAZE_OVER_TIME
+    at.button(key="viz_view_custom").click().run()
+    assert at.checkbox(key="global_show_order").value
+    assert at.selectbox(key="global_palette").value == initial_palette
+    assert at.session_state["global_x_field"] == "x"
+    assert at.session_state["global_y_field"] == "y"
+
+
+def test_time_view_falls_back_to_screen_axes_on_a_dataset_without_onsets():
+    w, f = example_import_tables()
+    w, f = api.load_scanpath_data(w, f.drop(columns="timestamp_ms"), names="canonical")
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at.session_state["_datasets"] = {
+        "Untimed": {
+            "words": w,
+            "fixations": f,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+        }
+    }
+    at.run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    picker = at.selectbox(key="data_source_picker")
+    first = picker.index
+    picker.select_index(
+        next(i for i, label in enumerate(picker.options) if "Untimed" in label)
+    ).run()
+    assert not at.exception
+    assert at.button(key="viz_view_gaze_over_time").disabled
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "x",
+        "y",
+    )
+    at.selectbox(key="data_source_picker").select_index(first).run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    assert (
+        at.session_state["global_x_field"],
+        at.session_state["global_y_field"],
+    ) == chart_axes.GAZE_OVER_TIME
+
+
+def test_choosing_scanpath_in_compare_replaces_the_underlying_time_chart():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    assert not at.button(key="viz_view_gaze_over_time").disabled
+    assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"
+    at.button(key="viz_view_scanpath").click().run()
+    assert at.toggle(key="single_compare_toggle").value
+    at.toggle(key="single_compare_toggle").set_value(False).run()
+    assert at.button(key="viz_view_scanpath").proto.type == "primary"
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "x",
+        "y",
+    )
+
+
+def test_time_shortcuts_follow_the_clock_of_the_selected_reading():
+    words, fix = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    words = pd.concat(
+        [words.assign(trial_id="recorded"), words.assign(trial_id="untimed")]
+    )
+    fix = pd.concat(
+        [
+            fix.assign(trial_id="recorded"),
+            fix.assign(trial_id="untimed", timestamp_ms=np.nan),
+        ]
+    )
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at.session_state["_datasets"] = {
+        "Mixed": {
+            "words": words,
+            "fixations": fix,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Mixed"
+    at.run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    at.selectbox(key="single_trial_id").set_value("untimed").run()
+    assert not at.exception
+    assert at.button(key="viz_view_gaze_over_time").disabled
+    assert (
+        "Horizontal position over time"
+        not in at.selectbox(key="_plot_axis_preset").options
+    )
+    at.selectbox(key="single_trial_id").set_value("recorded").run()
+    assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"
+    assert (
+        at.selectbox(key="_plot_axis_preset").value == "Horizontal position over time"
+    )
+
+
 def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
     next(box for box in at.selectbox if box.label == "Axis preset").set_value(
@@ -325,9 +563,9 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
         chart_axes.ELAPSED,
         "y",
     )
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert at.session_state["single_animate"]
-    at.button(key="viz_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(False).run()
     assert not at.session_state["single_animate"]
     assert at.session_state["global_x_field"] == chart_axes.ELAPSED
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
@@ -336,7 +574,7 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
     at.toggle(key="single_compare_toggle").set_value(True).run()
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
     assert at.session_state["single_compare_toggle"]
-    assert at.button(key="viz_view_scanpath").proto.type == "primary"
+    assert at.button(key="viz_view_custom").proto.type == "primary"
     at.toggle(key="single_compare_toggle").set_value(False).run()
     assert at.session_state["global_x_field"] == chart_axes.ELAPSED
     at.button(key="viz_view_scanpath").click().run()
@@ -410,3 +648,106 @@ def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     at.button(key="design_apply_Reading clock").click().run()
     check_clock()
     assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+def test_compare_elapsed_axes_keep_each_readings_parent_clock_and_scale(layout):
+    words, first = make_multipart_synthetic_data()
+    second = first.assign(timestamp_ms=first.timestamp_ms * 2 + 91_000)
+    later = first[first.screen_id == "question"]
+    a, b = later.iloc[-1], later.iloc[0]
+    key = (a.participant_id, a.trial_id)
+    fig = api.compare_scanpaths(
+        words,
+        first,
+        key,
+        key,
+        words_b=words,
+        fixations_b=second,
+        screen="question",
+        screen_b="question",
+        layout=layout,
+        x_field=chart_axes.ELAPSED,
+        y_field="y",
+        labels=("First", "Second"),
+        fix_index_range=(int(a.order_in_trial), int(a.order_in_trial)),
+        fix_index_range_b=(int(b.order_in_trial), int(b.order_in_trial)),
+        color_by="(uniform)",
+        show_saccade_arrows=True,
+    )
+    assert list(_trace(fig, "First").x) == pytest.approx(
+        [(a.timestamp_ms - first.timestamp_ms.min()) / 1000]
+    )
+    assert list(_trace(fig, "Second").x) == pytest.approx(
+        [(b.timestamp_ms - first.timestamp_ms.min()) / 500]
+    )
+    assert _trace(fig, "Second").xaxis == "x2"
+    assert fig.layout.xaxis.range == fig.layout.xaxis2.range
+    assert fig.layout.yaxis.range == fig.layout.yaxis2.range
+    assert fig.layout.yaxis.range[0] > fig.layout.yaxis.range[1]
+    assert len([t for t in fig.data if t.name == "Fixation duration"]) == 2
+    assert all(t.marker.symbol != "arrow" for t in fig.data)
+    assert not fig.layout.shapes
+
+
+@pytest.mark.parametrize("comparing", [False, True])
+def test_index_sequence_without_markers_obeys_window_and_hide(comparing):
+    words, fix = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    first = fix.iloc[0]
+    key = (first.participant_id, first.trial_id)
+    fix = fix[(fix.participant_id == key[0]) & (fix.trial_id == key[1])].copy()
+    fix["duration_ms"] = np.where(fix.order_in_trial == 3, 1, 200)
+    settings = dict(
+        x_field="order_in_trial",
+        y_field="x",
+        show_fixations=False,
+        show_order=True,
+        show_saccades=True,
+        fix_index_range=(2, 5),
+        fixation_flags={"short": {"mode": "Hide", "threshold_ms": 50}},
+    )
+    fig = (
+        api.compare_scanpaths(words, fix, key, key, **settings)
+        if comparing
+        else api.plot_scanpath(words, fix, **settings)
+    )
+    lines = [t for t in fig.data if t.name == "Fixation sequence"]
+    assert len(lines) == 1 + int(comparing)
+    assert all(list(t.x) == [2, 4, 5] for t in lines)
+    assert all(t.mode == "lines" for t in fig.data if t.x is not None and len(t.x) > 1)
+
+
+def test_sample_only_comparison_axis_does_not_draw_fixation_keys():
+    words, fix = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    first = fix.iloc[0]
+    key = (first.participant_id, first.trial_id)
+    raw = pd.DataFrame(
+        {
+            "participant_id": key[0],
+            "trial_id": key[1],
+            "x": [1],
+            "y": [2],
+            "timestamp_ms": [35.0],
+            "pupil_area": [231.0],
+        }
+    )
+    fig = api.compare_scanpaths(
+        words,
+        fix,
+        key,
+        key,
+        words_b=words,
+        fixations_b=fix,
+        raw_gaze_b=raw,
+        show_raw_gaze=True,
+        x_field="timestamp_ms",
+        y_field="pupil_area",
+        duration_size_legend=True,
+        marker_size_scale="linear",
+        labels=("First", "Second"),
+    )
+    assert [t.name for t in fig.data] == ["Second · raw gaze"]
+    assert list(fig.data[0].x) == [35]
+    assert list(fig.data[0].y) == [231]
+    assert sum(a.text == "No data on these axes" for a in fig.layout.annotations) == 1
+    assert not fig.layout.shapes

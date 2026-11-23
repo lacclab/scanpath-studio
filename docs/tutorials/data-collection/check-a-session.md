@@ -49,7 +49,7 @@ session.
 ## 5. Save the review { #5-save-the-review }
 
 Export favorites, tags and notes from :material/database: **Data Management**
-→ **Annotations** → **Export**. The file includes participant and trial IDs.
+→ **Current dataset → Annotations → Export**. The file includes participant and trial IDs.
 **Open** on an annotation row returns to that trial.
 
 To reconcile a second reviewer's notes, choose **Import**. The preview counts

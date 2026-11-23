@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 import pytest
 from PIL import Image
 
+from scanpath_studio.aggregation import MEASURES, corpus_overview
+from scanpath_studio.api import plot_corpus_figure
 from scanpath_studio.data import (
     compute_word_metrics,
     infer_fix_schema,
@@ -116,6 +118,28 @@ class TestSampleDataPipeline:
 
 
 class TestPipelineFigures:
+    def test_overview_plots_observed_reading_ranges(self, normalized_demo):
+        words, _ = normalized_demo
+        measure = MEASURES["ffd"]
+        table = corpus_overview(words, measure, "participant")
+        fig = plot_corpus_figure(
+            table,
+            kind="overview",
+            series_col="participant_id",
+            measure_label=measure.axis_label,
+        )
+        trace = fig.data[0]
+        readings = words.groupby(["participant_id", "trial_id"])[measure.column].mean()
+        for point, label in enumerate(fig.layout.yaxis.ticktext):
+            values = readings.loc[label]
+            assert trace.x[point] == pytest.approx(values.mean())
+            assert trace.x[point] - trace.error_x.arrayminus[point] == pytest.approx(
+                values.min()
+            )
+            assert trace.x[point] + trace.error_x.array[point] == pytest.approx(
+                values.max()
+            )
+
     def test_scanpath_figure_renders(self, normalized_demo):
         words, fixations = normalized_demo
         pid = words["participant_id"].iloc[0]
@@ -459,11 +483,8 @@ def _png_first_ink_col(path: str) -> int:
 
 class TestStimulusImageAlignment:
     """The bundled demo ships per-trial stimulus PNGs placed at data
-    (``image_x``, ``image_y``). Those origins are *external* metadata (rendered by
-    a separate script, not by ``update_sample_data.py``), so this guards against a
-    regenerated origin drifting the page off the AOI boxes / fixations (e.g.
-    ``image_y=148``, ~36 px too high). Aligns the PNG's own text lines to the
-    word boxes; a wrong origin fails here regardless of which script produced it.
+    (``image_x``, ``image_y``). Each rendered PNG's text lines align with the
+    recorded word boxes when the sample builder places it at the correct origin.
 
     Correct origin for the OneStop demo is ``(image_x=368, image_y=186)`` — where
     the experiment's own Experiment Builder drew the paragraph image (its

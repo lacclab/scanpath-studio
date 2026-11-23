@@ -240,7 +240,7 @@ class TestColumnMappingOverrideFlow:
         # the fixations frame was re-normalized, not relabelled.
         raw_fix = load_sample_data()[1]
         before_expected = list(raw_fix["CURRENT_FIX_DURATION"].head(5))
-        after_expected = list(raw_fix["NEXT_SAC_AMPLITUDE"].head(5))
+        after_expected = pd.to_numeric(raw_fix["NEXT_SAC_AMPLITUDE"].head(5)).tolist()
         assert before_expected != after_expected  # the remap must be observable
 
         at = _boot(view=VIEW_DATA)
@@ -449,7 +449,7 @@ class TestBulkExportFlow:
     ``st.download_button`` is drivable from ``AppTest``, and the test clicks the
     real one — but the bytes it serves live in Streamlit's media-file manager,
     not in the element tree, so there is no way to *read* the zip back from the
-    click. The payload is therefore captured at the ``tabs.bulk_export`` seam by
+    click. The payload is therefore captured at the ``tabs.build_download`` seam by
     a wrapper that calls the real function. Everything up to and including the
     button press — the options collected from the widgets, the scope, the trial
     pool, the figure settings — is the real UI path; only the *inspection* of
@@ -471,19 +471,19 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         tabular = at.pills(key="bulk_export_tabular")
         assert "Mega-table" not in tabular.options
-        at.multiselect(key="filter_participants").set_value(["l7_1090"])
+        at.multiselect(key="filter_participants").set_value(["l7_183"])
         at.pills(key="bulk_export_figfmts").set_value([])
         tabular.set_value(["Fixations"])
         at.run(timeout=60)
@@ -506,14 +506,14 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0], result[1]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always
@@ -524,7 +524,7 @@ class TestBulkExportFlow:
 
         # Narrow to one reader — the export's default scope is the filtered pool.
         participants = at.multiselect(key="filter_participants")
-        participants.set_value(["l7_1090"])
+        participants.set_value(["l7_183"])
         at.run(timeout=60)
         _clean(at, "after narrowing to one participant:")
         pool = _trial_ids(at)
@@ -565,18 +565,18 @@ class TestBulkExportFlow:
             "read_csv.R",
         }
         for trial in pool:
-            expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
-            expected.add(f"per_trial/l7_1090__{trial}/plot_config.json")
+            expected.add(f"per_trial/l7_183__{trial}/fixations.csv")
+            expected.add(f"per_trial/l7_183__{trial}/plot_config.json")
         assert self._zip_names(zip_bytes) == expected
 
         # The per-trial config identifies its own trial, and records the live
         # word-box toggle in the file itself (not just in the call kwargs).
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            cfg = json.loads(zf.read(f"per_trial/l7_1090__{pool[0]}/plot_config.json"))
+            cfg = json.loads(zf.read(f"per_trial/l7_183__{pool[0]}/plot_config.json"))
             fix_csv = pd.read_csv(
-                io.BytesIO(zf.read(f"per_trial/l7_1090__{pool[0]}/fixations.csv"))
+                io.BytesIO(zf.read(f"per_trial/l7_183__{pool[0]}/fixations.csv"))
             )
-        assert cfg["selection"]["participant_id"] == "l7_1090"
+        assert cfg["selection"]["participant_id"] == "l7_183"
         assert cfg["selection"]["trial_id"] == pool[0]
         assert cfg["layers"]["words"] is True
 
@@ -585,19 +585,19 @@ class TestBulkExportFlow:
         raw_fix = load_sample_data()[1]
         expected_rows = int(
             (
-                (raw_fix["participant_id"] == "l7_1090")
+                (raw_fix["participant_id"] == "l7_183")
                 & (raw_fix["unique_trial_id"] == pool[0])
             ).sum()
         )
         assert expected_rows > 0
         assert len(fix_csv) == expected_rows
-        assert set(fix_csv["participant_id"].unique()) == {"l7_1090"}
+        assert set(fix_csv["participant_id"].unique()) == {"l7_183"}
         # Under the demo's own names: its file calls the trial id
         # `unique_trial_id` and the duration `CURRENT_FIX_DURATION`.
         assert set(fix_csv["unique_trial_id"].unique()) == {pool[0]}
         assert sorted(fix_csv["CURRENT_FIX_DURATION"]) == sorted(
             raw_fix.loc[
-                (raw_fix["participant_id"] == "l7_1090")
+                (raw_fix["participant_id"] == "l7_183")
                 & (raw_fix["unique_trial_id"] == pool[0]),
                 "CURRENT_FIX_DURATION",
             ]
@@ -636,7 +636,7 @@ class TestBulkExportFlow:
             for name in names_all
             if name.startswith("per_trial/")
         }
-        assert exported == {"l7_1090", "l37_1129"}
+        assert exported == {"l7_183", "l37_273"}
         # README, citation, inventory, dictionary and R reader, then two files
         # per trial.
         assert len(names_all) == 5 + 2 * DEMO_TRIALS_IN_PICKER
@@ -712,6 +712,56 @@ class TestBulkExportFlow:
         # The session is as it was: the choices that led to the build stand.
         assert at.radio(key="bulk_export_scope").value == "This trial"
         assert list(at.pills(key="bulk_export_figfmts").value) == ["HTML", "SVG"]
+
+    def test_smaller_png_files_rebuilds_figures_and_layers(self, monkeypatch):
+        from contextlib import contextmanager
+
+        from PIL import Image
+
+        from scanpath_studio import export
+        from scanpath_studio.file_citation import stamp
+
+        buffer = io.BytesIO()
+        Image.new("RGBA", (120, 80), (31, 73, 122, 128)).save(
+            buffer, "PNG", compress_level=0
+        )
+        original = stamp(buffer.getvalue(), "png")
+
+        @contextmanager
+        def renderer(_enabled):
+            yield lambda _fig, fmt, *_: original if fmt == "png" else b"<svg/>"
+
+        monkeypatch.setattr(export, "_figure_renderer", renderer)
+        at = _boot(subtab=SUBTAB_EXPORT)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["PNG", "SVG"])
+        at.toggle(key="bulk_export_layers").set_value(True)
+        at.run(timeout=60)
+        assert at.toggle(key="bulk_export_compact_pngs").value is False
+
+        def build():
+            next(b for b in at.button if b.label == "Build export").click().run(
+                timeout=60
+            )
+            _clean(at, "after building PNG figures and layers:")
+            with zipfile.ZipFile(
+                io.BytesIO(at.session_state["_bulk_export_cache"]["data"])
+            ) as z:
+                return {
+                    p: z.read(p) for p in z.namelist() if p.endswith((".png", ".svg"))
+                }
+
+        fast = build()
+        at.toggle(key="bulk_export_compact_pngs").set_value(True).run(timeout=60)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
+        smaller = build()
+        assert smaller.keys() == fast.keys()
+        assert any("/layers/" in path and path.endswith(".png") for path in fast)
+        for path in fast:
+            if path.endswith(".png"):
+                assert fast[path] == original and len(smaller[path]) < len(original)
+            else:
+                assert smaller[path] == fast[path] == b"<svg/>"
 
     def test_the_html_files_choice_reaches_the_bundle(self, monkeypatch):
         from scanpath_studio import tabs

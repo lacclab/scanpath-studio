@@ -19,8 +19,8 @@ print(gallery_figure("saccade-types"))
 === "In the app"
 
     1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
-    2. In :material/arrow_outward: **Saccades** ▾ → **Line** → **Color**, choose **By type**.
-    3. To match this example, open :material/aspect_ratio: **Figure & canvas** ▾ → **Legends** and untick **Show** for **Saccade types**. This page shows the color key below the figure.
+    2. In :material/arrow_outward: **Saccades** → **Color**, choose **By type**.
+    3. To match this example, open :material/aspect_ratio: **Figure** → **Legends** and untick **Show** for **Saccade types**. This page shows the color key below the figure.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 
@@ -28,7 +28,7 @@ print(gallery_figure("saccade-types"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele \
       --saccade-color-by-type --no-saccade-type-legend \
       --highlight-column '' \
       -o saccade-types.html

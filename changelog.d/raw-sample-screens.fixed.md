@@ -1,0 +1,1 @@
+Screens with gaze samples alone appear in the trial picker and exports. Comparisons place each reading’s samples on its recorded screen. Saccade peak speeds use consecutive positions from the same eye and screen and skip gaps in tracking.

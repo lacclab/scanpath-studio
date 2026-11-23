@@ -30,7 +30,16 @@ def test_distribution_chart_labels_follow_normalization(section, compare, normal
     pin_view(at, "Corpus Analysis")
     at.session_state["corpus_subtab"] = section
     at.session_state["groups_compare"] = compare
+    if section == "Groups" and compare:
+        at.session_state["cmp_view"] = "Overlaid distributions"
     at.run(timeout=60)
+    if section == "Per participant":
+        settings = next(
+            p for p in at.get("popover") if p.proto.popover.label == "Chart settings"
+        )
+        assert settings.selectbox(key="prdr_view").value == "Distribution vs cohort"
+        assert {s.key for s in settings.selectbox} == {"prdr_view", "prdr7_kind"}
+        assert {s.key for s in at.selectbox} >= {"prdr_pid", "prdr_measure"}
     for normalized in (False, True):
         if normalized:
             at.toggle(key=normalize).set_value(True).run(timeout=60)

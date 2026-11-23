@@ -140,7 +140,7 @@ from .metadata_editor import (
 from .persistence import is_loopback_url, persistence_enabled
 from .styles import mapping_menu_css
 from .tour import (
-    maybe_show_wizard_guide,
+    WIZARD_HELP_KEY,
     render_spotlight_wizard_guide,
     render_wizard_guide_button,
 )
@@ -3964,6 +3964,8 @@ MAP_LINES = {
         ("trial", "participant", "text_id", "screen_id"),
         ("x", "y", "timestamp"),
         ("word_id", "text"),
+        ("eye", "pupil_area", "pupil_diameter"),
+        ("screen_index", "canvas_width", "canvas_height"),
     ),
 }
 
@@ -4212,12 +4214,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             '<div class="sps-wiz-title">Set up your dataset</div>',
             unsafe_allow_html=True,
         )
-        # Step-by-step guide: a floating card that auto-opens once per session
-        # and is replayable via the popover below. Arm it (auto/first-visit)
-        # then render the card early so it streams before the heavy
-        # upload/normalize work. Drawn outside the sticky bar: a sticky parent
-        # can become the containing block of a fixed child.
-        maybe_show_wizard_guide()
+        # A requested guide draws outside the sticky bar so it can float beside the form.
         render_spotlight_wizard_guide()
         # One ❓ popover for the setup guide and the docs — a popover, not a
         # dialog, since it is a two-item chooser with no modal weight to it.
@@ -4227,16 +4224,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # — and the same kind of control as each other: a content-width
         # button stacked over a stretched link button would read as two
         # unrelated widgets of two different widths.
-        with help_col.popover(f"{ICONS['help']} Setup help", width="content"):
+        with help_col.popover(
+            f"{ICONS['help']} Setup help",
+            key=WIZARD_HELP_KEY,
+            on_change="rerun",
+            width="content",
+        ):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
             # tab and so cannot lose an in-progress upload the way switching
             # views would — the same reason the leave prompt exists.
             st.link_button(
-                # Named for what it *is* rather than for the page it opens — a
-                # page name ("Data guide") would read like one more wizard step
-                # on a row of wizard controls, which is the one thing it is not.
-                "More documentation ↗",
+                "Read the import guide ↗",
                 f"{build_info().docs_url}guides/loading-data/",
                 icon=ICONS["docs"],
                 type="tertiary",

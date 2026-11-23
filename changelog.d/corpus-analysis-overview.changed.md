@@ -1,0 +1,1 @@
+Corpus Analysis opens with a chart of texts or participants. Select a dot for its readings, open a word or participant profile, or choose Groups to compare two conditions. Chart settings, tables and downloads open on demand.

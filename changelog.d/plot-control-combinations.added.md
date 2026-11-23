@@ -1,0 +1,1 @@
+Compare readings on shared numeric axes, highlight word borders in comparisons and replays, and use the fixation window and sequence line with markers hidden. Plot controls grey out when the selected view or data cannot use them.

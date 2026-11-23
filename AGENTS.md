@@ -42,6 +42,8 @@ scanpath_studio/
 │  ├─ ui_mode.py         the Scanpath view's Essentials | Full mode: how it is seeded (`?ui=`, cookie),
 │  │                     the header switch, the CSS that hides the other mode's containers, ＋ More lists
 │  ├─ tabs.py            the views' panels: Scanpath (plot + rail + subtabs), Corpus Analysis, the Data page
+│  ├─ corpus_overview.py the Texts and Participants summary charts, selection and profile drill-down
+│  ├─ corpus_navigation.py the Corpus Analysis destinations and published summary/profile bookmarks
 │  ├─ controls.py        the Scanpath rail, the column-mapping UI and the trial filters
 │  ├─ metadata_editor.py the participant, trial and text metadata controls shared by the wizard and Data Management
 │  ├─ upload_ui.py       shared file-read error messages for the upload controls
@@ -52,13 +54,14 @@ scanpath_studio/
 │  ├─ url_state.py       deep links, 🔗 Share (Link · Code · File), settings-file save/restore + migrations
 │  ├─ session_keys.py    the session keys / URL params that are a wire format, as constants
 │  ├─ plot_config.py     the settings-file serializer shared by Share and the export bundle
-│  ├─ tour.py            welcome tour, task tutorials and the setup guide
+│  ├─ tour.py            sample invitation, task guides and the optional import walkthrough
+│  ├─ feedback.py        offline troubleshooting, GitHub support links and bug-report details
 │  ├─ loading.py         loading cards (revealed by a timer thread) with Cancel
 │  ├─ progress.py        a Streamlit-free progress + cancel hook for loaders and builders
 │  ├─ constants.py       palette, defaults, `ICONS`, citation metadata, experimental-feature gates
 │  ├─ styles.py          injected CSS
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
-│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About → Debug)
+│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About & citation → App details → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
 │  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
 │  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
@@ -92,6 +95,7 @@ scanpath_studio/
 │  ├─ plots.py           `FigureSettings` (the render contract) + every Plotly builder + layer split
 │  ├─ code_snippet.py    the Python / CLI code that reproduces the figure on screen
 │  ├─ export.py          bulk export (figures + tables, per trial or combined)
+│  ├─ bulk_renderer.py   Kaleido page reuse and browser recycling for bulk figures
 │  ├─ animation_export.py GIF / MP4 from the replay (warm Kaleido + Pillow / imageio-ffmpeg)
 │  ├─ export_status.py   shared export stages and byte signatures
 │  └─ authoring.py, authoring_component.py
@@ -285,8 +289,8 @@ uv run --extra test python scripts/verify_change.py  # see a change work (/verif
 uv run --extra lint ruff check .
 uv run --extra lint ruff format .
 
-# Regenerate bundled sample data (needs the full OneStop CSVs, or --source-dir)
-uv run python -m scanpath_studio.update_sample_data
+# Regenerate the bundled L1 demo from the OneStop Full paragraph reports and raw ASC files
+uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc
 
 # Standalone desktop bundle (needs `pip install . pyinstaller` — non-editable)
 # Output: dist/ScanpathStudio.app on macOS, dist/ScanpathStudio/ elsewhere.
@@ -478,8 +482,11 @@ here fails when its rule is broken.
 - **Every fingerprint is exact** — a frame hashed in full or named by its source
   (`data.stamp_source` / `adopt_source`, `frame_cache`, `assign_derived`), never
   sampled. A new large per-rerun frame needs one, or it is hashed every run.
-- The bundled `raw_gaze.{csv,parquet}` is **synthesized** from one bundled
-  trial's fixations and must stay keyed to a trial in them.
+- The bundled `raw_gaze.{csv,parquet}` carries the two L1 readers' recorded
+  EyeLink gaze positions for all 24 readings. Extract samples within the
+  fixation report's paragraph interest period and subtract its trial start
+  time to share the fixation clock. Keep every recorded tick, including missing
+  x/y values, pupil area in tracker units and the tracked eye.
 
 **Figures**
 
@@ -508,9 +515,11 @@ here fails when its rule is broken.
   `tabs._render_save_plot_button` hands its component. A new writer stamps its
   output too; only the toolbar camera's PNG can't.
 - **Kaleido** (PNG/SVG/PDF, GIF/MP4) needs Chrome (`plotly_get_chrome -y`;
-  `packages.txt` on Streamlit Cloud), and its warm server is a process-wide
-  singleton: hold `animation_export.KALEIDO_LOCK`. The on-screen PNG/SVG is
-  saved in the browser; HTML needs no browser.
+  `packages.txt` on Streamlit Cloud). Hold `animation_export.KALEIDO_LOCK`
+  for native rendering. Single figures and animations use Kaleido's process-wide
+  warm server. Multi-reading bundles reuse one browser page and periodically
+  replace the browser to release native memory. The on-screen PNG/SVG is saved
+  in the browser. HTML export works without Chrome.
 - Bulk export iterates *all* filtered trials — narrow the filter first.
 
 **Loading and performance**

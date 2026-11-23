@@ -33,7 +33,7 @@ def _figures_dir() -> Path:
 
 FIGS = _figures_dir()
 
-SCAN_TRIAL = ("l7_1090", "l7_1090_2_2_4_Ele")  # 35 fixations, short + clean
+SCAN_TRIAL = ("l7_183", "l7_183_2_2_4_Ele")
 CMP_TEXT = "2_1_1_Ele"  # read by two demo participants
 
 

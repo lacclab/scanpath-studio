@@ -32,6 +32,7 @@ from .authoring import (
     parse_authoring_document,
     sample_draft,
 )
+from .chart_axes import GAZE_OVER_TIME
 from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
@@ -119,8 +120,10 @@ from .constants import (
 from .controls import (
     _ALIGN_OPTIONS,
     claim_mapping,
+    clear_replay_layer_restore,
     color_field_options,
     forget_color_range,
+    forget_design_selection,
     numeric_field_options,
     palette_state,
 )
@@ -1897,7 +1900,7 @@ _TEXT_STATE_KEYS = frozenset(
 )
 #: A data field the rail heals against the loaded data: a string, or unset.
 _FIELD_STATE_KEYS = frozenset(
-    {"global_word_hover_measure", "global_x_field", "global_y_field"}
+    {"global_color_by", "global_word_hover_measure", "global_x_field", "global_y_field"}
 )
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
@@ -1933,7 +1936,7 @@ def _legend_position(value) -> str:
     return position
 
 
-#: Each legend's three keys (Figure & canvas → Legends), checked the same way
+#: Each legend's three keys (Figure → Legends), checked the same way
 #: whether they come from a link, a settings file, a design or the cache.
 _LEGEND_STATE_PARSERS = {
     key: parse
@@ -2699,7 +2702,10 @@ def _restore_window(
 
 
 def _restore_plot_config(
-    config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
+    config: dict,
+    combos: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[int, list]:
     """Seed session_state from an uploaded plot-config dict so the rail
     widgets render with the saved settings. Returns ``(applied, skipped)`` where
@@ -2730,6 +2736,12 @@ def _restore_plot_config(
     has_valid_plot_section = _has_plot_section(config)
 
     layers = section("layers")
+    if (
+        "fixations" in layers
+        or "saccades" in layers
+        or isinstance(section("mode").get("animate"), bool)
+    ):
+        clear_replay_layer_restore()
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
@@ -3237,14 +3249,19 @@ def _restore_plot_config(
             )
 
     axes = section("axes")
-    numeric = numeric_field_options(fixations)
-    for cfg_key, state_key, label in (
-        ("x_field", "global_x_field", "X axis field"),
-        ("y_field", "global_y_field", "Y axis field"),
+    numeric = numeric_field_options(fixations, raw_gaze)
+    if (axes.get("x_field"), axes.get("y_field")) == GAZE_OVER_TIME and not all(
+        field in numeric for field in GAZE_OVER_TIME
     ):
-        val = axes.get(cfg_key)
-        if val is not None:
-            put_valid(val in numeric, state_key, val, label)
+        skipped.append("Gaze over time (no recorded fixation onsets)")
+    else:
+        for cfg_key, state_key, label in (
+            ("x_field", "global_x_field", "X axis field"),
+            ("y_field", "global_y_field", "Y axis field"),
+        ):
+            val = axes.get(cfg_key)
+            if val is not None:
+                put_valid(val in numeric, state_key, val, label)
     if "coordinate_grid" in axes:
         put("global_show_coordinate_grid", bool(axes["coordinate_grid"]))
     if "coordinate_grid_auto" in axes:
@@ -3585,6 +3602,8 @@ def _restore_plot_config(
             compare, SINGLE_COMPARE_FIX_RANGE, "_compare_fix_range_trial", restore
         )
 
+    if has_valid_plot_section and restore.applied:
+        forget_design_selection(st.session_state)
     return restore.applied, skipped
 
 
@@ -3676,7 +3695,9 @@ def _restore_figure_mode(
         st.session_state.pop(SINGLE_COMPARE_SCREEN_ID, None)
 
 
-def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
+def _apply_uploaded_plot_config(
+    combos: pd.DataFrame, fixations: pd.DataFrame, raw_gaze: pd.DataFrame | None = None
+) -> None:
     """Restore settings from a freshly uploaded plot-config JSON, once per file.
 
     Reads the file captured by 🔗 Share → File's ``plot_config_upload``
@@ -3718,7 +3739,7 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
             return
         st.rerun()
     try:
-        applied, skipped = _restore_plot_config(config, combos, fixations)
+        applied, skipped = _restore_plot_config(config, combos, fixations, raw_gaze)
     except Exception as exc:  # backstop for an unexpectedly shaped config
         st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return

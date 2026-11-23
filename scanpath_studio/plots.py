@@ -6364,6 +6364,11 @@ _REPLAY_PLAYER_JS = """(function () {
       slot.appendChild(range);
       var readout = document.createElement('span');
       readout.setAttribute('aria-hidden', 'true');
+      readout.style.colorScheme = 'light dark';
+      readout.style.color = 'CanvasText';
+      readout.style.background = 'Canvas';
+      readout.style.borderRadius = '4px';
+      readout.style.padding = '2px 4px';
       readout.style.whiteSpace = 'nowrap';
       readout.style.fontVariantNumeric = 'tabular-nums';
       var widest = prefix + ((steps[last] && steps[last].label) || '');

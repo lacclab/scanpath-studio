@@ -155,8 +155,8 @@ jobs:
       - name: Install Chromium and WebKit
         run: playwright install --with-deps chromium webkit
 
-      - name: Run the browser smoke test
-        run: pytest -q tests/test_browser_smoke.py
+      - name: Run the browser smoke test and the download page's link checks
+        run: pytest -q tests/test_browser_smoke.py tests/test_bundle_download_page.py
 
       - name: Check keyboard navigation, narrow imports, and offline downloads in WebKit
         env:

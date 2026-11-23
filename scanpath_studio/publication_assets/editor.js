@@ -1042,7 +1042,7 @@ window.publicationMovieFrame = async (elapsed) => {
   return png;
 };
 async function moviePoster() {
-  const art = await artwork(),
+  const art = await artwork(doc.panels, true),
     dpi = Math.min(144, (1080 * 72) / art.H, (1920 * 72) / art.W);
   const image = await canvasFor(art, dpi),
     canvas = document.createElement("canvas");

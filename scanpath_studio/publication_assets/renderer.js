@@ -540,7 +540,23 @@ function scoped(art, id, isolate) {
     }
   return root;
 }
-function draft(alt = false, panels = doc.panels) {
+// The reading time, in seconds, that a replay panel's suggested caption names.
+const frameTime = (p, s) => fmt((clock(s)[p.frame || 0] || 0) / 1000);
+// The widest of those times over the panel's clip interval.
+function widestTime(p, s) {
+  const times = clock(s),
+    last = times.length - 1,
+    end = clip(p.end ?? last, 0, last);
+  let widest = "",
+    most = -1;
+  for (let i = clip(p.start ?? 0, 0, last); i <= end; i++) {
+    const t = fmt((times[i] || 0) / 1000),
+      w = textWidth(t, 9);
+    if (w > most) [widest, most] = [t, w];
+  }
+  return widest;
+}
+function draft(alt = false, panels = doc.panels, time = frameTime) {
   const result = panels
     .map((p, i) => {
       const s = byId(p.source),
@@ -574,9 +590,7 @@ function draft(alt = false, panels = doc.panels) {
         desc +
         (p.crop ? " (detail)" : "") +
         (ls ? ". " + ls : "") +
-        (clock(s).length
-          ? " · " + fmt((clock(s)[p.frame || 0] || 0) / 1000) + " s"
-          : "")
+        (clock(s).length ? " · " + time(p, s) + " s" : "")
       );
     })
     .join(alt ? " " : "\n");
@@ -586,7 +600,9 @@ function draft(alt = false, panels = doc.panels) {
   return result + (!alt && refs.length ? "\n" + refs.join(" ") : "");
 }
 const letter = (i) => String.fromCharCode(65 + i);
-function build(arts, panels) {
+// `steady` draws a frame of a replay clip, which shares one sheet size with
+// every other frame of the clip and with its poster.
+function build(arts, panels, steady = false) {
   const W = doc.width * PT,
     slide = ["Full slide", "Half slide"].includes(doc.destination),
     gap = doc.gap,
@@ -609,6 +625,15 @@ function build(arts, panels) {
         : doc.captionPlacement === "Single line"
         ? [caption.replaceAll("\n", " ")]
         : [];
+  // The suggested caption ends with each frame's reading time, which can wrap
+  // onto another line. A clip holds room for the widest time in its interval.
+  const captionLines =
+    steady && doc.caption == null && doc.captionPlacement === "Wrap"
+      ? Math.max(
+          cl.length,
+          lines(draft(false, panels, widestTime), bodyW, size).length
+        )
+      : cl.length;
   const disclosure = [
     ...new Set(
       panels.flatMap((p) =>
@@ -629,7 +654,7 @@ function build(arts, panels) {
           doc.heat.norm
     );
   const footer =
-    (cl.length + credit.length) * size * 1.32 + (hasHeat ? size * 4 : 0);
+    (captionLines + credit.length) * size * 1.32 + (hasHeat ? size * 4 : 0);
   const parts = arts.map((a, i) => {
     const panel = panels[i],
       box = cropBox(panel, a),
@@ -955,9 +980,9 @@ function setBox(n, x, y, w, h, box) {
   }))
     n.setAttribute(key, value);
 }
-async function artwork(panels = doc.panels) {
+async function artwork(panels = doc.panels, steady = false) {
   if (!panels.length) throw Error("Open a saved figure to export it.");
   const arts = [];
   for (const p of panels) arts.push(await capture(byId(p.source), p));
-  return build(arts, panels);
+  return build(arts, panels, steady);
 }

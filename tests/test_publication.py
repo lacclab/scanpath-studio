@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
 
@@ -12,7 +13,58 @@ from PIL import Image
 
 import scanpath_studio as sps
 from scanpath_studio import cli, publication
+from scanpath_studio.animation_export import chrome_available, chromium_browser_path
 from scanpath_studio.export import ExportOptions, _bundle_image
+
+needs_chrome = pytest.mark.skipif(
+    not chrome_available(), reason="needs Chrome to draw the figure"
+)
+
+
+def _in_editor(doc: dict, *expressions: str) -> list:
+    """Evaluate each expression, in order, in the offline editor in Chromium."""
+    from choreographer import Browser
+
+    async def run():
+        async with Browser(path=chromium_browser_path()) as browser:
+            tab = await browser.create_tab()
+
+            async def command(method, params=None):
+                reply = await tab.send_command(method, params)
+                assert "error" not in reply, reply
+                return reply["result"]
+
+            async def evaluate(expression):
+                result = await command(
+                    "Runtime.evaluate",
+                    {
+                        "expression": expression,
+                        "awaitPromise": True,
+                        "returnByValue": True,
+                    },
+                )
+                assert "exceptionDetails" not in result, result
+                return result["result"].get("value")
+
+            tree = await command("Page.getFrameTree")
+            await command(
+                "Page.setDocumentContent",
+                {
+                    "frameId": tree["frameTree"]["frame"]["id"],
+                    "html": publication.editor_html(doc),
+                },
+            )
+            await evaluate("window.publicationReady")
+            return [await evaluate(e) for e in expressions]
+
+    return asyncio.run(run())
+
+
+def _replay_recipe(**kwargs) -> dict:
+    words, fixations = sps.load_sample_data(names="canonical")
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    replay = sps.animate_scanpath(words, fixations, pid, tid, fix_index_range=(1, 40))
+    return sps.publication_figure(replay, name="Replay", **kwargs)
 
 
 def test_recipe_round_trip_and_embedded_text(tmp_path):
@@ -257,3 +309,93 @@ def test_quick_download_size_keeps_current_figure_draft_identity():
     assert original["id"] == resized["id"]
     assert original["settings"] != resized["settings"]
     assert capture(6, 170)["id"] != original["id"]
+
+
+@needs_chrome
+def test_replay_clip_keeps_one_size_when_the_caption_time_wraps(tmp_path):
+    import imageio.v2 as imageio
+
+    doc = _replay_recipe(width_mm=85)
+    doc["captionPlacement"] = "Wrap"
+    # A description whose suggested caption changes its line count with the
+    # frame's reading time, and the first frame at which it does.
+    (found,) = _in_editor(
+        doc,
+        """(() => {
+          const p = doc.panels[0], s = byId(p.source), times = clock(s),
+            w = doc.width * PT - 2 * Math.min(10, doc.width * PT * 0.025);
+          for (let n = 0; n < 300; n++) {
+            s.description = "Replay " + "x".repeat(n);
+            const count = times.map(
+              (_, i) => lines(draft(false, [{ ...p, frame: i }]), w, 9).length
+            );
+            const k = count.findIndex((c) => c !== count[0]);
+            if (k > 0) return [s.description, k];
+          }
+        })()""",
+    )
+    assert found, "no description wraps the caption time within the clip"
+    description, k = found
+    doc["sources"][0]["description"] = description
+    doc["panels"][0].update(start=k - 1, end=k, frame=k - 1)
+
+    def heights(steady):
+        return f"""(async () => {{
+          const out = [];
+          for (const frame of [{k - 1}, {k}])
+            out.push((await artwork([{{ ...doc.panels[0], frame }}], {steady})).H);
+          return out;
+        }})()"""
+
+    still, clip = _in_editor(doc, heights("false"), heights("true"))
+    # A still keeps its own frame's caption; every frame of the clip holds
+    # the room of the longest one.
+    assert still[0] != still[1]
+    assert clip == [max(still), max(still)]
+
+    movie = tmp_path / "clip.mp4"
+    movie.write_bytes(publication.render(doc, "mp4"))
+    with Image.open(io.BytesIO(publication.replay_poster(doc))) as poster:
+        reader = imageio.get_reader(movie)
+        try:
+            frame = reader.get_data(0)
+        finally:
+            reader.close()
+        assert frame.shape[:2] == (poster.height, poster.width)
+
+
+def test_clip_frames_of_different_sizes_are_refused(monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+
+    import choreographer
+
+    def png(width):
+        buf = io.BytesIO()
+        Image.new("RGB", (width, 40), "white").save(buf, "PNG")
+        return {"type": "string", "value": base64.b64encode(buf.getvalue()).decode()}
+
+    frames = iter([png(60), png(60), png(80)])
+
+    async def reply(method, params):
+        if method == "Page.getFrameTree":
+            return {"result": {"frameTree": {"frame": {"id": "main"}}}}
+        if method == "Runtime.evaluate":
+            expression = params["expression"]
+            if expression == "publicationClipDuration()":
+                return {"result": {"result": {"type": "number", "value": 125}}}
+            if expression.startswith("publicationMovieFrame"):
+                return {"result": {"result": next(frames)}}
+            return {"result": {"result": {"type": "undefined"}}}
+        return {"result": {}}
+
+    tab = MagicMock()
+    tab.send_command = reply
+    browser = MagicMock()
+    browser.__aenter__.return_value.create_tab = AsyncMock(return_value=tab)
+    monkeypatch.setattr(choreographer, "Browser", lambda **kwargs: browser)
+    monkeypatch.setattr(
+        "scanpath_studio.animation_export.chromium_browser_path", lambda: "test-browser"
+    )
+    monkeypatch.setattr(publication, "editor_html", lambda doc: "")
+    with pytest.raises(ValueError, match="changed size at frame 3 of the clip"):
+        publication.render(publication.project([]), "mp4")

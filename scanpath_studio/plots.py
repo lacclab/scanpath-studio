@@ -36,6 +36,7 @@ from .constants import (
     DEFAULT_CAPTION_COLOR,
     DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_COLORBAR_THICKNESS,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
@@ -155,7 +156,7 @@ class FigureSettings:
     marker_size_scale: str = DEFAULT_MARKER_SIZE_SCALE
     marker_duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE
     #: A few reference circles labelled in ms, drawn under a fixed scale.
-    duration_size_legend: bool = True
+    duration_size_legend: bool = DEFAULT_DURATION_SIZE_LEGEND
     #: Where each legend sits, as ``{kind: {"position", "arrangement", "size"}}``
     #: for the kinds in ``LEGEND_KINDS``. A kind left out, or set to "auto"
     #: throughout, is drawn in its default place; whether it is drawn at all is
@@ -6161,8 +6162,17 @@ _REPLAY_PLAYER_JS = """(function () {
       }
       return lo;
     }
+    var latestDraw;
+    function animate(frame, options) {
+      var draw = Plotly.animate(gd, frame, options);
+      latestDraw = draw;
+      draw.catch(function (error) {
+        // Plotly rejects a queued frame without a reason when a newer draw replaces it.
+        if (draw === latestDraw || error !== undefined) { throw error; }
+      });
+    }
     function draw(k, options) {
-      Plotly.animate(gd, readFrame ? readFrame(k) : [String(k)], options);
+      animate(readFrame ? readFrame(k) : [String(k)], options);
       if (readFrame) {
         if (bar) { bar.at(k); }
         else if (gd.layout.sliders && gd.layout.sliders[0] && gd.layout.sliders[0].active !== k) {
@@ -6211,7 +6221,7 @@ _REPLAY_PLAYER_JS = """(function () {
       eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
       if (!template) { template = readFrame ? readFrame(last) : gd._transitionData._frames[last]; }
       var frame = frameAtTime(template, readings, e.ms, 'fixation-step');
-      Plotly.animate(gd, frame, leap);
+      animate(frame, leap);
       var words = r.words[j], duration = r.durations[j];
       var detail = (r.label ? r.label + ' · ' : '') + 'Fixation ' + (r.ids[j] || (j + 1)) +
         ', ' + (r.recorded ? 'onset ' : 'estimated onset ') + e.ms + ' ms' +
@@ -6364,6 +6374,11 @@ _REPLAY_PLAYER_JS = """(function () {
       slot.appendChild(range);
       var readout = document.createElement('span');
       readout.setAttribute('aria-hidden', 'true');
+      readout.style.colorScheme = 'light dark';
+      readout.style.color = 'CanvasText';
+      readout.style.background = 'Canvas';
+      readout.style.borderRadius = '4px';
+      readout.style.padding = '2px 4px';
       readout.style.whiteSpace = 'nowrap';
       readout.style.fontVariantNumeric = 'tabular-nums';
       var widest = prefix + ((steps[last] && steps[last].label) || '');

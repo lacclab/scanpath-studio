@@ -1634,6 +1634,7 @@ class TestSplitScanpathLayers:
                 heatmap_metric="duration_ms",
                 background_image=str(p),
                 background_image_size=(1310, 991),
+                duration_size_legend=True,
             ),
         )
 

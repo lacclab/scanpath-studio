@@ -23,7 +23,7 @@ print(gallery_figure("hearts-arrows"))
     1. Load your Words and Fixations tables, or the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
     2. In :material/blur_on: **Fixations** ▾ → **Marker**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Tick **Snap** → **To line**, and leave **Fixation index** → **Show** unticked.
     3. In :material/arrow_outward: **Saccades** ▾, set **Shape** to **Arc**. Under **Line**, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Arrow size** to **12**.
-    4. In :material/aspect_ratio: **Figure** → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave :material/article: **Stimulus** ▾ → **Highlight words** unticked.
+    4. In :material/aspect_ratio: **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave :material/article: **Stimulus** ▾ → **Highlight words** unticked.
 
     Save the look under :material/palette: **My designs** to apply it to your own data.
 
@@ -40,7 +40,7 @@ print(gallery_figure("hearts-arrows"))
       --marker-size-range 18 30 --fixation-opacity 0.85 --snap-fixations \
       --saccade-arcs --saccade-arrows --saccade-color '#4f46a5' \
       --saccade-width 2.5 --saccade-arrow-size 12 \
-      --no-fixation-index --no-duration-size-legend --highlight-column '' \
+      --no-fixation-index --highlight-column '' \
       --illustration-text "Illustration · hand-drawn" -o hearts-arrows.html
     ```
 

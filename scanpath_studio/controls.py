@@ -35,6 +35,7 @@ from .constants import (
     DEFAULT_COLORBAR_LENGTH,
     DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_CROP_MARGIN_PX,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
@@ -803,7 +804,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # without it are read as "relative", so they still draw as saved.
     "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
     "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
-    "global_duration_size_legend": True,
+    "global_duration_size_legend": DEFAULT_DURATION_SIZE_LEGEND,
     # 📐 Figure → Legends: where each legend sits (Auto = the builder's
     # own placement). Size None = the figure's own text size.
     **{
@@ -6504,7 +6505,9 @@ def _collect_viz_settings(
         marker_duration_range=tuple(
             ss.get("global_marker_duration_range") or DEFAULT_MARKER_DURATION_RANGE
         ),
-        duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
+        duration_size_legend=bool(
+            ss.get("global_duration_size_legend", DEFAULT_DURATION_SIZE_LEGEND)
+        ),
         legend_layout=_collect_legend_layout(ss),
         # A deselected position control stores None and draws at its default.
         **{

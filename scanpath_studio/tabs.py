@@ -133,6 +133,7 @@ from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
     AUTHOR_CHOICE,
     DATASET_EDITOR_OPEN_KEY,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
@@ -2118,7 +2119,9 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         marker_duration_range=tuple(
             viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
         ),
-        duration_size_legend=viz_settings.get("duration_size_legend", True),
+        duration_size_legend=viz_settings.get(
+            "duration_size_legend", DEFAULT_DURATION_SIZE_LEGEND
+        ),
         legend_layout=viz_settings.get("legend_layout"),
         **{
             name: viz_settings.get(name, option.default)

@@ -9,6 +9,7 @@ import pandas as pd
 
 from .constants import (
     DEFAULT_CROP_MARGIN_PX,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_SIGMA_PX,
@@ -342,7 +343,9 @@ def build_plot_config(
                 )
             ],
             "duration_size_legend": bool(
-                figure_settings.get("duration_size_legend", True)
+                figure_settings.get(
+                    "duration_size_legend", DEFAULT_DURATION_SIZE_LEGEND
+                )
             ),
             **{
                 name: int(figure_settings[name])

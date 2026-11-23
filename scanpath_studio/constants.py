@@ -219,6 +219,7 @@ MARKER_SIZE_SCALES = {
     "relative": "Relative to this figure",
 }
 DEFAULT_MARKER_SIZE_SCALE = "sqrt"
+DEFAULT_DURATION_SIZE_LEGEND = False
 #: What a figure saved before the fixed scale existed was drawn with — the
 #: migration target for old saved configs and Share links.
 LEGACY_MARKER_SIZE_SCALE = "relative"

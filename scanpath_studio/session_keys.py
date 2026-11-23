@@ -1290,6 +1290,44 @@ def compare_state_keys(index: int) -> frozenset:
     return frozenset(t.format(idx=index) for t in COMPARE_STATE_KEY_TEMPLATES)
 
 
+#: Every setting a share link carries, as the session keys it writes. The reading
+#: and the one-shot handoffs a link also seeds (`URL_SEEDED_STATE_KEYS`) are its
+#: navigation, not settings.
+LINK_STATE_KEYS = (
+    frozenset(SHARE_PARAMS.values())
+    | frozenset(SETUP_PARAMS.values())
+    | frozenset(EXPORT_PARAMS.values())
+    | frozenset(COMPARE_B_FILTER_PARAMS.values())
+    | frozenset(COMPARE_STYLE_PARAMS.values())
+    | LEGEND_STATE_KEYS
+)
+
+#: Every session key a 🔗 Share → File settings file restores.
+SETTINGS_FILE_STATE_KEYS = (
+    PLOT_CONFIG_STATE_KEYS
+    | PLOT_CONFIG_OTHER_STATE_KEYS
+    | compare_state_keys(0)
+    | compare_state_keys(1)
+)
+
+#: Link settings a settings file leaves out, each with the reason. Any other link
+#: setting must be in the file: `tests/test_saved_state_contract.py` fails on one
+#: the file lacks, so a new link setting gets a file field or an entry here.
+NOT_IN_SETTINGS_FILE: Mapping[str, str] = MappingProxyType(
+    {
+        SINGLE_SHOW_CHIPS: (
+            "The trial summary above the plot belongs to the view, not the figure, "
+            "and the file describes the figure and nothing else."
+        ),
+        "global_word_hover_measure": (
+            "Superseded by global_word_hover_fields, which the file carries: the "
+            "app draws word hover from that list, and an old link's single "
+            "measure is folded into it when the session is seeded."
+        ),
+    }
+)
+
+
 #: Session keys that were renamed, each to the keys it now sets. A recovery
 #: cache or saved design written before the rename still holds the old name.
 LEGACY_SESSION_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(

@@ -77,16 +77,24 @@ from .dataset_identity import DATASET_IDS_KEY, dataset_share_id, forget_dataset_
 from .file_lock import file_lock
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
+    COMPARE_B_FILTER_STATE_KEYS,
     COMPARE_IDENTITY_STATE_KEY,
     COMPARE_SOURCE_STATE_KEY,
     DESIGN_PRESETS,
+    EXPORT_FIGURE_DPI,
+    EXPORT_FIGURE_WIDTH,
+    EXPORT_FIGURE_WIDTH_UNIT,
+    PENDING_COMPARE_STATE_KEY,
     PLOT_CONFIG_STATE_KEYS,
+    SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_FIX_RANGE,
     SINGLE_PLAYBACK_SPEED,
     SINGLE_SCREEN_ID,
+    SINGLE_TRIAL_CHOSEN,
     compare_state_keys,
     keep_legacy_marker_scale,
     rename_legacy_keys,
@@ -206,6 +214,12 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     SINGLE_COMPARE_SCREEN_ID,
     *compare_state_keys(0),
     *compare_state_keys(1),
+    # B's fixation and saccade filters, kept as A's `global_*` ones are.
+    *COMPARE_B_FILTER_STATE_KEYS,
+    # The figure's print width and resolution, kept like the rest of the figure.
+    EXPORT_FIGURE_WIDTH,
+    EXPORT_FIGURE_WIDTH_UNIT,
+    EXPORT_FIGURE_DPI,
     # The descriptions the user wrote: their own words, like the design
     # library. A plain session key so editing one never touches the stored
     # frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
@@ -231,6 +245,30 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     DATASET_SETUP_OVERRIDES_KEY,
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
+}
+_FIXATION_WINDOW = (
+    "The fixation window belongs to the reading it was drawn on. A settings "
+    "file restores it only after checking it against that reading's fixations "
+    "(url_state._restore_window); the cache restores keys unchecked, so it "
+    "leaves the window to be drawn afresh."
+)
+#: Settings-file keys the cache leaves out, each with the reason. Any other key
+#: a settings file restores must be in `_SESSION_KEYS`:
+#: `tests/test_saved_state_contract.py` fails on one that is in neither.
+NOT_CACHED: dict[str, str] = {
+    PENDING_COMPARE_STATE_KEY: (
+        "A one-shot handoff that B's picker resolves on the next run; the cache "
+        "keeps what it resolves to, B's dataset and identity."
+    ),
+    SINGLE_TRIAL_CHOSEN: (
+        "A one-shot handoff that the trial picker resolves; the cache keeps the "
+        "reading it resolves to (single_trial_id)."
+    ),
+    SINGLE_FIX_RANGE: _FIXATION_WINDOW,
+    "single_fix_range_user_set": _FIXATION_WINDOW,
+    "single_fix_range_all_trials": _FIXATION_WINDOW,
+    SINGLE_COMPARE_FIX_RANGE: _FIXATION_WINDOW,
+    "single_compare_fix_range_user_set": _FIXATION_WINDOW,
 }
 #: The durable session keys that hold the user's work rather than a tab's
 #: view: two sessions sharing the cache must not overwrite each other's copy

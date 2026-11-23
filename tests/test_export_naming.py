@@ -486,6 +486,37 @@ def test_invalid_pattern_disables_build_and_preview_matches_real_html_and_table_
     assert_example("aggregate/all_fixations.csv")
 
 
+def test_the_contents_preview_is_planned_once_per_choice(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    planned = []
+
+    def plan(*args, **kwargs):
+        planned.append(kwargs["options"].path_pattern)
+        return real(*args, **kwargs)
+
+    real = tabs.bundle_contents
+    monkeypatch.setattr(tabs, "bundle_contents", plan)
+    tabs._c_bundle_contents.clear()
+    at = AppTest.from_function(_real_bundle_panel)
+    at.session_state["bulk_export_contents"] = True
+    at.run()
+    assert not at.exception and len(planned) == 1
+    rows = at.dataframe[0].value
+    assert "per_trial/p1__t1/plot_config.json" in set(rows["Path"])
+    # A rerun that changes nothing the plan reads plans nothing.
+    at.run()
+    assert len(planned) == 1 and at.dataframe[0].value.equals(rows)
+    pattern = "{participant_id}/{artifact}.{ext}"
+    at.text_input(key="bulk_export_path_pattern").set_value(pattern).run()
+    assert planned == [planned[0], pattern]
+    assert "p1/plot_config.json" in set(at.dataframe[0].value["Path"])
+    at.run()
+    assert len(planned) == 2
+
+
 def test_a_replaced_disk_bundle_stays_downloadable_for_a_grace_period(monkeypatch):
     import gc
 

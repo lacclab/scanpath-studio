@@ -297,6 +297,7 @@ from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
     DEFAULT_PRINT_DPI,
     HTML_SELF_CONTAINED_KEY,
+    BundleContents,
     ExportOptions,
     annotate_figure,
     apply_export_scope,
@@ -8347,6 +8348,44 @@ def _c_export_unit_count(
         return None
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_bundle_contents(
+    _combos: pd.DataFrame,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    _options: ExportOptions,
+    _settings: dict,
+    _column_names: dict,
+    _annotation_records: list | None,
+    axes: tuple[str, str],
+    frame_keys: tuple,
+    key: tuple,
+) -> BundleContents | str:
+    """*Preview bundle contents*, which walks every reading and takes seconds
+    over a large corpus for a custom path pattern. Cached on the four frames'
+    fingerprints (``frame_keys``), the axes and ``key``: the options, the
+    settings (with the attached metadata tables' fingerprints), the names of
+    the metadata fields a pattern can use, the column names and the annotations.
+
+    An invalid plan's message is returned, not raised, so it is cached too."""
+    try:
+        return bundle_contents(
+            _combos,
+            _words,
+            _fixations,
+            _raw_gaze,
+            options=_options,
+            settings=_settings,
+            axes=axes,
+            column_names=_column_names,
+            metadata_rows_for=_metadata_mod.pattern_rows,
+            annotation_records=_annotation_records,
+        )
+    except ValueError as error:
+        return str(error)
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _c_export_screen_choices(
     _words: pd.DataFrame,
@@ -8513,6 +8552,13 @@ def _render_bulk_export(
         from scanpath_studio.app import _dataset_display_name
 
         annotation_dataset = _dataset_display_name(annotation_owner)
+    settings_key = json.dumps(figure_settings, sort_keys=True, default=str)
+    annotations_key = json.dumps(annotation_records, sort_keys=True, default=str)
+    table_names = _dataset_table_names()
+    # A renamed column changes every table's header.
+    names_key = json.dumps(
+        {t: n.to_payload() for t, n in table_names.items()}, sort_keys=True
+    )
     preview = st.expander(
         "Preview bundle contents", key="bulk_export_contents", on_change="rerun"
     )
@@ -8524,21 +8570,31 @@ def _render_bulk_export(
                 for grain in ("participant", "trial", "text")
             },
         }
-        try:
-            contents = bundle_contents(
-                active_combos,
-                active_words,
-                active_fix,
-                active_raw_gaze,
-                options=options,
-                settings=preview_settings,
-                axes=(x_field, y_field),
-                column_names=_dataset_table_names(),
-                metadata_rows_for=_metadata_mod.pattern_rows,
-                annotation_records=annotation_records,
+        # The settings carry the attached tables' fingerprints; a pattern can
+        # also name a field the table declares.
+        metadata_fields = tuple(
+            None if table is None else table.names
+            for table in (
+                _metadata_mod.active(),
+                _metadata_mod.active_trials(),
+                _metadata_mod.active_texts(),
             )
-        except ValueError as error:
-            preview.error(str(error))
+        )
+        contents = _c_bundle_contents(
+            active_combos,
+            active_words,
+            active_fix,
+            active_raw_gaze,
+            options,
+            preview_settings,
+            table_names,
+            annotation_records,
+            (x_field, y_field),
+            frame_keys,
+            (repr(options), settings_key, metadata_fields, names_key, annotations_key),
+        )
+        if isinstance(contents, str):
+            preview.error(contents)
         else:
             if options.print_width_mm and options.raster_formats():
                 sizing = f"{options.print_width_mm:g} mm wide"
@@ -8556,16 +8612,12 @@ def _render_bulk_export(
         str(font_family),
         str(x_field),
         str(y_field),
-        json.dumps(figure_settings, sort_keys=True, default=str),
+        settings_key,
         repr(options),
-        json.dumps(annotation_records, sort_keys=True, default=str),
+        annotations_key,
         annotation_dataset,
         EXPORTER_VERSION,
-        # A renamed column changes every table's header.
-        json.dumps(
-            {t: n.to_payload() for t, n in _dataset_table_names().items()},
-            sort_keys=True,
-        ),
+        names_key,
     )
     cache = st.session_state.get("_bulk_export_cache")
     if cache and cache.get("sig") != sig:

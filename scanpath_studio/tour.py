@@ -24,6 +24,12 @@ from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
+    DATA_CURRENT,
+    DATA_INSPECTION_KEY,
+    DATA_LIBRARY,
+    DATA_WORKSPACE_KEY,
+    DATA_WORKSPACE_REQUEST,
+    DATASET_EDITOR_OPEN_KEY,
     DEMO_CHOICE,
     GUIDE_RETURN_KEY,
     ICONS,
@@ -73,6 +79,7 @@ class TutorialStep:
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
     dataset_editor: bool = False
+    data_section: str = DATA_CURRENT
     #: The step's target is built inside a popover, so it is not in the
     #: page until that popover's trigger is clicked. The selector of the trigger;
     #: the spotlight opens it before it looks for the target (`_popover_script`).
@@ -103,14 +110,15 @@ TUTORIALS = (
         (
             TutorialStep(
                 "Add your files",
-                "In **Data Management**, choose **Add dataset**. Add a Fixations, Words "
-                "or Raw gaze table, map its columns, and check the recording setup before saving.",
-                ".st-key-tutorial_available_datasets",
+                "In **Data Management → Dataset library**, choose **Add dataset → Import files**. "
+                "Add a Fixations, Words or Raw gaze table, map its columns, and check the recording setup.",
+                ".st-key-data_page_add",
                 view=_VIEW_DATA,
+                data_section=DATA_LIBRARY,
             ),
             TutorialStep(
                 "Check the column mapping",
-                "Open **Edit dataset → Data tables & column mapping**. Check that the participant, "
+                "In **Current dataset**, open **Edit dataset → Data tables & column mapping**. Check that the participant, "
                 "trial, and coordinates match your source columns. Save changes if you correct a mapping.",
                 ".st-key-tutorial_column_mapping",
                 view=_VIEW_DATA,
@@ -118,8 +126,8 @@ TUTORIALS = (
             ),
             TutorialStep(
                 "Check what loaded",
-                "In **Data Management**, inspect the trial counts and tables. "
-                "If readings have been joined together, check **Trial identity** under **Edit dataset**.",
+                "In **Current dataset → Overview**, check the participant and trial counts. "
+                "Open **Tables** to inspect the records or **Data checks** to review problems.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
@@ -687,6 +695,32 @@ def restore_sample_on_rerun() -> None:
         _exit_spotlight(return_to_view=st.session_state.pop("_sample_exit"))
 
 
+def _data_location() -> dict:
+    """Remember the Data Management tab, its inspection panel and an open editor."""
+    state = st.session_state
+    return {
+        DATA_WORKSPACE_KEY: state.get(DATA_WORKSPACE_REQUEST)
+        or state.get(DATA_WORKSPACE_KEY, DATA_CURRENT),
+        DATA_INSPECTION_KEY: state.get(DATA_INSPECTION_KEY, "Overview"),
+        DATASET_EDITOR_OPEN_KEY: bool(state.get(DATASET_EDITOR_OPEN_KEY)),
+    }
+
+
+def _restore_guide_location(original: dict) -> None:
+    """Apply the user's settings through the same paths as their controls."""
+    for key, value in original.items():
+        if key == DATA_WORKSPACE_KEY:
+            # The tab may still belong to the previous page's widget tree.
+            # The Data page consumes this request before mounting its tabs.
+            st.session_state[DATA_WORKSPACE_REQUEST] = value
+        elif key == "global_anim_autoplay":
+            from .controls import write_through
+
+            write_through(key, value)
+        else:
+            st.session_state[key] = value
+
+
 def _exit_spotlight(*, return_to_view: bool = True) -> None:
     """Undo the sample guide's temporary plot choices and return to its caller."""
     state = st.session_state
@@ -694,15 +728,15 @@ def _exit_spotlight(*, return_to_view: bool = True) -> None:
     state.pop("_sample_restart", None)
     original = state.pop(GUIDE_RETURN_KEY, {})
     if not return_to_view:
-        original.pop("main_nav", None)
-        original.pop(CORPUS_SUBTAB, None)
-    for key, value in original.items():
-        if key == "global_anim_autoplay":
-            from .controls import write_through
-
-            write_through(key, value)
-        else:
-            state[key] = value
+        for key in (
+            "main_nav",
+            CORPUS_SUBTAB,
+            DATA_WORKSPACE_KEY,
+            DATA_INSPECTION_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        ):
+            original.pop(key, None)
+    _restore_guide_location(original)
 
 
 def _dismiss_listener_script(
@@ -967,6 +1001,8 @@ def _arm_tour() -> None:
         original = {"main_nav": view}
         if view == _VIEW_CORPUS and CORPUS_SUBTAB in state:
             original[CORPUS_SUBTAB] = state[CORPUS_SUBTAB]
+        elif view == _VIEW_DATA:
+            original.update(_data_location())
         state[GUIDE_RETURN_KEY] = original
     # A sample guide follows one reading even if a comparison or a static
     # view was open. An explicit request to replay also takes effect when the
@@ -1141,12 +1177,20 @@ def build_tutorial_context(words, fixations, combos) -> dict[str, object]:
 
 
 def tutorial_availability(
-    tutorial: TutorialDefinition, context: dict[str, object]
+    tutorial: TutorialDefinition,
+    context: dict[str, object],
+    *,
+    needs_add_button: bool = False,
 ) -> tuple[bool, str]:
     """Whether this walkthrough can reach its controls in the current session."""
     if context.get("wizard_open"):
         return False, "Finish adding your dataset, or use Setup help in the form."
     if tutorial.id == "load_inspect":
+        if needs_add_button and context.get("editor_open"):
+            return False, (
+                "In **Data Management → Current dataset**, save or cancel your open edit "
+                "to use **Add dataset**."
+            )
         return True, ""
     if tutorial.id == "compare_readings":
         return (
@@ -1200,13 +1244,13 @@ def _tutorial_completed() -> dict[str, bool]:
 
 def _start_use_case(tutorial_id: str) -> None:
     """Start on the first unfinished step and remember where the guide was opened."""
-    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
-
     tutorial = _TUTORIAL_BY_ID.get(tutorial_id)
     if (
         tutorial is None
         or not tutorial_availability(
-            tutorial, st.session_state.get("_tutorial_context", {})
+            tutorial,
+            st.session_state.get("_tutorial_context", {}),
+            needs_add_button=True,
         )[0]
     ):
         return
@@ -1218,7 +1262,7 @@ def _start_use_case(tutorial_id: str) -> None:
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
         "single_subtab": _current_subtab(),
         "corpus_subtab": st.session_state.get("corpus_subtab", "Per text"),
-        DATASET_EDITOR_OPEN_KEY: bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY)),
+        **_data_location(),
         UI_MODE: ui_mode.current_mode(),
     }
     if tutorial.requires_full:
@@ -1253,7 +1297,7 @@ def _finish_use_case(tutorial_id: str) -> None:
 def _restore_tutorial_return() -> None:
     """Leave from any step, including a paused guide, with the original view and mode."""
     location = st.session_state.pop(GUIDE_RETURN_KEY, {})
-    st.session_state.update(location)
+    _restore_guide_location(location)
     st.session_state["tutorial_active"] = None
 
 
@@ -1269,22 +1313,25 @@ def change_tutorial_mode(mode: str) -> None:
 
 
 def _open_tutorial_surface(step: TutorialStep) -> None:
-    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
-
     st.session_state["main_nav"] = step.view
     if step.subtab is not None:
         st.session_state["single_subtab"] = step.subtab
     if step.corpus_subtab is not None:
         st.session_state["corpus_subtab"] = step.corpus_subtab
-    # The Data page's two screens. A step that points into the editor
-    # opens it; one that points at the overview closes it, so walking back up a
-    # tutorial does not leave the editor covering the table the previous step
-    # was about.
     if step.view == _VIEW_DATA:
         if step.dataset_editor:
             st.session_state[DATASET_EDITOR_OPEN_KEY] = True
-        else:
-            st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
+        elif step.data_section == DATA_CURRENT or st.session_state.get(
+            DATASET_EDITOR_OPEN_KEY
+        ):
+            from .app import open_dataset_panel
+
+            open_dataset_panel("Overview")
+            # Going Back to Add files can leave the editor. Its normal leave
+            # prompt keeps an unfinished edit on screen until the user decides.
+            if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+                return
+        st.session_state[DATA_WORKSPACE_REQUEST] = step.data_section
 
 
 _KNOWN_VIEWS = (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA)
@@ -1299,18 +1346,28 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     page*, offering to open the panel they are looking at and withholding its
     spotlight.
     """
-    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
-
     current_view = st.session_state.get("main_nav", _VIEW_SCANPATH)
     if current_view not in _KNOWN_VIEWS:
         current_view = _VIEW_SCANPATH
     if current_view != step.view:
         return False
+    if step.view == _VIEW_DATA and (
+        st.session_state.get(DATA_WORKSPACE_KEY, DATA_CURRENT) != step.data_section
+        or (
+            step.data_section == DATA_CURRENT
+            and not step.dataset_editor
+            and st.session_state.get(DATA_INSPECTION_KEY, "Overview") != "Overview"
+        )
+    ):
+        return False
     # On the Data page, "which screen" is part of the answer — an
     # editor step is not open while the overview is showing, and vice versa.
-    if step.view == _VIEW_DATA and bool(
-        st.session_state.get(DATASET_EDITOR_OPEN_KEY)
-    ) != bool(step.dataset_editor):
+    if (
+        step.view == _VIEW_DATA
+        and step.data_section == DATA_CURRENT
+        and bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY))
+        != bool(step.dataset_editor)
+    ):
         return False
     if (
         step.corpus_subtab is not None
@@ -1340,6 +1397,7 @@ def maybe_show_tutorial_library() -> None:
 
 def stash_tutorial_context(context: dict[str, object]) -> None:
     """Save the small availability snapshot the guide fragments read."""
+    context["editor_open"] = bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY))
     st.session_state["_tutorial_context"] = context
 
 
@@ -1379,7 +1437,9 @@ def _tutorial_library_dialog() -> None:
                     f"{i}. {step.body}" for i, step in enumerate(steps_of(tutorial), 1)
                 )
             )
-            available, reason = tutorial_availability(tutorial, context)
+            available, reason = tutorial_availability(
+                tutorial, context, needs_add_button=True
+            )
             if available:
                 completed = bool(_tutorial_completed().get(tutorial.id))
                 paused = not completed and tutorial.id in _tutorial_progress()
@@ -1412,7 +1472,11 @@ def render_use_case_tutorial() -> None:
     if tutorial is None:
         return
     context = st.session_state.get("_tutorial_context") or {}
-    available, reason = tutorial_availability(tutorial, context)
+    steps = steps_of(tutorial)
+    step_index = max(0, min(_tutorial_progress().get(tutorial.id, 0), len(steps) - 1))
+    available, reason = tutorial_availability(
+        tutorial, context, needs_add_button=step_index == 0
+    )
     if not available:
         st.info(
             f"**{tutorial.title}** is paused. {filtered_reason(tutorial, context) or reason}"
@@ -1424,8 +1488,6 @@ def render_use_case_tutorial() -> None:
             args=(_restore_tutorial_return,),
         )
         return
-    steps = steps_of(tutorial)
-    step_index = max(0, min(_tutorial_progress().get(tutorial.id, 0), len(steps) - 1))
     step = steps[step_index]
     progress_text = f"Step {step_index + 1} of {len(steps)}"
     if guide_folded("tutorial"):

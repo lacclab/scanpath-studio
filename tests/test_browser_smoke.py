@@ -174,9 +174,7 @@ def test_first_visit_respects_the_requested_page(app_url, browser, path):
             page.get_by_role("dialog", name=title).wait_for()
         else:
             target = (
-                ".st-key-dataset_table_grid"
-                if path == "data"
-                else ".st-key-corpus_pool_bar"
+                ".st-key-data_identity" if path == "data" else ".st-key-corpus_pool_bar"
             )
             page.locator(target).wait_for()
         _settle(page)
@@ -214,10 +212,32 @@ def test_help_menu_opens_four_destinations_over_the_current_view(app_url, browse
         assert page.url.split("?")[0] == f"{app_url}/corpus-analysis"
 
 
+def test_import_walkthrough_returns_to_the_data_tab_that_opened_help(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data")
+        saved = page.get_by_role("tab", name="Saved work", exact=True)
+        saved.click()
+        heading = page.get_by_role("heading", name="Your session", exact=True)
+        sync_api.expect(heading).to_be_visible()
+        page.get_by_role("button", name=re.compile("Help · (Dev|Stable)")).click()
+        page.get_by_role("menuitem", name="Task guides", exact=True).click()
+        chooser = page.get_by_role("dialog", name="Task guides", exact=True)
+        chooser.get_by_text("Import and check a recording", exact=True).click()
+        chooser.get_by_role("button", name="Show me in the app", exact=True).click()
+        library = page.get_by_role("tab", name="Dataset library", exact=True)
+        sync_api.expect(library).to_have_attribute("aria-selected", "true")
+        guide = page.locator(".st-key-tour_card")
+        guide.get_by_role("button", name="Exit", exact=True).click()
+        sync_api.expect(saved).to_have_attribute("aria-selected", "true")
+        sync_api.expect(heading).to_be_visible()
+
+
 def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
         page.goto(f"{app_url}/data")
+        page.get_by_role("tab", name="Dataset library").click()
         grid = page.locator(".st-key-dataset_table_grid")
         counts = grid.locator(
             '[class*="st-key-dsc_participants_"] .sps-ds-num:not(.sps-ds-gap)'
@@ -229,6 +249,57 @@ def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
         )
         grid.get_by_role("button", name="Participants", exact=True).click()
         sync_api.expect(counts.first).to_have_text(largest)
+
+
+def test_overview_opens_the_right_table_and_all_six_stay_on_the_page(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name=re.compile(r"^Words 2,614")).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Words", exact=True)
+        ).to_be_in_viewport()
+        links = page.locator(".st-key-data_table_links")
+        for label in (
+            "Fixations",
+            "Words",
+            "Raw gaze samples",
+            "Participants",
+            "Trials",
+            "Texts",
+        ):
+            sync_api.expect(
+                links.get_by_role("link", name=label, exact=True)
+            ).to_have_count(1)
+            sync_api.expect(
+                page.get_by_role("heading", name=label, exact=True)
+            ).to_have_count(1)
+        links.get_by_role("link", name="Texts", exact=True).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Texts", exact=True)
+        ).to_be_in_viewport()
+
+
+def test_dataset_editor_can_remove_an_uploaded_metadata_file_by_name(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name="Edit dataset", exact=True).click()
+        upload = page.get_by_role(
+            "region", name="Participant metadata table (optional)"
+        )
+        upload.locator('input[type="file"]').set_input_files(
+            {
+                "name": "readers.csv",
+                "mimeType": "text/csv",
+                "buffer": b"participant_id,reader_group\nl7_1090,first\n",
+            }
+        )
+        column = page.get_by_text("reader_group", exact=True)
+        sync_api.expect(column.first).to_be_visible()
+        _settle(page)
+        upload.get_by_role("button", name="Remove readers.csv", exact=True).click()
+        sync_api.expect(column).to_have_count(0)
 
 
 def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):

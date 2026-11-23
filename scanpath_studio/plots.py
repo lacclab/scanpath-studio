@@ -36,6 +36,7 @@ from .constants import (
     DEFAULT_CAPTION_COLOR,
     DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_COLORBAR_THICKNESS,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
@@ -155,7 +156,7 @@ class FigureSettings:
     marker_size_scale: str = DEFAULT_MARKER_SIZE_SCALE
     marker_duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE
     #: A few reference circles labelled in ms, drawn under a fixed scale.
-    duration_size_legend: bool = True
+    duration_size_legend: bool = DEFAULT_DURATION_SIZE_LEGEND
     #: Where each legend sits, as ``{kind: {"position", "arrangement", "size"}}``
     #: for the kinds in ``LEGEND_KINDS``. A kind left out, or set to "auto"
     #: throughout, is drawn in its default place; whether it is drawn at all is

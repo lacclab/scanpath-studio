@@ -35,6 +35,7 @@ from .column_names import (
 from .constants import (
     _VIEW_DATA,
     CITATION,
+    DATA_RUN_SHEETS_KEY,
     DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_NAME_MAX_CHARS,
@@ -486,6 +487,7 @@ def _remove_dataset(name: str) -> None:
     import scanpath_studio.annotations as annotations_mod
 
     annotations_mod.forget_dataset(st.session_state, name)
+    st.session_state.get(DATA_RUN_SHEETS_KEY, {}).pop(name, None)
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     forget_dataset_identity(st.session_state, name)

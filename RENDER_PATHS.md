@@ -31,7 +31,7 @@ lists the four render views. The reference and compact Share snippets use
 | `marker_size_range` | ✅ | ✅ | ✅ | A/B controls set each scanpath's range. A style without a range inherits the figure-wide value. |
 | `color_by`, `fixation_colorscale`, `fixation_color_range` | ✅ | ✅ | ✅ | Compare colours the fill and makes the scanpath colour the outline; a range is present only when explicit (absent = scale to the data, A+B together) |
 | `fixation_symbol` | ✅ | ✅ | ✅ | Glyph shapes (♥) are drawn as text by `plots._glyph_scatter_traces` in every builder |
-| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | Relative sizing uses the visible durations of both readings together. Each side keeps its own pixel range. The size key draws in Compare when these ranges match. |
+| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | Relative sizing uses the visible durations of both readings together. Each side keeps its own pixel range. The size key is off by default. In Compare it can be shown when these ranges match. |
 | `fix_index_range` | ✅ | ✅ | ✅ | Sliced in `tabs._slice_fix_range`; Compare's B has its own window (`single_compare_fix_range`) |
 | `fixation_flags` (short / long / out-of-bounds) | ✅ | ✅ | ✅ | Compare applies each scanpath's own (B: `cmp1_fixclass_*`) |
 | `illustration_label` / `illustration_text` | ✅ | ✅ | ✅ | An authored drawing on either side of a comparison qualifies for the automatic label |

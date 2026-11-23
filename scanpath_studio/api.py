@@ -2016,18 +2016,7 @@ def list_parts(
     if raw_gaze is not None:
         raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
     names = _call_names(fixations=fix_names, words=word_names, raw_gaze=gaze_names)
-    catalog = part_catalog(words, fixations)
-    if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
-        # Per trial, as `_select_part` and the app decide it: a trial neither
-        # words nor fixations cover takes its screens from its samples.
-        samples = part_catalog(raw_gaze)
-        covered = _data.trial_keys(words) | _data.trial_keys(fixations)
-        own = [
-            (str(p), str(t)) not in covered
-            for p, t in zip(samples["participant_id"], samples["trial_id"])
-        ]
-        if any(own):
-            catalog = pd.concat([catalog, samples[own]], ignore_index=True)
+    catalog = _data.dataset_part_catalog(words, fixations, raw_gaze)
     if participant is not None or trial is not None:
         # An id spelled before composite ids escaped a `_` inside a part.
         participant, trial = (
@@ -4423,7 +4412,7 @@ def cache_status() -> dict:
     settings, saved designs, metadata tables and annotations under your cache folder, so
     a refresh or a restart resumes where it left off. A hosted deployment, such as the
     online demo, keeps none. The same information is on the app's **Data Management**
-    page under *Saved on this computer*, and in ``scanpath-studio cache``.
+    page under *Saved work*, and in ``scanpath-studio cache``.
 
     | Key | What it holds |
     | --- | --- |

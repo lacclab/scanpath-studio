@@ -222,6 +222,7 @@ def _surface_open_probe_app():
     data_step = next(
         s for tutorial in TUTORIALS for s in tutorial.steps if s.view == _VIEW_DATA
     )
+    st.session_state["data_workspace"] = data_step.data_section
     verdicts = []
     for view in (_VIEW_DATA, _VIEW_CORPUS, _VIEW_SCANPATH):
         st.session_state["main_nav"] = view
@@ -490,6 +491,91 @@ class TestUseCaseTutorials:
         assert at.query_params["corpus_subtab"] == "Groups"
         assert at.query_params["embed"] == "true"
 
+    def test_import_visits_the_library_editor_and_overview_then_returns_to_saved_work(
+        self, experimental_off
+    ):
+        from scanpath_studio.constants import (
+            DATA_CURRENT,
+            DATA_INSPECTION_KEY,
+            DATA_LIBRARY,
+            DATA_STORAGE,
+            DATA_WORKSPACE_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        )
+        from tests.conftest import APP_SCRIPT, pin_data_view
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        at.query_params["ui"] = "essentials"
+        pin_data_view(at, section=DATA_STORAGE)
+        at.session_state["_tutorial_library_requested"] = True
+        at.run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_STORAGE
+        at.button(key="tutorial_start_load_inspect").click().run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_LIBRARY
+        at.button(key="tutorial_next").click().run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_CURRENT
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY]
+        at.button(key="tutorial_back").click().run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_LIBRARY
+        assert at.button(key="add_data_btn")
+        at.button(key="tutorial_next").click().run()
+        at.button(key="tutorial_next").click().run()
+        assert at.session_state[DATA_INSPECTION_KEY] == "Overview"
+        assert DATASET_EDITOR_OPEN_KEY not in at.session_state
+        at.button(key="tutorial_done").click().run()
+        assert not at.exception, at.exception
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_STORAGE
+        assert at.session_state["ui_mode"] == "essentials"
+
+    @pytest.mark.parametrize(
+        ("section", "panel", "editing", "guide"),
+        [
+            ("Dataset library", "Overview", False, "filter_annotate"),
+            ("Current dataset", "Tables", False, "welcome"),
+            ("Current dataset", "Data checks", False, "load_inspect"),
+            ("Current dataset", "Tables", True, "filter_annotate"),
+        ],
+    )
+    def test_exit_restores_the_data_workspace_panel_and_editor(
+        self, section, panel, editing, guide
+    ):
+        from scanpath_studio.constants import (
+            _VIEW_DATA,
+            DATA_INSPECTION_KEY,
+            DATA_WORKSPACE_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        )
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+        from tests.conftest import APP_SCRIPT, pin_data_view
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        at.query_params["ui"] = "essentials"
+        pin_data_view(at, section=section)
+        at.session_state[DATA_INSPECTION_KEY] = panel
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = editing
+        if editing:
+            at.session_state[EDITOR_NAME_FIELD_KEY] = "Unfinished edit"
+        at.session_state["_tutorial_library_requested"] = True
+        at.run()
+        assert not at.exception, at.exception
+        if editing:
+            assert not any(b.key == "tutorial_start_load_inspect" for b in at.button)
+            assert any(
+                "save or cancel your open edit" in item.value for item in at.caption
+            )
+        at.button(key=f"tutorial_start_{guide}").click().run()
+        at.button(
+            key="tour_sp_close" if guide == "welcome" else "tutorial_exit"
+        ).click().run()
+        assert not at.exception, at.exception
+        assert at.session_state["main_nav"] == _VIEW_DATA
+        assert at.session_state[DATA_WORKSPACE_KEY] == section
+        assert at.session_state[DATA_INSPECTION_KEY] == panel
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is editing
+        if editing:
+            assert at.text_input(key=EDITOR_NAME_FIELD_KEY).value == "Unfinished edit"
+        assert at.session_state["ui_mode"] == "essentials"
+
     def test_paused_guide_can_exit_and_restore_mode(self):
         from scanpath_studio.constants import _VIEW_CORPUS
 
@@ -633,28 +719,22 @@ class TestSpotlightSelectorsResolve:
             tabs.CORPUS_SUBTABS
         )
 
-    def test_the_data_page_draws_the_datasets_table_the_tutorial_points_at(self):
-        """The "Load and verify a dataset" tutorial outlines what the Data page
-        draws, not the data-source picker — which only Scanpath and Corpus
-        Analysis draw."""
-        from pathlib import Path
+    def test_the_first_import_step_highlights_the_control_that_imports_files(self):
+        from scanpath_studio.constants import DATA_LIBRARY
+        from scanpath_studio.tour import _TUTORIAL_BY_ID
+        from tests.conftest import APP_SCRIPT, pin_data_view
 
-        from streamlit.testing.v1 import AppTest
-
-        from scanpath_studio.constants import _VIEW_DATA
-
-        app_script = Path(__file__).resolve().parent.parent / "streamlit_app.py"
-        at = AppTest.from_file(str(app_script), default_timeout=60)
-        at.session_state["main_nav"] = _VIEW_DATA
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        pin_data_view(at, section=DATA_LIBRARY)
         at.run()
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        def keys(node):
-            yield getattr(node, "key", None)
-            for child in getattr(node, "children", {}).values():
-                yield from keys(child)
-
-        assert "tutorial_available_datasets" in set(keys(at.main))
+        assert not at.exception, at.exception
+        step = _TUTORIAL_BY_ID["load_inspect"].steps[0]
+        label = (
+            at.container(key=step.selector.removeprefix(".st-key-"))
+            .button(key="add_data_btn")
+            .label
+        )
+        assert label == "Import files"
 
     def test_no_two_steps_spotlight_the_same_area(self):
         """Two steps sharing a selector would light up both areas at once.

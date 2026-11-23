@@ -10,11 +10,10 @@ and feedback, the current edition's documentation, and About & citation.
 Selecting a dialog action arms it and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
-Session-wide tools are not on the bar but where each is used: what the
-recovery cache holds at the foot of the Data page
-(``app._render_saved_here_section``), the settings file on 🗺️ Scanpath →
-🔗 Share → File (``tabs.render_settings_file``), and the annotations' export on
-🗂️ Data → Annotations.
+Data Management → Saved work shows the recovery copy
+(``app._render_saved_here_section``). Annotations are exported under Current
+dataset → Annotations. Scanpath → Share → Settings file exports plot settings
+(``tabs.render_settings_file``).
 
 The Data page's sections run on every run: the page container is built every
 run and hidden off-screen when another view is active
@@ -35,6 +34,8 @@ from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
+    DATA_WORKSPACE_LAST,
+    DATA_WORKSPACE_REQUEST,
     ICONS,
 )
 
@@ -97,7 +98,7 @@ def _unused_page_body() -> None:  # pragma: no cover - never executed
     entry is selected — we never call ``.run()``, because ``app.main`` owns
     the dispatch (it has to: the view bodies close over frames the long prelude
     computes, and the epilogue — ``save_local_state``, then the Data page's
-    *Saved on this computer* — has to run *after* the body). So these never execute.
+    *Saved work* — has to run *after* the body). So these never execute.
     """
     raise AssertionError("page body should never run — app.main owns dispatch")
 
@@ -221,6 +222,10 @@ def render_nav() -> str:
     if chosen_action is not None:
         _arm_help_action(chosen_action)
         back = st.session_state.get(_MIRROR_KEY)
+        if back == _VIEW_DATA and DATA_WORKSPACE_LAST in st.session_state:
+            st.session_state.setdefault(
+                DATA_WORKSPACE_REQUEST, st.session_state[DATA_WORKSPACE_LAST]
+            )
         switch_to_view(back if back in pages else _VIEW_SCANPATH)  # reruns
     active = next(
         (view for view, page in pages.items() if page.title == selected.title),

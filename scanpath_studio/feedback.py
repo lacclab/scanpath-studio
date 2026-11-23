@@ -25,20 +25,22 @@ def _storage_answer() -> str:
     saving = persistence.persistence_enabled(str(st.context.url or ""))
     backups = (
         "Keep your original files. Before refreshing, export annotations from "
-        "**Data Management → Annotations** and plot settings from "
+        "**Data Management → Current dataset → Annotations** and plot settings from "
         "**Scanpath → Share → Settings file**."
     )
     if not saving:
         recovery = f"Uploads stay in memory for this session. {backups}"
+    elif st.session_state.get(persistence.SAVE_CONFLICT_KEY) or st.session_state.get(
+        persistence.SAVE_FAILED_KEY
+    ):
+        recovery = f"The app couldn’t update the recovery copy. Your unsaved edits are still in this tab. {backups}"
     elif persistence.persistence_paused(st.session_state):
         recovery = f"Recovery saving is paused for this session. {backups} Reload to retry the saved copy."
-    elif st.session_state.get(persistence.SAVE_CONFLICT_KEY):
-        recovery = f"The app couldn’t update the recovery copy. Your unsaved edits are still in this tab. {backups}"
     else:
         recovery = (
             "A recovery copy keeps your datasets, settings and annotations between visits. "
-            "To remove it, open **Data Management → Saved on this computer → "
-            "Clear what is saved…**."
+            "In **Data Management → Saved work**, open **Your session → "
+            "Saved session details → Clear saved session…** to remove it."
         )
     return f"{location} {recovery}"
 
@@ -52,32 +54,32 @@ def troubleshooting_items() -> list[tuple[str, str]]:
             "Check that the Words and Fixations tables describe the same trial and "
             "screen, with coordinates in pixels measured from the same origin. "
             "Correct any offset or scale difference in the source files before importing "
-            "again. If only the figure’s framing is wrong, check **Data Management → "
-            "Edit dataset → Recording setup → Screen**. "
+            "again. If only the figure’s framing is wrong, check **Screen** under "
+            "**Data Management → Current dataset → Edit dataset → Recording setup**. "
             f"[Files and units]({docs}guides/loading-data/#tables)",
         ),
         (
             "An imported column is mapped to the wrong field.",
-            "Open **Data Management → Edit dataset → Data tables & column mapping**, "
-            "choose the right column and save your changes. If the column was left "
-            "out during import, add the dataset again from the original files and "
-            "keep that column.",
+            "Open **Data Management → Current dataset → Edit dataset**. Under "
+            "**Data tables & column mapping**, choose the right column and save your "
+            "changes. If the column was left out during import, add the dataset again "
+            "from the original files and keep that column.",
         ),
         (
             "Corpus Analysis shows no reading measures.",
             "Check which dataset and trials are selected. Corpus Analysis needs a Words "
             "table with a per-word measure such as first fixation duration. For an "
-            "imported dataset, open **Data Management → Edit dataset** and map that "
-            "column under **Words → Reading measures**. "
+            "imported dataset, open **Data Management → Current dataset → Edit dataset** "
+            "and map that column under **Words → Reading measures**. "
             f"[Reading measures]({docs}guides/loading-data/#reading-measures)",
         ),
         (
             "My coauthor can’t open my shared view.",
-            "A link shares the trial and figure settings. The demo opens directly, "
-            "and public corpora open where available. For uploads, send the original "
-            "files and the setup file from **Edit dataset → Download setup file**. "
-            "On another computer, import them under the name in the link, then reopen "
-            "it using that app’s address. "
+            "Links carry settings. The demo and available public corpora open directly. "
+            "For uploads, choose **Download setup file** in **Data Management → Current "
+            "dataset → Edit dataset**. Send it with the original files. Your coauthor "
+            "uses **Add dataset → Import files → Start from → A setup file**, imports "
+            "under the name in the link and reopens it at their app’s address. "
             f"[Sharing a view]({docs}guides/scanpath-visualization/controls/#under-the-plot)",
         ),
         (

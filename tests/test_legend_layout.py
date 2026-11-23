@@ -374,7 +374,9 @@ class TestTheBuilders:
             legend_layout=layout,
         )
         assert any(t.legend == "legend3" for t in static.data)
-        anim = sps.animate_scanpath(words, fixations, p1, t1, legend_layout=layout)
+        anim = sps.animate_scanpath(
+            words, fixations, p1, t1, duration_size_legend=True, legend_layout=layout
+        )
         assert any(s.type == "circle" and s.yanchor == 1 for s in anim.layout.shapes), (
             "the size key went to the top-left corner"
         )

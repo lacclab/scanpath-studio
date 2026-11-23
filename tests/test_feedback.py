@@ -96,10 +96,12 @@ def test_storage_answer_matches_the_actual_installation(local, saving, monkeypat
     assert f"processed on this {'computer' if local else 'server'}" in answer
     if saving:
         assert "recovery copy keeps" in answer
-        assert "Saved on this computer → Clear what is saved…" in answer
+        assert "Data Management → Saved work" in answer
+        assert "Your session → Saved session details → Clear saved session…" in answer
     else:
         assert "memory for this session" in answer
         assert "before refreshing" in answer.lower()
+        assert "Data Management → Current dataset → Annotations" in answer
 
 
 @pytest.mark.parametrize(
@@ -107,6 +109,7 @@ def test_storage_answer_matches_the_actual_installation(local, saving, monkeypat
     [
         (persistence._PAUSED_KEY, "Recovery saving is paused"),
         (persistence.SAVE_CONFLICT_KEY, "unsaved edits are still in this tab"),
+        (persistence.SAVE_FAILED_KEY, "unsaved edits are still in this tab"),
     ],
 )
 def test_recovery_answer_accounts_for_unsaved_session_changes(
@@ -134,10 +137,18 @@ def test_about_says_where_data_goes_for_this_run():
         assert "no recovery copy" in unsaved
 
 
-def test_about_shows_the_line_for_a_hosted_run(monkeypatch):
+@pytest.mark.parametrize(
+    ("problem", "status"),
+    [
+        (None, "no recovery copy"),
+        (persistence.SAVE_CONFLICT_KEY, "latest changes haven’t been saved"),
+        (persistence.SAVE_FAILED_KEY, "latest changes haven’t been saved"),
+    ],
+)
+def test_about_shows_the_storage_state_for_a_hosted_run(monkeypatch, problem, status):
     from scanpath_studio import app
 
-    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
+    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1" if problem else "0")
     monkeypatch.setattr(app, "server_bound_to_loopback", lambda: False)
 
     def about():
@@ -145,9 +156,12 @@ def test_about_shows_the_line_for_a_hosted_run(monkeypatch):
 
         app._about_dialog()
 
-    at = AppTest.from_function(about).run()
+    at = AppTest.from_function(about)
+    if problem:
+        at.session_state[problem] = True
+    at.run()
     assert not at.exception
     details = next(tab for tab in at.tabs if tab.label == "App details")
     body = " ".join(md.value for md in details.markdown)
-    assert "on this server" in body and "no recovery copy" in body
+    assert "on this server" in body and status in body
     assert f"{app.build_info().docs_url}about/#privacy" in body

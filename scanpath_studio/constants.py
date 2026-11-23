@@ -219,6 +219,7 @@ MARKER_SIZE_SCALES = {
     "relative": "Relative to this figure",
 }
 DEFAULT_MARKER_SIZE_SCALE = "sqrt"
+DEFAULT_DURATION_SIZE_LEGEND = False
 #: What a figure saved before the fixed scale existed was drawn with — the
 #: migration target for old saved configs and Share links.
 LEGACY_MARKER_SIZE_SCALE = "relative"
@@ -1011,15 +1012,16 @@ RAW_GAZE_SNAP_RESTORE_KEY = "_raw_gaze_snap_restore"
 #: one decided while the link was on the URL. Session-only: a link is a visit.
 RAW_GAZE_LINK_FOR_KEY = "_raw_gaze_link_for"
 
-#: "The ✏️ Edit dataset screen is open". The Data page is two screens: the
-#: **overview** (the dataset table + what's in the open dataset) and the
-#: **editor** (everything that configures it — source options and location,
-#: column mapping, recording setup, trial identity, stimulus images, the two
-#: metadata tables, preprocessing). Both are built every run and switched by key,
-#: for exactly the reason the page itself is (see below): the editor is nothing
-#: but widgets that drive `prepare_data`, and Streamlit drops the key of a widget
-#: that did not render. The built-in sources' column-mapping panels are the
-#: exception, drawn only while it is open (`controls.column_mapping_from_state`).
+#: Session navigation within Data Management. The editor occupies Current dataset.
+DATA_WORKSPACE_KEY = "data_workspace"
+DATA_WORKSPACE_REQUEST = "_requested_data_workspace"
+#: The native Help menu visits another page, which clears the Data tab widget.
+DATA_WORKSPACE_LAST = "_last_data_workspace"
+DATA_CURRENT = "Current dataset"
+DATA_LIBRARY = "Dataset library"
+DATA_STORAGE = "Saved work"
+DATA_INSPECTION_KEY = "data_inspection_panel"
+DATA_RUN_SHEETS_KEY = "_data_run_sheets"
 DATASET_EDITOR_OPEN_KEY = "_dataset_editor_open"
 #: The settings to restore when an in-app guide ends or the session reopens.
 GUIDE_RETURN_KEY = "_guide_return"
@@ -1252,7 +1254,7 @@ ICONS: dict[str, str] = {
     "close": ":material/close:",
     "open": ":material/open_in_new:",
     "mute": ":material/notifications_off:",
-    # Data → Saved on this computer, and the Debug drawer.
+    # Data Management → Saved work, and the Debug drawer.
     "recovery": ":material/history:",
     "debug": ":material/bug_report:",
     # Data page and the add-dataset wizard.

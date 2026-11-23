@@ -337,6 +337,7 @@ class TestDerivedAnalysisTablesGate:
 
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
 
         def _must_not_run(*_a, **_k):
@@ -358,6 +359,7 @@ class TestDerivedAnalysisTablesGate:
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, at.exception

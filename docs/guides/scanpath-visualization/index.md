@@ -173,11 +173,11 @@ You can save each of these to a file and load it again:
 | What | Where |
 | --- | --- |
 | figure settings | :material/share: **Share** → **Settings file** |
-| favorites, tags and notes | :material/database: **Data Management** → **Annotations** → **Export** |
+| favorites, tags and notes | :material/database: **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | :material/edit: **Edit dataset** → **Download setup file** |
 | saved figure designs | :material/palette: **My designs** → **Export** |
 
 Keep your source data alongside these files, and load the same dataset before
 restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See :material/database: **Data
-Management** → :material/history: **Saved on this computer**.
+Management** → **Saved work → Your session**.

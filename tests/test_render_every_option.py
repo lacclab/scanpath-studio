@@ -722,13 +722,17 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
             "Reader A",
             "--label-b",
             "Reader B",
-            "--fixation-opacity",
-            "0.5",
+            "--no-fixations",
         ],
     )
     assert f"--compare-participant {OTHER[0]}" in printed
     assert f"--compare-trial {OTHER[1]}" in printed
     assert "--label-a 'Reader A'" in printed
+    assert "--no-fixations" in printed
+    assert [(t.name, t.mode) for t in first.data if t.showlegend] == [
+        ("Reader A", "lines"),
+        ("Reader B", "lines"),
+    ]
     assert first.to_json() == second.to_json()
 
 

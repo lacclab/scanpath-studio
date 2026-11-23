@@ -7020,16 +7020,17 @@ def _render_scanpath_animation(
     playback_speed = settings.playback_speed
     show_words = settings.show_words
     show_word_labels = settings.show_word_labels
+    show_fixations = settings.show_fixations
     show_saccades = settings.show_saccades
     show_saccade_arrows = settings.show_saccade_arrows
-    show_order = settings.show_order
+    show_order = show_fixations and settings.show_order
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
     order_textposition = _order_textposition(settings.order_label_position)
-    color_by = settings.color_by
+    color_by = settings.color_by if show_fixations else None
     # As in `make_scanpath_figure` — "line" is colour-by-line.
-    color_by_line = settings.color_by_line or color_by == "line"
+    color_by_line = show_fixations and (settings.color_by_line or color_by == "line")
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
     fixation_flags = settings.fixation_flags
@@ -7408,14 +7409,6 @@ def _render_scanpath_animation(
         s["all_x"] = all_x
         s["all_y"] = all_y
         s["n_total"] = n_total
-        hover_fields = (
-            ["order_in_trial", "duration_ms"]
-            if fixation_hover_fields is None
-            else list(fixation_hover_fields)
-        )
-        s["customdata"], s["hovertemplate"] = _hover_payload(
-            ordered, hover_fields, fixation=True, words=s.get("words")
-        )
         # The trial's own fixation numbers, as the static figure and the hover
         # show them — never a 1..n renumbering of what survived the filters.
         s["order_text"] = _fixation_order_labels(ordered)
@@ -7432,24 +7425,35 @@ def _render_scanpath_animation(
         s["curr_outline"] = s["color"] if dual else CURRENT_FIX_OUTLINE
         s["curr_outline_w"] = 2.5 if dual else 2
 
-        base_x, base_y = _revealed_xy(all_x, all_y, 1)
-        trail = _trail_traces(
-            s,
-            base_x,
-            base_y,
-            # A/B legend on the dual overlay only — off by default, honours the
-            # compare-legend toggle. The single-replay colour-by legend
-            # below is separate and unaffected. Under shared category colours
-            # the swatch would show a category, and a glyph has no swatch, so a
-            # separate entry (below) names the scanpath instead.
-            showlegend=dual and show_legend and not own_entries,
-            name=s["label"],
-            legendgroup=s["label"],
-            hovertemplate=(s["label"] + "<br>" if dual else "") + s["hovertemplate"],
-        )
-        s["idx_trails"] = list(range(len(fig.data), len(fig.data) + len(trail)))
-        for trace in trail:
-            fig.add_trace(trace)
+        s["idx_trails"] = []
+        if show_fixations:
+            hover_fields = (
+                ["order_in_trial", "duration_ms"]
+                if fixation_hover_fields is None
+                else list(fixation_hover_fields)
+            )
+            s["customdata"], s["hovertemplate"] = _hover_payload(
+                ordered, hover_fields, fixation=True, words=s.get("words")
+            )
+            base_x, base_y = _revealed_xy(all_x, all_y, 1)
+            trail = _trail_traces(
+                s,
+                base_x,
+                base_y,
+                # A/B legend on the dual overlay only — off by default, honours the
+                # compare-legend toggle. The single-replay colour-by legend
+                # below is separate and unaffected. Under shared category colours
+                # the swatch would show a category, and a glyph has no swatch, so a
+                # separate entry (below) names the scanpath instead.
+                showlegend=dual and show_legend and not own_entries,
+                name=s["label"],
+                legendgroup=s["label"],
+                hovertemplate=(s["label"] + "<br>" if dual else "")
+                + s["hovertemplate"],
+            )
+            for trace in trail:
+                s["idx_trails"].append(len(fig.data))
+                fig.add_trace(trace)
         # Order numbers: a text trace holding EVERY fixation's final position,
         # with not-yet-reached fixations masked to None x/y (so nothing is drawn
         # there). A number snaps on at its fixation when that position un-masks —
@@ -7478,6 +7482,7 @@ def _render_scanpath_animation(
         else:
             s["idx_order"] = None
         if show_saccades:
+            label_line = dual and show_legend and not show_fixations
             sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, 1)
             s["idx_sac"] = len(fig.data)
             fig.add_trace(
@@ -7490,14 +7495,12 @@ def _render_scanpath_animation(
                     ),
                     # On the base trace only — a frame restates the
                     # line's x/y and style, never its opacity, so it holds.
-                    # Named like the static figure's, which is how the app's
-                    # cached replay finds it to stamp the opacity on afterwards
-                    # (`tabs._build_and_render_animation`).
                     opacity=settings.saccade_opacity,
-                    showlegend=False,
+                    meta="saccades",
+                    showlegend=label_line,
                     legendgroup=s["label"],
                     hoverinfo="skip",
-                    name="saccades",
+                    name=s["label"] if label_line else "saccades",
                 )
             )
         else:
@@ -7535,8 +7538,13 @@ def _render_scanpath_animation(
                     legendgroup=s["label"],
                     hoverinfo="skip",
                     name="saccade direction",
+                    meta="saccades",
                 )
             )
+        s["flag_overlays"] = []
+        s["idx_curr"] = None
+        if not show_fixations:
+            continue
         s["idx_curr"] = len(fig.data)
         fig.add_trace(
             go.Scatter(
@@ -7557,7 +7565,6 @@ def _render_scanpath_animation(
         # that category's marker + colour, drawn over the trail. Full-length like
         # every animated trace — fixations that aren't flagged are masked out
         # permanently, the rest un-mask as the replay reaches them.
-        s["flag_overlays"] = []
         s_flags = s.get("flags", flags)
         if s_flags:
             overlay_masks = _fixation_flag_masks(
@@ -7608,7 +7615,7 @@ def _render_scanpath_animation(
     # Categorical colour legend, as in the static figure. These dummy traces sit
     # AFTER the per-scanpath traces so the frame indices recorded above stay
     # valid; frames never touch them.
-    if dual and show_legend and own_entries:
+    if show_fixations and dual and show_legend and own_entries:
         for s in specs:
             coloured = s["marker_line"] is not None
             fig.add_trace(
@@ -7632,7 +7639,7 @@ def _render_scanpath_animation(
                 )
             )
     _add_category_legend(fig, category_legend, color_label)
-    if glyph and specs:
+    if show_fixations and glyph and specs:
         # A glyph carries no colorscale, so A's numeric colour bar rides on a
         # trace of its own (after the animated ones, like the legend entries).
         bar = _glyph_colorbar_trace(
@@ -7662,10 +7669,11 @@ def _render_scanpath_animation(
         # (sizes/colours) and `text` are full-length and identical every
         # frame, so only positions change — `redraw=False` then re-renders
         # just this trace, not the whole figure.
-        tx, ty = _revealed_xy(all_x, all_y, kk)
-        for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
-            traces_in_frame.append(trace)
-            traces_idx_in_frame.append(idx)
+        if show_fixations:
+            tx, ty = _revealed_xy(all_x, all_y, kk)
+            for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
+                traces_in_frame.append(trace)
+                traces_idx_in_frame.append(idx)
 
         if show_order:
             # Same full-length positions/text as the base order trace; the
@@ -7713,6 +7721,8 @@ def _render_scanpath_animation(
             traces_in_frame.append(dict(x=arw_x, y=arw_y, mode="markers"))
             traces_idx_in_frame.append(s["idx_arrow"])
 
+        if s["idx_curr"] is None:
+            continue
         ci = kk - 1
         traces_in_frame.append(
             dict(
@@ -10757,7 +10767,6 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
     {
         "x_field",
         "y_field",
-        "show_fixations",
         "show_heatmap",
         "heatmap_metric",
         "heatmap_style",
@@ -10933,6 +10942,8 @@ def replay_size_key_range(
     A lone replay's is the figure's ``marker_size_range``. A co-animation sizes
     each scanpath in its own style's range, and one key serves both only while
     those agree — as on the static comparison."""
+    if not settings.show_fixations:
+        return None
     dual = all(f is not None and not f.empty for f in (fixations, fixations_b))
     if not dual:
         return tuple(settings.marker_size_range)

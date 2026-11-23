@@ -45,6 +45,7 @@ from .multipart import (
     SCREEN_TIMESTAMP,
     grouping_columns,
     normalize_screen_identity,
+    part_catalog,
     validate_matching_parts,
 )
 
@@ -520,7 +521,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
 
     def _publish(value: Any) -> None:
         with _INFLIGHT_LOCK:
-            wins = store.get((_LATEST_REQUESTED, slot)) == key
+            wins = store.get((_LATEST_REQUESTED, slot), _MISSING) == key
             if wins:
                 previous = store.get(slot)
                 if keep > 1 and previous is not None and previous[0] != key:
@@ -555,6 +556,8 @@ def forget_frame_cache(slot: str) -> None:
         return  # No runtime: there is no cache.
     if store:
         with _INFLIGHT_LOCK:
+            # A conversion already in flight must not repopulate a forgotten slot.
+            store.pop((_LATEST_REQUESTED, slot), None)
             store.pop(slot, None)
             store.pop((_EARLIER, slot), None)
 
@@ -8207,11 +8210,14 @@ def trial_pool(*frames: pd.DataFrame | None) -> pd.DataFrame:
 def text_ids(*frames: pd.DataFrame | None) -> set[str]:
     """The distinct text ids across every frame that carries one.
 
-    ``unique_text_id`` when any frame has it, else ``text_id`` — one id space,
-    never a union of the two. Counting the words table alone would say
-    **0 texts** for a fixations-only dataset whose fixations name twelve.
+    For identified readings, use the same recorded text as metadata joins.
+    Tables without reading identities use their unique text IDs when present.
     """
     present = [f for f in frames if f is not None and not f.empty]
+    if present and all(names_readings(f) for f in present):
+        from .metadata import recording_keys, text_keys
+
+        return text_keys(recording_keys(*present))
     column = (
         "unique_text_id"
         if any("unique_text_id" in f.columns for f in present)
@@ -8241,6 +8247,25 @@ def filter_frame_to_keys(frame: pd.DataFrame, keys: set) -> pd.DataFrame:
         [frame["participant_id"].astype(str), frame["trial_id"].astype(str)]
     )
     return frame[idx.isin(keys)]
+
+
+def dataset_part_catalog(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """List screens from words and fixations, using samples for gaze-only trials."""
+    catalog = part_catalog(words, fixations)
+    if raw_gaze is None or SCREEN_ID not in raw_gaze or raw_gaze.empty:
+        return catalog
+    covered = trial_keys(words) | trial_keys(fixations)
+    if not covered:
+        return part_catalog(raw_gaze)
+    samples_only = trial_keys(raw_gaze) - covered
+    if not samples_only:
+        return catalog
+    extra = part_catalog(filter_frame_to_keys(raw_gaze, samples_only))
+    return pd.concat([catalog, extra], ignore_index=True)
 
 
 def filter_to_keys(

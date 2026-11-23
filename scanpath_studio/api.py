@@ -2016,18 +2016,7 @@ def list_parts(
     if raw_gaze is not None:
         raw_gaze, gaze_names = _named_in(raw_gaze, "raw_gaze")
     names = _call_names(fixations=fix_names, words=word_names, raw_gaze=gaze_names)
-    catalog = part_catalog(words, fixations)
-    if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
-        # Per trial, as `_select_part` and the app decide it: a trial neither
-        # words nor fixations cover takes its screens from its samples.
-        samples = part_catalog(raw_gaze)
-        covered = _data.trial_keys(words) | _data.trial_keys(fixations)
-        own = [
-            (str(p), str(t)) not in covered
-            for p, t in zip(samples["participant_id"], samples["trial_id"])
-        ]
-        if any(own):
-            catalog = pd.concat([catalog, samples[own]], ignore_index=True)
+    catalog = _data.dataset_part_catalog(words, fixations, raw_gaze)
     if participant is not None or trial is not None:
         # An id spelled before composite ids escaped a `_` inside a part.
         participant, trial = (
@@ -2943,8 +2932,9 @@ def animate_scanpath(
 
     The replay takes a subset of [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s
     options (``figure_options("animation")``), and the ones they share default alike, so
-    the replay matches the static figure. The replay is made of fixations: it draws no
-    raw gaze, and nothing detects fixations from samples.
+    the replay matches the static figure. Set ``show_fixations=False`` to replay the
+    saccades alone. The replay uses fixation times and positions and has no raw-gaze
+    layer.
 
     **Two scanpaths.** ``trial_b`` co-animates a second trial, like the app's Animate +
     Compare. Both readings are drawn in A's coordinates, so a co-animation is an
@@ -4423,7 +4413,7 @@ def cache_status() -> dict:
     settings, saved designs, metadata tables and annotations under your cache folder, so
     a refresh or a restart resumes where it left off. A hosted deployment, such as the
     online demo, keeps none. The same information is on the app's **Data Management**
-    page under *Saved on this computer*, and in ``scanpath-studio cache``.
+    page under *Saved work*, and in ``scanpath-studio cache``.
 
     | Key | What it holds |
     | --- | --- |

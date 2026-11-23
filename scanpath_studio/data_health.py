@@ -86,6 +86,7 @@ class _Check:
     key: str
     table: str
     title: str
+    topic: str
     columns: tuple[str, ...]
     #: ``frame → {label: mask}``; the finding's rows are their union.
     masks: Callable[[pd.DataFrame], dict[str, pd.Series]]
@@ -161,6 +162,7 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_duration",
         "fixations",
         "Fixations lasting 0 ms or less",
+        "fixation durations",
         ("duration_ms",),
         _duration_masks,
         (
@@ -174,6 +176,7 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_timing",
         "fixations",
         "Fixations with an infinite duration or onset",
+        "fixation timing",
         ("duration_ms", "timestamp_ms"),
         _timing_masks,
         "They stay in every table and export. An infinite duration makes every "
@@ -186,6 +189,7 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_position",
         "fixations",
         "Fixations with no usable position",
+        "fixation positions",
         ("x", "y"),
         _position_masks,
         "They stay in every table and export. The plot leaves out their markers "
@@ -197,6 +201,7 @@ CHECKS: tuple[_Check, ...] = (
         "raw_gaze_position",
         "raw_gaze",
         "Raw-gaze samples with no usable position",
+        "gaze sample positions",
         ("x", "y"),
         _position_masks,
         "They stay in the table and its export. The raw-gaze layer leaves them "
@@ -206,6 +211,7 @@ CHECKS: tuple[_Check, ...] = (
         "word_box_size",
         "words",
         "Word boxes with no area or no usable position",
+        "word boxes",
         ("x", "y", "width", "height"),
         _box_masks,
         "They stay in every table and export. A box with no area contains no "
@@ -218,6 +224,7 @@ CHECKS: tuple[_Check, ...] = (
         "word_canvas",
         "words",
         "Word rows with an unusable screen size",
+        "screen dimensions",
         ("canvas_width", "canvas_height"),
         _canvas_masks,
         _CANVAS_CONSEQUENCE,
@@ -226,6 +233,7 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_canvas",
         "fixations",
         "Fixations with an unusable screen size",
+        "screen dimensions",
         ("canvas_width", "canvas_height"),
         _canvas_masks,
         _CANVAS_CONSEQUENCE,
@@ -256,6 +264,17 @@ def affected_rows(frame: pd.DataFrame, finding: HealthFinding) -> pd.DataFrame:
     )
 
 
+def applicable_checks(frames: dict) -> list[_Check]:
+    """Checks for which the dataset supplies rows and all required columns."""
+    return [
+        check
+        for check in CHECKS
+        if (frame := frames.get(check.table)) is not None
+        and not frame.empty
+        and all(column in frame for column in check.columns)
+    ]
+
+
 def check_data_health(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,
@@ -273,12 +292,8 @@ def check_data_health(
     """
     frames = {"words": words, "fixations": fixations, "raw_gaze": raw_gaze}
     findings: list[HealthFinding] = []
-    for check in CHECKS:
+    for check in applicable_checks(frames):
         frame = frames[check.table]
-        if frame is None or frame.empty:
-            continue
-        if any(c not in frame.columns for c in check.columns):
-            continue
         masks = {k: m.fillna(False) for k, m in check.masks(frame).items()}
         union = pd.Series(False, index=frame.index)
         for mask in masks.values():

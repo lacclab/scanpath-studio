@@ -67,6 +67,8 @@ from .constants import (
     COLORSCALES,
     CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
+    DATA_CURRENT,
+    DATA_WORKSPACE_REQUEST,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
     FIXATION_DURATION_FLAGS,
@@ -118,6 +120,7 @@ from .constants import (
 from .controls import (
     _ALIGN_OPTIONS,
     claim_mapping,
+    clear_replay_layer_restore,
     color_field_options,
     forget_color_range,
     forget_design_selection,
@@ -2729,6 +2732,12 @@ def _restore_plot_config(
     has_valid_plot_section = _has_plot_section(config)
 
     layers = section("layers")
+    if (
+        "fixations" in layers
+        or "saccades" in layers
+        or isinstance(section("mode").get("animate"), bool)
+    ):
+        clear_replay_layer_restore()
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
@@ -4685,4 +4694,5 @@ def _go_scanpath() -> None:
 
 
 def _go_data() -> None:
+    st.session_state[DATA_WORKSPACE_REQUEST] = DATA_CURRENT
     st.session_state["main_nav"] = _VIEW_DATA

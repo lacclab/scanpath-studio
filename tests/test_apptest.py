@@ -27,6 +27,7 @@ from tests.conftest import (
     SUBTAB_SHARE,
     answer_setup_step,
     open_data_view,
+    open_dataset_editor,
     picked_trial_id,
     pin_data_view,
     pin_view,
@@ -527,7 +528,7 @@ class TestLazySubtabs:
         for name in (
             "render_multiple_comparison_tab",
             "render_alignment_comparison_tab",
-            "render_data_inspection_tab",
+            "render_data_tables",
             "_render_export_panel",
         ):
             real = getattr(tabs_module, name)
@@ -559,74 +560,44 @@ class TestLazySubtabs:
 
 @pytest.mark.timeout(90)
 class TestDataInspectionTab:
-    """The 🗂️ Data page's inspection panel: headline counts, raw tables, the
-    summary-stats table, and (as its own section above them) the column-mapping
-    table — with no second stats row, fixation histogram or per-word measure
-    section."""
+    """Inspect the selected dataset and edit its column mapping."""
 
-    def test_merged_sections_present_and_old_removed(self):
+    def test_overview_opens_the_requested_table(self):
         at = _make_apptest(synthetic=True)
         pin_data_view(at)
         at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not at.exception, at.exception
+        assert "Synthetic test trial" in [h.value for h in at.subheader]
+        assert {"Participants", "Trials", "Texts"} <= {m.label for m in at.metric}
+        assert not any(w.key == "data_table_choice" for w in at.selectbox)
+        assert not any(getattr(w, "key", None) == "dataset_table_grid" for w in at.main)
 
-        # The page has two heading styles: the *overview* uses subheaders, and
-        # every section of the ✏️ Edit screen is one of the add screen's
-        # numbered parts, so its headings are `.sps-wiz-part` markdown.
-        subheaders = [s.value for s in at.subheader]
-        # The list of datasets opens the page with no heading of its own.
-        assert f"{ICONS['datasets']} Available datasets" not in subheaders
-        section = f"{ICONS['search']} What's in **Synthetic test trial**"
-        assert section in subheaders, f"missing stage {section}: {subheaders}"
-        parts = " ".join(
-            str(m.value)
-            for m in at.markdown
-            if str(m.value).startswith('<div class="sps-wiz-part"')
-        )
-        # `SCANPATH_EXPERIMENTAL=1` in conftest, so Preprocessing renders here
-        # even though a default build hides it.
-        for section in ("column mapping", "Recording setup", "Preprocessing"):
-            assert section in parts, f"missing part {section}: {parts}"
-        # The raw tables and the stats share ONE tab bar — no "📋 Raw data" or
-        # "📊 Summary statistics" expander.
-        folded = [e.label for e in at.expander]
-        assert not any("Raw data" in label for label in folded), folded
-        assert not any("Summary statistics" in label for label in folded), folded
-        tab_labels = [t.label for t in at.tabs]
-        for tab in (
-            f"{ICONS['stats']} Stats",
+        at.button(key="data_inspect_words").click()
+        pin_data_view(at)
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert at.session_state["data_inspection_panel"] == "Tables"
+        headings = [h.value for h in at.subheader]
+        assert headings[-6:] == [
             "Fixations",
-            "Words (interest areas)",
-            "Raw gaze",
-        ):
-            assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
-        # The counts are the section's opening answer, so they have no heading.
-        assert "Dataset statistics" not in subheaders
-
-        metric_labels = [m.label for m in at.metric]
-        for headline in ("Participants", "Texts", "Trials", "Fixations", "Word rows"):
-            assert headline in metric_labels, f"missing headline metric {headline}"
-        # No second statistics row.
-        for dropped in ("Mean fixation dur (ms)", "Reading speed (wpm)"):
-            assert dropped not in metric_labels, f"{dropped} should be removed"
-
-        # No histogram or per-word measure section.
-        text = " ".join(subheaders)
-        assert "Fixation duration distribution" not in text
-        assert "Per-word measure" not in text
-
-        # The filtering caveat is on each spread metric's own ❔, not a caption
-        # under the summary-stats table.
-        assert not any("computed after filtering" in c.value for c in at.caption)
-        spread = [m for m in at.metric if m.label.endswith("per trial")]
-        assert spread, [m.label for m in at.metric]
-        assert all("Computed after the current filters" in m.help for m in spread)
+            "Words",
+            "Raw gaze samples",
+            "Participants",
+            "Trials",
+            "Texts",
+        ]
+        assert any("data_table_words" in str(item.proto) for item in at.get("iframe"))
+        assert "Participants" not in [m.label for m in at.metric]
 
     def test_column_mapping_uses_the_setup_field_grid(self):
         at = _make_apptest(synthetic=True)
         pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        at.button(key="data_edit_current").click()
+        pin_data_view(at)
+        at.run(timeout=60)
 
         mapping_cells = [
             m.value for m in at.markdown if "sps-readonly-map-value" in (m.value or "")
@@ -868,7 +839,7 @@ class TestDatasetTable:
             }
         }
         at.session_state["data_source_choice"] = self.NAME
-        pin_data_view(at)
+        pin_data_view(at, section="Dataset library")
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         return at
@@ -901,34 +872,24 @@ class TestDatasetTable:
     def _edit(token):
         return edit_row_key(token)
 
-    def test_the_editor_opens_under_the_table_and_its_stats(self):
-        """✏️ Edit dataset does not replace the overview — the table
-        and *What's in the dataset* stay on screen, the editor opens under
-        them, and the page is brought down to it once."""
-        from scanpath_studio.app import _EDITOR_SCROLL_KEY
-        from scanpath_studio.constants import (
-            DATA_EDITOR_KEY,
-            DATA_OVERVIEW_KEY,
-            DATASET_EDITOR_OPEN_KEY,
-        )
+    def test_editing_a_library_row_opens_a_focused_editor(self):
+        from scanpath_studio.constants import DATA_EDITOR_KEY, DATASET_EDITOR_OPEN_KEY
 
         at = self._at()
         self._click(at, self._edit(self.NAME))
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not at.exception, at.exception
         assert at.session_state[DATASET_EDITOR_OPEN_KEY]
-        assert _EDITOR_SCROLL_KEY not in at.session_state  # used up by the bar
-        overview = at.main.get_by_key(DATA_OVERVIEW_KEY)
-        assert overview is not None
+        assert at.session_state["data_workspace"] == "Current dataset"
         assert at.main.get_by_key(DATA_EDITOR_KEY) is not None
-        overview_keys = {getattr(w, "key", None) for w in overview}
-        assert f"dataset_open_{self._slug(self.NAME)}" in overview_keys
-        assert "tutorial_data_inspection" in overview_keys
+        assert not any(getattr(w, "key", None) == "data_identity" for w in at.main)
 
     def test_opening_another_row_closes_an_untouched_editor(self):
         from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY, DEMO_CHOICE
 
         at = self._at()
         self._click(at, self._edit(self.NAME))
+        pin_data_view(at, section="Dataset library")
+        at.run(timeout=90)
         self._click(at, f"dataset_open_{self._slug(DEMO_CHOICE)}")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The editor edits the open dataset, so opening another one closes it.
@@ -1101,7 +1062,7 @@ class TestDatasetTable:
         at.session_state["data_source_choice"] = DEMO_CHOICE
         pin_data_view(at)
         at.run(timeout=90)
-        self._click(at, self._edit(DEMO_CHOICE))
+        self._click(at, "data_edit_current")
         field = next(t for t in at.text_input if t.key == EDITOR_NAME_FIELD_KEY)
         field.input("Demo, renamed")
         text = next(
@@ -1179,6 +1140,8 @@ class TestDatasetTable:
         )
         pin_data_view(at)
         at.run(timeout=90)
+        pin_data_view(at, section="Dataset library")
+        at.run(timeout=90)
         self._click(at, self._edit(DEMO_CHOICE))
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[_EDITOR_LEAVE_PENDING_KEY] is True
@@ -1239,7 +1202,8 @@ class TestDatasetTable:
             (pid, tid): {"star": True, "tags": ["Review"], "note": "Mine."},
             ("nobody", "nothing"): {"star": True, "tags": [], "note": "Not here."},
         }
-        pin_data_view(at)
+        at.session_state["data_inspection_panel"] = "Annotations"
+        pin_data_view(at, section="Current dataset")
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         tables = [
@@ -1254,7 +1218,7 @@ class TestDatasetTable:
         assert table["In dataset"].to_dict() == {"Mine.": True, "Not here.": False}
         assert any("hasn't loaded" in str(c.value) for c in at.caption)
 
-    def test_a_long_list_gets_a_search_and_a_short_one_does_not(self):
+    def test_library_search_works_on_short_and_long_lists(self):
         import pandas as pd
 
         from scanpath_studio import api
@@ -1262,7 +1226,7 @@ class TestDatasetTable:
         from scanpath_studio.data import load_sample_data
 
         at = self._at()
-        assert not [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
+        assert at.text_input(key=_DATASET_SEARCH_KEY)
 
         words, fixations = api.load_scanpath_data(
             *load_sample_data(), names="canonical"
@@ -1281,7 +1245,7 @@ class TestDatasetTable:
         # value set on a widget inside a fragment (the table is one) before the
         # next run reads it — the browser keeps it, as it does every widget's.
         at.session_state[_DATASET_SEARCH_KEY] = "study 3"
-        pin_data_view(at)
+        pin_data_view(at, section="Dataset library")
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert [t for t in at.text_input if t.key == _DATASET_SEARCH_KEY]
@@ -1359,7 +1323,8 @@ class TestDatasetTable:
         assert any(
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
-        assert any("reconstructed, not recorded" in c for c in captions)
+        assert any("raw-gaze samples are synthesized" in c for c in captions)
+        assert any("belong to the bundled demo" in msg.value for msg in at.info)
         # What an *About this dataset* popover would write (its own label is
         # not in the tree).
         tree = str(at._tree)
@@ -1701,7 +1666,7 @@ class TestBuiltInRecordingSetupOverride:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
     def _open(self, at):
-        at.button(key=edit_row_key(DEMO_CHOICE)).click()
+        at.button(key="data_edit_current").click()
         self._run(at)
 
     def _overrides(self, at) -> dict:
@@ -1799,7 +1764,7 @@ class TestBuiltInEditorSavesItsMapping:
         at.session_state["data_source_choice"] = DEMO_CHOICE
         pin_data_view(at)
         at.run(timeout=90)
-        at.button(key=edit_row_key(DEMO_CHOICE)).click()
+        at.button(key="data_edit_current").click()
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -2865,9 +2830,7 @@ class TestSetupWizard:
         entry = at.session_state["_datasets"][name]
         # The unmapped/unkept column is recorded as dropped (drives the note).
         assert "junk_col" in entry["dropped_columns"]["words"]
-        # The remap form lives on the 🗂️ Data page.
-        pin_data_view(at)
-        at.run(timeout=60)
+        open_dataset_editor(at)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The editable remap form renders for a stored dataset.
         assert any(b.key == f"remap_apply_{name}" for b in at.button)
@@ -4480,6 +4443,7 @@ class TestOpenTrialFromCorpusTable:
                 "note": "check",
             }
         }
+        at.session_state["data_inspection_panel"] = "Annotations"
         at.session_state["main_nav"] = _VIEW_DATA
         at.run()
         assert not at.exception, at.exception
@@ -4575,8 +4539,12 @@ class TestLazySubtabBodiesStillRender:
         pin_data_view(at)
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        headings = " ".join(s.value for s in at.subheader)
-        assert "What's in" in headings or at.dataframe
+        assert "Bundled demo" in [s.value for s in at.subheader]
+        at.button(key="data_inspect_fixations").click()
+        pin_data_view(at)
+        at.run(timeout=120)
+        assert "Fixations" in [h.value for h in at.subheader]
+        assert at.dataframe
 
 
 class TestAnimationExportRasterBranch:

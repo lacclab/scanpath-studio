@@ -30,6 +30,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Raw gaze | Full → Layers → **Raw gaze** | `global_show_raw_gaze` | Samples drawn; on by default when raw gaze is the only table |
 | Filters & highlights | Full → Layers → **Filters & highlights** | its popover's keys | Active marks a filtered or highlighted reading; the fixation range slices the trail |
 | Figure | Full → Figure | `global_legend_<kind>_*`, title and framing keys | Open each named menu. A title, framing change and legend position reach the plot. |
+| Saccades-only replay | Animation → Full → **Fixations** off, **Saccades** on | `global_show_fix`, `global_show_saccades` | Lines appear as the reading reaches each fixation. Direction arrows follow their lines. |
 | Animation | Switch at the top of Plot controls | `single_animate` | Switch from a custom figure to the replay and back in either mode. Its axes and layers come back. |
 | Gaze over time and Custom | Third row of Plot controls | `viz_view_gaze_over_time`, `viz_view_custom`, `global_x_field`, `global_y_field` | Plot elapsed seconds against horizontal position, visit another view, then restore the last manual design with Custom. |
 | Views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
@@ -68,7 +69,9 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | ➕ Add dataset wizard | Upload → map columns → validate → the dataset opens; `*` fields block only when missing |
 | Draw a scanpath | Draw word 1 → word 3 → word 1, change the last duration, preview, save and reopen by name. The draft and Share code reproduce the three visits. |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
-| 📂 Available datasets | Lists every dataset; renaming an upload preserves its annotations, saved selection and comparison identity |
+| Current dataset | Overview counts the filtered trials. Averages and table coverage describe the same selection. A recording row jumps to its table on a page with all six tables. Data checks cover the whole dataset even when the filters leave zero trials. |
+| Dataset library | Search or filter by source, sort, and open a dataset. Opening another dataset with unsaved edits offers to keep or discard the draft. Renaming an upload preserves its annotations, saved selection and comparison identity. |
+| Saved work | Local recovery and downloaded corpora are accessible even when the current dataset fails to load. |
 | Mapping recovery | Upload a Fixations table with an unrecognized duration, press Add dataset, activate the blocker with Enter, and map a seconds column. The duration picker receives focus and shows two converted values. |
 | Dataset credit | Credit an unpublished lab dataset and a second comparison dataset. The saved README identifies which supplies the exported trials and BibTeX contains both references. |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |

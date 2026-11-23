@@ -115,10 +115,54 @@ def _as_written(frames) -> list:
     return json.loads(to_json_plotly(frames))
 
 
+@pytest.mark.parametrize("show_saccades", [True, False])
+def test_replay_with_fixations_hidden(show_saccades):
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    pid, tid = fixations.iloc[0][["participant_id", "trial_id"]]
+    fig = api.animate_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        show_fixations=False,
+        show_saccades=show_saccades,
+        show_saccade_arrows=True,
+        show_order=True,
+        show_word_labels=False,
+        color_by="line",
+        fixation_symbol="heart",
+        duration_size_legend=True,
+        fixation_flags={"short": {"mode": "Highlight", "threshold_ms": 110}},
+        anim_grid_step_ms=100,
+    )
+    assert [t.name for t in fig.data] == (
+        ["saccades", "saccade direction"] if show_saccades else []
+    )
+    times = fig.layout.meta["scanpath_frame_times_ms"]
+    assert len(times) == len(fig.frames) > 1
+    assert times[-1] == fixations.timestamp_ms.iloc[-1] + fixations.duration_ms.iloc[-1]
+    for time_ms, frame in zip(times, fig.frames, strict=True):
+        if show_saccades:
+            lines, arrows = frame.data
+            reached = fixations[fixations.timestamp_ms <= time_ms]
+            segments = list(zip(reached.x, reached.x.iloc[1:]))
+            assert [x for x in lines.x if x is not None] == [
+                x for segment in segments for x in segment
+            ]
+            assert sum(x is not None for x in arrows.x) == len(segments)
+        else:
+            assert not frame.data
+
+
 class TestTheBrowserGetsTheSameFrames:
     @needs_node
     @pytest.mark.parametrize("dual", [False, True])
-    def test_compact_streamlit_frames_match_every_full_trace(self, dual, tmp_path):
+    @pytest.mark.parametrize("show_fixations", [True, False])
+    def test_compact_streamlit_frames_match_every_full_trace(
+        self, dual, show_fixations, tmp_path
+    ):
         from scanpath_studio import plots, replay_frames
         from scanpath_studio.synthetic import load_synthetic_data
 
@@ -133,6 +177,7 @@ class TestTheBrowserGetsTheSameFrames:
             autoplay=False,
             fixations_b=other if dual else None,
             words_b=words if dual else None,
+            show_fixations=show_fixations,
             show_order=True,
             show_saccade_arrows=True,
             fixation_symbol="heart",

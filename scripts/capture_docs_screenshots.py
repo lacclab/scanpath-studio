@@ -170,7 +170,7 @@ def capture(page: Page) -> None:
 
     print("data page")
     ui.nav(page, "Data Management")
-    page.get_by_role("heading", name="Data Management", exact=True).wait_for()
+    page.locator(".st-key-data_recording_tables").wait_for(state="visible")
     ui.shot(page, "data-page")
     _webp("data-page")
 

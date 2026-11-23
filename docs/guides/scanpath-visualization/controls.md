@@ -78,10 +78,11 @@ If you switch to Essentials while comparing readings, the comparison switch stay
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="Animation settings" loading="lazy"></a>
 
-Turn **Animation** on to replay the reading fixation by fixation. Use the play and
-pause buttons and time slider above the plot to navigate the replay. Switch
-**Animation** off to return to your selected figure and its settings. During an animation, the **Fixations**, **Heatmap** and
-**Raw gaze** switches are grayed. For playback and frame stepping from the
+Turn **Animation** on to replay the reading. Use the play and pause buttons and
+the time slider above the plot. Switch **Animation** off to return to your figure.
+For a saccades-only replay, open **Full**, leave **Saccades** on, and turn
+**Fixations** off. Each line appears when the reading reaches its next fixation.
+**Heatmap** and **Raw gaze** are available in static views. For playback and frame stepping from the
 keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Animation settings** in Full for these controls:
 
 | Control | What it does |
@@ -255,7 +256,7 @@ An **Active** label appears beside **Filters & highlights** when either reading 
 | --- | --- |
 | **Fixations** → **Index range** | Show only some fixations: a range of the reading order, such as fixations 10 to 40. |
 | **Keep this range across trials** | Keep that fixation range when you move to another trial. Off, it applies to this trial only, and the next trial shows all its fixations. |
-| **Short** / **Long** | Find fixations shorter or longer than the cutoff (80 ms and 800 ms by default). **Show** keeps the usual marker and **Highlight** changes its appearance. **Hide** removes the marker and skips the fixation in replay and fixation-index sequences. Spatial saccade lines and static heatmaps still use the fixation. |
+| **Short** / **Long** | Find fixations shorter or longer than the cutoff (80 ms and 800 ms by default). **Show** keeps the usual marker and **Highlight** changes its appearance. **Hide** removes the marker and skips the fixation in replay and fixation-index sequences. Replay lines connect the remaining fixations. Spatial saccade lines and heatmaps on static plots still use the hidden fixation. |
 | **Outside the text** | Highlight or hide fixations that land in no word box. |
 | **Near a blink** | Highlight or hide fixations at or next to a blink (needs a blink column). |
 | **Highlight markers** → shape and color | Choose the marker shape and color of each highlighted fixation kind. |

@@ -7,6 +7,7 @@ from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import session_keys as sk
 from scanpath_studio import tabs, ui_mode
+from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 from tests.conftest import APP_SCRIPT, pin_view
 
@@ -451,9 +452,33 @@ def test_animation_keeps_the_underlying_static_layers():
     assert not at.exception
     assert at.session_state["single_animate"] is True
     assert at.session_state["global_show_heatmap"] is True
-    assert at.session_state["global_show_fix"] is False
     assert at.toggle(key="single_animate").value
-    assert _tile_type(at, "heatmap") == "primary"
+    assert at.toggle(key="global_show_fix").value is True
+    assert at.session_state["_quick_view_selection"] == "heatmap"
+    assert _lit_tiles(at) == ["heatmap"]
+    at.toggle(key="single_animate").set_value(False).run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["heatmap"]
+    assert at.toggle(key="global_show_heatmap").value is True
+    assert at.toggle(key="global_show_fix").value is False
+    assert at.toggle(key="global_show_saccades").value is False
+
+
+def test_saccades_only_replay_keeps_a_hand_edited_scanpath():
+    at = _boot(mode="full")
+    at.slider(key="global_saccade_width").set_value(4.5).run()
+    at.toggle(key="global_show_fix").set_value(False).run()
+    for replay in (True, False):
+        at.toggle(key="single_animate").set_value(replay).run()
+        assert not at.exception
+        assert _lit_tiles(at) == ["custom"]
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value
+        figure = at.session_state[SNIPPET_STATE_KEY]
+        assert figure.kind == ("animation" if replay else "static")
+        assert figure.settings["show_fixations"] is False
+        assert figure.settings["show_saccades"] is True
+        assert figure.settings["saccade_width"] == 4.5
 
 
 @pytest.mark.parametrize("name", ["heatmap", "illustration"])

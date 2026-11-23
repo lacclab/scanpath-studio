@@ -154,6 +154,25 @@ print(
 
 ::: scanpath_studio.api.save_figure
 
+### Publication figures
+
+Pass a mapping of panel headings to Plotly figures. A `.json` file reopens in the app and an `.html` file opens an offline editor. Other supported extensions render the artwork.
+
+```python
+recipe = sps.publication_figure(
+    {"Reading": scanpath, "Word profile": chart},
+    name="Figure 2",
+    width_mm=170,
+    layout="row",
+)
+sps.save_publication(recipe, "figure-2.json")
+sps.save_publication(recipe, "figure-2.svg")
+```
+
+::: scanpath_studio.api.publication_figure
+
+::: scanpath_studio.api.save_publication
+
 ::: scanpath_studio.api.save_panel_proof
 
 ::: scanpath_studio.api.save_figure_layers

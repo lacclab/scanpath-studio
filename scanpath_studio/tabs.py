@@ -5740,6 +5740,38 @@ def _render_export_panel(
 
             panel_proof_ui.render(displayed_fig, _print_size_setting(), panel_settings)
 
+    from . import publication_ui
+
+    publication_ui.render(
+        displayed_fig,
+        title=save_slug,
+        kind="replay" if animate else "scanpath",
+        description=_figure_alt(displayed_fig, save_slug)
+        if displayed_fig is not None
+        else save_slug,
+        plot_id=_true_scale_plot_id(plot_key),
+        replay=replay,
+        compare=bool(
+            displayed_fig is not None
+            and (displayed_fig.layout.meta or {}).get("scanpath_panels")
+        ),
+        settings_for=lambda: _current_figure_config(
+            selected_participant,
+            selected_trial,
+            canvas_width,
+            canvas_height,
+            viz_settings.get("x_field", "x"),
+            viz_settings.get("y_field", "y"),
+            _build_figure_settings(
+                viz_settings, bool(viz_settings.get("show_raw_gaze"))
+            ),
+            viz_settings,
+            base_font_size,
+            raw_gaze,
+            font_family=font_family,
+        ),
+    )
+
     if not include_bundle:
         ui_mode.render_export_pointer(st)
         return
@@ -8502,6 +8534,11 @@ def _render_bulk_export(
         except ValueError as error:
             preview.error(str(error))
         else:
+            if options.print_width_mm and options.raster_formats():
+                sizing = f"{options.print_width_mm:g} mm wide"
+                if options.include_png or options.include_tiff:
+                    sizing += f" · {options.print_dpi} dpi for raster figures"
+                preview.caption(sizing)
             for note in contents.notes:
                 preview.caption(note)
             preview.dataframe(pd.DataFrame(contents.files), hide_index=True)
@@ -10601,6 +10638,10 @@ def _chart(fig) -> None:
         config={**PLOTLY_CONFIG},
         alt=_figure_alt(fig, "Corpus analysis chart"),
     )
+    from . import publication_ui
+
+    title = _figure_alt(fig, "Corpus chart")
+    publication_ui.chart_button(fig, title, st._main._get_delta_path_str())
 
 
 def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
@@ -11211,6 +11252,11 @@ def render_per_text_tab(
                 f"Stimulus layout from {md_literal(str(chosen[0]))} / {md_literal(str(chosen[1]))}."
             )
         _render_true_scale_chart(fig, key="ptext_stimulus")
+        from . import publication_ui
+
+        publication_ui.chart_button(
+            fig, f"{measure.axis_label} · {text_id}", "ptext_stimulus"
+        )
         values = agg_words[["word_id", "value"]]
         if chosen:
             values = values.assign(

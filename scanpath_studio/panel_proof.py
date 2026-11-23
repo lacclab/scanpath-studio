@@ -71,6 +71,17 @@ def svg(figure, width_mm: float) -> bytes:
         height=round(figure.layout.height),
         scale=1,
     )
+    return size_svg(
+        payload,
+        round(figure.layout.width),
+        round(figure.layout.height),
+        proof["width_mm"],
+    )
+
+
+def size_svg(payload: bytes, width: int, height: int, width_mm: float) -> bytes:
+    """Keep native vector coordinates and set their physical dimensions."""
+    proof = {"width_mm": width_mm, "height_mm": width_mm * height / width}
     root = re.search(rb"<svg\b[^>]*>", payload)
     if root is None:
         raise ValueError("The renderer did not return an SVG document.")
@@ -84,10 +95,5 @@ def svg(figure, width_mm: float) -> bytes:
             count=1,
         )
     if b"viewBox=" not in tag:
-        tag = (
-            tag[:-1]
-            + f' viewBox="0 0 {round(figure.layout.width)} {round(figure.layout.height)}">'.encode(
-                "ascii"
-            )
-        )
+        tag = tag[:-1] + f' viewBox="0 0 {width} {height}">'.encode("ascii")
     return payload[: root.start()] + tag + payload[root.end() :]

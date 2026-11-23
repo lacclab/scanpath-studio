@@ -32,11 +32,13 @@ __all__ = [
     "plot_corpus_figure",
     "plot_scanpath",
     "propose_schema",
+    "publication_figure",
     "render_parent_trial",
     "run_analysis_recipe",
     "save_figure",
     "save_figure_layers",
     "save_panel_proof",
+    "save_publication",
     "version_info",
 ]
 # The release this tree descends from: the number `/release` bumps (with

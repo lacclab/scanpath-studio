@@ -11,6 +11,7 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Goal | Where |
 | --- | --- |
 | Save the figure or replay on screen | :material/file_export: **Export** → **Current figure** |
+| Assemble a paper figure or a slide | :material/file_export: **Export** → **Prepare figure for a paper or slide** |
 | Export many trials and their tables | :material/file_export: **Export** → **Export bundle** |
 | Share a view or copy its code | :material/share: **Share** → **Link** or **Code** |
 | Reuse the figure settings | :material/palette: **My designs**, or :material/share: **Share** → **Settings file** |
@@ -19,6 +20,19 @@ To export multiple trials, switch to Full and open **Export bundle**.
 Essentials offers **Current figure** for the figure or replay on screen.
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
+
+## Prepare a paper figure or slide
+
+Open **Scanpath → Export → Prepare figure for a paper or slide**. The editor starts with the displayed reading. To collect another reading or replay, select it in Scanpath, return to the editor and choose **Use current figure** or **Use current replay**. In Corpus Analysis, use **Add chart to figure workspace** below the chart. The chart keeps its measure, axes and any uncertainty band already shown.
+
+1. In **Panel layout**, add the collected sources, arrange them in a row, stack or grid, and edit the headings. Matching word-box heatmaps can use a common range and a single legend. **Replace selected panel** keeps a compatible crop and clears pins tied to the previous reading.
+2. In **Region & events**, draw a rectangle, choose a word span or capture the current scanpath zoom. Include a screen overview if the reader needs to see where the detail came from. Pin a fixation or a saccade, edit its label and drag the label on the proof.
+3. In **Proof & export**, choose a column width or a slide preset, then check the smallest lettering at that size. The proof also flags clipped legends, labels and captions. View it in grayscale, wrap a caption under the figure or keep it in the manuscript. **Caption & save** lets you edit and download both the caption and alternative text.
+4. Export SVG or PDF for vector artwork. PNG and TIFF use the chosen physical width and raster resolution. For a replay, select the interval, playback speed and poster frame in **Replay**. **Prepare MP4 and poster** produces a ZIP containing the clip, a matching PNG and the figure recipe. Rendering PDF or video in the app requires a local Chromium browser on the server.
+
+**Save named figure on this device** stores the figure in this browser. Reopen it from **Saved figures**, including under **Data Management → Saved work**. For a coauthor, download the figure recipe. They can load it under **Saved figures → Open figure recipe** or **Share → Settings file**. Recipes contain the plotted data, tooltip fields and embedded stimulus images. A **Share → Link** can open the editor on a source view. The recipe carries the assembled panels and edits.
+
+To give a set of filtered readings the same physical size, choose **Apply size to export bundle**. In Full mode, open **Export bundle**, select the formats and inspect **Preview bundle contents**. Each figure keeps its own aspect ratio. The ZIP’s `index.csv` records the output dimensions and the DPI for sized raster files.
 
 ## Reproduce a coauthor's results
 

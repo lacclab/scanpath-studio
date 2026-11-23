@@ -353,3 +353,19 @@ def test_upload_reference_survives_a_new_label_and_name_reuse(old, new):
     session["_datasets"]["second"] = {}
     assert resolve_dataset_reference(session, old, identifier) == "first"
     assert dataset_share_id(session, "first") == identifier
+
+
+@given(st.lists(st.tuples(_ID_TEXT, _ID_TEXT), max_size=8))
+def test_publication_recipe_preserves_panel_order_and_wording(labels):
+    from scanpath_studio import publication
+
+    sources = [
+        {"id": str(i), "title": title, "figure": {"data": [], "layout": {}}}
+        for i, (title, _) in enumerate(labels)
+    ]
+    doc = publication.project(sources)
+    for panel, (_, caption) in zip(doc["panels"], labels):
+        panel["labels"] = [dict(x=0, y=2, dx=0, dy=1, text=caption)]
+    restored = json.loads(publication.render(doc, "json"))
+    publication.validate_project(restored)
+    assert restored == doc

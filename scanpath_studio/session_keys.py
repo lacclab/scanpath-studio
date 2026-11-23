@@ -424,6 +424,7 @@ PARAM_TAB = "tab"
 # The Essentials / Full interface mode (`ui_mode.resolve_mode`). A viewer's own
 # preference, so it is read from a link but never written by Share.
 PARAM_UI = "ui"
+PARAM_PREPARE = "prepare"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
@@ -909,6 +910,7 @@ LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
 
 URL_OPTIONAL_PARAMS = frozenset(
     {
+        PARAM_PREPARE,
         "word_hover_fields_json",
         "fixation_hover_fields_json",
         *LEGEND_PARAMS,

@@ -18,6 +18,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 
 | Feature | Where | Drive it by | Works when |
 | --- | --- | --- | --- |
+| Prepare publication figure | Scanpath → Export → Prepare figure for a paper or slide | `?prepare=1`, `render --sample -o reading.publication.json`, `publication_figure` | Pin an event, save and reopen the recipe, then export at 85 mm and 300 dpi. The PNG and TIFF are 1,004 px wide and the SVG declares 85 mm. |
 | Pick a reading | Above the plot | `single_participant`, `single_trial_id` | The plot, title and chips follow; a share link reopens the same reading |
 | Keyboard shortcuts | Scanpath page, trial arrows, replay timeline | Left / Right, Shift + Left / Right, Space, Home / End | Page arrows step trials, Shift + arrows step B, and the replay timeline steps frames and toggles playback. Typing in the picker leaves the trial alone. |
 | Fixation charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |

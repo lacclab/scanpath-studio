@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="object-src 'none'; frame-src 'none'; base-uri 'none'; img-src data: blob:; font-src data:; connect-src 'none'">
+  <title>Prepare figure · Scanpath Studio</title>
+  <style><!--STYLE--></style>
+  <!--PLOTLY-->
+</head>
+<body>
+  <main>
+    <header>
+      <div><small>Scanpath Studio</small><h1>Prepare figure</h1></div>
+      <button id="library">Saved figures</button>
+    </header>
+    <nav aria-label="Figure tools"></nav>
+    <div class="workspace">
+      <section>
+        <div class="proof">
+          <div class="proofhead"><strong id="figure-name"></strong><button id="zoom">100%</button></div>
+          <div id="stage"><div id="sheet"></div></div>
+        </div>
+        <div id="metrics"></div>
+        <div id="type-sizes" class="note"></div>
+        <div id="issues" aria-live="polite"></div>
+      </section>
+      <aside id="controls"></aside>
+    </div>
+    <div id="message" role="status"></div>
+    <input type="file" id="upload" accept=".json" hidden>
+  </main>
+  <div id="drawing" aria-hidden="true"></div>
+  <script id="project-data" type="application/json"><!--INPUT--></script>
+  <script><!--EDITOR--></script>
+</body>
+</html>

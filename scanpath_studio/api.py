@@ -3961,6 +3961,49 @@ def _compare_raw_gaze(
     return samples
 
 
+def publication_figure(
+    figures,
+    *,
+    name: str = "Untitled figure",
+    width_mm: float = 170,
+    layout: str = "stack",
+) -> dict:
+    """Build a portable figure project from a mapping of panel titles to Plotly figures.
+
+    Use the returned recipe with save_publication or open its JSON in Prepare figure.
+    The recipe includes the plotted data and embedded images.
+    """
+    from .publication import project, source
+
+    def kind(fig: go.Figure) -> str:
+        meta = fig.layout.meta or {}
+        if isinstance(meta, dict):
+            if meta.get("scanpath_frame_times_ms"):
+                return "replay"
+            if "scanpath_panels" in meta:
+                return "scanpath"
+        for trace in fig.data:
+            if trace.name in ("words", "saccades", "Raw gaze") or (
+                isinstance(trace.meta, dict) and "publication_order" in trace.meta
+            ):
+                return "scanpath"
+        return "chart"
+
+    return project(
+        (source(fig, title, kind=kind(fig)) for title, fig in figures.items()),
+        name=name,
+        width_mm=width_mm,
+        layout=layout,
+    )
+
+
+def save_publication(recipe: dict, path: str | Path) -> Path:
+    """Save an editable publication project or its physical-size SVG, PDF, PNG, TIFF or MP4."""
+    from .publication import save
+
+    return save(recipe, path)
+
+
 def save_panel_proof(fig: go.Figure, path: str | Path, *, width_mm: float) -> Path:
     """Save a split comparison as an SVG with its manuscript width in millimetres.
 
@@ -4021,6 +4064,24 @@ def save_figure(
     Returns:
         The path written.
     """
+    if str(path).lower().endswith((".publication.json", ".publication.html")):
+        if any(v is not None for v in (width, height, proof_width_mm)) or scale != 2:
+            raise ValueError("Use width_mm or width_in to size a publication figure.")
+        if width_mm is not None and width_in is not None:
+            raise ValueError("Pass width_mm or width_in, not both.")
+        name = Path(path).name.rsplit(".publication.", 1)[0]
+        recipe = publication_figure(
+            {name: fig},
+            name=name,
+            width_mm=width_mm
+            if width_mm is not None
+            else width_in * 25.4
+            if width_in is not None
+            else 170,
+        )
+        if dpi is not None:
+            recipe["dpi"] = dpi
+        return save_publication(recipe, path)
     if proof_width_mm is not None:
         if (
             any(v is not None for v in (width, height, width_mm, width_in, dpi))

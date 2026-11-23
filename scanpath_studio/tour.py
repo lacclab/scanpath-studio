@@ -1691,7 +1691,9 @@ def tour_suppressed(query_params) -> bool:
     (rather than reading ``st.query_params`` itself) because AppTest can't
     inject query params — this stays unit-testable.
     """
-    if (query_params.get("embed") or "").lower() in {"true", "1"}:
+    if query_params.get("prepare") == "1" or (
+        query_params.get("embed") or ""
+    ).lower() in {"true", "1"}:
         return True
     return any(k in query_params for k in ("source", "participant", "trial", "tab"))
 

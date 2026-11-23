@@ -743,7 +743,7 @@ def _render_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--animate",
         action="store_true",
-        help="Render the animated replay instead of the static figure (HTML only).",
+        help="Create a replay as interactive HTML or an editable publication project.",
     )
 
     viz = parser.add_argument_group(
@@ -1596,13 +1596,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "--width-mm",
         type=float,
         metavar="MM",
-        help="Print width of a PNG in mm, drawn at --dpi (replaces --scale).",
+        help="Width in mm for a PNG or a publication project.",
     )
     print_width.add_argument(
         "--width-in",
         type=float,
         metavar="IN",
-        help="Print width of a PNG in inches, drawn at --dpi.",
+        help="Width in inches for a PNG or a publication project.",
     )
     print_width.add_argument(
         "--proof-width-mm",
@@ -2854,15 +2854,21 @@ def render(argv: list[str]) -> None:
                 "--proof-width-mm sets both panel dimensions. Omit other image sizing and layer options."
             )
     _apply_shared_colorbar_flags(args)
-    # A print width sizes a PNG; say so before the data loads.
+    # Reject unsupported output sizes before loading the dataset.
     printed = args.width_mm is not None or args.width_in is not None
     if args.dpi is not None and not printed:
         parser.error(
             "Use --dpi with --width-mm or --width-in to set the PNG print resolution."
         )
-    if printed and args.output and not str(args.output).lower().endswith(".png"):
+    if (
+        printed
+        and args.output
+        and not str(args.output)
+        .lower()
+        .endswith((".png", ".publication.json", ".publication.html"))
+    ):
         parser.error(
-            "Print width applies to PNG files. Use an output filename ending in .png "
+            "Print width applies to PNG files and publication projects. Use .png, .publication.json or .publication.html "
             "with --width-mm or --width-in."
         )
     # Validate everything derivable from argv before the (possibly minutes-long
@@ -3004,9 +3010,13 @@ def render(argv: list[str]) -> None:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
     if args.crop_margin is not None and args.crop_margin < 0:
         raise SystemExit("--crop-margin must be zero or more pixels.")
-    if args.animate and args.output and not args.output.lower().endswith(".html"):
+    if (
+        args.animate
+        and args.output
+        and not args.output.lower().endswith((".html", ".publication.json"))
+    ):
         raise SystemExit(
-            "--animate writes interactive HTML — use a .html output. For GIF or "
+            "--animate writes interactive .html files or a .publication.json recipe. For GIF or "
             "MP4, use the app's Export, or "
             "scanpath_studio.animation_export.export_animation in Python."
         )
@@ -4500,6 +4510,7 @@ usage:
                                    (see `scanpath-studio render --help`)
   scanpath-studio corpus …         render a corpus figure from a tidy CSV
   scanpath-studio recipe …         reproduce a cohort or difference profile CSV from its recipe
+  scanpath-studio publication …    render a publication figure recipe
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
@@ -4525,6 +4536,7 @@ _COMMANDS = (
     "analyze",
     "corpus",
     "recipe",
+    "publication",
     "check",
     "cache",
     "version",
@@ -4634,6 +4646,24 @@ def main(argv: list[str] | None = None) -> None:
                 f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
             )
         analyze(argv[1:])
+    elif argv[0] == "publication":
+        import json
+
+        from .api import save_publication
+
+        parser = argparse.ArgumentParser(
+            prog="scanpath-studio publication",
+            description="Render a figure project saved in Prepare figure.",
+        )
+        parser.add_argument("recipe", type=Path)
+        parser.add_argument("-o", "--output", required=True, type=Path)
+        args = parser.parse_args(argv[1:])
+        try:
+            save_publication(
+                json.loads(args.recipe.read_text(encoding="utf-8")), args.output
+            )
+        except (ValueError, RuntimeError, OSError) as exc:
+            parser.error(str(exc))
     elif argv[0] == "recipe":
         recipe(argv[1:])
     elif argv[0] == "corpus":

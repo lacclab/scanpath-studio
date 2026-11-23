@@ -2332,7 +2332,10 @@ def _migrate_config_9_to_10(config: dict) -> dict:
     """Draw a saved replay's fixations. A replay drew them whatever the
     Fixation switch said, so a file that saved a replay with the switch off
     showed them; read as saved, it would open an empty replay, or saccades
-    alone. Fixation windows and their scope are left alone."""
+    alone. Fixation windows and their scope are left alone.
+
+    As with an old link, the fixations are on for the replay only: the
+    in-memory ``mode`` marks it, and leaving the replay hides them again."""
     migrated = dict(config)
     mode, layers = migrated.get("mode"), migrated.get("layers")
     if (
@@ -2343,7 +2346,12 @@ def _migrate_config_9_to_10(config: dict) -> dict:
         and not layers["fixations"]
     ):
         migrated["layers"] = {**layers, "fixations": True}
+        migrated["mode"] = {**mode, _REPLAY_ONLY_FIXATIONS: True}
     return migrated
+
+
+#: Set by `_migrate_config_9_to_10` on the migrated (never saved) config.
+_REPLAY_ONLY_FIXATIONS = "_replay_only_fixations"
 
 
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
@@ -2802,6 +2810,8 @@ def _restore_plot_config(
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
+    if section("mode").get(_REPLAY_ONLY_FIXATIONS) is True:
+        st.session_state[_AUTO_REPLAY_FIXATIONS] = True
 
     illustration = section("illustration")
     if "label_mode" in illustration:

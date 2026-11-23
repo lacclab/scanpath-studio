@@ -87,6 +87,13 @@ def test_an_old_settings_file_draws_the_replays_fixations():
     )
     assert restored["single_animate"] is True
     assert restored["global_show_fix"] is True
+    # As with the old link, leaving the replay returns to the static figure
+    # the file described.
+    import streamlit as st
+
+    controls.leave_animation()
+    assert st.session_state["global_show_fix"] is False
+    st.session_state.clear()
 
 
 def test_a_saccades_only_replay_file_stays_saccades_only():

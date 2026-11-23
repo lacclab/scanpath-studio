@@ -315,6 +315,33 @@ class TestOverlongRowsAreFoundByTheReadItself:
         assert frame["trial"].tolist() == ["t1", "t2"]
         assert "(line 3)" in pop_read_notes(frame)[0]
 
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    @pytest.mark.parametrize("projected", [True, False])
+    @pytest.mark.parametrize("newline", ["\n", "\r\n"])
+    def test_a_line_break_inside_a_quoted_header_cell(
+        self, tmp_path, route, projected, newline
+    ):
+        """Excel writes a header cell with a manual line break in quotes."""
+        rows = [
+            ";".join(HEADER) + ';"Notes' + newline + '(free text)"',
+            "p1;t1;1;2;3;a",
+            "p1;t2;1;2;3;b",
+        ]
+        body = newline.join(rows).encode() + newline.encode()
+        path = tmp_path / "notes.csv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "notes.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("notes.csv", body)
+        source = _upload("notes.csv", body) if route == "upload" else path
+        plan = _plan() if projected else ReadPlan(identity=("participant", "trial"))
+        frame = read_table(source, plan=plan)
+        assert frame["trial"].tolist() == ["t1", "t2"]
+        assert pop_read_notes(frame) == []
+        if not projected:
+            assert frame.columns[-1] == "Notes" + newline + "(free text)"
+
     def test_an_extra_field_spelled_like_a_missing_value_still_counts(self):
         rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;t1;1;2;3;NA", "p1;t2;1;2;3"]
         frame = read_table(_upload("na.csv", "\n".join(rows).encode()), plan=_plan())

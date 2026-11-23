@@ -2303,9 +2303,20 @@ def _first_line(head: bytes) -> bytes:
     """
     encoding = _bom_encoding(head)
     if encoding is not None and encoding != "utf-8-sig":
-        line = head.decode(encoding, "ignore").split("\n", 1)[0].rstrip("\r")
-        return line.encode("utf-8")
-    return head.split(b"\n", 1)[0].rstrip(b"\r")
+        text = head.decode(encoding, "ignore")
+        end = _unquoted_line_end(text, '"', "\n")
+        return (text if end < 0 else text[:end]).rstrip("\r").encode("utf-8")
+    end = _unquoted_line_end(head, b'"', b"\n")
+    return (head if end < 0 else head[:end]).rstrip(b"\r")
+
+
+def _unquoted_line_end(text, quote, newline) -> int:
+    """Where the first record of ``text`` ends: its first newline outside a
+    quoted field ("Notes\\n(free text)" is one header cell), or -1."""
+    at = text.find(newline)
+    while at >= 0 and text.count(quote, 0, at) % 2:
+        at = text.find(newline, at + 1)
+    return at
 
 
 def _sniff_delimiter(buf, name: str) -> str:
@@ -2455,6 +2466,11 @@ def _read_delimited(
         )
     except _ExtraFields:
         pass
+    except ValueError as exc:
+        # A header the probe column could not be appended to (pandas then
+        # finds neither it nor the columns after it) reads through the scan.
+        if probe not in str(exc):
+            raise
     with contextlib.ExitStack() as stack:
         if rereadable:
             _rewind(buf)
@@ -2635,7 +2651,15 @@ def _with_extra_column(buf, sep: str, name: str):
             at = head.find(token, at + 1)
         if at >= 0 and (line_end < 0 or at < line_end):
             line_end = at
-    if line_end < 0 and len(head) == _HEADER_MAX_BYTES:
+    quote = '"' if text else '"'.encode(codec)
+    quotes, at = 0, head.find(quote, len(mark))
+    while 0 <= at < (line_end if line_end >= 0 else len(head)):
+        quotes += (at - len(mark)) % unit == 0
+        at = head.find(quote, at + 1)
+    if (line_end < 0 and len(head) == _HEADER_MAX_BYTES) or quotes % 2:
+        # No line end in reach, or the first one sits inside a quoted header
+        # cell ("Notes\n(free text)"): the record scan, which follows
+        # quoting, reads this table instead.
         if owned:
             source.close()
         return None

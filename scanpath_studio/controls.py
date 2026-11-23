@@ -2187,10 +2187,14 @@ _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
-#: Compare and Animate are ways of *viewing* a design, not part of
-#: it: switching one on leaves the design's highlight where it is. (A design
-#: still records whether Compare was on, so applying it restores that.)
-_VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
+#: Compare and the replay are ways of *viewing* a design, not part of it:
+#: switching one on, or changing how the replay plays, leaves the design's
+#: highlight where it is, and every view tile, Custom included, keeps them as
+#: they are. (A saved design still records whether Compare was on and the
+#: replay speed, so applying it restores them.) See `_is_view_mode_key`.
+_VIEW_MODE_KEYS = frozenset(
+    {SINGLE_COMPARE_TOGGLE, SINGLE_ANIMATE, SINGLE_PLAYBACK_SPEED}
+)
 #: The dataset the applied design's baseline was taken on; see
 #: `_active_quick_view`.
 _QUICK_VIEW_DATASET = "_quick_view_dataset"
@@ -2200,18 +2204,26 @@ def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 
 
+def _is_view_mode_key(key: object) -> bool:
+    """Whether a session key sets how a design is viewed rather than the design:
+    one of `_VIEW_MODE_KEYS`, or a replay setting (`global_anim_*`)."""
+    name = str(key)
+    return name in _VIEW_MODE_KEYS or name.startswith("global_anim_")
+
+
 def _design_drifted(applied: dict, current: dict) -> bool:
     """Whether the plot settings moved off the design that was applied.
 
     Every design key counts — a named view resets *all* of them to the widget
     defaults, so changing any plot control is a departure from it — except the
-    mirrors above. A key present on only one side is compared against its
-    widget default: a control registered late (its popover opened after the
-    baseline was taken) at its default value has not been changed, while a key
-    with no default (an explicit colour range) appearing *has*.
+    mirrors above and the view-mode keys, which every view tile keeps as they
+    are (`_is_view_mode_key`). A key present on only one side is compared
+    against its widget default: a control registered late (its popover opened
+    after the baseline was taken) at its default value has not been changed,
+    while a key with no default (an explicit colour range) appearing *has*.
     """
     for key in applied.keys() | current.keys():
-        if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
+        if _is_drift_mirror(key) or _is_view_mode_key(key):
             continue
         default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
         if applied.get(key, default) != current.get(key, default):
@@ -2292,7 +2304,7 @@ def _initial_plot_design(current: dict) -> str:
             for key, value in current.items()
             if key in expected
             and key != "global_palette"
-            and key not in _VIEW_MODE_KEYS
+            and not _is_view_mode_key(key)
             and not _is_drift_mirror(key)
         ):
             return name
@@ -2441,18 +2453,6 @@ def on_animation_change() -> None:
 def _toggle_animation_from_tile() -> None:
     st.session_state[SINGLE_ANIMATE] = not st.session_state.get(SINGLE_ANIMATE, False)
     on_animation_change()
-
-
-def _is_view_mode_key(key: object) -> bool:
-    """Whether a session key is Compare's switch or a replay setting.
-
-    These set how a design is viewed, so every view tile, Custom included,
-    leaves them as they are.
-    """
-    name = str(key)
-    return name in {SINGLE_COMPARE_TOGGLE, SINGLE_PLAYBACK_SPEED} or name.startswith(
-        "global_anim_"
-    )
 
 
 def _choose_plot_view(name: str, current: str | None) -> None:

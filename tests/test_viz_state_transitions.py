@@ -158,6 +158,34 @@ def test_the_custom_tile_keeps_compare_and_the_replay_settings(monkeypatch):
     assert {key: store[key] for key in viewing} == viewing
 
 
+def test_view_mode_settings_neither_drift_nor_change_with_a_tile(monkeypatch):
+    """The keys every tile keeps are exactly the ones the drift check skips:
+    changing the replay leaves the view lit, and no tile changes it back."""
+    store = _viz_store()
+    store.update({"single_compare_toggle": False, "single_playback_speed": 1.0})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    controls._choose_plot_view("scanpath", None)
+    assert controls._active_quick_view() == "scanpath"
+    viewing = {
+        "single_compare_toggle": True,
+        "single_playback_speed": 2.0,
+        "global_anim_autoplay": False,
+        "global_anim_quality": "Custom",
+        "global_anim_grid_step_ms": 40,
+        "global_anim_max_frames": 900,
+    }
+    assert all(controls._is_view_mode_key(key) for key in viewing)
+    store.update(viewing)
+    assert controls._active_quick_view() == "scanpath"
+
+    current = "scanpath"
+    for tile in ("heatmap", "illustration", "gaze_over_time", "custom", "scanpath"):
+        controls._choose_plot_view(tile, current)
+        assert controls._active_quick_view() == tile
+        assert {key: store[key] for key in viewing} == viewing, tile
+        current = tile
+
+
 def test_scanpath_quick_view_clears_custom_configuration(monkeypatch):
     store = _viz_store()
     store.update(

@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 import pytest
 from PIL import Image
 
+from scanpath_studio.aggregation import MEASURES, corpus_overview
+from scanpath_studio.api import plot_corpus_figure
 from scanpath_studio.data import (
     compute_word_metrics,
     infer_fix_schema,
@@ -116,6 +118,28 @@ class TestSampleDataPipeline:
 
 
 class TestPipelineFigures:
+    def test_overview_plots_observed_reading_ranges(self, normalized_demo):
+        words, _ = normalized_demo
+        measure = MEASURES["ffd"]
+        table = corpus_overview(words, measure, "participant")
+        fig = plot_corpus_figure(
+            table,
+            kind="overview",
+            series_col="participant_id",
+            measure_label=measure.axis_label,
+        )
+        trace = fig.data[0]
+        readings = words.groupby(["participant_id", "trial_id"])[measure.column].mean()
+        for point, label in enumerate(fig.layout.yaxis.ticktext):
+            values = readings.loc[label]
+            assert trace.x[point] == pytest.approx(values.mean())
+            assert trace.x[point] - trace.error_x.arrayminus[point] == pytest.approx(
+                values.min()
+            )
+            assert trace.x[point] + trace.error_x.array[point] == pytest.approx(
+                values.max()
+            )
+
     def test_scanpath_figure_renders(self, normalized_demo):
         words, fixations = normalized_demo
         pid = words["participant_id"].iloc[0]

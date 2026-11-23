@@ -140,7 +140,7 @@ class TestThePages:
         pin_view(at, "Corpus Analysis")
         at.run(timeout=90)
         assert not at.exception, at.exception
-        picker = next(s for s in at.selectbox if s.key == "ptext_measure")
+        picker = at.selectbox(key="corpus_measure")
         # The demo's report has no single-fixation or landing measures, and
         # the page does not derive them.
         labels = " ".join(picker.options)

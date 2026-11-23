@@ -27,12 +27,14 @@ need [reading measures in the Words table](../../guides/loading-data/index.md#re
 the bundled demo includes them. To compare participants on one text, their
 trials of that text must share one text ID.
 
+In **Overview**, choose **Text** or **Participant** under **Summarize by**.
+Select a point to see its contributing readings and open the corresponding profile.
+
 ## Keep the result
 
-**⬇ Download this table (CSV)** saves the values. **⬇ Download the recipe
+The CSV download saves the values. **⬇ Download the recipe
 (JSON)** saves the dataset name, the trial filters, the analysis choices and the
-counts. Keep the source data as well: the recipe records the dataset name,
-but does not include the data itself.
+counts. Keep the source data alongside the recipe so you can reproduce the result.
 
 To draw a summary with Python or the CLI, see
 [Plot a summary in code](../../guides/corpus-workspace/index.md#plot-a-summary-in-code).

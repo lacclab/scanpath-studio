@@ -13,7 +13,7 @@ apart on purpose — this file holds the filters and no styling; the figure
 settings file (🔗 Share → Settings file) holds styling and no filters — so the recipe
 says so in ``excludes`` rather than leaving a reader to guess.
 
-Per-text cohort profiles can be rerun with the original data and filter inputs.
+Overview tables and word profiles can be rerun with the original data and filter inputs.
 
 Pure — no Streamlit; ``tabs._download_tidy`` assembles the inputs.
 """
@@ -30,6 +30,13 @@ import pandas as pd
 RECIPE_KIND = "scanpath-studio/analysis-recipe"
 #: Bumped when a field changes meaning; adding a field does not bump it.
 RECIPE_VERSION = 1
+
+OVERVIEW_VIEW = "Mean and range"
+REPLAYABLE_VIEWS = (
+    ("Overview", OVERVIEW_VIEW),
+    ("Per text", "Cohort profile"),
+    ("Groups", "Difference word profile"),
+)
 
 #: What the recipe deliberately leaves out, written into every one.
 EXCLUDES = {
@@ -92,6 +99,7 @@ def analysis_choices(
     *,
     section: str | None = None,
     view: str | None = None,
+    group_by: str | None = None,
     text: tuple[str, Any] | None = None,
     screen: Any = None,
     reader: Any = None,
@@ -117,6 +125,8 @@ def analysis_choices(
         out["section"] = section
     if view:
         out["view"] = view
+    if group_by:
+        out["group_by"] = group_by
     if text is not None:
         out["text"] = {"field": str(text[0]), "id": jsonable(text[1])}
     if screen is not None:
@@ -509,16 +519,11 @@ def _recipe_group(group, words, fixations):
     return result.spec
 
 
-def cohort_recipe_table(
+def analysis_recipe_table(
     recipe, words, fixations, *, metadata, annotations, raw_gaze=None
 ) -> pd.DataFrame:
-    """Reproduce the selected cohort profile from canonical frames."""
-    from .aggregation import (
-        MEASURES,
-        cohort_word_profile,
-        group_word_difference,
-        text_screen_options,
-    )
+    """Apply the saved selection and reproduce one published analysis table."""
+    from .aggregation import MEASURES, corpus_overview
 
     recipe = _object(recipe, "recipe")
     if (
@@ -529,11 +534,59 @@ def cohort_recipe_table(
         raise ValueError("Unsupported analysis recipe kind or version.")
     a = _object(recipe.get("analysis"), "analysis")
     view = (a.get("section"), a.get("view"))
-    difference = view == ("Groups", "Difference word profile")
-    if not difference and view != ("Per text", "Cohort profile"):
+    if view not in REPLAYABLE_VIEWS:
         raise ValueError(
-            "The recipe runner supports Per text → Cohort profile and Groups → Difference word profile."
+            "The recipe runner supports Overview, Per text → Cohort profile and Groups → Difference word profile."
         )
+    key = _object(a.get("measure"), "measure").get("key")
+    measure = MEASURES.get(key) if isinstance(key, str) else None
+    if not measure or not measure.per_word or measure.column not in words:
+        raise ValueError(
+            f"The Words table needs the recipe's mapped reading measure {key!r}."
+        )
+    filters = recipe.get("trial_filters")
+    if not isinstance(filters, list):
+        raise ValueError("The recipe needs a trial_filters list.")
+    selection = (
+        _object(recipe["selection"], "selection")
+        if "selection" in recipe
+        else _legacy_selection(filters)
+    )
+    words = _select_words(words, fixations, selection, metadata, annotations, raw_gaze)
+    if view == ("Overview", OVERVIEW_VIEW):
+        if a.get("aggregation") != "mean" or set(a) - {
+            "section",
+            "view",
+            "aggregation",
+            "group_by",
+            "measure",
+        }:
+            raise ValueError(
+                "The overview recipe supports the mean of a recorded word measure, grouped by text or participant."
+            )
+        table = corpus_overview(words, measure, a.get("group_by"))
+    else:
+        table = _profile_table(a, words, fixations, measure)
+    expected = _object(recipe.get("result"), "result").get("rows")
+    if type(expected) is not int or expected != len(table):
+        raise ValueError(
+            f"The analysis produced {len(table)} rows; the recipe records {expected}. Check the input data, mappings and filters."
+        )
+    return table
+
+
+# Direct callers of the word-profile runner use this name.
+cohort_recipe_table = analysis_recipe_table
+
+
+def _profile_table(a, words, fixations, measure):
+    from .aggregation import (
+        cohort_word_profile,
+        group_word_difference,
+        text_screen_options,
+    )
+
+    difference = a["view"] == "Difference word profile"
     text = _object(a.get("text"), "text")
     field, text_id = text.get("field"), text.get("id")
     if (
@@ -543,12 +596,6 @@ def cohort_recipe_table(
     ):
         raise ValueError(
             "The recipe needs a text ID and its matching column in the Words table."
-        )
-    key = _object(a.get("measure"), "measure").get("key")
-    measure = MEASURES.get(key) if isinstance(key, str) else None
-    if not measure or not measure.per_word or measure.column not in words:
-        raise ValueError(
-            f"The Words table needs the recipe's mapped reading measure {key!r}."
         )
     agg, spread, norm, minimum = (
         a.get(k) for k in ("aggregation", "spread", "normalization", "min_readers")
@@ -578,15 +625,6 @@ def cohort_recipe_table(
         raise ValueError("Unsupported normalization in the cohort profile recipe.")
     if type(minimum) is not int or minimum < 1:
         raise ValueError("Min participants per word must be a positive integer.")
-    filters = recipe.get("trial_filters")
-    if not isinstance(filters, list):
-        raise ValueError("The recipe needs a trial_filters list.")
-    selection = (
-        _object(recipe["selection"], "selection")
-        if "selection" in recipe
-        else _legacy_selection(filters)
-    )
-    words = _select_words(words, fixations, selection, metadata, annotations, raw_gaze)
     screen = a.get("screen")
     if screen is not None and str(screen) not in text_screen_options(
         words, field, text_id
@@ -626,11 +664,6 @@ def cohort_recipe_table(
         )
     if minimum > 1 or not difference:
         table = table.loc[table["enough"].eq(True)]
-    expected = _object(recipe.get("result"), "result").get("rows")
-    if type(expected) is not int or expected != len(table):
-        raise ValueError(
-            f"The profile produced {len(table)} rows; the recipe records {expected}. Check the input data, mappings and filters."
-        )
     return table
 
 

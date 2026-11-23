@@ -982,6 +982,25 @@ REGISTER: tuple[Computation, ...] = (
     # Aggregation / statistics
     # ------------------------------------------------------------------
     Computation(
+        id="agg.corpus_overview",
+        name="Mean and observed range by text or participant",
+        category=CATEGORY_AGGREGATION,
+        summary="Compares a recorded word measure across the filtered corpus.",
+        formula=(
+            "Average the word values within each reading. For a participant, show the mean, "
+            "minimum and maximum of those reading means. For a text, first average each "
+            "participant’s readings of that text, then summarize the participant means."
+        ),
+        code="scanpath_studio/aggregation.py:corpus_overview",
+        unit="same as the measure",
+        grouping="Readings use participant and trial IDs across their screens. Text comparisons use a mapped Text ID.",
+        missing="Only finite, reading-specific values contribute. Shared stimulus copies are excluded. A group with no values keeps its counts and has a blank mean.",
+        tiers="A, C",
+        status=STATUS_VERIFIED,
+        consumers=(_CORPUS, _API, _CLI),
+        tests=("tests/test_corpus_overview.py",),
+    ),
+    Computation(
         id="agg.measure_values",
         name="Measure value extraction",
         category=CATEGORY_AGGREGATION,

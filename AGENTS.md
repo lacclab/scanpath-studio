@@ -42,6 +42,7 @@ scanpath_studio/
 │  ├─ ui_mode.py         the Scanpath view's Essentials | Full mode: how it is seeded (`?ui=`, cookie),
 │  │                     the header switch, the CSS that hides the other mode's containers, ＋ More lists
 │  ├─ tabs.py            the views' panels: Scanpath (plot + rail + subtabs), Corpus Analysis, the Data page
+│  ├─ corpus_overview.py the Corpus Analysis landing view and its links into text, participant and group analyses
 │  ├─ controls.py        the Scanpath rail, the column-mapping UI and the trial filters
 │  ├─ metadata_editor.py the participant, trial and text metadata controls shared by the wizard and Data Management
 │  ├─ upload_ui.py       shared file-read error messages for the upload controls

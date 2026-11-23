@@ -29,6 +29,7 @@ import streamlit as st
 from scanpath_studio import (
     alignment,
     chart_axes,
+    corpus_overview,
     dataset_credit,
     loading,
     progress,
@@ -46,6 +47,7 @@ from scanpath_studio.aggregation import (
     available_features,
     available_measures,
     cohort_word_profile,
+    corpus_text_column,
     distinct_group_labels,
     effective_spread,
     ensure_fixation_enrichment,
@@ -79,6 +81,7 @@ from scanpath_studio.aggregation import (
     word_rate_profile,
 )
 from scanpath_studio.analysis_recipe import (
+    REPLAYABLE_VIEWS,
     analysis_choices,
     build_analysis_recipe,
     group_definition,
@@ -229,6 +232,7 @@ from scanpath_studio.controls import (
     static_plot_view,
 )
 from scanpath_studio.data import (
+    AOI_TRIAL_ID,
     IDENTITY_SCHEMA_FIELDS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
@@ -239,6 +243,7 @@ from scanpath_studio.data import (
     assign_derived,
     assign_fingerprint,
     brought_reading_measures,
+    carries_mapped_text,
     coerce_bool_or_na,
     compute_word_metrics,
     derive_trial_index,
@@ -438,7 +443,7 @@ if TYPE_CHECKING:
 
 #: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
 #: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
-CORPUS_SUBTABS = ("Per text", "Per sentence", "Per participant", "Groups")
+CORPUS_SUBTABS = ("Overview", "Per text", "Per sentence", "Per participant", "Groups")
 
 
 def corpus_subtabs() -> tuple[str, ...]:
@@ -9150,6 +9155,16 @@ def _c_enrich_fix(_fix, _words, ffkey, fwkey):
     return ensure_fixation_enrichment(_fix, _words)
 
 
+def _enriched_corpus_fixations(
+    fixations: pd.DataFrame, words: pd.DataFrame
+) -> pd.DataFrame:
+    enriched = _c_enrich_fix(
+        fixations, words, frame_fingerprint(fixations), frame_fingerprint(words)
+    )
+    assign_derived(enriched, "enrich_fix", (fixations, words))
+    return enriched
+
+
 @st.cache_data(show_spinner=False)
 def _c_trial_keys(_frame, fkey):
     """`data.trial_keys`, cached per frame — a trial-metadata group
@@ -9213,6 +9228,7 @@ def _measure_picker(
         return None
     labels = {m.label: m.key for m in ms}
     options = list(labels)
+    _drop_stale(key, options)
     default = "Total fixation duration — TFD"
     index = options.index(default) if default in options else 0
     chosen = host.selectbox(
@@ -9220,6 +9236,7 @@ def _measure_picker(
         options=options,
         index=index,
         key=key,
+        persist_state="session",
         help="The eye-movement measure the views in this section show.",
     )
     return MEASURES[labels[chosen]]
@@ -9237,30 +9254,6 @@ _COMPUTED_READER_VIEWS = frozenset(
         "Participant summary table",
     }
 )
-
-#: What each Per participant / Groups view shows, as its section caption names
-#: it (the caption lists only the views this build offers).
-_VIEW_PHRASES = {
-    "Distribution vs cohort": "their distribution",
-    "Reading summary": "a reading-speed summary",
-    "Fixation duration over time": "fixation duration over the trial",
-    "Saccade vs fixation duration": "saccade vs fixation duration",
-    "Progressive vs regressive": "progressive vs regressive saccades",
-    "Landing-position curve": "the landing-position curve",
-    "Per-trial trend": "their per-trial trend",
-    "Distributions": "distribution summaries",
-    "Word profile": "the cohort word profile",
-    "Participant summary table": "a per-participant summary table",
-    "Group trend": "the group's trend",
-}
-
-
-def _views_phrase(views) -> str:
-    """The offered ``views`` as one prose list: "a, b and c"."""
-    parts = [_VIEW_PHRASES.get(view, view) for view in views]
-    if len(parts) < 2:
-        return "".join(parts)
-    return ", ".join(parts[:-1]) + " and " + parts[-1]
 
 
 def _measure_note(host, measure: Measure, observation: str) -> None:
@@ -9321,16 +9314,15 @@ def _spread_note(host, spread: str, agg: str | None = None) -> None:
 
 def _normalize_toggle(host, *, key, disabled=False):
     """Z-score-per-participant toggle."""
-    return bool(
-        host.toggle(
-            "Z-score per participant",
-            value=False,
-            key=key,
-            disabled=disabled,
-            help="Each participant's values minus their mean, divided by their "
-            "SD. Compares participants' patterns with their overall level removed.",
-        )
+    enabled = host.toggle(
+        "Z-score per participant",
+        key=key,
+        disabled=disabled,
+        persist_state="session",
+        help="Each participant's values minus their mean, divided by their "
+        "SD. Compares participants' patterns with their overall level removed.",
     )
+    return enabled and not disabled
 
 
 def _min_readers_input(host, *, key, label="Min participants per word", default=1):
@@ -9343,6 +9335,7 @@ def _min_readers_input(host, *, key, label="Min participants per word", default=
             value=default,
             step=1,
             key=key,
+            persist_state="session",
             help="Hide words that fewer participants than this have a value for.",
         )
     )
@@ -9373,8 +9366,9 @@ def _download_tidy(
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
-    cohort_csv = None
-    if recipe.get("view") in ("Cohort profile", "Difference word profile"):
+    replayable = (context.get("section"), recipe.get("view")) in REPLAYABLE_VIEWS
+    result_csv = None
+    if replayable:
         entry = (st.session_state.get("_datasets") or {}).get(
             context.get("dataset", {}).get("source")
         )
@@ -9404,7 +9398,7 @@ def _download_tidy(
                 "keep_columns": keep,
             },
         }
-        cohort_csv = csv
+        result_csv = csv
         # Record the app's headers even if the runner loads canonical tables.
         counts["headers"] = as_written(df.iloc[:0], names).columns.tolist()
     row = host.container(horizontal=True, gap="small")
@@ -9424,13 +9418,13 @@ def _download_tidy(
         )
     row.download_button(
         "⬇ Download the recipe (JSON)",
-        data=partial(_recipe_json, context, recipe, name, counts, cohort_csv),
+        data=partial(_recipe_json, context, recipe, name, counts, result_csv),
         file_name=recipe_file_name(name),
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
         help="Reproduce this table with scanpath-studio recipe and the same source files."
-        if recipe.get("view") in ("Cohort profile", "Difference word profile")
+        if replayable
         else (
             "A record of the dataset name, trial filters, analysis choices and counts"
             " used for this table. Keep your data separately; the recipe contains no "
@@ -9447,7 +9441,7 @@ def _tidy_csv(df: pd.DataFrame, names: ColumnNames) -> bytes:
 
 
 def _recipe_json(
-    context: dict, recipe: dict, name: str, counts: dict, cohort_csv=None
+    context: dict, recipe: dict, name: str, counts: dict, result_csv=None
 ) -> str:
     """The recipe file's text, built when the button is clicked.
 
@@ -9463,8 +9457,8 @@ def _recipe_json(
     if recipe.get("groups"):
         recipe["groups"] = [group_definition(*pair) for pair in recipe["groups"]]
     analysis = analysis_choices(section=context.get("section"), **recipe)
-    if cohort_csv is not None:
-        counts = {**counts, "sha256": hashlib.sha256(cohort_csv()).hexdigest()}
+    if result_csv is not None:
+        counts = {**counts, "sha256": hashlib.sha256(result_csv()).hexdigest()}
 
     return json.dumps(
         build_analysis_recipe(
@@ -9475,7 +9469,7 @@ def _recipe_json(
             pool=context.get("pool") or {},
             analysis=analysis,
             selection=context.get("selection")
-            if analysis.get("view") in ("Cohort profile", "Difference word profile")
+            if (analysis.get("section"), analysis.get("view")) in REPLAYABLE_VIEWS
             else None,
             table_file=name,
             counts=counts,
@@ -9814,7 +9808,7 @@ _NO_SUCH_PARTICIPANT = "\x00__no_such_participant__"
 def _group_split_columns(words, fixations):
     """Categorical fields with 2…60 values, from both frames or the metadata."""
     out = []
-    text_col = _text_column(words) or _text_column(fixations)
+    text_col = corpus_text_column(words) or corpus_text_column(fixations)
     candidates = list(_GROUP_SPLIT_CANDIDATES) + ([text_col] if text_col else [])
     for col in dict.fromkeys(candidates):
         if col in words.columns and col in fixations.columns:
@@ -9844,7 +9838,7 @@ def _render_filter_set(words, fixations, *, key, default_label):
     label = st.text_input(
         "Group name", value=default_label, key=f"{key}_label", persist_state="session"
     )
-    text_col = _text_column(fixations) or _text_column(words)
+    text_col = corpus_text_column(fixations) or corpus_text_column(words)
     for col, pretty in (
         ("participant_id", "Participants"),
         (text_col, "Texts"),
@@ -10056,14 +10050,6 @@ def _cohort_unavailable(host, cohorts) -> bool:
                 )
             )
     return blocked
-
-
-def _text_column(frame: pd.DataFrame) -> str | None:
-    """Canonical text/passage id column, if any."""
-    for col in ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id"):
-        if col in frame.columns:
-            return col
-    return None
 
 
 def _corpus_unavailable_notice(
@@ -10373,14 +10359,9 @@ def render_corpus_analysis_tab(
     canvas_renderer: Callable[[Any], None] | None = None,
     has_raw_gaze: bool = False,
     recipe_context: dict | None = None,
+    dataset_has_word_measures: bool = False,
 ) -> None:
-    """Corpus Analysis tab — question-oriented analysis sections.
-
-    One subtab per question — **Per text** (one text, many readers), **Per
-    participant** (one participant, many trials), and **Groups** (profile one
-    cohort, or flip a toggle to compare two). Every section obeys the active
-    trial filters and reads the shared measure picker / aggregation / spread /
-    normalization controls.
+    """Compare the filtered corpus, then inspect a text, participant or group.
 
     ``recipe_context`` — the dataset, trial filters and pool — is what each
     table's recipe records beside the view's own choices; without it the
@@ -10400,6 +10381,7 @@ def render_corpus_analysis_tab(
             scale_text_to_boxes=scale_text_to_boxes,
             canvas_renderer=canvas_renderer,
             has_raw_gaze=has_raw_gaze,
+            dataset_has_word_measures=dataset_has_word_measures,
         )
     finally:
         _RECIPE_CONTEXT.reset(token)
@@ -10418,10 +10400,16 @@ def _render_corpus_analysis_body(
     scale_text_to_boxes: bool,
     canvas_renderer: Callable[[Any], None] | None,
     has_raw_gaze: bool,
+    dataset_has_word_measures: bool,
 ) -> None:
     """The body of :func:`render_corpus_analysis_tab`."""
     # The page shows the reading measures the dataset *brought* and computes
     # none. Without one there is nothing to show.
+    if words_filtered.empty and dataset_has_word_measures:
+        st.info(
+            "These trials have no word rows. Open **Edit filters** to include readings with word measures."
+        )
+        return
     if not available_measures(words_filtered, None, per_word_only=True):
         _corpus_unavailable_notice(
             has_aoi_table=not words_filtered.empty, has_raw_gaze=has_raw_gaze
@@ -10435,10 +10423,7 @@ def _render_corpus_analysis_body(
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
     )
-    # Keyed → the `.st-key-…` selector the "Explore a corpus question" tutorial
-    # spotlights when it names the subtab to open. The tab bar carries no
-    # widget key, so a tutorial can only *point* at it, never switch it.
-    #
+    # The tutorial spotlights this container and opens sections by their URL-bound names.
     with st.container(key="tutorial_corpus_subtabs"):
         names = corpus_subtabs()
         panes = st.tabs(
@@ -10456,6 +10441,16 @@ def _render_corpus_analysis_body(
             bind="query-params",
         )
         opened = dict(zip(names, panes, strict=True))
+    if (
+        not opened["Overview"].open
+        and AOI_TRIAL_ID in words_filtered
+        and words_filtered[AOI_TRIAL_ID].notna().any()
+    ):
+        pane = next((pane for pane in panes if pane.open), st)
+        pane.info(
+            "The Words table includes shared stimulus values. Each matching reading displays "
+            "a copy, so several participants can show the same source measurement."
+        )
     viz_settings = corpus_style_controls(
         fixations_filtered,
         base_font_size,
@@ -10472,6 +10467,16 @@ def _render_corpus_analysis_body(
         opened["Groups"],
     )
     sentence_tab = opened.get("Per sentence")
+    if opened["Overview"].open:
+        with opened["Overview"], _recipe_section("Overview"):
+            corpus_overview.render_corpus_overview(
+                words_filtered,
+                download=_download_tidy,
+                canvas_width=canvas_width,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                colors=_corpus_series_colors(viz_settings),
+            )
     if text_tab.open:
         with text_tab, _recipe_section("Per text"):
             render_per_text_tab(
@@ -10667,21 +10672,29 @@ def _text_picker(
     ``follow_scanpath`` opens on the text of the trial last viewed in Scanpath,
     when the pool holds it."""
     host = host or st
-    text_col = _text_column(words)
+    text_col = corpus_text_column(words)
     if text_col is None or "word_id" not in words.columns:
         return None, None
+    if not carries_mapped_text(words):
+        host.caption(
+            "These IDs come from Trial ID. Map a Text ID in the Words table to match passages across readers."
+        )
     counts = text_read_counts(words, text_col)
     if not counts.empty:
         labels = {
             f"{row.text}  ({plural(row.n_participants, 'participant')})": row.text
             for row in counts.itertuples()
         }
-        current = _scanpath_trial_text(words, text_col) if follow_scanpath else None
+        current = None
+        if follow_scanpath:
+            current = _scanpath_trial_text(words, text_col)
+            current = st.session_state.pop(corpus_overview.PENDING_TEXT, current)
         if current is not None:
             wanted = next((k for k, v in labels.items() if v == current), None)
             if wanted is not None:
                 st.session_state[key] = wanted
-        chosen = host.selectbox(label, list(labels), key=key)
+        _drop_stale(key, list(labels))
+        chosen = host.selectbox(label, list(labels), key=key, persist_state="session")
         return text_col, labels[chosen]
     vals = sorted(words[text_col].astype(str).unique())
     if not vals:
@@ -10715,12 +10728,11 @@ def _screen_picker(words, text_col, text_id, *, key: str, host=None):
 
 def _participant_picker(words, fixations, *, key, host=None, label="Participant"):
     host = host or st
-    for frame in (fixations, words):
-        if frame is not None and not frame.empty and "participant_id" in frame.columns:
-            opts = sorted(frame["participant_id"].astype(str).unique())
-            if opts:
-                return host.selectbox(label, opts, key=key)
-    return None
+    options = sorted(_cohort_reader_ids(fixations, words))
+    if not options:
+        return None
+    _drop_stale(key, options)
+    return host.selectbox(label, options, key=key, persist_state="session")
 
 
 def _percentile_among_others(
@@ -10774,26 +10786,22 @@ def render_per_text_tab(
         st.info("Per-text views need a Words table (word ids + reading measures).")
         return
     fkey = frame_fingerprint(words_filtered)
-    # A multipart corpus needs a third control — word ids restart on each
-    # screen. The *frame* decides the layout (known before any picker runs); the
-    # picker itself only renders once the chosen text turns out to span more than
-    # one screen.
     multipart = has_screen_identity(words_filtered)
-    top = st.columns([3, 2, 2] if multipart else [3, 2])
+    top = st.columns([2, 2, 3, 1] if multipart else [2, 2, 3])
     text_col, text_id = _text_picker(
-        words_filtered, key="ptext_text", host=top[0], follow_scanpath=True
+        words_filtered, key="ptext_text", host=top[1], follow_scanpath=True
     )
     if text_col is None or text_id is None:
         st.info("No text/passage column found.")
         return
     screen_id = (
         _screen_picker(
-            words_filtered, text_col, text_id, key="ptext_screen", host=top[2]
+            words_filtered, text_col, text_id, key="ptext_screen", host=top[3]
         )
         if multipart
         else None
     )
-    view = top[1].selectbox(
+    view = top[0].selectbox(
         "View",
         [
             "Per-participant profiles",
@@ -10804,6 +10812,7 @@ def render_per_text_tab(
             "Skip / regression rate",
         ],
         key="ptext_view",
+        persist_state="session",
     )
     fw = dict(
         canvas_width=canvas_width,
@@ -10818,7 +10827,7 @@ def render_per_text_tab(
                 "rate to show."
             )
             return
-        min_readers = _min_readers_input(st, key="ptext6_min")
+        min_readers = _min_readers_input(top[2], key="ptext6_min")
         rate = _c_word_rate(
             words_filtered, text_col, text_id, min_readers, fkey, screen_id
         )
@@ -10838,29 +10847,23 @@ def render_per_text_tab(
         )
         return
 
-    if view == "Per-participant profiles":
-        measure_col, agg_col = st.columns([3, 1])
-        profile_chart = st.container()
-        options = st.container(horizontal=True)
-        extra_col = norm_col = options
-        note_host = st
-    else:
-        measure_col, agg_col, extra_col, norm_col = st.columns([3, 1, 1, 1])
-        note_host = measure_col
     measure = _measure_picker(
         words_filtered,
         fixations_filtered,
         key="ptext_measure",
-        host=measure_col,
+        host=top[2],
         per_word_only=True,
     )
     if measure is None:
         return
+    options = st.expander("Analysis settings")
+    agg_col, extra_col, norm_col = options.columns(3)
     agg = agg_col.selectbox(
         "Aggregate",
         _AGG_OPTIONS,
         format_func=str.capitalize,
         key="ptext_agg",
+        persist_state="session",
         help="How values are combined: a participant's repeated trials of this "
         "text, then each word's values across participants.",
     )
@@ -10873,7 +10876,7 @@ def render_per_text_tab(
         disabled=measure.is_rate or view == "Measure on the stimulus",
     )
     _measure_note(
-        note_host,
+        st,
         measure,
         (
             f"Each value is one participant on one word (the {agg} of their "
@@ -10911,16 +10914,15 @@ def render_per_text_tab(
                 screen_id,
             )
             cohort = coh[["word_id", "value"]] if not coh.empty else None
-        with profile_chart:
-            _chart(
-                make_small_multiples_figure(
-                    per,
-                    measure_label=measure.value_label(normalize),
-                    cohort=cohort,
-                    aggregate=agg,
-                    **fw,
-                )
+        _chart(
+            make_small_multiples_figure(
+                per,
+                measure_label=measure.value_label(normalize),
+                cohort=cohort,
+                aggregate=agg,
+                **fw,
             )
+        )
         _download_tidy(
             st,
             per,
@@ -10977,11 +10979,12 @@ def render_per_text_tab(
             "Spread",
             _SPREAD_OPTIONS,
             key="ptext3_spread",
+            persist_state="session",
             help="The band drawn around each word's value across participants: "
             "SD, SEM, IQR or a 95% bootstrap confidence interval.",
         )
-        _spread_note(st, spread, agg)
-        min_readers = _min_readers_input(st, key="ptext3_min")
+        _spread_note(options, spread, agg)
+        min_readers = _min_readers_input(options, key="ptext3_min")
         prof = _c_cohort_profile(
             words_filtered,
             text_col,
@@ -11243,7 +11246,7 @@ def render_per_text_tab(
                 "`universal_pos`."
             )
             return
-        feat_label = extra_col.selectbox("Feature", list(feats), key="ptext5_feat")
+        feat_label = st.selectbox("Feature", list(feats), key="ptext5_feat")
         feature_col, categorical = feats[feat_label]
         df = _c_word_feature(
             words_filtered,
@@ -11310,35 +11313,23 @@ def render_per_reader_tab(
         # from the dataset, and stay behind the experimental flag until checked
         # by hand.
         views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
-    st.caption(
-        "One **participant**, all their trials, against everyone else: "
-        f"{_views_phrase(views)}."
-    )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
         return
     # Keyed → the tutorial's "pick the reader, then the view" step.
-    top = st.container(key="tutorial_per_reader_view").columns([2, 3])
+    top = st.container(key="tutorial_per_reader_view").columns([3, 2])
     pid = _participant_picker(
-        words_filtered, fixations_filtered, key="prdr_pid", host=top[0]
+        words_filtered, fixations_filtered, key="prdr_pid", host=top[1]
     )
     if pid is None:
         st.info("No participant column found.")
         return
-    fix_e = _c_enrich_fix(
-        fixations_filtered,
-        words_filtered,
-        frame_fingerprint(fixations_filtered),
-        frame_fingerprint(words_filtered),
-    )
-    # A fresh copy out of the cache each rerun, named by its inputs.
-    assign_derived(fix_e, "enrich_fix", (fixations_filtered, words_filtered))
     if st.session_state.get("prdr_view") not in (None, *views):
         del st.session_state["prdr_view"]
-    view = top[1].selectbox("View", views, key="prdr_view")
+    view = top[0].selectbox("View", views, key="prdr_view", persist_state="session")
     if (
         view in ("Fixation duration over time", "Saccade vs fixation duration")
-        and fix_e.empty
+        and fixations_filtered.empty
     ):
         st.info("This view needs fixations, and none are in scope.")
         return
@@ -11365,7 +11356,11 @@ def render_per_reader_tab(
             _observation(measure, normalize)
             + " *Cohort* pools every other participant's values.",
         )
-        frame = fix_e if measure.frame == "fixations" else words_filtered
+        frame = (
+            _enriched_corpus_fixations(fixations_filtered, words_filtered)
+            if measure.frame == "fixations"
+            else words_filtered
+        )
         groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
         _chart(
             make_distribution_figure(
@@ -11376,7 +11371,9 @@ def render_per_reader_tab(
                 **fw,
             )
         )
-    elif view == "Reading summary":
+        return
+    fix_e = _enriched_corpus_fixations(fixations_filtered, words_filtered)
+    if view == "Reading summary":
         summary = reader_summary(words_filtered, fix_e, pid)
         cohort = _c_cohort_summary(
             words_filtered,
@@ -11690,13 +11687,11 @@ def render_per_group_tab(
     ]
     if not computed_measures_enabled():
         views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
-    st.caption(
-        "Define a **group** (split a field or build a filter set), then pool its "
-        f"participants: {_views_phrase(views)}."
-    )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
         return
+    _drop_stale("pgrp_view", views)
+    view = st.selectbox("View", views, key="pgrp_view", persist_state="session")
     with st.expander("Group", expanded=True):
         spec, label = _render_group_definition(
             words_filtered, fixations_filtered, key="pgrp", two_groups=False
@@ -11717,13 +11712,7 @@ def render_per_group_tab(
     pool = (words_filtered, fixations_filtered)
     assign_derived(words_g, "apply_group", pool, (0, spec or {}))
     assign_derived(fix_in, "apply_group", pool, (1, spec or {}))
-    fix_g = _c_enrich_fix(
-        fix_in,
-        words_g,
-        frame_fingerprint(fix_in),
-        frame_fingerprint(words_g),
-    )
-    assign_derived(fix_g, "enrich_fix", (fix_in, words_g))
+    fix_g = _enriched_corpus_fixations(fix_in, words_g)
     n_readers = _cohort_readers(fix_g, words_g)
     n_fix = len(fix_g) if fix_g is not None else 0
     st.caption(
@@ -11732,9 +11721,6 @@ def render_per_group_tab(
     if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
         st.info("This group is empty. Widen its definition.")
         return
-    if st.session_state.get("pgrp_view") not in (None, *views):
-        del st.session_state["pgrp_view"]
-    view = st.selectbox("View", views, key="pgrp_view")
     fw = dict(
         canvas_width=canvas_width,
         base_font_size=base_font_size,
@@ -11963,9 +11949,6 @@ def render_per_group_tab(
         )
 
 
-_GROUP_MEANS_VIEW = "Group means & difference"
-
-
 def _fmt_stat(value, digits: int = 2) -> str:
     """A summary number, or an em dash when there is none (NaN / None)."""
     if value is None or (isinstance(value, float) and np.isnan(value)):
@@ -11986,14 +11969,22 @@ def render_group_comparison_tab(
     scale_text_to_boxes: bool = True,
 ) -> None:
     """*How do two groups differ?* — two cohorts side by side."""
-    st.caption(
-        "Define **two groups** to compare their distributions, word profiles and "
-        "means. These are descriptive summaries; they do not run significance "
-        "tests."
-    )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
         return
+    view = st.selectbox(
+        "View",
+        [
+            "Overlaid distributions",
+            "Difference word profile",
+            "Side-by-side summary bars",
+            corpus_overview.GROUP_MEANS_VIEW,
+            "Within-participant contrast",
+            "Two-group word heatmap",
+        ],
+        key="cmp_view",
+        persist_state="session",
+    )
     with st.expander("Groups A & B", expanded=True):
         spec_a, spec_b, label_a, label_b = _render_group_definition(
             words_filtered, fixations_filtered, key="cmp", two_groups=True
@@ -12023,18 +12014,6 @@ def render_group_comparison_tab(
             if shared
             else " · no participant in both."
         )
-    )
-    view = st.selectbox(
-        "View",
-        [
-            "Overlaid distributions",
-            "Difference word profile",
-            "Side-by-side summary bars",
-            _GROUP_MEANS_VIEW,
-            "Within-participant contrast",
-            "Two-group word heatmap",
-        ],
-        key="cmp_view",
     )
     fw = dict(
         canvas_width=canvas_width,
@@ -12246,7 +12225,7 @@ def render_group_comparison_tab(
                 counts={"complete_pairs": len(differences)},
             ),
         )
-    elif view == _GROUP_MEANS_VIEW:  # descriptive only
+    elif view == corpus_overview.GROUP_MEANS_VIEW:  # descriptive only
         measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure")
         if measure is None:
             return

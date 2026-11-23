@@ -382,7 +382,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Choose the participant and the view",
-                "Pick the participant on the left, then set **View** to **Per-trial trend**. "
+                "Set **View** to **Per-trial trend** and choose a participant. "
                 "It plots one point per trial across the experiment. Trial order "
                 "comes from your data; check any notice about an inferred order.",
                 ".st-key-tutorial_per_reader_view",
@@ -733,10 +733,10 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": NAV_SELECTOR,
         "title": f"{ICONS['nav']} The menu bar",
-        "body": f"**{ICONS['view_scanpath']} Scanpath** is this view. "
-        f"**{ICONS['view_corpus']} Corpus Analysis** shows all participants "
-        f"together. **{ICONS['view_data']} Data Management** lists your datasets "
-        f"and adds new ones. **{ICONS['help']} Help** opens in a window.",
+        "body": f"Use **{ICONS['view_scanpath']} Scanpath** for one trial and "
+        f"**{ICONS['view_corpus']} Corpus Analysis** to compare texts or participants. "
+        f"Open **{ICONS['view_data']} Data Management** to add or edit datasets "
+        f"and **{ICONS['help']} Help** for guides.",
     },
 ]
 
@@ -2053,7 +2053,7 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         return False
     if (
         step.corpus_subtab is not None
-        and st.session_state.get("corpus_subtab", "Per text") != step.corpus_subtab
+        and st.session_state.get("corpus_subtab", "Overview") != step.corpus_subtab
     ):
         return False
     return step.subtab is None or _current_subtab() == step.subtab

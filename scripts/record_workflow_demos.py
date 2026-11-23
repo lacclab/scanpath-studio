@@ -738,6 +738,7 @@ def corpus_analysis(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(_nav(page, "Corpus Analysis"), "Corpus Analysis", hold=1.4)
+    d.click(_button(page, "Open word profile"), "inspect a text", hold=1.0)
     d.choose("ptext_view", "Measure on the stimulus", "on the stimulus", hold=0.8)
     d.scroll(330)
     d.pause(2.0)

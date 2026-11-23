@@ -54,6 +54,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 
 | Feature | Works when |
 | --- | --- |
+| Corpus overview | Switch between text and participant means, inspect a point and open its profile. The selected ID and measure carry through, and the recipe reproduces the full summary CSV. |
 | Measures from the dataset | Only the measures the dataset brought (`measure_*` fields); a notice and greyed sections without one |
 | Recipe download | The Cohort profile and Difference word profile recipes reproduce the downloaded CSV with the original source files and selections |
 | Study revision | Inspect a word with an unmeasured reading, compare two snapshots after a source correction, and find the participant and reading that changed |

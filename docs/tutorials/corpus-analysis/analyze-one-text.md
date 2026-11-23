@@ -7,12 +7,13 @@ description: "Compare how participants read the words of one text using the read
 Compare how participants read the words of one text.
 
 1. [Select the trials](index.md#before-you-start), then open
-   :material/bar_chart: **Corpus Analysis** → **Per text**.
-2. Pick a text and a reading measure your data provides.
+   :material/bar_chart: **Corpus Analysis** and choose a **Reading measure**.
+2. With **Summarize by** set to **Text**, select a dot and choose **Open word
+   profile** to see how the measure varies word by word.
 3. In **View**, choose **Measure on the stimulus**. To plot the measure against
    a word feature such as surprisal, choose **Measure vs feature** and pick the
    **Feature**. Your Words table must have that column.
-4. In **Aggregate**, choose how to combine the values. **Cohort profile**
+4. Open **Analysis settings** and choose **Aggregate** to set how values are combined. **Cohort profile**
    also shows a shaded **Spread** band. Use **Min participants per word**
    to leave out words with too few participants contributing a value.
 5. [Download the table and recipe](index.md#keep-the-result).

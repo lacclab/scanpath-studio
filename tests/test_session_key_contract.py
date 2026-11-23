@@ -870,8 +870,13 @@ def test_url_bound_widget_keys_frozen():
     # label its value: renaming either breaks a bookmarked Corpus Analysis view.
     from scanpath_studio import tabs
 
-    assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
+    assert sk.URL_BOUND_WIDGET_KEYS == {
+        "corpus_subtab",
+        "corpus_group_by",
+        "corpus_measure",
+    }
     assert tabs.CORPUS_SUBTABS == (
+        "Overview",
         "Per text",
         "Per sentence",
         "Per participant",

@@ -76,6 +76,7 @@ from scanpath_studio import (
 )
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio import updates as update_check
+from scanpath_studio.aggregation import available_measures
 from scanpath_studio.annotations import (
     filter_keys,
 )
@@ -11093,6 +11094,9 @@ def _run_app() -> None:
                     canvas_renderer=canvas_renderer,
                     has_raw_gaze=not raw_gaze_filtered.empty,
                     recipe_context=recipe_context,
+                    dataset_has_word_measures=bool(
+                        available_measures(words_all, None, per_word_only=True)
+                    ),
                 )
             _render_inclusion_report(
                 words_all,

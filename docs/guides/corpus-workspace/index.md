@@ -4,17 +4,45 @@ description: "Summarize eye-tracking reading measures by text, participant or gr
 
 # Corpus Analysis
 
-The :material/bar_chart: **Corpus Analysis** view summarizes reading measures
-by text, participant or group. It uses the selected dataset and the trials
-that match your filters.
+Open :material/bar_chart: **Corpus Analysis** to compare a reading measure across
+the trials in your current selection. The pool beside the dataset picker shows
+how many trials and participants your filters include.
 
 <figure class="sps-screenshot" markdown>
-![Corpus Analysis: total fixation duration by word and participant](../../assets/screenshots/corpus-analysis.webp)
+![Total fixation duration across 12 texts, with the selected text’s mean and participant range](../../assets/screenshots/corpus-analysis.webp)
 </figure>
+
+## Compare the corpus
+
+In **Overview**, choose a **Reading measure** from your Words table. **Summarize
+by** changes what a dot represents.
+
+| Summarize by | Dot | Line |
+| --- | --- | --- |
+| **Text** | Mean across participants who read the text | Lowest to highest participant mean |
+| **Participant** | Mean across that participant’s readings | Lowest to highest reading mean |
+
+Each reading contributes the mean of its finite word values across all its
+screens. When a participant reads a text more than once, their reading means
+are averaged before they contribute to the text mean.
+
+Comparisons across texts use the Text ID mapped in the Words table. Without
+one, the overview opens by participant. The summary needs measurements for
+individual readings. It excludes shared stimulus values copied across readers.
+
+Select a dot, or choose an ID in the inspector, to see how many readings and
+word rows contributed. **Open word profile** follows a text down to individual
+words. **Open participant profile** compares that reader’s distribution with
+the other selected readers. Both carry the chosen measure into the profile.
+**Compare groups** takes the same measure into a two-group comparison.
+
+The chart shows up to 12 groups with the highest means. The **Summary table**
+and CSV include every group with the required IDs, including those with no
+finite values. Their counts distinguish missing measurements from recorded zeros.
 
 ## Choose a view
 
-Open a tab, then pick a figure in its **View** menu.
+You can also open a detailed tab directly and choose a figure from **View**.
 
 | Tab | Use it to |
 | --- | --- |
@@ -22,7 +50,8 @@ Open a tab, then pick a figure in its **View** menu.
 | **Per participant** | Inspect one participant across trials |
 | **Groups** | Summarize a group of trials, or compare two groups or conditions |
 
-Choose a **Measure** and use **Aggregate** to choose how values are combined.
+In **Per text**, choose a **Measure** and open **Analysis settings** to set
+**Aggregate**.
 For views with a shaded band, **Spread** controls what the band shows.
 For word profiles, **Min participants per word** sets how many participants
 must have a value for a word to be included.
@@ -58,11 +87,9 @@ exclusion reasons, so a reading that fails two rules counts only once.
 
 ## Save results
 
-Under each result, **⬇ Download this table (CSV)** saves the table and
-**⬇ Download the recipe (JSON)** saves a record of the analysis: the dataset name,
-trial filters, analysis choices and counts. Keep your source data separately;
-the recipe contains neither the data nor the figure settings. To inspect
-individual trials, return to the Scanpath view.
+Use the CSV download below a result to save its values. **⬇ Download the recipe
+(JSON)** records the dataset name, trial filters, analysis choices and counts.
+Keep the source files with the recipe so you can rerun the analysis.
 
 A cohort profile's **Methods draft** records its measure, grouping,
 normalization, spread, reader threshold, trial filters and software version.
@@ -70,9 +97,11 @@ normalization, spread, reader threshold, trial filters and software version.
 IDs and measurements. After correcting a source file, open an earlier
 snapshot there to see which readings or word values changed.
 
-### Rerun a cohort or group difference profile
+### Rerun an overview or word profile { #rerun-a-cohort-or-group-difference-profile }
 
-Save the recipe alongside the CSV from **Per text → Cohort profile** or **Groups → Difference word profile**. Keep the source tables. For a difference profile, the recipe records each group’s constraints and which group was subtracted.
+Save the recipe alongside the CSV from **Overview**, **Per text → Cohort profile**
+or **Groups → Difference word profile**. For a difference profile, the recipe
+records each group’s constraints and which group was subtracted.
 New recipes save the column mappings, filename-derived columns and character-box
 merges used at import. Supply the original files to reproduce the CSV.
 

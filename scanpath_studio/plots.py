@@ -10321,6 +10321,94 @@ def make_word_rate_figure(
     return fig
 
 
+OVERVIEW_VISIBLE_ROWS = 12
+
+
+def make_corpus_overview_figure(
+    table: pd.DataFrame,
+    *,
+    group_col: str,
+    value_col: str = "value",
+    measure_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    colors: Sequence[str] | None = None,
+) -> go.Figure:
+    """Rank the measured groups by mean, with a line from minimum to maximum."""
+    stats = [value_col, "lo", "hi"]
+    measured = table[[group_col, *stats]].copy()
+    measured[stats] = measured[stats].apply(pd.to_numeric)
+    measured = measured.dropna(subset=stats, how="all")
+    if measured.empty:
+        return _no_data_figure(
+            measure_label, font_family=font_family, base_font_size=base_font_size
+        )
+    if measured[group_col].isna().any():
+        raise ValueError("Each measured overview row needs a group ID.")
+    mean, lo, hi = measured[stats].to_numpy(dtype=float, na_value=np.nan).T
+    if not np.isfinite([mean, lo, hi]).all():
+        raise ValueError(
+            "Each measured overview row needs a finite mean, minimum (lo) and maximum (hi)."
+        )
+    if ((mean < lo) & ~np.isclose(mean, lo, rtol=1e-12, atol=0)).any() or (
+        (mean > hi) & ~np.isclose(mean, hi, rtol=1e-12, atol=0)
+    ).any():
+        raise ValueError(
+            "An overview mean must fall between its minimum (lo) and maximum (hi)."
+        )
+    rows = measured.sort_values(value_col, ascending=False, kind="stable").head(
+        OVERVIEW_VISIBLE_ROWS
+    )
+    names = rows[group_col].astype(str).tolist()
+    color = colors[0] if colors else DEFAULT_FIXATION_COLOR
+    fig = go.Figure(
+        go.Scatter(
+            x=rows[value_col],
+            y=list(range(len(rows))),
+            mode="markers",
+            marker=dict(size=10, color=color),
+            error_x=dict(
+                type="data",
+                symmetric=False,
+                array=(rows["hi"] - rows[value_col]).clip(lower=0),
+                arrayminus=(rows[value_col] - rows["lo"]).clip(lower=0),
+                color=color,
+                thickness=1.5,
+                width=4,
+            ),
+            customdata=list(zip(names, rows["lo"], rows["hi"], strict=True)),
+            hovertemplate="<b>%{customdata[0]}</b><br>Mean %{x:.4~g}<br>Range %{customdata[1]:.4~g} to %{customdata[2]:.4~g}<extra></extra>",
+        )
+    )
+    truncated = len(rows) < len(measured)
+    fig.update_layout(
+        template="plotly_white",
+        width=canvas_width,
+        height=max(195, 82 + 25 * len(rows)),
+        margin=dict(l=10, r=25, t=34 if truncated else 12, b=40),
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=dict(
+            text=f"Highest {len(rows)} of {len(measured):,} means",
+            font_size=base_font_size,
+        )
+        if truncated
+        else None,
+        showlegend=False,
+    )
+    fig.update_yaxes(
+        tickmode="array",
+        tickvals=list(range(len(rows))),
+        ticktext=[label if len(label) <= 28 else label[:27] + "…" for label in names],
+        range=[len(rows) - 0.5, -0.5],
+        automargin=True,
+        showgrid=False,
+        zeroline=False,
+    )
+    fig.update_xaxes(title_text=measure_label, automargin=True)
+    return fig
+
+
 def make_distribution_figure(
     groups: dict,
     *,

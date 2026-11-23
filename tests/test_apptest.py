@@ -3474,6 +3474,7 @@ class TestCorpusAnalysisTab:
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
         [
+            ("Overview", "corpus_measure"),
             ("Per text", "ptext_view"),
             ("Per participant", "prdr_view"),
             ("Groups", "pgrp_view"),
@@ -3498,27 +3499,6 @@ class TestCorpusAnalysisTab:
         # has no `screen_id`, so it must not appear — every single-screen
         # dataset is left as it is.
         assert "ptext_screen" not in keys
-
-    @pytest.mark.parametrize(
-        ("subtab", "view_key"),
-        [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
-    )
-    def test_the_section_caption_names_only_offered_views(self, subtab, view_key):
-        """The caption lists the views in the View list, no others."""
-        from scanpath_studio import tabs
-
-        at = _make_apptest()
-        pin_view(at, "Corpus Analysis")
-        at.session_state["corpus_subtab"] = subtab
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        offered = next(s for s in at.selectbox if s.key == view_key).options
-        captions = " ".join(c.value for c in at.caption)
-        for view, phrase in tabs._VIEW_PHRASES.items():
-            if view in offered:
-                assert phrase in captions, view
-            elif view in tabs._COMPUTED_READER_VIEWS:
-                assert phrase not in captions, view
 
     def test_per_text_opens_on_the_scanpath_trials_text(self):
         """Per text opens on the text of the trial the user has open in
@@ -3693,6 +3673,7 @@ class TestCorpusAnalysisTab:
         what one plotted value is; the error-bar choice says what it shows."""
         at = _make_apptest()
         pin_view(at, "Corpus Analysis")
+        at.session_state["corpus_subtab"] = "Per text"
         at.session_state["ptext_view"] = "Cohort profile"
         at.session_state["ptext3_spread"] = "SEM"
         at.run(timeout=60)

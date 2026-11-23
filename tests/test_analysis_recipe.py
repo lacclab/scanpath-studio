@@ -164,10 +164,11 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
     at.run(timeout=90)
     bound.clear()
     pin_view(at, "Corpus Analysis")
+    at.session_state["corpus_subtab"] = "Per text"
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    # Per text → Per-participant profiles is the page's default view.
+    # Per-participant profiles is the first view inside Per text.
     buttons = {b.key: b for b in at.download_button}
     assert "dl_ptext1" in buttons
     assert buttons["dl_ptext1_recipe"].proto.label == "⬇ Download the recipe (JSON)"
@@ -212,6 +213,7 @@ def test_downloaded_filtered_profile_replays_through_cli_and_api(monkeypatch, tm
     at.session_state["filter_participants"] = ["l7_1090"]
     at.run(timeout=90)
     pin_view(at, "Corpus Analysis")
+    at.session_state["corpus_subtab"] = "Per text"
     at.run(timeout=90)
     at.selectbox(key="ptext_view").select("Cohort profile").run(timeout=90)
     at.selectbox(key="ptext_agg").select("median").run(timeout=90)

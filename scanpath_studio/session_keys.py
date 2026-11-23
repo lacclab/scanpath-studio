@@ -469,7 +469,9 @@ PARAM_DATASET_ID = "dataset_id"
 # Streamlit reads and writes these itself; `_apply_url_preset` and
 # `_build_share_query` never see them.
 CORPUS_SUBTAB = "corpus_subtab"
-URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
+CORPUS_GROUP_BY = "corpus_group_by"
+CORPUS_MEASURE = "corpus_measure"
+URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE})
 
 # Where `?source=` lands. Written by `app.main`'s source dispatch — every
 # `?source=` token resolves to `data_source_choice` there, and

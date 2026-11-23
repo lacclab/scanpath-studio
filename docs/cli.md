@@ -294,6 +294,15 @@ print(cli_reference("render", heading="###"))
 scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 ```
 
+To draw an overview CSV, pass its grouping column with `--series-col`. For
+example, this draws participant means and their observed ranges from a summary
+whose ID column is named `reader`.
+
+```bash
+scanpath-studio corpus --input overview.csv --kind overview --series-col reader \
+  --measure-label "Total fixation duration (ms)" -o overview.html
+```
+
 ```python exec="true"
 from docs_support import cli_reference
 
@@ -302,8 +311,8 @@ print(cli_reference("corpus"))
 
 ## recipe
 
-Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe
-and source tables. Recipes include the original column mappings. If raw gaze
+Recreate an **Overview**, **Cohort profile** or **Difference word profile** CSV
+from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze
 supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`.
 The command identifies any missing metadata or annotation input and verifies
 the regenerated CSV against the checksum in the recipe when available.

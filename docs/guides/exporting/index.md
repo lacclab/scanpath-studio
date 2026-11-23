@@ -142,8 +142,9 @@ With :material/movie: **Animation** selected, **Export** → **Current figure** 
 replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and
 **Next fixation** move to individual onsets and show the fixation’s duration and
 assigned word when available. The time slider scrubs through the whole reading.
-A GIF or MP4 with a low frame cap shows the state reached at each frame’s start.
-A fixation after the last frame starts can be absent from the clip.
+Each frame of a GIF or MP4 shows the state reached at that frame’s start, and the
+last frame shows the complete scanpath. With a low frame cap, a fixation that
+begins between two frames first shows in the later one.
 
 The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 

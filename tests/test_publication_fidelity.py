@@ -329,7 +329,7 @@ def test_recorded_or_estimated_time_agrees_in_replay_axis_and_summary(
 
 
 @pytest.mark.parametrize("speed", [1, 2])
-def test_capped_gif_never_paints_a_future_marker_at_its_decoded_display_time(
+def test_capped_gif_paints_no_future_marker_before_ending_on_the_whole_scanpath(
     speed, monkeypatch
 ):
     words, fixations = load_synthetic_data()
@@ -361,12 +361,18 @@ def test_capped_gif_never_paints_a_future_marker_at_its_decoded_display_time(
     gif = animation_export.export_animation(fig, fmt="gif", max_frames=2)
     elapsed = 0
     with Image.open(io.BytesIO(gif)) as image:
+        last = image.n_frames - 1
         for i in range(image.n_frames):
             image.seek(i)
             rgb = image.convert("RGB")
-            for j, onset in enumerate((0, 500, 900)):
-                if rgb.getpixel((j, 0)) == (0, 0, 0):
-                    assert onset <= elapsed * speed
+            painted = [rgb.getpixel((j, 0)) == (0, 0, 0) for j in range(3)]
+            if i == last:
+                # The final image holds until the replay ends: all of it shows.
+                assert all(painted)
+            else:
+                for shown, onset in zip(painted, (0, 500, 900), strict=True):
+                    if shown:
+                        assert onset <= elapsed * speed
             elapsed += image.info["duration"]
     assert elapsed == pytest.approx(995 / speed, abs=10)
 

@@ -741,7 +741,15 @@ def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
             expect_point(325)
             page.get_by_role("button", name="Previous fixation").click()
             assert "onset 220 ms" in page.get_by_role("status").inner_text()
-            page.get_by_role("slider", name="Replay time").press("Home")
+            # Several seeks before the next paint replace a queued Plotly frame.
+            page.get_by_role("slider", name="Replay time").evaluate(
+                """slider => {
+                    for (const value of ['1', slider.max, '0']) {
+                        slider.value = value;
+                        slider.dispatchEvent(new Event('input', {bubbles: true}));
+                    }
+                }"""
+            )
             expect_point(fixations.iloc[0]["x"])
             assert registered_frames() == 0
             assert errors == []

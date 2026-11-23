@@ -7353,6 +7353,13 @@ def render_plot_controls(
     has_fixations = has_fixations or (b_fix is not None and not b_fix.empty)
     sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
     screen_help = "Choose screen X and Y to draw this layer."
+    # Why Fixations greys when the trial has fixations but none of them can be
+    # placed on the chosen axes (a pupil-area chart, say).
+    fix_axis_help = (
+        "Both axes must be fields available in the fixations."
+        if chart_axes
+        else "No fixation has a screen position to draw."
+    )
     # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
@@ -7380,7 +7387,10 @@ def render_plot_controls(
         visibility_key="global_show_fix",
         on_change=clear_replay_layer_restore,
         disabled=not has_fixations or not has_markers,
-        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
+        help=_greyed_help(
+            (not has_fixations, "This trial has no fixations."),
+            (not has_markers, fix_axis_help),
+        ),
     )
     show_saccades, sac_grp = _layer_row(
         layers,
@@ -7523,7 +7533,7 @@ def render_plot_controls(
         _layer_off(
             f"{ICONS['fixations']} Fixations",
             off=not show_fix or not has_fixations or not has_markers,
-            reason=no_fixations_note or None,
+            reason=no_fixations_note or (None if has_markers else fix_axis_help),
         ),
         _popover_rows("fix"),
     ):

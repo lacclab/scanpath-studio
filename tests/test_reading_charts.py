@@ -158,6 +158,25 @@ def test_pupil_preset_enables_recorded_samples_and_round_trips_through_settings(
     )
 
 
+def test_fixations_say_why_they_grey_on_axes_they_lack():
+    """Fixations carry no pupil area: the switch greys with the reason, and its
+    menu gives the same one rather than asking to turn the layer on."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.toggle(key="single_animate").set_value(False).run()
+    at.selectbox(key="_plot_axis_preset").set_value(
+        "Pupil area over recorded time"
+    ).run()
+    assert not at.exception
+    reason = "Both axes must be fields available in the fixations."
+    switch = at.toggle(key="global_show_fix")
+    assert switch.disabled
+    assert switch.help == reason
+    menu = next(p for p in at.get("popover") if p.key == "plot_menu_fix")
+    captions = [caption.value for caption in menu.caption]
+    assert captions[0] == reason
+    assert not any("Turn the layer on" in caption for caption in captions)
+
+
 def test_missing_timestamps_never_supply_elapsed_seconds():
     w, f = example_import_tables()
     f = f.iloc[:3].copy()

@@ -3053,7 +3053,7 @@ saved:</p>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="show_chart" aria-hidden="true"></span> <strong>Gaze over time</strong></td>
-<td>Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Available for a single reading with recorded fixation onsets.</td>
+<td>Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation.</td>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="build" aria-hidden="true"></span> <strong>Custom</strong></td>
@@ -3253,7 +3253,7 @@ Recording setup. Click <strong>Stimulus</strong> to adjust the text or image for
 </tr>
 <tr>
 <td><strong>Word highlights</strong> → <strong>Style</strong></td>
-<td>Choose the word highlight style, <strong>Mark text</strong> (colored text) or <strong>Mark border</strong> (a border around the words), and the highlight color.</td>
+<td>Choose the word highlight style, <strong>Mark text</strong> (colored text) or <strong>Mark border</strong> (a border around the words), and the highlight color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus.</td>
 </tr>
 <tr>
 <td><strong>Stimulus image</strong> → <strong>Show</strong></td>
@@ -3432,11 +3432,11 @@ Recording setup. Click <strong>Stimulus</strong> to adjust the text or image for
 <tbody>
 <tr>
 <td><strong>Axis preset</strong></td>
-<td>Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. <strong>Connect fixations</strong> traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
+<td>Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. <strong>Connect fixations</strong> traces the windowed index sequence, including with fixation markers hidden. <strong>Hide</strong> filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
 </tr>
 <tr>
 <td><strong>Choose axis fields</strong> → horizontal / vertical</td>
-<td>Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. <strong>Screen X and Y</strong> restores the stimulus view. Animation and Compare readings use screen coordinates.</td>
+<td>Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. <strong>Screen X and Y</strong> restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates.</td>
 </tr>
 <tr>
 <td><strong>Grid</strong> → <strong>Show</strong></td>

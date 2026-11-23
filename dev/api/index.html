@@ -6607,7 +6607,11 @@ Two datasets can hold the same <code>(participant_id, trial_id)</code>, so B's p
 IDs are prefixed with <code>dataset_b</code> inside the merged frames. Without that, the
 figure could draw the wrong reading, or rows of both mixed into one. The frames you
 pass in are not modified, and only the trace labels show the prefix.</p>
-<p><strong>The overlay gate.</strong> An overlay needs both readings on screens of the same size, or
+<p><strong>Numeric axes.</strong> Set <code>x_field</code> and <code>y_field</code> to compare index, position,
+duration or other numeric fields in panels with matching ranges. An overlay
+request uses side-by-side panels on these axes. Elapsed seconds start at
+each full reading's first recorded fixation onset.</p>
+<p><strong>The overlay gate.</strong> A spatial overlay needs both readings on screens of the same size, or
 it raises <code>ValueError</code> (the app falls back to side by side). That holds across
 datasets, and within one when the two screens carry different <code>canvas_width</code> /
 <code>canvas_height</code> or <code>setup_b</code> states another screen. Pass
@@ -7690,12 +7694,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>critical_span_style</code><br><code>--critical-span-style</code></td>
 <td><code>'Mark text'</code></td>
-<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of <code>'Mark text'</code>, <code>'Mark border'</code>, <code>'None'</code>.<br><em>Single plot.</em></td>
+<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of <code>'Mark text'</code>, <code>'Mark border'</code>, <code>'None'</code>.</td>
 </tr>
 <tr>
 <td><code>span_border_color</code><br><code>--span-border-color</code></td>
 <td><code>'#000000'</code></td>
-<td>Box color under <code>--critical-span-style</code> mark-border.<br><em>Single plot.</em></td>
+<td>Box color under <code>--critical-span-style</code> mark-border.</td>
 </tr>
 <tr>
 <td><code>show_stimulus_image</code><br><code>--show-stimulus-image</code></td>
@@ -7984,12 +7988,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>x_field</code><br><code>--x-field</code></td>
 <td><code>'x'</code></td>
-<td>Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter.<br><em>Single plot.</em></td>
+<td>Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>y_field</code><br><code>--y-field</code></td>
 <td><code>'y'</code></td>
-<td>Vertical axis of the static chart. Takes the same fields as <code>--x-field</code>.<br><em>Single plot.</em></td>
+<td>Vertical axis of the static chart. Takes the same fields as <code>--x-field</code>.<br><em>Single plot, Compare.</em></td>
 </tr>
 </tbody>
 </table>

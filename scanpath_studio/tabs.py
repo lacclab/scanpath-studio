@@ -10741,7 +10741,7 @@ def _chart(fig) -> None:
 
     title = _figure_alt(fig, "Corpus chart")
     publication_ui.render(
-        fig, title=title, kind="chart", key="chart_" + st._main._get_delta_path_str()
+        fig, title=title, kind="chart", key=publication_ui.chart_key(fig)
     )
 
 

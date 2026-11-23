@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import uuid
@@ -105,6 +106,27 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     if action and action.get("type") == "batch":
         st.session_state["_publication_batch"] = action["value"]
         st.rerun()
+
+
+def chart_key(figure) -> str:
+    """The export workspace key of a Corpus Analysis chart.
+
+    It names the open section and what the chart shows (its title, axis titles
+    and kinds of marks), never the chart's position on the page, so a note
+    drawn above the chart keeps its workspace open with its draft.
+    """
+    from .session_keys import CORPUS_SUBTAB
+
+    layout = figure.layout
+    identity = [
+        st.session_state.get(CORPUS_SUBTAB),
+        layout.title.text,
+        layout.xaxis.title.text,
+        layout.yaxis.title.text,
+        sorted({trace.type for trace in figure.data}),
+    ]
+    digest = hashlib.sha256(json.dumps(identity, default=str).encode()).hexdigest()
+    return "chart_" + digest[:16]
 
 
 def _capture(figure, replay, *, title, kind, description, settings, references) -> dict:

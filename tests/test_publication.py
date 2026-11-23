@@ -405,6 +405,52 @@ def test_batch_size_is_the_proof_artwork_width(crop):
     assert "The crop, labels and caption apply only to this figure." in shown
 
 
+def _corpus_chart_app():
+    import plotly.graph_objects as go
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    st.session_state.setdefault("corpus_subtab", "Per text")
+    if st.session_state.get("note"):
+        st.info("A note drawn above the chart.")
+    measure = st.session_state.get("measure", "Skip rate")
+    tabs._chart(
+        go.Figure(
+            go.Bar(x=["a", "b"], y=[1, 2]),
+            layout=dict(title=measure, xaxis_title="Word", yaxis_title=measure),
+        )
+    )
+
+
+def test_corpus_chart_workspace_stays_open_when_a_note_appears_above():
+    from streamlit.testing.v1 import AppTest
+
+    def workspaces(at):
+        return {
+            k: at.session_state[k]
+            for k in at.session_state
+            if str(k).startswith("prepare_figure_chart_")
+        }
+
+    at = AppTest.from_function(_corpus_chart_app).run()
+    assert not at.exception
+    (key,) = workspaces(at)
+    at.session_state[key] = True
+    at.run()
+    at.session_state["note"] = True
+    at.run()
+    assert not at.exception
+    assert workspaces(at) == {key: True}
+    (group,) = [e for e in at.expander if e.label == "Prepare figure for export"]
+    assert group.proto.expanded
+
+    # Another chart, here another measure, has a workspace of its own.
+    at.session_state["measure"] = "Regression rate"
+    at.run()
+    assert set(workspaces(at)) - {key}
+
+
 def test_clip_frames_of_different_sizes_are_refused(monkeypatch):
     from unittest.mock import AsyncMock, MagicMock
 

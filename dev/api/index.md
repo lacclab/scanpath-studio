@@ -1050,7 +1050,6 @@ Examples:
 | `line_spacing` `--line-spacing`                       | `3.0`         | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N.                                                                                                                                                |
 | `scale_text_to_boxes` `--no-scale-text-to-boxes`      | `True`        | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
 | `text_color` `--text-color`                           | `'#000000'`   | Stimulus text color.                                                                                                                                                                                                                |
-| `background_color` `--background-color`               | `'#ffffff'`   | Plot background color.                                                                                                                                                                                                              |
 | `highlight_column` `--highlight-column`               | `None`        | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
 | `highlight_text_color` `--highlight-text-color`       | `'#D55E00'`   | Color of the `--highlight-column` words under `--critical-span-style` mark-text.                                                                                                                                                    |
 | `critical_span_style` `--critical-span-style`         | `'Mark text'` | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Single plot.*                                       |
@@ -1108,19 +1107,25 @@ Examples:
 | `fixation_flags` `--fixation-flag`    | `None`                         | Highlight or hide one kind of fixation, like the app's Filters & highlights. Repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]. CATEGORY is short, long, oob (outside every word box) or blink. MODE is off, highlight or hide. threshold_ms applies to short and long only. hide removes the fixations from the figure only; measures and exports keep them. E.g. `--fixation-flag` short=hide,threshold_ms=80. |
 | `saccade_classes` `--saccade-classes` | `list`, see `figure_options()` | Draw only these saccade types, comma-separated, e.g. `--saccade-classes` regression,return_sweep. Types: forward, skip, refixation, return_sweep, regression, other (off the text). A hidden type loses its line and its arrow. Default: all. *Single plot, Compare.*                                                                                                                                                                        |
 
-### Figure & canvas
+### Screen & framing
 
-| Option and `render` flag                                  | Default     | Description                                                                                                                                                                                                                     |
-| --------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fit_to_monitor` `--no-full-monitor`                      | `True`      | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                                                                     |
-| `crop_margin` `--crop-margin`                             | `None`      | The margin around the data, in screen px, when cropping to it. Implies `--crop-to-data`.                                                                                                                                        |
-| `show_plot_frame` `--no-plot-frame`                       | `True`      | Leave out the border around the plot area.                                                                                                                                                                                      |
-| `plot_frame_color` `--plot-frame-color`                   | `'#000000'` | Color of the border around the plot area.                                                                                                                                                                                       |
-| `show_coordinate_grid` `--coordinate-grid`                | `False`     | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                                                                  |
-| `coordinate_grid_spacing` `--coordinate-grid-spacing`     | `None`      | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                                                       |
-| `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`        | Size of the coordinate grid's labels, 6–36 px.                                                                                                                                                                                  |
-| `x_field` `--x-field`                                     | `'x'`       | Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. *Single plot.* |
-| `y_field` `--y-field`                                     | `'y'`       | Vertical axis of the static chart. Takes the same fields as `--x-field`. *Single plot.*                                                                                                                                         |
+| Option and `render` flag                | Default     | Description                                                                                 |
+| --------------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| `background_color` `--background-color` | `'#ffffff'` | Plot background color.                                                                      |
+| `fit_to_monitor` `--no-full-monitor`    | `True`      | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data). |
+| `crop_margin` `--crop-margin`           | `None`      | The margin around the data, in screen px, when cropping to it. Implies `--crop-to-data`.    |
+| `show_plot_frame` `--no-plot-frame`     | `True`      | Leave out the border around the plot area.                                                  |
+| `plot_frame_color` `--plot-frame-color` | `'#000000'` | Color of the border around the plot area.                                                   |
+
+### Axes
+
+| Option and `render` flag                                  | Default | Description                                                                                                                                                                                                                     |
+| --------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_coordinate_grid` `--coordinate-grid`                | `False` | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                                                                  |
+| `coordinate_grid_spacing` `--coordinate-grid-spacing`     | `None`  | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                                                       |
+| `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`    | Size of the coordinate grid's labels, 6–36 px.                                                                                                                                                                                  |
+| `x_field` `--x-field`                                     | `'x'`   | Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. *Single plot.* |
+| `y_field` `--y-field`                                     | `'y'`   | Vertical axis of the static chart. Takes the same fields as `--x-field`. *Single plot.*                                                                                                                                         |
 
 ### Title & labels
 
@@ -1133,7 +1138,7 @@ Examples:
 | `caption_color` `--caption-color`         | `'#555555'` | Color of the `--caption` text.                                                                                                                                  |
 | `show_credit` `--credit`                  | `False`     | A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.                                                                            |
 
-### Hover
+### Hover fields
 
 | Option and `render` flag                          | Default                        | Description                                                  |
 | ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------ |

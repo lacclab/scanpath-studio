@@ -4,7 +4,7 @@ EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
 1. Open the bundled demo in the **Scanpath** view. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
 1. Turn on **Raw gaze** and turn off **Saccades**.
-1. In **Fixations** ▾ → **Marker** → **Opacity**, set 0.35 so the samples show through.
+1. In **Fixations** → **Opacity**, set 0.35 so the samples show through.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
 

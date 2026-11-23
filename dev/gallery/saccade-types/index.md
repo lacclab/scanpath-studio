@@ -5,8 +5,8 @@ Forward movements, skips, refixations, return sweeps and regressions.
 ForwardSkipRefixationReturn sweepRegressionOff the text
 
 1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
-1. In **Saccades** ▾ → **Line** → **Color**, choose **By type**.
-1. To match this example, open **Figure & canvas** ▾ → **Legends** and untick **Show** for **Saccade types**. This page shows the color key below the figure.
+1. In **Saccades** → **Color**, choose **By type**.
+1. To match this example, open **Figure** → **Legends** and untick **Show** for **Saccade types**. This page shows the color key below the figure.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
 

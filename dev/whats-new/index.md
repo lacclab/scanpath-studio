@@ -34,7 +34,10 @@
 - On phones, the Scanpath view choices sit directly below the figure, ahead of Export and the other trial panels.
 - Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
 - Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
-- Essentials and Full share the same four view tiles and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
+- Essentials and Full share their view controls and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
+- Full plot controls now have Layers, Axes and Figure tabs. Open a layer by name to style it, use its switch to change visibility, or choose a chart by fixation order or time in Axes.
+- In Full, search for a plot setting to open its controls directly. Each editor puts common adjustments first and groups detailed styling, timing and layout options under their own headings.
+- Switch Animation on or off from Plot controls, plot horizontal fixation position with Gaze over time, or return to your last hand-edited figure with Custom.
 - About & citation opens with a short project overview. Citation has the APA and BibTeX references, and App details groups privacy, updates and support.
 - Help now offers offline task guides and troubleshooting. Start the sample replay or import guide when you need it, and send suggestions to GitHub Ideas. Documentation ↗ opens in a new tab.
 - Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.
@@ -78,6 +81,7 @@
 - Comparison links and generated Python and CLI commands preserve each reader’s marker fill, colors and line styles when using the print palette.
 - A tab with an older recovery copy warns you before it can overwrite newer saved work. Your edits stay available in the tab to export.
 - Saving a static figure uses the shared renderer and reports when an installed browser has not finished starting Kaleido. HTML, PNG, SVG and PDF retain their citation.
+- After Undo or Redo, you can reopen a plot menu and immediately change the restored setting again.
 - The replay timer is easier to read in dark mode.
 - Screens with gaze samples alone appear in the trial picker and exports. Comparisons place each reading’s samples on its recorded screen. Saccade peak speeds use consecutive positions from the same eye and screen and skip gaps in tracking.
 

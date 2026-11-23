@@ -27,11 +27,11 @@ The commands recreate a figure and a two-word results table. A checksum from the
 
 ## Cite what you export
 
-Files saved through **Export** include citation information in their metadata. To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
+Files saved through **Export** include citation information in their metadata. To add a visible credit to the figure, use **Figure** → **Title & labels** → **Credit**.
 
 - **Cite**, under each download and in **Share** → **Code**, gives a one-line figure credit, the APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
 - Each export bundle includes `CITATION.bib` and citation instructions in `README.md`.
-- **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio* line under the plot, for a figure shared without its caption. In code, pass `show_credit=True`, or `--credit` to `render`.
+- **Figure** → **Title & labels** → **Credit** adds a small *Made with Scanpath Studio* line under the plot, for a figure shared without its caption. In code, pass `show_credit=True`, or `--credit` to `render`.
 - In code, cite and `scanpath-studio cite` print the citation.
 
 \[!\[

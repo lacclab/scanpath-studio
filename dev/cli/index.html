@@ -2484,7 +2484,18 @@
   <a href="#flags-figure-canvas" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Figure &amp; canvas
+        Screen &amp; framing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-axes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Axes
       
     </span>
   </a>
@@ -2506,7 +2517,7 @@
   <a href="#flags-hover" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hover
+        Hover fields
       
     </span>
   </a>
@@ -2950,7 +2961,18 @@
   <a href="#flags-figure-canvas" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Figure &amp; canvas
+        Screen &amp; framing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-axes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Axes
       
     </span>
   </a>
@@ -2972,7 +2994,7 @@
   <a href="#flags-hover" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hover
+        Hover fields
       
     </span>
   </a>
@@ -4126,12 +4148,6 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Box color under <code>--critical-span-style</code> mark-border (default: #000000).</td>
 </tr>
 <tr>
-<td><code>--background-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Plot background color (default: #ffffff).</td>
-</tr>
-<tr>
 <td><code>--line-spacing</code></td>
 <td><code>N</code></td>
 <td>—</td>
@@ -4416,7 +4432,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </tbody>
 </table>
 </div>
-<h3 id="flags-figure-canvas">Figure &amp; canvas<a class="headerlink" href="#flags-figure-canvas" title="Permanent link">&para;</a></h3>
+<h3 id="flags-figure-canvas">Screen &amp; framing<a class="headerlink" href="#flags-figure-canvas" title="Permanent link">&para;</a></h3>
 <div class="sps-reference-table sps-flag-table">
 <table>
 <thead>
@@ -4434,6 +4450,51 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>—</td>
 <td>Screen size in px, e.g. 2560x1440 (default: 2560x1440 for <code>--sample</code> and <code>--onestop</code>, 1680x1050 for <code>--potec</code>, 1200x800 for <code>--authoring</code>, otherwise estimated from the data).</td>
 </tr>
+<tr>
+<td><code>--background-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Plot background color (default: #ffffff).</td>
+</tr>
+<tr>
+<td><code>--no-plot-frame</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Leave out the border around the plot area.</td>
+</tr>
+<tr>
+<td><code>--plot-frame-color</code></td>
+<td><code>COLOR</code></td>
+<td>—</td>
+<td>Color of the border around the plot area (default: #000000).</td>
+</tr>
+<tr>
+<td><code>--crop-to-data</code><br><code>--no-full-monitor</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Frame the plot on the data instead of the whole <code>--canvas</code> screen (the app's Crop to data).</td>
+</tr>
+<tr>
+<td><code>--crop-margin</code></td>
+<td><code>PX</code></td>
+<td>—</td>
+<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="flags-axes">Axes<a class="headerlink" href="#flags-axes" title="Permanent link">&para;</a></h3>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
 <tr>
 <td><code>--coordinate-grid</code></td>
 <td>switch</td>
@@ -4453,18 +4514,6 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Size of the coordinate grid's labels, 6–36 px (default: 18).</td>
 </tr>
 <tr>
-<td><code>--no-plot-frame</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Leave out the border around the plot area.</td>
-</tr>
-<tr>
-<td><code>--plot-frame-color</code></td>
-<td><code>COLOR</code></td>
-<td>—</td>
-<td>Color of the border around the plot area (default: #000000).</td>
-</tr>
-<tr>
 <td><code>--x-field</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
@@ -4475,18 +4524,6 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>FIELD</code></td>
 <td>—</td>
 <td>Vertical axis of the static chart (default: y). Takes the same fields as <code>--x-field</code>.</td>
-</tr>
-<tr>
-<td><code>--crop-to-data</code><br><code>--no-full-monitor</code></td>
-<td>switch</td>
-<td>—</td>
-<td>Frame the plot on the data instead of the whole <code>--canvas</code> screen (the app's Crop to data).</td>
-</tr>
-<tr>
-<td><code>--crop-margin</code></td>
-<td><code>PX</code></td>
-<td>—</td>
-<td>The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies <code>--crop-to-data</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -4560,7 +4597,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </tbody>
 </table>
 </div>
-<h3 id="flags-hover">Hover<a class="headerlink" href="#flags-hover" title="Permanent link">&para;</a></h3>
+<h3 id="flags-hover">Hover fields<a class="headerlink" href="#flags-hover" title="Permanent link">&para;</a></h3>
 <div class="sps-reference-table sps-flag-table">
 <table>
 <thead>

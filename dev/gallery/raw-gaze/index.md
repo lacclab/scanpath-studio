@@ -1,8 +1,8 @@
 # Raw gaze
 
-Gaze samples under translucent fixations. The bundled demo's gaze samples are synthetic.
+EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
-1. Load a Raw gaze table with your Fixations and Words tables. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
+1. Open the bundled demo in the **Scanpath** view. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
 1. Turn on **Raw gaze** and turn off **Saccades**.
 1. In **Fixations** ▾ → **Marker** → **Opacity**, set 0.35 so the samples show through.
 
@@ -10,7 +10,7 @@ Gaze samples under translucent fixations. The bundled demo's gaze samples are sy
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_2_2_Adv \
+  -p l37_273 -t l37_273_2_2_2_Adv \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
   --highlight-column '' \
   -o raw-gaze.html
@@ -20,13 +20,13 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+pid, tid = "l37_273", "l37_273_2_2_2_Adv"
 raw_gaze = sps.load_sample_raw_gaze()
 fig = sps.plot_scanpath(
     words,
     fixations,
-    "l37_1129",
-    "l37_1129_2_2_2_Adv",
+    pid,
+    tid,
     raw_gaze=raw_gaze,
     fixation_opacity=0.35,
     show_saccades=False,

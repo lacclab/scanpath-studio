@@ -18,52 +18,52 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 
 ## At a glance
 
-| Function                                      | What it does                                                                    |
-| --------------------------------------------- | ------------------------------------------------------------------------------- |
-| **Load your data**                            |                                                                                 |
-| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                   |
-| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names. |
-| propose_schema                                | Find the column mapping auto-detection would use for a raw table.               |
-| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.   |
-| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.             |
-| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.               |
-| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                           |
-| load_text_metadata                            | Load a text-level metadata table: one row per text.                             |
-| **Load the bundled demo and public datasets** |                                                                                 |
-| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                            |
-| load_sample_raw_gaze                          | Load synthesized raw gaze samples for one trial in the bundled demo.            |
-| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.            |
-| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.          |
-| **Draw a scanpath**                           |                                                                                 |
-| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.         |
-| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                     |
-| **Inspect**                                   |                                                                                 |
-| list_trials                                   | List every plottable trial: one row per participant and trial.                  |
-| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.           |
-| check_data_health                             | Check durations, positions and word boxes for data problems.                    |
-| run_analysis_recipe                           | Recreate a per-word cohort profile or a two-group difference profile.           |
-| **Plot**                                      |                                                                                 |
-| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.     |
-| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.      |
-| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.             |
-| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.        |
-| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.     |
-| **Figure options**                            |                                                                                 |
-| figure_options                                | List figure options and their default values.                                   |
-| **Reproduce a figure in code**                |                                                                                 |
-| figure_code                                   | Write the API or CLI code that reproduces a figure.                             |
-| **Save**                                      |                                                                                 |
-| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                         |
-| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.     |
-| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                      |
-| **Recovery cache**                            |                                                                                 |
-| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.       |
-| clear_cache                                   | Delete the recovery cache.                                                      |
-| **Version and updates**                       |                                                                                 |
-| version_info                                  | Return version and installation details without a network request.              |
-| check_for_updates                             | Check GitHub for a newer release.                                               |
-| **Citation**                                  |                                                                                 |
-| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.         |
+| Function                                      | What it does                                                                      |
+| --------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Load your data**                            |                                                                                   |
+| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                     |
+| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.   |
+| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                 |
+| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.     |
+| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.               |
+| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                 |
+| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                             |
+| load_text_metadata                            | Load a text-level metadata table: one row per text.                               |
+| **Load the bundled demo and public datasets** |                                                                                   |
+| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                              |
+| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo. |
+| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.              |
+| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.            |
+| **Draw a scanpath**                           |                                                                                   |
+| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.           |
+| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                       |
+| **Inspect**                                   |                                                                                   |
+| list_trials                                   | List every plottable trial: one row per participant and trial.                    |
+| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.             |
+| check_data_health                             | Check durations, positions and word boxes for data problems.                      |
+| run_analysis_recipe                           | Recreate a per-word cohort profile or a two-group difference profile.             |
+| **Plot**                                      |                                                                                   |
+| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.       |
+| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.        |
+| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.               |
+| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.          |
+| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.       |
+| **Figure options**                            |                                                                                   |
+| figure_options                                | List figure options and their default values.                                     |
+| **Reproduce a figure in code**                |                                                                                   |
+| figure_code                                   | Write the API or CLI code that reproduces a figure.                               |
+| **Save**                                      |                                                                                   |
+| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                           |
+| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.       |
+| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                        |
+| **Recovery cache**                            |                                                                                   |
+| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.         |
+| clear_cache                                   | Delete the recovery cache.                                                        |
+| **Version and updates**                       |                                                                                   |
+| version_info                                  | Return version and installation details without a network request.                |
+| check_for_updates                             | Check GitHub for a newer release.                                                 |
+| **Citation**                                  |                                                                                   |
+| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.           |
 
 ## Column names
 
@@ -82,14 +82,14 @@ print(words[columns].head(3))
 ```
 
 ```
-  participant_id     unique_trial_id
-0       l37_1129  l37_1129_2_1_1_Ele
-1       l37_1129  l37_1129_2_1_2_Ele
-2       l37_1129  l37_1129_2_1_3_Adv
+  participant_id    unique_trial_id
+0        l37_273  l37_273_2_1_1_Ele
+1        l37_273  l37_273_2_1_2_Ele
+2        l37_273  l37_273_2_1_3_Adv
    IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-0      0    Robert                        32.0            387
-1      1  Myslajek                       170.0            785
-2      2     stops                       290.0           1330
+0      1    Robert                       243.0            243
+1      2  Myslajek                       192.0            192
+2      3     stops                       140.0            140
 ```
 
 ## Load your data
@@ -250,7 +250,7 @@ load_raw_gaze(
 
 Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.
 
-Raw gaze is the third table plot_scanpath can draw, under the fixations: one row per eye-tracker sample, with a participant, a trial, `x` / `y` and usually a timestamp. `plot_scanpath` keeps only the plotted trial's (and screen's) samples, so one table can serve a whole corpus.
+Raw gaze is the third table plot_scanpath can draw, under the fixations: one row per eye-tracker sample, with a participant, a trial, `x` / `y` and usually a timestamp. Optional fields include the tracked eye, pupil area and pupil diameter in the recording's own units. `plot_scanpath` keeps the selected reading's samples. Use `x_field="timestamp_ms", y_field="pupil_area"` to inspect pupil area over time.
 
 Parameters:
 
@@ -384,9 +384,9 @@ Returns:
 load_sample_raw_gaze(*, names=NAMES_SOURCE)
 ```
 
-Load synthesized raw gaze samples for one trial in the bundled demo.
+Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-OneStop ships no sample-level gaze, so this is **synthesized** from one of the demo's real trials, and covers that trial alone.
+The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps and recorded pupil values.
 
 Parameters:
 
@@ -542,7 +542,7 @@ list_parts(
 
 List the ordered screens of multipart data, optionally for one trial.
 
-A trial recorded as raw gaze alone takes its screens from `raw_gaze` (its `screen_id`). That is decided per trial, so a samples-only trial keeps its screens in a dataset whose other trials have fixations.
+Screens can come from any of the three tables, including a screen on which the tracker recorded samples and no fixations.
 
 Parameters:
 
@@ -1110,17 +1110,17 @@ Examples:
 
 ### Figure & canvas
 
-| Option and `render` flag                                  | Default     | Description                                                                                                                                                                              |
-| --------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fit_to_monitor` `--no-full-monitor`                      | `True`      | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                              |
-| `crop_margin` `--crop-margin`                             | `None`      | The margin around the data, in screen px, when cropping to it. Implies `--crop-to-data`.                                                                                                 |
-| `show_plot_frame` `--no-plot-frame`                       | `True`      | Leave out the border around the plot area.                                                                                                                                               |
-| `plot_frame_color` `--plot-frame-color`                   | `'#000000'` | Color of the border around the plot area.                                                                                                                                                |
-| `show_coordinate_grid` `--coordinate-grid`                | `False`     | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                           |
-| `coordinate_grid_spacing` `--coordinate-grid-spacing`     | `None`      | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                |
-| `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`        | Size of the coordinate grid's labels, 6–36 px.                                                                                                                                           |
-| `x_field` `--x-field`                                     | `'x'`       | Horizontal axis of the static chart. Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation. *Single plot.* |
-| `y_field` `--y-field`                                     | `'y'`       | Vertical axis of the static chart. Takes the same fields as `--x-field`. *Single plot.*                                                                                                  |
+| Option and `render` flag                                  | Default     | Description                                                                                                                                                                                                                     |
+| --------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fit_to_monitor` `--no-full-monitor`                      | `True`      | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                                                                     |
+| `crop_margin` `--crop-margin`                             | `None`      | The margin around the data, in screen px, when cropping to it. Implies `--crop-to-data`.                                                                                                                                        |
+| `show_plot_frame` `--no-plot-frame`                       | `True`      | Leave out the border around the plot area.                                                                                                                                                                                      |
+| `plot_frame_color` `--plot-frame-color`                   | `'#000000'` | Color of the border around the plot area.                                                                                                                                                                                       |
+| `show_coordinate_grid` `--coordinate-grid`                | `False`     | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                                                                  |
+| `coordinate_grid_spacing` `--coordinate-grid-spacing`     | `None`      | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                                                       |
+| `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`        | Size of the coordinate grid's labels, 6–36 px.                                                                                                                                                                                  |
+| `x_field` `--x-field`                                     | `'x'`       | Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. *Single plot.* |
+| `y_field` `--y-field`                                     | `'y'`       | Vertical axis of the static chart. Takes the same fields as `--x-field`. *Single plot.*                                                                                                                                         |
 
 ### Title & labels
 
@@ -1182,8 +1182,8 @@ The app's **Share** tab → **Code** shows the Python or CLI code that rebuilds 
 ```
 print(
     sps.figure_code(
-        participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele",
+        participant="l7_183",
+        trial="l7_183_2_1_1_Ele",
         show_heatmap=True,
         color_by="duration_ms",
     )
@@ -1198,8 +1198,8 @@ words, fixations = sps.load_sample_data()
 fig = sps.plot_scanpath(
     words,
     fixations,
-    participant='l7_1090',
-    trial='l7_1090_2_1_1_Ele',
+    participant='l7_183',
+    trial='l7_183_2_1_1_Ele',
     canvas_size=(2560, 1440),
     color_by='duration_ms',
     show_heatmap=True,
@@ -1293,8 +1293,8 @@ Examples:
 ```
 print(
     sps.figure_code(
-        participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele",
+        participant="l7_183",
+        trial="l7_183_2_1_1_Ele",
         show_heatmap=True,
         flavor="cli",
     )

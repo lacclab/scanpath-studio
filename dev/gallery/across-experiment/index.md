@@ -24,7 +24,7 @@ from scanpath_studio.data import derive_trial_index
 from scanpath_studio.plots import make_trend_figure
 
 words, fixations = sps.load_sample_data(names="canonical")
-reader = words[words["participant_id"] == "l37_1129"].copy()
+reader = words[words["participant_id"] == "l37_273"].copy()
 reader["trial_index"] = derive_trial_index(reader)
 trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
 fig = make_trend_figure(

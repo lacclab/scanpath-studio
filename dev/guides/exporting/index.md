@@ -50,6 +50,8 @@ For a PNG at print size, pass `width_mm` and `dpi` to `save_figure`, or `--width
 
 In the app, **Export bundle** → **Trials to include** picks the trials: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**. Open **Preview bundle contents** to see the selected readings, their filenames and the columns in their tables. A word-measures CSV can contain the original stimulus words even when the figure masks them. When you select specific screens, the bundle includes notes on those screens and their parent trials.
 
+When you export all screens, rows with no Screen ID are included once in the trial’s tables. Selecting specific screens includes only rows assigned to those screens. A screen with raw gaze alone has its own sample table.
+
 If a figure fails, the download includes the files that succeeded. With the same data and settings still open, choose **Retry failed figure files**. The app retries each missing format or layer and keeps the successful files. If it could not split a figure into layers, it tries that step again. Check `index.csv` for any files that still failed. Stopping a retry leaves the previous download available.
 
 CSV bundles include `columns.json` and an editable `read_csv.R`. In R, set the working directory to the extracted bundle and run `source("read_csv.R")` with the jsonlite package installed. The example preserves reader IDs such as `01` and `1` as text. A blank measurement becomes `NA` and zero stays zero.
@@ -89,7 +91,7 @@ import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
 words, fixations = sps.load_sample_data()
-replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
+replay = sps.animate_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
 Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 ```
 

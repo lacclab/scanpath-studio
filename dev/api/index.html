@@ -3976,7 +3976,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_sample_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_sample_raw_gaze"><code>load_sample_raw_gaze</code></a></td>
-<td>Load synthesized raw gaze samples for one trial in the bundled demo.</td>
+<td>Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_potec&lt;/span&gt;" href="#scanpath_studio.datasets.load_potec"><code>load_potec</code></a></td>
@@ -4124,14 +4124,14 @@ across datasets. The example below shows the names returned for the bundled demo
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"IA_ID"</span><span class="p">,</span> <span class="s2">"IA_LABEL"</span><span class="p">,</span> <span class="s2">"IA_FIRST_FIXATION_DURATION"</span><span class="p">,</span> <span class="s2">"IA_DWELL_TIME"</span><span class="p">]</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">words</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>  participant_id     unique_trial_id
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>0       l37_1129  l37_1129_2_1_1_Ele
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>1       l37_1129  l37_1129_2_1_2_Ele
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>2       l37_1129  l37_1129_2_1_3_Adv
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>  participant_id    unique_trial_id
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>0        l37_273  l37_273_2_1_1_Ele
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>1        l37_273  l37_273_2_1_2_Ele
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>2        l37_273  l37_273_2_1_3_Adv
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>0      0    Robert                        32.0            387
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>1      1  Myslajek                       170.0            785
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>2      2     stops                       290.0           1330
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>0      1    Robert                       243.0            243
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>1      2  Myslajek                       192.0            192
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>2      3     stops                       140.0            140
 </code></pre></div>
 <h2 id="load-your-data">Load your data<a class="headerlink" href="#load-your-data" title="Permanent link">&para;</a></h2>
 
@@ -4641,8 +4641,10 @@ climbs out of it.</p>
         <p>Load and normalize a raw, sample-level gaze table, for <code>raw_gaze=</code>.</p>
 <p>Raw gaze is the third table <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> can
 draw, under the fixations: one row per eye-tracker sample, with a participant, a
-trial, <code>x</code> / <code>y</code> and usually a timestamp. <code>plot_scanpath</code> keeps only the
-plotted trial's (and screen's) samples, so one table can serve a whole corpus.</p>
+trial, <code>x</code> / <code>y</code> and usually a timestamp. Optional fields include the
+tracked eye, pupil area and pupil diameter in the recording's own units.
+<code>plot_scanpath</code> keeps the selected reading's samples. Use
+<code>x_field="timestamp_ms", y_field="pupil_area"</code> to inspect pupil area over time.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -5031,9 +5033,11 @@ internal ones (see
 
     <div class="doc doc-contents first">
 
-        <p>Load synthesized raw gaze samples for one trial in the bundled demo.</p>
-<p>OneStop ships no sample-level gaze, so this is <strong>synthesized</strong> from one of the
-demo's real trials, and covers that trial alone.</p>
+        <p>Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.</p>
+<p>The table includes each sample during paragraph reading, with screen x/y in
+pixels, the tracked eye and pupil area in the tracker's units. Timestamps
+are milliseconds from trial recording start on the fixation report's clock.
+Samples with missing positions keep their timestamps and recorded pupil values.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -5505,9 +5509,8 @@ names the frames carry.</p>
     <div class="doc doc-contents first">
 
         <p>List the ordered screens of multipart data, optionally for one trial.</p>
-<p>A trial recorded as raw gaze alone takes its screens from <code>raw_gaze</code> (its
-<code>screen_id</code>). That is decided per trial, so a samples-only trial keeps its screens
-in a dataset whose other trials have fixations.</p>
+<p>Screens can come from any of the three tables, including a screen on which
+the tracker recorded samples and no fixations.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7945,7 +7948,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>x_field</code><br><code>--x-field</code></td>
 <td><code>'x'</code></td>
-<td>Horizontal axis of the static chart. Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.<br><em>Single plot.</em></td>
+<td>Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>y_field</code><br><code>--y-field</code></td>
@@ -8173,8 +8176,8 @@ to get the same figure. <code>figure_code</code> writes the same code without th
 <code>render --print-code</code> prints it for a <code>render</code> command you already have.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">print</span><span class="p">(</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">figure_code</span><span class="p">(</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_1090"</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">trial</span><span class="o">=</span><span class="s2">"l7_1090_2_1_1_Ele"</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_183"</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">trial</span><span class="o">=</span><span class="s2">"l7_183_2_1_1_Ele"</span><span class="p">,</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">color_by</span><span class="o">=</span><span class="s2">"duration_ms"</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="p">)</span>
@@ -8187,8 +8190,8 @@ to get the same figure. <code>figure_code</code> writes the same code without th
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">words</span><span class="p">,</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">fixations</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">participant</span><span class="o">=</span><span class="s1">'l7_1090'</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">trial</span><span class="o">=</span><span class="s1">'l7_1090_2_1_1_Ele'</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">participant</span><span class="o">=</span><span class="s1">'l7_183'</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">trial</span><span class="o">=</span><span class="s1">'l7_183_2_1_1_Ele'</span><span class="p">,</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">),</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">color_by</span><span class="o">=</span><span class="s1">'duration_ms'</span><span class="p">,</span>
 <a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
@@ -8598,8 +8601,8 @@ as <code># Note:</code> comments, as the app's ⚠️ captions and the <code>Not
 <p><span class="doc-section-title">Examples:</span></p>
     <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.figure_code--__codelineno-0-1" name="scanpath_studio.api.figure_code--__codelineno-0-1" href="#scanpath_studio.api.figure_code--__codelineno-0-1"></a><span class="nb">print</span><span class="p">(</span>
 <a id="scanpath_studio.api.figure_code--__codelineno-0-2" name="scanpath_studio.api.figure_code--__codelineno-0-2" href="#scanpath_studio.api.figure_code--__codelineno-0-2"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">figure_code</span><span class="p">(</span>
-<a id="scanpath_studio.api.figure_code--__codelineno-0-3" name="scanpath_studio.api.figure_code--__codelineno-0-3" href="#scanpath_studio.api.figure_code--__codelineno-0-3"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_1090"</span><span class="p">,</span>
-<a id="scanpath_studio.api.figure_code--__codelineno-0-4" name="scanpath_studio.api.figure_code--__codelineno-0-4" href="#scanpath_studio.api.figure_code--__codelineno-0-4"></a>        <span class="n">trial</span><span class="o">=</span><span class="s2">"l7_1090_2_1_1_Ele"</span><span class="p">,</span>
+<a id="scanpath_studio.api.figure_code--__codelineno-0-3" name="scanpath_studio.api.figure_code--__codelineno-0-3" href="#scanpath_studio.api.figure_code--__codelineno-0-3"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">"l7_183"</span><span class="p">,</span>
+<a id="scanpath_studio.api.figure_code--__codelineno-0-4" name="scanpath_studio.api.figure_code--__codelineno-0-4" href="#scanpath_studio.api.figure_code--__codelineno-0-4"></a>        <span class="n">trial</span><span class="o">=</span><span class="s2">"l7_183_2_1_1_Ele"</span><span class="p">,</span>
 <a id="scanpath_studio.api.figure_code--__codelineno-0-5" name="scanpath_studio.api.figure_code--__codelineno-0-5" href="#scanpath_studio.api.figure_code--__codelineno-0-5"></a>        <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="scanpath_studio.api.figure_code--__codelineno-0-6" name="scanpath_studio.api.figure_code--__codelineno-0-6" href="#scanpath_studio.api.figure_code--__codelineno-0-6"></a>        <span class="n">flavor</span><span class="o">=</span><span class="s2">"cli"</span><span class="p">,</span>
 <a id="scanpath_studio.api.figure_code--__codelineno-0-7" name="scanpath_studio.api.figure_code--__codelineno-0-7" href="#scanpath_studio.api.figure_code--__codelineno-0-7"></a>    <span class="p">)</span>

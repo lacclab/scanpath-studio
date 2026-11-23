@@ -3336,22 +3336,22 @@ For example, <code>--compare-participant B --compare-trial 'round:2'</code> pres
 colon in the trial ID. The shorthand <code>--compare-with PARTICIPANT:TRIAL</code> splits
 at the last colon.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>compare.html
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>compare.html
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
 <a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
 <a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Side by side: each panel draws its trial's stimulus</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
 <a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
 <a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># A style for each scanpath</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
 <a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
 <a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
@@ -3522,10 +3522,15 @@ ignores the <code>box_*</code> keys and <code>raw_gaze_color</code>.</p>
 <code>--fixations</code>, and draws the plotted trial's samples under the fixations. With
 <code>--compare-with</code> it covers both scanpaths, each in its scanpath's color.
 <code>--compare-raw-gaze PATH…</code> gives B's samples when B comes from another
-dataset. <code>--animate</code> ignores raw gaze with a warning.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv<span class="w"> </span><span class="se">\</span>
+dataset. With the bundled demo, <code>--sample-raw-gaze</code> draws the recorded samples
+for the selected reading. <code>--animate</code> ignores raw gaze with a warning.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_2_2_Adv<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
 </code></pre></div>
+<p>To plot the same reading's pupil area over its recorded clock, use
+<code>--x-field timestamp_ms --y-field pupil_area</code> with <code>--sample-raw-gaze</code>.
+<code>scanpath-studio check --sample</code> includes the raw table and reports how many
+samples have missing positions.</p>
 <p>When <code>--raw-gaze</code> is the only input, it is the dataset. <code>--list-trials</code> lists
 its trials, and <code>render</code> draws the chosen trial's samples as recorded. No
 fixations are detected from them, so <code>--animate</code> and <code>--compare-with</code> exit
@@ -4349,7 +4354,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--sample-raw-gaze</code></td>
 <td>switch</td>
 <td>—</td>
-<td>With <code>--sample</code>: draw the bundled demo's raw gaze. It is synthesized, and covers one trial only.</td>
+<td>With <code>--sample</code>, draw the recorded EyeLink gaze samples for the selected reading.</td>
 </tr>
 <tr>
 <td><code>--raw-gaze-schema</code></td>
@@ -4463,7 +4468,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--x-field</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
-<td>Horizontal axis of the static chart (default: x). Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.</td>
+<td>Horizontal axis of the static chart (default: x). Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter.</td>
 </tr>
 <tr>
 <td><code>--y-field</code></td>

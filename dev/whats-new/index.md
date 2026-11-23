@@ -18,6 +18,7 @@
 - Compare received readings with the experiment run sheet, inspect data-check findings by reading, preview changed reading IDs, and download inclusion counts and individual exclusion reasons.
 - Labs can attach a title, authors, version, DOI or preferred wording to an uploaded dataset. Cite and export bundles include the saved credits and identify the second dataset of a comparison. Programmatic comparison bundles include both dataset references in `CITATION.bib`. Open an included settings file to restore both readings, their selected screens and the comparison layout.
 - In Python, load data with `include_source_cells=True` and call `explain_fixation()` to see a fixation’s input row, file, original units and word assignment. Merged fixations list their contributing rows.
+- Plot gaze position and pupil measurements against recorded time or sample number. The OneStop demo includes every recorded sample, with its tracked eye, pupil area and missing positions.
 - Animation can replay saccades with the fixation markers hidden, for one reading or two.
 
 ### Changed
@@ -35,6 +36,7 @@
 - Essentials and Full share the same four view tiles and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
 - Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.
 - The fixation size legend starts hidden. Turn on Fixation sizes under Figure & canvas → Legends to include it in a figure.
+- The bundled demo now uses two readers from the published OneStop L1 cohort and includes recorded EyeLink gaze samples for all 24 readings. Demo participant and trial IDs have changed.
 
 ### Removed
 
@@ -72,6 +74,7 @@
 - A tab with an older recovery copy warns you before it can overwrite newer saved work. Your edits stay available in the tab to export.
 - Saving a static figure uses the shared renderer and reports when an installed browser has not finished starting Kaleido. HTML, PNG, SVG and PDF retain their citation.
 - The replay timer is easier to read in dark mode.
+- Screens with gaze samples alone appear in the trial picker and exports. Comparisons place each reading’s samples on its recorded screen. Saccade peak speeds use consecutive positions from the same eye and screen and skip gaps in tracking.
 
 ## Release v0.47.0
 

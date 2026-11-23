@@ -2664,6 +2664,9 @@ bundle contents</strong> to see the selected readings, their filenames and the c
 in their tables. A word-measures CSV can contain the original stimulus words
 even when the figure masks them. When you select specific screens, the bundle
 includes notes on those screens and their parent trials.</p>
+<p>When you export all screens, rows with no Screen ID are included once in the
+trial’s tables. Selecting specific screens includes only rows assigned to those
+screens. A screen with raw gaze alone has its own sample table.</p>
 <p>If a figure fails, the download includes the files that succeeded. With the same data
 and settings still open, choose <strong>Retry failed figure files</strong>. The app retries each
 missing format or layer and keeps the successful files. If it could not split a figure
@@ -2707,7 +2710,7 @@ A fixation after the last frame starts can be absent from the clip.</p>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">replay</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_1129"</span><span class="p">,</span> <span class="s2">"l37_1129_2_1_1_Ele"</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">replay</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_273"</span><span class="p">,</span> <span class="s2">"l37_273_2_1_1_Ele"</span><span class="p">)</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">export_animation</span><span class="p">(</span><span class="n">replay</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">))</span>
 </code></pre></div>
 <p>Use <code>fmt="gif"</code> and a <code>.gif</code> filename for GIF output.</p>

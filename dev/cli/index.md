@@ -88,22 +88,22 @@ Hover fields appear in the order you list them. For a column named `pupil, left`
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -162,12 +162,14 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 
 ### Raw gaze
 
-`--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. `--animate` ignores raw gaze with a warning.
+`--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
+
+To plot the same reading's pupil area over its recorded clock, use `--x-field timestamp_ms --y-field pupil_area` with `--sample-raw-gaze`. `scanpath-studio check --sample` includes the raw table and reports how many samples have missing positions.
 
 When `--raw-gaze` is the only input, it is the dataset. `--list-trials` lists its trials, and `render` draws the chosen trial's samples as recorded. No fixations are detected from them, so `--animate` and `--compare-with` exit with an error that says so.
 
@@ -357,7 +359,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | ------------------------ | ----------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--raw-gaze`             | `PATH [PATH ...]` | —       | The Raw gaze table to draw under the fixations, in the formats `--fixations` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table. Drawn on static figures and `--compare-with` comparisons, where each scanpath's samples take its color, but not with `--animate`. As the only input it is the dataset: its trials are listed and drawn as recorded, and no fixations are detected from the samples. |
 | `--no-raw-gaze`          | switch            | —       | Load the `--raw-gaze` table but hide its layer, like turning off the app's Raw gaze switch. With raw gaze as the only input, the figure then shows no gaze.                                                                                                                                                                                                                                                                                         |
-| `--sample-raw-gaze`      | switch            | —       | With `--sample`: draw the bundled demo's raw gaze. It is synthesized, and covers one trial only.                                                                                                                                                                                                                                                                                                                                                    |
+| `--sample-raw-gaze`      | switch            | —       | With `--sample`, draw the recorded EyeLink gaze samples for the selected reading.                                                                                                                                                                                                                                                                                                                                                                   |
 | `--raw-gaze-schema`      | `JSON`            | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes. Needed only when a column isn't recognized.                                                                                                                                                                                                                                                                                                  |
 | `--raw-gaze-color`       | `COLOR`           | —       | Raw gaze sample color (default: #888888). In a comparison, each scanpath's samples are drawn in its color instead.                                                                                                                                                                                                                                                                                                                                  |
 | `--raw-gaze-marker-size` | `PX`              | —       | Raw gaze sample size, 1–12 px (default: 4).                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -373,18 +375,18 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 ### Figure & canvas
 
-| Option                               | Value   | Default | Description                                                                                                                                                                            |
-| ------------------------------------ | ------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--canvas`                           | `WxH`   | —       | Screen size in px, e.g. 2560x1440 (default: 2560x1440 for `--sample` and `--onestop`, 1680x1050 for `--potec`, 1200x800 for `--authoring`, otherwise estimated from the data).         |
-| `--coordinate-grid`                  | switch  | —       | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                         |
-| `--coordinate-grid-spacing`          | `PX`    | —       | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                              |
-| `--coordinate-grid-font-size`        | `PX`    | —       | Size of the coordinate grid's labels, 6–36 px (default: 18).                                                                                                                           |
-| `--no-plot-frame`                    | switch  | —       | Leave out the border around the plot area.                                                                                                                                             |
-| `--plot-frame-color`                 | `COLOR` | —       | Color of the border around the plot area (default: #000000).                                                                                                                           |
-| `--x-field`                          | `FIELD` | —       | Horizontal axis of the static chart (default: x). Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation. |
-| `--y-field`                          | `FIELD` | —       | Vertical axis of the static chart (default: y). Takes the same fields as `--x-field`.                                                                                                  |
-| `--crop-to-data` `--no-full-monitor` | switch  | —       | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                            |
-| `--crop-margin`                      | `PX`    | —       | The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies `--crop-to-data`.                                            |
+| Option                               | Value   | Default | Description                                                                                                                                                                                                                   |
+| ------------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--canvas`                           | `WxH`   | —       | Screen size in px, e.g. 2560x1440 (default: 2560x1440 for `--sample` and `--onestop`, 1680x1050 for `--potec`, 1200x800 for `--authoring`, otherwise estimated from the data).                                                |
+| `--coordinate-grid`                  | switch  | —       | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                                                                |
+| `--coordinate-grid-spacing`          | `PX`    | —       | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                                                     |
+| `--coordinate-grid-font-size`        | `PX`    | —       | Size of the coordinate grid's labels, 6–36 px (default: 18).                                                                                                                                                                  |
+| `--no-plot-frame`                    | switch  | —       | Leave out the border around the plot area.                                                                                                                                                                                    |
+| `--plot-frame-color`                 | `COLOR` | —       | Color of the border around the plot area (default: #000000).                                                                                                                                                                  |
+| `--x-field`                          | `FIELD` | —       | Horizontal axis of the static chart (default: x). Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. |
+| `--y-field`                          | `FIELD` | —       | Vertical axis of the static chart (default: y). Takes the same fields as `--x-field`.                                                                                                                                         |
+| `--crop-to-data` `--no-full-monitor` | switch  | —       | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                                                                   |
+| `--crop-margin`                      | `PX`    | —       | The margin around the data, in screen px, when cropping to it (default: 5% of the data's extent, at least 20 px). Implies `--crop-to-data`.                                                                                   |
 
 ### Title & labels
 

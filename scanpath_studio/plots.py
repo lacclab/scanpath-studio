@@ -3821,19 +3821,94 @@ def _add_redaction_blocks(
             fig.add_trace(trace)
 
 
+def _first_strong_rtl(word: object) -> bool | None:
+    """Whether a word's first strong character is right to left; ``None`` for
+    a word without one (a number, punctuation)."""
+    for char in str(word):
+        direction = bidirectional(char)
+        if direction in ("L", "R", "AL"):
+            return direction != "L"
+    return None
+
+
+def _neutral_word_rtl(words: pd.DataFrame, strong: Sequence[bool | None]) -> np.ndarray:
+    """The direction a word without a strong character takes from its context.
+
+    Within each reading's visual line, in reading order (Word ID): the
+    direction of the strong words on both sides when they agree, else the
+    line's own — its first strong word's, or failing that the passage's first
+    strong word's, else left to right. A side with no strong word counts as
+    the line's direction. Unicode resolves a neutral character between strong
+    ones the same way.
+    """
+    from .measures import cluster_word_lines
+    from .multipart import grouping_columns
+
+    out = np.zeros(len(words), dtype=bool)
+    keys = grouping_columns(words)
+    groups = (
+        words.groupby(keys, sort=False, dropna=False).indices.values()
+        if keys
+        else [np.arange(len(words))]
+    )
+    word_ids = (
+        pd.to_numeric(words["word_id"], errors="coerce").to_numpy(dtype=float)
+        if "word_id" in words
+        else np.arange(len(words), dtype=float)
+    )
+    for positions in groups:
+        positions = np.asarray(positions)
+        if all(strong[p] is not None for p in positions):
+            continue
+        positions = positions[np.argsort(word_ids[positions], kind="stable")]
+        passage = next((strong[p] for p in positions if strong[p] is not None), False)
+        lines = (
+            cluster_word_lines(words.iloc[positions]).to_numpy()
+            if {"y", "height"} <= set(words.columns)
+            else np.zeros(len(positions), dtype=int)
+        )
+        for line in pd.unique(lines):
+            on_line = positions[lines == line]
+            known = [strong[p] for p in on_line]
+            base = next((d for d in known if d is not None), passage)
+            for i, position in enumerate(on_line):
+                if known[i] is not None:
+                    continue
+                before = next((d for d in reversed(known[:i]) if d is not None), base)
+                after = next((d for d in known[i + 1 :] if d is not None), base)
+                out[position] = before if before == after else base
+    return out
+
+
 def _word_label_rtl(words: pd.DataFrame) -> pd.Series:
-    """Use the word's first strong character, falling back to its passage for neutrals."""
+    """Whether each word is drawn right to left.
 
-    def first_strong(word):
-        for char in str(word):
-            direction = bidirectional(char)
-            if direction in ("L", "R", "AL"):
-                return direction != "L"
-        return None
-
-    from_text = words["text"].fillna("").map(first_strong)
-    fallback = words.get("right_to_left", False)
-    return from_text.where(from_text.notna(), fallback).eq(True)
+    A word takes the direction of its first strong character (Unicode's
+    bidirectional classes). A word with none, such as a number or a
+    punctuation mark, takes the dataset's ``right_to_left`` when it records
+    one (as ``redact_word_text`` does for the text it masks), else its
+    direction among its neighbours on the line and its passage
+    (:func:`_neutral_word_rtl`).
+    """
+    strong = [
+        None if direction is None else bool(direction)
+        for direction in words["text"].fillna("").map(_first_strong_rtl)
+    ]
+    if "right_to_left" in words:
+        for position, recorded in enumerate(words["right_to_left"]):
+            if strong[position] is None and pd.notna(recorded):
+                strong[position] = bool(recorded)
+    if all(direction is not None for direction in strong):
+        return pd.Series(strong, index=words.index, dtype=bool)
+    context = _neutral_word_rtl(words, strong)
+    return pd.Series(
+        [
+            context[position] if direction is None else direction
+            for position, direction in enumerate(strong)
+        ],
+        index=words.index,
+        dtype=bool,
+    )
 
 
 def _add_word_label_trace(

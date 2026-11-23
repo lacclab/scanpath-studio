@@ -4919,18 +4919,44 @@ load_sample_raw_gaze = st.cache_data(read_sample_raw_gaze)
 
 
 def normalized_sample_raw_gaze() -> tuple[pd.DataFrame, dict | None, tuple[str, ...]]:
-    """The demo samples, mapping and original headers shared by both scanpaths."""
+    """The demo samples, mapping and original headers shared by both scanpaths.
 
-    def build():
-        sample = read_sample_raw_gaze()
-        if sample.empty:
-            return sample, None, ()
-        schema = propose_raw_gaze_schema(sample)
-        if validate_raw_gaze_schema(schema):
-            return pd.DataFrame(), None, tuple(sample.columns)
-        return normalize_raw_gaze(sample, schema), schema, tuple(sample.columns)
+    The samples are read and normalized once per process: the demo is the same
+    file for everyone, and a copy per session would cost each visitor ~54 MB.
+    Each session gets its own shallow copy of that frame, which shares its
+    buffers, so a column assigned, a value set or ``attrs`` edited by one
+    session lands in its copy only (pandas copy-on-write). Every copy carries
+    the shared frame's fingerprint, so caches keyed on it are shared too.
+    """
+    shared, schema, columns, ident = _shared_sample_raw_gaze()
+    if shared.empty:
+        return pd.DataFrame(), None, columns
 
-    return frame_cache("demo_raw_gaze", (), build)
+    def own_copy() -> pd.DataFrame:
+        frame = shared.copy(deep=False)
+        assign_fingerprint(frame, ident)
+        return frame
+
+    # Kept for the session rather than made per call: the trial index
+    # `utils.extract_trial` reads is built once per frame object (~125 ms here).
+    frame = frame_cache("demo_raw_gaze", ident, own_copy)
+    return frame, dict(schema), columns
+
+
+@st.cache_resource(show_spinner=False)
+def _shared_sample_raw_gaze() -> tuple[
+    pd.DataFrame, dict | None, tuple[str, ...], tuple[str, str]
+]:
+    """The one normalized demo frame, private to `normalized_sample_raw_gaze`."""
+    # Drawn once per load, so no session hashes 400k rows to look it up.
+    ident = ("source", uuid.uuid4().hex)
+    sample = read_sample_raw_gaze()
+    if sample.empty:
+        return sample, None, (), ident
+    schema = propose_raw_gaze_schema(sample)
+    if validate_raw_gaze_schema(schema):
+        return pd.DataFrame(), None, tuple(sample.columns), ident
+    return normalize_raw_gaze(sample, schema), schema, tuple(sample.columns), ident
 
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:

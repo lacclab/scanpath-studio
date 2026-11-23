@@ -259,6 +259,26 @@ def test_trial_index_is_reused_and_released_with_its_source():
     assert ident not in utils._TRIAL_INDICES
 
 
+def test_copies_with_one_assigned_fingerprint_share_one_trial_index():
+    from scanpath_studio.data import assign_fingerprint
+
+    frame = pd.DataFrame(
+        {"participant_id": ["p", "p"], "trial_id": ["b", "a"], "value": [10, 1]}
+    )
+    assign_fingerprint(frame, ("test", "shared index"))
+    copy = frame.copy(deep=False)
+    assign_fingerprint(copy, ("test", "shared index"))
+    other = frame.copy(deep=False)
+    assign_fingerprint(other, ("test", "another frame"))
+    assert utils._trial_positions(copy) is utils._trial_positions(frame)
+    assert utils._trial_positions(other) is not utils._trial_positions(frame)
+    assert utils.extract_trial(copy, "p", "a").value.to_list() == [1]
+    # The copy keeps the index alive after the frame that built it is gone.
+    del frame
+    gc.collect()
+    assert utils.extract_trial(copy, "p", "b").value.to_list() == [10]
+
+
 @pytest.mark.parametrize("width", [None, -1, float("inf")])
 def test_missing_measurements_are_not_resolved_as_measured(width):
     setup = SetupSnapshot.from_dict(

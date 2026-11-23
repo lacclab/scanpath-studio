@@ -282,21 +282,37 @@ _TRIAL_INDEX_LOCK = threading.Lock()
 
 
 def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
-    """Share a read-only position index for the lifetime of its source frame."""
+    """Share a read-only position index for the lifetime of its source frame.
+
+    Frames with the same assigned fingerprint hold the same rows in the same
+    order, so they share one index too — each session's copy of the demo's
+    samples (`data.normalized_sample_raw_gaze`) reads the first one's.
+    """
     identity = id(frame)
     fingerprint = frame_fingerprint(frame)
+    positions = None
     with _TRIAL_INDEX_LOCK:
         cached = _TRIAL_INDICES.get(identity)
         if cached is not None and cached[0]() is frame and cached[1] == fingerprint:
             return cached[2]
+        if fingerprint[0] == "assigned":
+            positions = next(
+                (
+                    entry[2]
+                    for entry in _TRIAL_INDICES.values()
+                    if entry[1] == fingerprint and entry[0]() is not None
+                ),
+                None,
+            )
 
     def release(ref):
         with _TRIAL_INDEX_LOCK:
             if _TRIAL_INDICES.get(identity, (None,))[0] is ref:
                 del _TRIAL_INDICES[identity]
 
-    grouped = frame.groupby(["participant_id", "trial_id"], sort=False).indices
-    positions = {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
+    if positions is None:
+        grouped = frame.groupby(["participant_id", "trial_id"], sort=False).indices
+        positions = {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
     with _TRIAL_INDEX_LOCK:
         _TRIAL_INDICES[identity] = weakref.ref(frame, release), fingerprint, positions
     return positions

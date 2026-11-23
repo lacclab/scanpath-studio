@@ -170,10 +170,10 @@ def update_bookmark(*, has_text: bool, measures: list[Measure]) -> None:
     state[_LAST_ROUTE] = (address, tuple(state[k] for k in _KEYS))
 
 
-def back_to_summary(section: str, *, has_text: bool) -> None:
+def back_to_summary(host, section: str, *, has_text: bool) -> None:
     if section == "Per participant" or (section == "Per text" and has_text):
         group = "Text" if section == "Per text" else "Participant"
-        st.button(
+        host.button(
             "Back to texts" if group == "Text" else "Back to participants",
             key="corpus_back_to_summary",
             type="tertiary",

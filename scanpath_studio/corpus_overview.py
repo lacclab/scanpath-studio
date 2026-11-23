@@ -42,11 +42,13 @@ def _open_profile(group_by: str, identifier, measure_label: str) -> None:
     state = st.session_state
     corpus_navigation.open_profile(group_by)
     if group_by == "text":
-        state[PENDING_TEXT] = identifier
+        if identifier is not None:
+            state[PENDING_TEXT] = identifier
         _set_popover_choice("ptext_view", "Cohort profile")
         state["ptext_measure"] = measure_label
     else:
-        state["prdr_pid"] = str(identifier)
+        if identifier is not None:
+            state["prdr_pid"] = str(identifier)
         _set_popover_choice("prdr_view", "Distribution vs cohort")
         state["prdr_measure"] = measure_label
 
@@ -87,9 +89,7 @@ def _format_value(value: float, measure: Measure) -> str:
     return f"{number} {measure.unit}" if measure.unit else number
 
 
-def _selection_details(
-    host, identifier, row: pd.Series, group_by: str, measure: Measure
-) -> None:
+def _selection_details(host, row: pd.Series, group_by: str, measure: Measure) -> None:
     if row["n_values"]:
         mean = _format_value(row["value"], measure)
         text = f"**{mean}** mean"
@@ -104,13 +104,6 @@ def _selection_details(
         )
     else:
         host.caption(f"This {group_by} has no recorded values for this measure.")
-    host.button(
-        "Open word profile" if group_by == "text" else "Open participant profile",
-        key="corpus_open_profile",
-        icon=ICONS["open"],
-        on_click=_open_profile,
-        args=(group_by, identifier, measure.label),
-    )
 
 
 def _inspect_point(chart_key: str, group_by: str, plotted_ids: list) -> None:
@@ -127,6 +120,8 @@ def render_corpus_overview(
     words: pd.DataFrame,
     *,
     group_by: str,
+    profile_host,
+    measure_host,
     download: Callable,
     canvas_width: int,
     base_font_size: int,
@@ -134,22 +129,24 @@ def render_corpus_overview(
     colors: tuple[str, str],
 ) -> None:
     shared = words[AOI_TRIAL_ID].notna() if AOI_TRIAL_ID in words else None
+    by_text = group_by == "text"
+    profile_label = "Open word profile" if by_text else "Open participant profile"
     if shared is not None and shared.all():
         st.info(
             "The Words table supplies one set of values per stimulus, shared across readings. "
             "To compare readings here, supply word measurements for each participant and trial."
         )
-        st.button(
-            f"View {group_by} details",
+        profile_host.button(
+            profile_label,
+            icon=ICONS["open"],
             on_click=corpus_navigation.open_profile,
             args=(group_by,),
         )
         return
     plot = st.container(key="corpus_overview_plot")
-    header, picker = plot.columns([2, 1], vertical_alignment="bottom")
     keys = [m.key for m in available_measures(words, None, per_word_only=True)]
     _drop_stale(CORPUS_MEASURE, keys)
-    key = picker.selectbox(
+    key = measure_host.selectbox(
         "Reading measure",
         keys,
         format_func=lambda k: MEASURES[k].label,
@@ -157,14 +154,13 @@ def render_corpus_overview(
         persist_state="session",
     )
     measure = MEASURES[key]
-    by_text = group_by == "text"
     contributors = "participants" if by_text else "readings"
     weighting = "Words with a recorded value are averaged within each reading. " + (
         "Repeated readings are averaged for each participant, then each participant contributes equally to the text mean."
         if by_text
         else "Each reading contributes equally to the participant mean."
     )
-    header.subheader(
+    plot.subheader(
         f"{measure.label.partition(' — ')[0]} by {group_by}",
         help=f"{measure_description(measure.column)}\n\n{weighting}",
         anchor=False,
@@ -196,11 +192,17 @@ def render_corpus_overview(
         label_visibility="collapsed",
         width=280,
     )
+    profile_host.button(
+        profile_label,
+        key="corpus_open_profile",
+        icon=ICONS["open"],
+        on_click=_open_profile,
+        args=(group_by, selected, measure.label),
+    )
     if selected is not None:
         detail = lookup.container(key="corpus_overview_detail", width="stretch")
         _selection_details(
             detail,
-            selected,
             table.loc[table[field].eq(selected)].iloc[0],
             group_by,
             measure,

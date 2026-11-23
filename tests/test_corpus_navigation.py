@@ -51,6 +51,23 @@ def test_legacy_section_bookmarks_select_their_parent_destination(section, desti
         assert "corpus_subtab" not in at.query_params
 
 
+@pytest.mark.parametrize(
+    ("group", "picker", "measure_key"),
+    [
+        ("Text", "ptext_text", "ptext_measure"),
+        ("Participant", "prdr_pid", "prdr_measure"),
+    ],
+)
+def test_profile_opens_before_selecting_a_summary_point(group, picker, measure_key):
+    measure = MEASURES["ffd"].label
+    at = _bookmarked(corpus_group_by=group, corpus_measure=measure).run()
+    assert at.selectbox(key=f"corpus_inspect_{group.lower()}").value is None
+    at.button(key="corpus_open_profile").click().run()
+    assert not at.exception
+    assert at.selectbox(key=picker).value
+    assert at.selectbox(key=measure_key).value == measure
+
+
 def test_browser_history_reopens_the_summary_profile_and_measure(experimental_off):
     measure = MEASURES["ffd"].label
     at = _bookmarked(

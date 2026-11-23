@@ -10969,12 +10969,14 @@ def _run_app() -> None:
             # Corpus Analysis has no trial-picker row, so the dataset picker
             # gets its own compact row at the top of the page — it stays
             # reachable on every analysis view.
-            _ds_col, pool_col = st.columns([2, 5], vertical_alignment="bottom")
-            render_data_source_picker(host=_ds_col)
+            dataset_row = st.container(
+                horizontal=True, vertical_alignment="bottom", gap="small"
+            )
+            render_data_source_picker(host=dataset_row.container(width=400))
             # The pool the analysis reads — and the filters behind it —
             # beside the dataset, where Scanpath keeps its own filter funnel.
             pool = render_analysis_pool_bar(
-                pool_col,
+                dataset_row,
                 words_all=words_all,
                 fixations_all=fixations_all,
                 raw_gaze_all=raw_gaze_all,

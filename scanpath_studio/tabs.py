@@ -10312,10 +10312,11 @@ def render_analysis_pool_bar(
     bar = host.container(
         key="corpus_pool_bar",
         horizontal=True,
+        width="content",
         vertical_alignment="center",
         gap="small",
     )
-    bar.markdown(text, width="stretch")
+    bar.markdown(text, width="content")
     pop = bar.popover(
         "Edit filters",
         icon=ICONS["trial_filter"],
@@ -10475,23 +10476,32 @@ def _render_corpus_analysis_body(
         key="tutorial_corpus_subtabs",
         horizontal=True,
         horizontal_alignment="distribute",
-        vertical_alignment="center",
+        vertical_alignment="bottom",
+        gap="small",
+    )
+    destinations = navigation.container(
+        horizontal=True, vertical_alignment="center", width="content", gap="xsmall"
     )
     section, group_by = corpus_navigation.render_chooser(
-        navigation, has_text=has_text, measures=measures
+        destinations, has_text=has_text, measures=measures
     )
+    figure_controls = navigation.container(
+        horizontal=True, vertical_alignment="bottom", width="content", gap="xsmall"
+    )
+    if section == "Overview":
+        measure_host = figure_controls.container(width=245)
     viz_settings = corpus_style_controls(
         fixations_filtered,
         base_font_size,
         words=words_filtered,
-        host=navigation,
+        host=figure_controls,
         raw_gaze=raw_gaze,
         # This view renders true-to-scale stimulus figures from the
         # canvas / typography settings, so it hosts that panel too — the rail
         # (its other home) doesn't exist here.
         canvas_renderer=canvas_renderer,
     )
-    corpus_navigation.back_to_summary(section, has_text=has_text)
+    corpus_navigation.back_to_summary(destinations, section, has_text=has_text)
     if (
         section != "Overview"
         and AOI_TRIAL_ID in words_filtered
@@ -10506,6 +10516,8 @@ def _render_corpus_analysis_body(
             corpus_overview.render_corpus_overview(
                 words_filtered,
                 group_by=group_by,
+                profile_host=destinations,
+                measure_host=measure_host,
                 download=_download_tidy,
                 canvas_width=canvas_width,
                 base_font_size=base_font_size,

@@ -1,6 +1,6 @@
 """How to cite Scanpath Studio: the BibTeX and APA entries.
 
-One builder for every place the citation is shown — ❓ Help → About in the app
+One builder for every place the citation is shown — ❓ Help → About & citation in the app
 and the docs site's *Cite* section (``scripts/docs_support.py``) — so the two
 print the same entry. It reads ``constants.CITATION`` / ``CITATION_AUTHORS`` and
 the package's ``__release__``, which ``tests/test_citation.py`` keeps equal to

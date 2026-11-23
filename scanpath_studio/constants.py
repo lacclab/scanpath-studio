@@ -219,6 +219,7 @@ MARKER_SIZE_SCALES = {
     "relative": "Relative to this figure",
 }
 DEFAULT_MARKER_SIZE_SCALE = "sqrt"
+DEFAULT_DURATION_SIZE_LEGEND = False
 #: What a figure saved before the fixed scale existed was drawn with — the
 #: migration target for old saved configs and Share links.
 LEGACY_MARKER_SIZE_SCALE = "relative"
@@ -826,10 +827,6 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
     return getattr(uploaded, "file_id", None), digest
 
 
-#: The privacy policy of Streamlit Community Cloud, which hosts the online demo
-#: and runs its own analytics in the page around the app.
-STREAMLIT_PRIVACY_URL = "https://streamlit.io/privacy-policy"
-
 #: The software's authors as ``(given names, family names)``, in citation order.
 #: The package ships without ``CITATION.cff``, so the app's citation is built
 #: from these; ``tests/test_citation.py`` keeps them equal to the file's
@@ -859,9 +856,6 @@ CITATION = {
     # Where a user asks, reports, and gets the desktop app.
     "questions_url": "https://github.com/lacclab/scanpath-studio/discussions/categories/q-a",
     "bug_report_url": "https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md",
-    "feature_request_url": (
-        "https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md"
-    ),
     "ideas_url": "https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas",
     "desktop_url": "https://github.com/lacclab/scanpath-studio/releases/latest",
     "lab_url": "https://lacclab.github.io/",
@@ -1018,16 +1012,19 @@ RAW_GAZE_SNAP_RESTORE_KEY = "_raw_gaze_snap_restore"
 #: one decided while the link was on the URL. Session-only: a link is a visit.
 RAW_GAZE_LINK_FOR_KEY = "_raw_gaze_link_for"
 
-#: "The ✏️ Edit dataset screen is open". The Data page is two screens: the
-#: **overview** (the dataset table + what's in the open dataset) and the
-#: **editor** (everything that configures it — source options and location,
-#: column mapping, recording setup, trial identity, stimulus images, the two
-#: metadata tables, preprocessing). Both are built every run and switched by key,
-#: for exactly the reason the page itself is (see below): the editor is nothing
-#: but widgets that drive `prepare_data`, and Streamlit drops the key of a widget
-#: that did not render. The built-in sources' column-mapping panels are the
-#: exception, drawn only while it is open (`controls.column_mapping_from_state`).
+#: Session navigation within Data Management. The editor occupies Current dataset.
+DATA_WORKSPACE_KEY = "data_workspace"
+DATA_WORKSPACE_REQUEST = "_requested_data_workspace"
+#: The native Help menu visits another page, which clears the Data tab widget.
+DATA_WORKSPACE_LAST = "_last_data_workspace"
+DATA_CURRENT = "Current dataset"
+DATA_LIBRARY = "Dataset library"
+DATA_STORAGE = "Saved work"
+DATA_INSPECTION_KEY = "data_inspection_panel"
+DATA_RUN_SHEETS_KEY = "_data_run_sheets"
 DATASET_EDITOR_OPEN_KEY = "_dataset_editor_open"
+#: The settings to restore when an in-app guide ends or the session reopens.
+GUIDE_RETURN_KEY = "_guide_return"
 DATA_OVERVIEW_KEY = "data_overview"
 DATA_EDITOR_KEY = "data_dataset_editor"
 DATA_EDITOR_OFFSCREEN_KEY = "data_dataset_editor_offscreen"
@@ -1182,8 +1179,8 @@ DATASET_ADDED_KEY = "_dataset_added_name"
 # Plotly text is baked into every export (▶ Play, the marker-shape previews).
 # The typographic glyphs on buttons (◀ ▶ ⇅ ✕ ⬇ ↗) are kept too.
 ICONS: dict[str, str] = {
-    # Navigation and dialogs. `app` is the welcome tour's; the favicon itself
-    # is 👀 — see `app.set_page_config`'s call site.
+    # Navigation and dialogs. The favicon is set separately in
+    # `app.set_page_config`.
     "app": ":material/visibility:",
     "view_scanpath": ":material/route:",
     "view_corpus": ":material/bar_chart:",
@@ -1220,7 +1217,7 @@ ICONS: dict[str, str] = {
     "plot_controls": ":material/tune:",
     "animate": ":material/movie:",
     "compare": ":material/compare:",
-    # Scanpath subtabs, the trial row and the welcome tour's stops.
+    # Scanpath subtabs and the trial row.
     "annotations": ":material/edit_note:",
     "comparisons": ":material/difference:",
     "line_assignment": ":material/format_line_spacing:",
@@ -1232,7 +1229,7 @@ ICONS: dict[str, str] = {
     "chips": ":material/label:",
     "panels": ":material/tab:",
     # The chevron Streamlit draws on every popover button, for prose that names
-    # an icon-only button the way it looks (the welcome tour).
+    # an icon-only button by its appearance.
     "menu_arrow": ":material/expand_more:",
     "views": ":material/dashboard:",
     "nav": ":material/explore:",
@@ -1257,7 +1254,7 @@ ICONS: dict[str, str] = {
     "close": ":material/close:",
     "open": ":material/open_in_new:",
     "mute": ":material/notifications_off:",
-    # Data → Saved on this computer, and ❓ Help → About → Debug.
+    # Data Management → Saved work, and the Debug drawer.
     "recovery": ":material/history:",
     "debug": ":material/bug_report:",
     # Data page and the add-dataset wizard.

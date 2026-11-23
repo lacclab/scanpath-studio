@@ -117,13 +117,65 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
-    /* The Data page's two screens: the overview (the dataset table +
-       what's in the open dataset) and the ✏️ Edit dataset screen. Same
-       mechanism and same reason as the page above, one level in: the editor is
-       *made* of the widgets that drive `prepare_data`, so it renders every run
-       and is hidden by key rather than skipped. */
-    .st-key-data_overview_offscreen { display: none !important; }
+    /* Source controls feed the loader while the editor is closed. */
     .st-key-data_dataset_editor_offscreen { display: none !important; }
+
+    .st-key-data_identity {
+        border-inline-start: 0.22rem solid var(--sps-accent);
+        background: linear-gradient(105deg, var(--sps-accent-soft), transparent 75%);
+    }
+    .st-key-data_identity h3 { overflow-wrap: anywhere; }
+    .st-key-data_inspection_panel { margin-block: 0.65rem 0.35rem; }
+    .st-key-data_totals { margin-top: 0.35rem; }
+    .st-key-data_averages, .st-key-data_recording_tables {
+        margin-block-start: 0.9rem;
+    }
+    .st-key-data_averages [data-testid="stMetric"] {
+        padding-inline: 0.85rem;
+        border-inline-start: 2px solid var(--sps-border);
+    }
+    .st-key-data_averages [data-testid="stMetricValue"] { font-size: 1.35rem; }
+    .st-key-data_recording_tables {
+        gap: 0 !important;
+    }
+    .st-key-data_recording_tables h4 { margin-bottom: 0.4rem; }
+    .st-key-data_recording_header, .st-key-data_recording_tables button[kind="tertiary"] {
+        padding-inline: 0.75rem;
+        border-bottom: 1px solid var(--sps-border);
+        border-radius: 0;
+    }
+    .st-key-data_recording_header { padding-block: 0.25rem; }
+    .st-key-data_recording_header p { font-size: 0.85rem; }
+    .st-key-data_recording_tables button[kind="tertiary"] {
+        justify-content: start; color: var(--sps-accent);
+        min-height: 2.5rem;
+    }
+    .st-key-data_recording_tables button [data-has-shortcut],
+    .st-key-data_recording_tables button [data-testid="stMarkdownContainer"] {
+        flex: 1; min-width: 0;
+    }
+    .st-key-data_recording_header p, .st-key-data_recording_tables button[kind="tertiary"] p {
+        display: grid; grid-template-columns: minmax(0, 2fr) minmax(3.5rem, 1fr) minmax(5rem, 1fr);
+        align-items: baseline; column-gap: 0.65rem; text-align: end;
+        font-variant-numeric: tabular-nums;
+    }
+    .st-key-data_recording_header strong, .st-key-data_recording_tables button strong { text-align: start; }
+    .st-key-data_recording_tables [data-testid="stExpander"] { margin-top: 0.6rem; }
+    .st-key-data_table_links { margin-block: 0.45rem; }
+    .st-key-data_table_links a { white-space: nowrap; }
+    .st-key-tutorial_data_inspection [id^="data-table-"] { scroll-margin-top: 4rem; }
+    .st-key-tutorial_data_inspection [class*="st-key-data_table_"]:not(.st-key-data_table_links) {
+        margin-block: 0.6rem 0.35rem;
+    }
+    .sps-ds-mobile-status { display: none; }
+    @media (max-width: 640px) {
+        .sps-ds-mobile-status { display: block; font-size: 0.8rem; }
+        .st-key-data_inspection_panel button { padding-inline: 0.45rem; }
+        .st-key-data_workspace [role="tablist"] { gap: 0; }
+        .st-key-data_workspace [role="tab"] { padding-inline: 0.4rem; }
+        .st-key-data_totals [data-testid="stMetric"] { padding: 0.65rem; }
+        .st-key-data_totals [data-testid="stMetricLabel"] span:has(> span > [data-testid="stMetricIcon"]) { display: none; }
+    }
 
     /* The add-dataset wizard's watcher (`wizard_watch`): a script with
        nothing to show, drawn on every run at the top of the page's notices. */
@@ -212,9 +264,6 @@ def get_app_css() -> str:
     [class*="st-key-dataset_open_"] button [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;
         overflow: hidden; clip-path: inset(50%); white-space: nowrap;
-    }
-    [class*="st-key-dsrow_current_"] > [class*="st-key-dataset_open_"] button {
-        cursor: default;
     }
     [class*="st-key-dsrow_"]:not(.st-key-dsrow_head) > [data-testid="stLayoutWrapper"] {
         position: relative;
@@ -675,6 +724,9 @@ def get_app_css() -> str:
     [data-testid="stTab"]:hover { background: var(--sps-accent-soft); }
     [data-testid="stTab"] p { font-weight: 600; }
     [data-testid="stTab"][aria-selected="true"] p { color: var(--sps-accent); }
+    @media (max-width: 400px) {
+        .st-key-about_sections [role="tab"] { padding-inline: 0.375rem; }
+    }
 
     /* Inline code chips (Trial / Participant / Text ids, etc.) -> clean pill
        badges. `:not(pre code)` leaves multi-line code blocks (e.g. the BibTeX in
@@ -2089,36 +2141,24 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-palette_layers_divider {
         margin-bottom: 0.2rem !important;
     }
-    /* Plot-rail triggers need enough height for their labels and switch tracks;
-       the app-wide compact button treatment otherwise leaves them cramped. */
-    .st-key-scanpath_rail .st-key-viz_view_scanpath button,
-    .st-key-scanpath_rail .st-key-viz_view_heatmap button,
-    .st-key-scanpath_rail .st-key-viz_view_illustration button,
-    .st-key-scanpath_rail .st-key-viz_view_custom button,
-    .st-key-scanpath_rail [class*="st-key-simple_view_"] button {
-        min-height: 2.6rem;
-        padding-top: 0.25rem;
-        padding-bottom: 0.25rem;
-    }
-    /* Essentials' View tiles are bigger than Full's presets: an icon over its
-       label, in a tile 4rem tall. Full's `quick_views_grid` keeps its own size. */
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
+    /* One tile grid in both modes, with the icon above its label. */
+    .st-key-scanpath_rail .st-key-tour_grp_views button {
         min-height: 4rem;
         padding-top: 0.4rem;
         padding-bottom: 0.4rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+    .st-key-scanpath_rail .st-key-tour_grp_views button > div > span {
         flex-direction: column;
         align-items: center;
         gap: 0.2rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+    .st-key-scanpath_rail .st-key-tour_grp_views button p {
         font-size: 1.05rem;
         line-height: 1.2;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+    .st-key-scanpath_rail .st-key-tour_grp_views button
         span:has(> [data-testid="stIconMaterial"]),
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+    .st-key-scanpath_rail .st-key-tour_grp_views button
         [data-testid="stIconMaterial"] {
         width: 1.6rem;
         height: 1.6rem;
@@ -2197,7 +2237,7 @@ def get_app_css() -> str:
         padding-right: 0.4rem;
         padding-top: 0.1rem;
     }
-    /* Design presets and Palette use the same quietly muted label treatment. */
+    /* View, Layers and Palette use the same quietly muted label treatment. */
     .sps-control-label {
         color: inherit;
         opacity: 0.72;
@@ -2205,32 +2245,29 @@ def get_app_css() -> str:
         line-height: 1.4;
         margin-bottom: 0;
     }
+    .st-key-scanpath_rail [data-testid="stMarkdownContainer"]:has(> .sps-control-label) {
+        margin-bottom: 0;
+    }
     .st-key-scanpath_rail .st-key-global_palette [data-testid="stWidgetLabel"] {
         opacity: 0.72;
     }
-    /* Give the heading a small breathing space, while keeping the 2×2 grid
-       itself tighter than ordinary Streamlit column rows. Essentials mode's View
-       tiles (`tour_grp_simple_views`) are the same grid. */
-    .st-key-scanpath_rail .st-key-quick_views_grid,
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views {
+    .st-key-scanpath_rail .st-key-tour_grp_views {
         margin-top: 0;
-        padding-top: 0.45rem;
         margin-bottom: 0.05rem;
     }
+    /* Streamlit gives each unwrapped column a 128px minimum. Both tiles
+       must fit the rail even when its content is narrower than 256px. */
+    .st-key-tour_grp_views [data-testid="stColumn"] { min-width: 0; }
     /* The grid's two rows are as far apart as its two columns
        (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
        app-wide 0.25rem under each block, twice over. The key sits on the
        vertical block itself, so the rule names it, not a child of it. */
-    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"],
     .st-key-scanpath_rail
-        .st-key-tour_grp_simple_views[data-testid="stVerticalBlock"] {
+        .st-key-tour_grp_views[data-testid="stVerticalBlock"] {
         gap: 0.4rem !important;
     }
-    .st-key-scanpath_rail .st-key-quick_views_grid > div,
-    .st-key-scanpath_rail .st-key-quick_views_grid [data-testid="stColumn"]
-        [data-testid="stVerticalBlock"] > div,
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views > div,
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views [data-testid="stColumn"]
+    .st-key-scanpath_rail .st-key-tour_grp_views > div,
+    .st-key-scanpath_rail .st-key-tour_grp_views [data-testid="stColumn"]
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
@@ -2336,69 +2373,10 @@ def get_app_css() -> str:
         height: 2.1rem;
         min-height: 0;
     }
-    /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size: the label's own
-       Material icon is what stays — the text collapses around it.
-       The rail is a fifth of the row, and these queries measure its
-       *content* box — 191px on a 1280px laptop. The full-size label
-       needs ~240px ("✎ Illustration", the longest, is 84px at 14px plus 12px
-       padding a side); under that the buttons tighten (padding, gap, a point
-       smaller: 75px), which holds one line down to ~175px. The icon fallback
-       starts at 178px, a few pixels of slack for other platforms' fonts — a
-       window under ~1220px. */
     @container sps-rail (max-width: 240px) {
-        .st-key-quick_views_grid [data-testid="stHorizontalBlock"],
-        .st-key-tour_grp_simple_views [data-testid="stHorizontalBlock"] {
-            gap: 0.4rem !important;
-        }
-        .st-key-viz_view_scanpath button,
-        .st-key-viz_view_heatmap button,
-        .st-key-viz_view_illustration button,
-        .st-key-viz_view_custom button,
-        [class*="st-key-simple_view_"] button {
-            padding-left: 0.25rem;
-            padding-right: 0.25rem;
-        }
-        .st-key-viz_view_scanpath button p,
-        .st-key-viz_view_heatmap button p,
-        .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p,
-        [class*="st-key-simple_view_"] button p {
-            font-size: 0.8125rem;
-            white-space: nowrap;
-        }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
-            font-size: 0.95rem;
-        }
-    }
-    @container sps-rail (max-width: 178px) {
-        .st-key-viz_view_scanpath button p,
-        .st-key-viz_view_heatmap button p,
-        .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p,
-        [class*="st-key-simple_view_"] button p {
-            font-size: 0;
-        }
-        /* The View tiles carry their icon in the `icon=` slot, beside the
-           label: with the label gone, its spacing would push the icon
-           off-centre. */
-        [class*="st-key-simple_view_"] button [data-testid="stIconMaterial"] {
-            margin: 0 !important;
-        }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
-            font-size: 0;
-        }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
-            gap: 0;
-        }
-        /* A markdown `:material/…:` renders as `span[role="img"]` — the
-           `stIconMaterial` test id is only on the `icon=` slot. */
-        .st-key-viz_view_scanpath button p span[role="img"],
-        .st-key-viz_view_heatmap button p span[role="img"],
-        .st-key-viz_view_illustration button p span[role="img"],
-        .st-key-viz_view_custom button p span[role="img"] {
-            font-size: 1.1rem;
-        }
+        .st-key-tour_grp_views [data-testid="stHorizontalBlock"] { gap: 0.4rem !important; }
+        .st-key-scanpath_rail .st-key-tour_grp_views button { padding-inline: 0.25rem; }
+        .st-key-scanpath_rail .st-key-tour_grp_views button p { font-size: 0.95rem; }
     }
     /* The rail's heading row holds nothing but the heading; Reset sits
        at the foot of the rail (`plot_reset_footer`), full width like every
@@ -2566,11 +2544,11 @@ def get_app_css() -> str:
         }
         .st-key-scanpath_rail > * { order: 1; }
         .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
-        .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
+        .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_view_modes, .st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
+        .st-key-scanpath_rail .st-key-tour_grp_views button {
             min-height: 44px;
         }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+        .st-key-scanpath_rail .st-key-tour_grp_views button > div > span {
             flex-direction: row;
         }
     }

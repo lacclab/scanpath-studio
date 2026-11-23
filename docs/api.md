@@ -113,7 +113,7 @@ default and matching CLI `render` flag, under the section names of the app's
 :material/tune: **Plot controls**. If an option applies to fewer than four views,
 its row names them. **Single plot** and **Single replay** show one scanpath.
 **Compare** shows two scanpaths together or in separate panels, and
-**Compare + Animate** replays two scanpaths.
+**Compare readings** with **Animation** replays two scanpaths.
 
 For options with a fixed set of values, case, spaces, `-` and `_` are ignored;
 other values raise a `ValueError`. A `--no-…` flag turns off an option that is
@@ -140,8 +140,8 @@ to get the same figure. `figure_code` writes the same code without the app, and
 ```python exec="true" source="above" result="python" session="api"
 print(
     sps.figure_code(
-        participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele",
+        participant="l7_183",
+        trial="l7_183_2_1_1_Ele",
         show_heatmap=True,
         color_by="duration_ms",
     )

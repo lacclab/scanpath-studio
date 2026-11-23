@@ -131,11 +131,12 @@ def test_import_guide_keeps_the_focused_field_visible(local_app_url, width, heig
             viewport={"width": width, "height": height}
         ).new_page()
         page.goto(local_app_url)
-        page.get_by_role("button", name="Use my data", exact=True).click(timeout=90000)
-        restore = page.locator(".st-key-guide_unfold_wizard button:visible").first
-        restore.wait_for(timeout=60000)
+        page.get_by_role("button", name="Import my data", exact=True).click(
+            timeout=90000
+        )
         field = page.locator(".st-key-wizard_dataset_name input:visible").first
         field.focus()
+        assert not page.locator(".st-key-tour_card:visible").count()
         assert field.evaluate("""el => {
             const r = el.getBoundingClientRect();
             return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
@@ -149,7 +150,8 @@ def test_import_guide_keeps_the_focused_field_visible(local_app_url, width, heig
             const r = el.getBoundingClientRect();
             return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
         }""")
-        restore.click()
+        page.get_by_role("button", name="Setup help").click()
+        page.get_by_role("button", name="Show setup guide").click()
         smoke._settle(page)
         card = page.locator(".st-key-tour_card:visible").first
         assert card.is_visible()

@@ -14,6 +14,7 @@ import pickle
 import re
 import warnings
 import zlib
+from collections import Counter
 from collections.abc import Callable, Hashable
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
@@ -96,7 +97,6 @@ from scanpath_studio.animation_export import (
 )
 from scanpath_studio.annotations import (
     filter_keys,
-    render_dataset_annotations,
     render_trial_annotations,
 )
 from scanpath_studio.cite_button import render_cite_button
@@ -132,7 +132,10 @@ from scanpath_studio.compare_source import (
 from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
     AUTHOR_CHOICE,
+    DATA_INSPECTION_KEY,
+    DATA_RUN_SHEETS_KEY,
     DATASET_EDITOR_OPEN_KEY,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
@@ -189,7 +192,6 @@ from scanpath_studio.constants import (
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
-    SIMPLE_VIEW_LIT_KEY,
     SUMMARY_CHIP_FIELDS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
@@ -200,6 +202,7 @@ from scanpath_studio.controls import (
     _labeled,
     _numeric_slider,
     _popover_rows,
+    _rail_section,
     _sub_row,
     _text_field_and_frame,
     active_filter_items,
@@ -212,6 +215,8 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    leave_animation,
+    metadata_readings,
     pin_word_heatmap_range,
     plot_popover_on_change,
     read_trial_filters,
@@ -222,8 +227,10 @@ from scanpath_studio.controls import (
     render_plot_controls,
     render_trial_chip_picker,
     render_trial_filters,
+    render_view_tiles,
     render_viz_reset,
     selected_hover_text,
+    static_plot_view,
 )
 from scanpath_studio.data import (
     IDENTITY_SCHEMA_FIELDS,
@@ -244,6 +251,7 @@ from scanpath_studio.data import (
     empty_fixations_frame,
     empty_words_frame,
     filter_to_keys,
+    forget_frame_cache,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
@@ -329,6 +337,7 @@ from scanpath_studio.multipart import (
     has_screen_identity,
     part_catalog,
     screen_canvas_size,
+    screen_rows,
 )
 from scanpath_studio.plots import (
     COLORBAR_DEFAULTS,
@@ -376,6 +385,7 @@ from scanpath_studio.session_keys import (
     EXPORT_FIGURE_WIDTH_UNIT,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_ANIMATE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
@@ -534,18 +544,25 @@ def _render_screen_navigator(
 
 
 def _part_catalog_for_display(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame, fixations: pd.DataFrame, raw_gaze: pd.DataFrame | None = None
 ) -> pd.DataFrame:
     """Use MultiplEYE's fixation-onset order if cached word order is stale."""
     try:
-        return part_catalog(words, fixations)
+        return part_catalog(words, fixations, raw_gaze)
     except ValueError as exc:
         if (
             str(exc) == "Multipart metadata 'screen_index' conflicts across tables."
             and "screen_kind" in fixations.columns
         ):
-            return part_catalog(fixations)
+            return part_catalog(fixations, raw_gaze)
         raise
+
+
+def _screen_catalog_status(words, fixations, raw_gaze) -> tuple[pd.DataFrame, str]:
+    try:
+        return _part_catalog_for_display(words, fixations, raw_gaze), ""
+    except ValueError as exc:
+        return pd.DataFrame(), f"{exc} Check the screen mappings in Edit dataset."
 
 
 def _embed_html_iframe(
@@ -2116,7 +2133,9 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         marker_duration_range=tuple(
             viz_settings.get("marker_duration_range", DEFAULT_MARKER_DURATION_RANGE)
         ),
-        duration_size_legend=viz_settings.get("duration_size_legend", True),
+        duration_size_legend=viz_settings.get(
+            "duration_size_legend", DEFAULT_DURATION_SIZE_LEGEND
+        ),
         legend_layout=viz_settings.get("legend_layout"),
         **{
             name: viz_settings.get(name, option.default)
@@ -3074,7 +3093,11 @@ def _render_compare_selector(
     slider_col = None
     screen_track = screen_track or any(
         frame is not None and SCREEN_ID in frame.columns
-        for frame in (words_filtered, fixations_filtered)
+        for frame in (
+            words_filtered,
+            fixations_filtered,
+            source.raw_gaze if source else None,
+        )
     )
     extra_track = [SELECTOR_SCREEN_TRACK] if screen_track else []
     if n > 1:
@@ -4138,31 +4161,6 @@ def _in_text_fixation_value(
     return f"{n_in} / {n_total}"
 
 
-def _synthesized_raw_gaze_note(token: str | None) -> str:
-    """`app.synthesized_raw_gaze_note`, imported late (``app`` imports ``tabs``)."""
-    from scanpath_studio.app import synthesized_raw_gaze_note
-
-    return synthesized_raw_gaze_note(token)
-
-
-def _synthetic_raw_gaze_plot_note(
-    *, drawn_a: bool, source_a: str | None, drawn_b: bool = False, source_b=None
-) -> str:
-    """The caption for a figure that draws synthesized samples, or ``""``.
-
-    ``drawn_a`` / ``drawn_b`` say whether each reading's samples are actually
-    on the figure (switch on, samples on this trial, not the replay), and
-    ``source_*`` names the dataset they came from — B's may be a second
-    dataset's. The sentence is the 🗂️ Data page's own (`reading_note`).
-    """
-    note = (drawn_a and _synthesized_raw_gaze_note(source_a)) or (
-        drawn_b and _synthesized_raw_gaze_note(source_b)
-    )
-    if not note:
-        return ""
-    return f"{ICONS['raw_gaze']} **Synthetic raw-gaze illustration.** {note}"
-
-
 def _raw_gaze_missing_note(
     shown: bool,
     *,
@@ -4199,6 +4197,7 @@ def _no_fixations_note(
     raw_gaze_shown: bool,
     animate_requested: bool,
     compare_requested: bool,
+    drawable_samples: bool = True,
 ) -> str:
     """What a trial with no fixations shows, and what it cannot.
 
@@ -4213,7 +4212,10 @@ def _no_fixations_note(
         return ""
     modes = [
         name
-        for name, on in (("Animate", animate_requested), ("Compare", compare_requested))
+        for name, on in (
+            ("Animation", animate_requested),
+            ("Compare", compare_requested),
+        )
         if on
     ]
     resolved = (
@@ -4232,6 +4234,8 @@ def _no_fixations_note(
         if raw_gaze_shown
         else f"Turn on {ICONS['raw_gaze']} **Raw gaze** to draw its gaze samples."
     )
+    if not drawable_samples:
+        shown = "None of its gaze samples have usable values on both selected axes."
     return (
         f"{ICONS['info']} **Raw gaze only.** There are no fixations in this "
         f"trial. {shown} "
@@ -4410,7 +4414,6 @@ def _build_studio_config(
             else None
         ),
         print_size=_print_size_setting(),
-        raw_gaze_synthesized=bool(_synthesized_raw_gaze_note(data_source)),
     )
 
 
@@ -4658,6 +4661,7 @@ def _build_compare_meta(
     raw_gaze: pd.DataFrame | None = None,
     include_raw_gaze: bool = True,
     dataset_canvas: tuple[int, int] | None = None,
+    screen_canvas: tuple[int, int] | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     Compare's A/B chip table, or None when no comparison is active.
@@ -4754,7 +4758,12 @@ def _build_compare_meta(
     # B's screen, read before the participant ids are namespaced (they don't
     # touch the canvas columns, but this is B's data as its corpus has it).
     setup_b = source.setup if source is not None else None
-    canvas_b = screen_canvas_size(compare_words) or screen_canvas_size(compare_fix)
+    canvas_b = (
+        screen_canvas_size(compare_words)
+        or screen_canvas_size(compare_fix)
+        or screen_canvas_size(compare_raw)
+        or screen_canvas
+    )
     if canvas_b is not None and setup_b is not None:
         setup_b = replace(setup_b, canvas_width=canvas_b[0], canvas_height=canvas_b[1])
     if canvas_b is None:
@@ -5190,7 +5199,7 @@ def _compare_dataset_name(compare_meta: dict | None) -> str:
 def _cancel_animation(task_key: tuple) -> None:
     """Cancel on the animation card — back to the static plot."""
     progress.cancel(task_key)
-    st.session_state["single_animate"] = False
+    leave_animation()
 
 
 #: The replay task this session's card was last opened for, held while
@@ -5249,7 +5258,7 @@ def _claim_animation_task(task_key: tuple) -> None:
 
 def _abandon_animation_task() -> None:
     """This Scanpath run builds no replay: stop the one an earlier run left
-    building — Animate switched off with its own switch mid-build, or
+    building — a static view selected mid-build, or
     a trial with nothing to animate — rather than let a replay of frames no
     longer wanted run on beside this run's figure. Show static plot cancels
     its build itself (`_cancel_animation`). A run on another view never gets
@@ -5557,7 +5566,7 @@ def _build_and_render_animation(
         # The frames were built at full opacity (`_plan_replay`).
         fig.update_traces(
             opacity=animation_settings.saccade_opacity,
-            selector=lambda trace: trace.name in ("saccades", "saccade direction"),
+            selector=dict(meta="saccades"),
         )
         # A co-animation whose two size ranges differ has no one key.
         key_range = replay_size_key_range(
@@ -5764,10 +5773,6 @@ def _render_export_panel(
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
         SYNTHETIC_CHOICE,
-    )
-    # Each trial's `plot_config.json` says when its samples are made up.
-    bulk_settings["raw_gaze_synthesized"] = bool(
-        _synthesized_raw_gaze_note(st.session_state.get("data_source_choice"))
     )
     # The bulk export rebuilds every figure from scratch, so the drift
     # correction must ride along or the batch silently differs from
@@ -6352,6 +6357,7 @@ def render_single_trial_tab(
     # Passed by ``app.main`` (which owns the source list + wizard hooks).
     data_source_renderer: Callable[[object], None] | None = None,
     canvas_renderer: Callable[[Any], None] | None = None,
+    on_reading_selected: Callable[[bool], None] | None = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
@@ -6506,6 +6512,8 @@ def render_single_trial_tab(
     render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
 
     if not (selected_participant and selected_trial):
+        if on_reading_selected is not None:
+            on_reading_selected(False)
         return
 
     # Remember the resolved selection so the Share subtab can build a deep link
@@ -6528,13 +6536,12 @@ def render_single_trial_tab(
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
-    screens = (
-        # A trial recorded as raw gaze alone takes its screens from its
-        # samples, so each screen draws in its own coordinate space.
-        part_catalog(parent_raw_gaze)
-        if parent_words.empty and parent_fixations.empty
-        else _part_catalog_for_display(parent_words, parent_fixations)
+    screens, screen_error = _screen_catalog_status(
+        parent_words, parent_fixations, parent_raw_gaze
     )
+    if screen_error:
+        plot_notes_slot.warning(screen_error)
+        return
     selected_screen = _render_screen_navigator(screens, host=screen_slot)
     from .annotations import render_disputed_note
 
@@ -6542,29 +6549,23 @@ def render_single_trial_tab(
         plot_notes_slot, selected_participant, selected_trial, selected_screen
     )
     if selected_screen is not None:
-        trial_words = extract_part(
-            parent_words, selected_participant, selected_trial, selected_screen
-        )
-        trial_fixations = extract_part(
-            parent_fixations, selected_participant, selected_trial, selected_screen
-        )
-        if not parent_raw_gaze.empty and SCREEN_ID in parent_raw_gaze.columns:
-            trial_raw_gaze = extract_part(
-                parent_raw_gaze,
-                selected_participant,
-                selected_trial,
-                selected_screen,
-            )
-        else:
-            trial_raw_gaze = pd.DataFrame()
-            if not parent_raw_gaze.empty:
+        trial_words = screen_rows(parent_words, selected_screen)
+        trial_fixations = screen_rows(parent_fixations, selected_screen)
+        trial_raw_gaze = screen_rows(parent_raw_gaze, selected_screen)
+        for label, parent in (
+            ("Words", parent_words),
+            ("Fixations", parent_fixations),
+            ("Raw gaze", parent_raw_gaze),
+        ):
+            if not parent.empty and SCREEN_ID not in parent:
                 plot_notes_slot.warning(
-                    "Raw-gaze samples are hidden because this trial has several "
-                    "screens and the samples don't say which screen each belongs to."
+                    f"{label} has no Screen ID. Its rows cannot be placed on this screen."
                 )
         st.session_state["_share_selection"]["screen_id"] = selected_screen
-        per_screen_canvas = screen_canvas_size(trial_words) or screen_canvas_size(
-            trial_fixations
+        per_screen_canvas = (
+            screen_canvas_size(trial_words)
+            or screen_canvas_size(trial_fixations)
+            or screen_canvas_size(trial_raw_gaze)
         )
         if per_screen_canvas is not None:
             canvas_width, canvas_height = per_screen_canvas
@@ -6578,6 +6579,8 @@ def render_single_trial_tab(
     # trial without them (raw gaze only, or words only) draws the static figure,
     # with those controls greyed and the reason said above the plot.
     trial_has_fixations = not trial_fixations.empty
+    if on_reading_selected is not None:
+        on_reading_selected(trial_has_fixations)
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
     # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.
@@ -6604,290 +6607,203 @@ def render_single_trial_tab(
         # ordinary window size.
         with st.container(key="plot_controls_header"):
             st.markdown(f"## {ICONS['plot_controls']} Plot controls")
-        # Essentials mode sets Animate from its View tiles and has no Compare, so
-        # the two mode rows are Full-only; they still run in Essentials, which
-        # keeps `animate` and `compare_enabled` resolved exactly as here.
-        with ui_mode.advanced_only(rail, "rail_modes").container(
-            key="tour_grp_view_modes"
-        ):
-            # The mode and its settings are ONE control, laid out the way a
-            # Zoom-style split button is: the toggle switches the mode on and off,
-            # the ▾ beside it opens the settings. The horizontal container is what
-            # puts them on one row; it wraps rather than overflowing, so on a rail
-            # too narrow for both the ▾ simply drops to the line below.
-            # `gap=None` is load-bearing, not taste:
-            # the toggles measure ~132 px (Animate) and ~137 px (Compare) against a
-            # ~195 px rail, so any gap at all puts Compare over the edge once the ▾
-            # is beside it — and zero is what the fused look wants anyway. The
-            # `split_mode_*` key is the hook `styles.py` draws the shared outline
-            # and the divider on, and it is also what shrinks the ▾ from Streamlit's
-            # default ~55 px button to a glyph's worth, which is where the rest of
-            # the room comes from. The trigger renders on every run — it greys out
-            # rather than disappearing, because one that comes and goes reflows the
-            # row under the cursor, and because what a mode offers is part of
-            # deciding whether to turn it on (so the menu opens either way; the
-            # controls inside are what go disabled).
-            with st.container(
-                horizontal=True,
-                wrap=False,
-                vertical_alignment="center",
-                gap=None,
-                key="split_mode_animate",
-            ):
-                # Animate styled like a layer: a toggle + a ▾ popover for its config
-                # (playback speed) — matching Compare and the visualization layers
-                # below. Seeded, not `value=`-defaulted: `single_animate` is restored
-                # pre-widget by a deep link / saved config (see session_keys), and
-                # passing both makes Streamlit warn. `setdefault` suffices —
-                # this toggle renders on every run, so it never first mounts late the
-                # way a popover-bound widget can (that case needs
-                # `persist_state="session"`).
-                st.session_state.setdefault("single_animate", False)
-                # `wrap=True` turns off Streamlit's one-line "truncate"
-                # label mode, which stamps a native `title=` tooltip repeating
-                # the label — icon ligature included, so it would read "movie
-                # Animate". `styles.py` draws the one-line ellipsis instead.
-                animate_requested = st.toggle(
-                    f"{ICONS['animate']} Animate",
-                    key="single_animate",
-                    persist_state="session",
-                    wrap=True,
-                    # Why the layer rows below grey out, on the switch that
-                    # does it. `styles.py` draws no `?` for it: the whole
-                    # switch is the hover target.
-                    help="Replay the reading fixation by fixation. The replay "
-                    "draws the fixations itself and has no heatmap or raw gaze, "
-                    "so the Fixations, Heatmap and Raw gaze switches are greyed "
-                    "while it is on.",
+        # Reserve the first block before resolving the detailed controls. Its
+        # tiles need the defaults seeded by render_plot_controls further below.
+        view_host = rail.container(key="rail_view_controls")
+        modes = rail.container(key="tour_grp_view_modes")
+        with modes:
+            compare_host = modes.container(key="rail_compare")
+            animate_requested = st.session_state.setdefault(SINGLE_ANIMATE, False)
+            animate = animate_requested and trial_has_fixations
+            anim_disabled = not animate
+            anim_gate = (
+                ""
+                if animate
+                else f"{ICONS['warning']} This trial has no fixations to animate."
+                if animate_requested
+                else f"{ICONS['warning']} Choose **Animation** to change playback."
+            )
+            _, animation_settings = _rail_section(
+                ui_mode.advanced_only(modes, "rail_animation"),
+                f"{ICONS['animate']} **Animation settings**",
+                name="Animation",
+                slug="animation",
+            )
+            with animation_settings, _popover_rows("animation"):
+                st.session_state.setdefault(
+                    "single_playback_speed", _ANIM_DEFAULT_SPEED
                 )
-                # The replay is built from fixations, so a trial with none
-                # draws the static figure (its raw gaze, its text) instead of
-                # nothing. The toggle keeps the user's value — resolve, don't
-                # rewrite — and the next trial with fixations replays again.
-                animate = animate_requested and trial_has_fixations
-                # The ▾ opens whether or not Animate is on — what a mode *offers* is
-                # part of deciding whether to turn it on, and a menu that refuses to
-                # open shows nothing. Off, every control inside is greyed instead
-                # (`anim_gate`), which is the same "your value is kept" contract the
-                # rail's own mode gating uses. Disabled or not, the body always runs,
-                # which is what keeps `playback_speed` / `anim_frames_slot` defined.
-                anim_disabled = not animate
-                anim_gate = (
-                    ""
-                    if not anim_disabled
-                    else f"{ICONS['warning']} Turn on **Animate** to change playback."
-                    if not animate_requested
-                    else f"{ICONS['warning']} This trial has no fixations to replay."
-                )
-                # No `icon=` — Streamlit already draws a chevron on a
-                # popover trigger, so a material arrow beside it would be a
-                # second one. The toggle's `help` sits on the trigger: on a
-                # widget it renders as a `?` icon, on a trigger as a plain
-                # hover tooltip.
-                # An explicit key — a blank-label popover otherwise relies
-                # on Streamlit's positional auto-key, which can shift across
-                # reruns and drop the open state. See `_rail_section` in
-                # controls.py for the full diagnosis; this row shares that
-                # helper's shape and its exposure.
-                # The rail popovers' layout: a *Replay* group (speed,
-                # autoplay, duration) and a *Frames* group (the smoothness
-                # preset, the spacing and the limit, and what they give
-                # this trial).
-                with (
-                    st.popover(
-                        # Named for screen readers; `styles.py` clips the
-                        # label off screen, so the chevron is all that is drawn.
-                        "Replay settings",
-                        width="content",
-                        key="split_mode_animate_popover",
-                        on_change=plot_popover_on_change(),
-                        help="Replay settings. Playback controls appear above the plot.",
+                playback_speed = _sub_row(
+                    "Speed",
+                    section="Replay",
+                    section_help="Playback speed, autoplay and duration.",
+                    caption_help=_gated_help(
+                        "Playback speed relative to the recorded fixation timings.",
+                        anim_gate,
                     ),
-                    _popover_rows("animate"),
-                ):
-                    st.session_state.setdefault(
-                        "single_playback_speed", _ANIM_DEFAULT_SPEED
-                    )
-                    playback_speed = _sub_row(
-                        "Speed",
-                        section="Replay",
-                        section_help="Playback speed, autoplay and duration.",
-                        caption_help=_gated_help(
-                            "Playback speed relative to the recorded fixation timings.",
-                            anim_gate,
-                        ),
-                    ).select_slider(
-                        "Playback speed",
-                        options=_ANIM_SPEED_OPTIONS,
-                        format_func=lambda x: _ANIM_SPEED_LABELS[
-                            _ANIM_SPEED_OPTIONS.index(x)
-                        ],
-                        key="single_playback_speed",
-                        persist_state="session",
-                        disabled=anim_disabled,
-                        label_visibility="collapsed",
-                    )
-                    # Start the replay automatically on load (at the speed
-                    # above). Off → the figure waits on the ▶ Play button.
+                ).select_slider(
+                    "Playback speed",
+                    options=_ANIM_SPEED_OPTIONS,
+                    format_func=lambda x: _ANIM_SPEED_LABELS[
+                        _ANIM_SPEED_OPTIONS.index(x)
+                    ],
+                    key="single_playback_speed",
+                    persist_state="session",
+                    disabled=anim_disabled,
+                    label_visibility="collapsed",
+                )
+                # Start the replay automatically on load (at the speed
+                # above). Off → the figure waits on the ▶ Play button.
+                _sub_row(
+                    "Autoplay",
+                    caption_help=_gated_help(
+                        "Start playing when the plot loads.", anim_gate
+                    ),
+                ).checkbox(
+                    "On load",
+                    key="global_anim_autoplay",
+                    persist_state="session",
+                    disabled=anim_disabled,
+                )
+                # How long the trial and its replay are belongs to
+                # *Replay*, under the speed it follows from. Filled later
+                # (`_render_anim_info`), once scanpath B is known; drawn
+                # only while there is a replay to time.
+                anim_timing_slot = (
                     _sub_row(
-                        "Autoplay",
-                        caption_help=_gated_help(
-                            "Start playing when the plot loads.", anim_gate
-                        ),
-                    ).checkbox(
-                        "On load",
-                        key="global_anim_autoplay",
-                        persist_state="session",
-                        disabled=anim_disabled,
+                        "Duration",
+                        caption_help="How long the trial's reading "
+                        "took, and how long its replay plays at the "
+                        "speed above.",
                     )
-                    # How long the trial and its replay are belongs to
-                    # *Replay*, under the speed it follows from. Filled later
-                    # (`_render_anim_info`), once scanpath B is known; drawn
-                    # only while there is a replay to time.
-                    anim_timing_slot = (
-                        _sub_row(
-                            "Duration",
-                            caption_help="How long the trial's reading "
-                            "took, and how long its replay plays at the "
-                            "speed above.",
-                        )
-                        if animate
-                        else None
-                    )
+                    if animate
+                    else None
+                )
 
-                    # The frame grid is a real tradeoff — smoothness against frame
-                    # count, which is what export size and render time are made of —
-                    # so the user sets it, and `_render_anim_info` says when the
-                    # frame limit coarsened it.
-                    def _apply_anim_quality() -> None:
-                        preset = _ANIM_QUALITY_PRESETS.get(
-                            st.session_state.get("global_anim_quality")
-                        )
-                        if preset is not None:
-                            (
-                                st.session_state["global_anim_grid_step_ms"],
-                                st.session_state["global_anim_max_frames"],
-                            ) = preset
-
-                    current_grid = (
-                        int(st.session_state.get("global_anim_grid_step_ms", 100)),
-                        int(st.session_state.get("global_anim_max_frames", 360)),
+                # The frame grid is a real tradeoff — smoothness against frame
+                # count, which is what export size and render time are made of —
+                # so the user sets it, and `_render_anim_info` says when the
+                # frame limit coarsened it.
+                def _apply_anim_quality() -> None:
+                    preset = _ANIM_QUALITY_PRESETS.get(
+                        st.session_state.get("global_anim_quality")
                     )
-                    matched_quality = next(
+                    if preset is not None:
                         (
-                            name
-                            for name, values in _ANIM_QUALITY_PRESETS.items()
-                            if values == current_grid
-                        ),
-                        None,
-                    )
-                    # Picking Custom on the segmented control has to be
-                    # "sticky" even while the grid still equals a preset
-                    # exactly (the state right after switching, before
-                    # either slider is touched) — otherwise this re-inference
-                    # would snap it straight back to that preset's name. Only
-                    # infer a preset when the mode isn't already Custom; a
-                    # grid matching no preset is unambiguous either way.
-                    previous_quality = st.session_state.get("global_anim_quality")
-                    if matched_quality is None:
-                        st.session_state["global_anim_quality"] = "Custom"
-                    elif previous_quality != "Custom":
-                        st.session_state["global_anim_quality"] = matched_quality
-                    # Written for someone meeting the replay for the
-                    # first time — what a frame is, what each control does
-                    # and what more of them costs — with the presets' own
-                    # numbers, so the help cannot drift from them.
-                    presets_help = " ".join(
-                        f"{name}: a frame every {step} ms, at most {cap}."
-                        for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
-                    )
+                            st.session_state["global_anim_grid_step_ms"],
+                            st.session_state["global_anim_max_frames"],
+                        ) = preset
+
+                current_grid = (
+                    int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                    int(st.session_state.get("global_anim_max_frames", 360)),
+                )
+                matched_quality = next(
+                    (
+                        name
+                        for name, values in _ANIM_QUALITY_PRESETS.items()
+                        if values == current_grid
+                    ),
+                    None,
+                )
+                # Picking Custom on the segmented control has to be
+                # "sticky" even while the grid still equals a preset
+                # exactly (the state right after switching, before
+                # either slider is touched) — otherwise this re-inference
+                # would snap it straight back to that preset's name. Only
+                # infer a preset when the mode isn't already Custom; a
+                # grid matching no preset is unambiguous either way.
+                previous_quality = st.session_state.get("global_anim_quality")
+                if matched_quality is None:
+                    st.session_state["global_anim_quality"] = "Custom"
+                elif previous_quality != "Custom":
+                    st.session_state["global_anim_quality"] = matched_quality
+                # Written for someone meeting the replay for the
+                # first time — what a frame is, what each control does
+                # and what more of them costs — with the presets' own
+                # numbers, so the help cannot drift from them.
+                presets_help = " ".join(
+                    f"{name}: a frame every {step} ms, at most {cap}."
+                    for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
+                )
+                _sub_row(
+                    "Quality",
+                    section="Frames",
+                    section_help="The replay is a series of still frames, each "
+                    "showing the scanpath up to that moment of the reading. "
+                    "More frames play more smoothly but take longer to build "
+                    "and export.",
+                    caption_help=_gated_help(
+                        f"{presets_help} Moving a slider below makes it Custom.",
+                        anim_gate,
+                    ),
+                ).segmented_control(
+                    "Animation smoothness",
+                    options=[*_ANIM_QUALITY_PRESETS, "Custom"],
+                    key="global_anim_quality",
+                    persist_state="session",
+                    on_change=_apply_anim_quality,
+                    disabled=anim_disabled,
+                    label_visibility="collapsed",
+                )
+
+                def _mark_anim_quality_custom() -> None:
+                    st.session_state["global_anim_quality"] = "Custom"
+
+                # The two sliders are live whatever the preset —
+                # a preset only sets them, and moving one makes it
+                # Custom — so there is no Custom click before a drag.
+                step_help = _gated_help(
+                    "Reading time between frames. Smaller plays smoother.",
+                    anim_gate,
+                )
+                _numeric_slider(
+                    st,
+                    "Frame every (ms)",
+                    key="global_anim_grid_step_ms",
+                    persist_state="session",
+                    min_value=20,
+                    max_value=500,
+                    step=10,
+                    slider_format="%d ms",
+                    number_format="%d",
+                    on_change=_mark_anim_quality_custom,
+                    disabled=anim_disabled,
+                    help=step_help,
+                    field_host=_sub_row("Every", caption_help=step_help),
+                )
+                limit_help = _gated_help(
+                    "The most frames a replay gets. If a trial needs more "
+                    "at the spacing above, the spacing widens instead.",
+                    anim_gate,
+                )
+                _numeric_slider(
+                    st,
+                    "Frame limit",
+                    key="global_anim_max_frames",
+                    persist_state="session",
+                    min_value=30,
+                    max_value=2000,
+                    step=10,
+                    slider_format="%d frames",
+                    number_format="%d",
+                    on_change=_mark_anim_quality_custom,
+                    disabled=anim_disabled,
+                    help=limit_help,
+                    field_host=_sub_row("Limit", caption_help=limit_help),
+                )
+                # Filled later, once the selected comparison trial is
+                # known: what the two controls above give this trial,
+                # said beside them.
+                anim_frames_slot = (
                     _sub_row(
-                        "Quality",
-                        section="Frames",
-                        section_help="The replay is a series of still frames, each "
-                        "showing the scanpath up to that moment of the reading. "
-                        "More frames play more smoothly but take longer to build "
-                        "and export.",
-                        caption_help=_gated_help(
-                            f"{presets_help} Moving a slider below makes it Custom.",
-                            anim_gate,
-                        ),
-                    ).segmented_control(
-                        "Animation smoothness",
-                        options=[*_ANIM_QUALITY_PRESETS, "Custom"],
-                        key="global_anim_quality",
-                        persist_state="session",
-                        on_change=_apply_anim_quality,
-                        disabled=anim_disabled,
-                        label_visibility="collapsed",
+                        "Result",
+                        caption_help="What the spacing and the limit give this trial.",
                     )
-
-                    def _mark_anim_quality_custom() -> None:
-                        st.session_state["global_anim_quality"] = "Custom"
-
-                    # The two sliders are live whatever the preset —
-                    # a preset only sets them, and moving one makes it
-                    # Custom — so there is no Custom click before a drag.
-                    step_help = _gated_help(
-                        "Reading time between frames. Smaller plays smoother.",
-                        anim_gate,
-                    )
-                    _numeric_slider(
-                        st,
-                        "Frame every (ms)",
-                        key="global_anim_grid_step_ms",
-                        persist_state="session",
-                        min_value=20,
-                        max_value=500,
-                        step=10,
-                        slider_format="%d ms",
-                        number_format="%d",
-                        on_change=_mark_anim_quality_custom,
-                        disabled=anim_disabled,
-                        help=step_help,
-                        field_host=_sub_row("Every", caption_help=step_help),
-                    )
-                    limit_help = _gated_help(
-                        "The most frames a replay gets. If a trial needs more "
-                        "at the spacing above, the spacing widens instead.",
-                        anim_gate,
-                    )
-                    _numeric_slider(
-                        st,
-                        "Frame limit",
-                        key="global_anim_max_frames",
-                        persist_state="session",
-                        min_value=30,
-                        max_value=2000,
-                        step=10,
-                        slider_format="%d frames",
-                        number_format="%d",
-                        on_change=_mark_anim_quality_custom,
-                        disabled=anim_disabled,
-                        help=limit_help,
-                        field_host=_sub_row("Limit", caption_help=limit_help),
-                    )
-                    # Filled later, once the selected comparison trial is
-                    # known: what the two controls above give this trial,
-                    # said beside them.
-                    anim_frames_slot = (
-                        _sub_row(
-                            "Result",
-                            caption_help="What the spacing and the limit "
-                            "give this trial.",
-                        )
-                        if animate
-                        else None
-                    )
-            # Compare is a view mode (toggle here); the second-trial selector renders
-            # above the chips in the plot column (compare_slot below), mirroring the
-            # main trial picker.
-            # Same split-button row as Animate above — toggle + ▾ settings.
-            # Compare config lives in the rail: the overlay/side-by-side/stacked
-            # layout + the show-A/B-legend toggle.
-            # The layout reaches the figure via session_state
-            # (`single_compare_layout`), read into `compare_layout` below.
-            with st.container(
+                    if animate
+                    else None
+                )
+            with compare_host.container(
                 horizontal=True,
                 wrap=False,
                 vertical_alignment="center",
@@ -6898,39 +6814,42 @@ def render_single_trial_tab(
                 # is seeded rather than given a `value=`: an explicit default fights
                 # the deep link the same way it would fight a restored config.
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
-                # `wrap=True` for the same reason as Animate above.
+                compare_unavailable = (
+                    not animate
+                    and not st.session_state[SINGLE_COMPARE_TOGGLE]
+                    and static_plot_view() == "illustration"
+                )
+                if compare_unavailable:
+                    # On returning to an illustration, disabling the widget would
+                    # discard the just-received click that switched comparison off.
+                    st.session_state[SINGLE_COMPARE_TOGGLE] = False
                 compare_requested = st.toggle(
                     f"{ICONS['compare']} Compare readings",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
-                    help="Add a second scanpath to the figure, overlaid or in a separate panel.",
+                    disabled=compare_unavailable,
+                    help="Choose Scanpath, Animation or Heatmap to compare readings."
+                    if compare_unavailable
+                    else "Add a second scanpath to the figure, overlaid or in a separate panel.",
                 )
                 # Compare is built from two readings' fixations (its
                 # raw-gaze layer only sits under them), so a trial without
                 # fixations stays on its static figure rather than drawing an empty
                 # comparison — same resolve as Animate.
                 compare_enabled = compare_requested and trial_has_fixations
-                # Opens either way; greyed inside while Compare is off — see the
-                # Animate row above for why the menu does not refuse to open.
+                # The menu stays available to inspect its settings while off.
                 cmp_disabled = not compare_enabled
                 cmp_gate = (
                     f"{ICONS['warning']} This trial has no fixations to compare."
                     if compare_requested and cmp_disabled
-                    else f"{ICONS['warning']} Turn on **Compare** to change these."
+                    else f"{ICONS['warning']} Turn on **Compare readings** to change these."
                     if cmp_disabled
                     else ""
                 )
-                # See the Animate row above — one arrow, and the toggle's
-                # `help` served as a tooltip here instead of a `?`; an
-                # explicit key so a blank-label popover keeps its open
-                # state across reruns.
-                # The rail popovers' layout — *View*, then
-                # *Stimulus from* (greyed unless the figure is an overlay, rather
-                # than hidden), *Legend* and *Step* as `label | ☑ Show` rows.
                 with (
                     st.popover(
-                        "Compare settings",  # named for screen readers, as Animate's
+                        "Compare settings",
                         width="content",
                         key="split_mode_compare_popover",
                         on_change=plot_popover_on_change(),
@@ -6987,7 +6906,7 @@ def render_single_trial_tab(
                     stored_layout = st.session_state.get(SINGLE_COMPARE_LAYOUT)
                     if animate and stored_layout != "Overlay":
                         st.caption(
-                            "Overlaid while **Animate** is on; your layout "
+                            "Overlaid in **Animation**. Your layout "
                             "comes back when you turn it off."
                         )
                     # Overlay pools both trials into one axis range, so
@@ -7131,6 +7050,7 @@ def render_single_trial_tab(
             fixations_filtered,
             base_font_size,
             host=rail,
+            view_host=view_host,
             # Where scanpath B's filters go, once B is loaded below.
             slots=rail_slots,
             # Compare draws B's samples too, so B's dataset having some
@@ -7148,6 +7068,7 @@ def render_single_trial_tab(
             # slider (its max is this trial's fixation count).
             fix_range_fixations=trial_fixations,
             trial_samples=trial_raw_gaze,
+            raw_gaze=raw_gaze,
             # The canvas / text panel (monitor geometry, fonts, text colour,
             # background) renders inside the rail's group order. `app.main`
             # passes it in already bound to the frames + data source, since
@@ -7166,6 +7087,7 @@ def render_single_trial_tab(
                             settings.get("y_field") or "y",
                         ),
                         trial_raw_gaze,
+                        trial_fixations,
                     ),
                 },
                 trial_words,
@@ -7174,7 +7096,7 @@ def render_single_trial_tab(
                 selected_trial,
                 combo_row=primary_combo_row,
             ),
-            # Essentials' lit View tile follows the figure actually drawn.
+            # A trial without fixations draws its static view.
             animating=bool(animate),
         )
         # The scoped reset closes the rail, below every control it
@@ -7194,7 +7116,7 @@ def render_single_trial_tab(
             narrowed=len(combos) < len(combos_all),
             sorted_=trial_sort_is_set("single"),
             comparing=bool(compare_enabled),
-            custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
+            custom_view=st.session_state.get("_custom_plot_in_use", False),
             axes=(viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
             if not (animate or compare_enabled)
             else ("x", "y"),
@@ -7211,6 +7133,7 @@ def render_single_trial_tab(
     compare_source: SecondaryDataset | None = None
     compare_pool: SecondaryDataset | None = None
     selected_compare_screen: str | None = None
+    compare_screen_canvas = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
     # The cross-dataset *resolve* is NOT done here. It needs B's screen,
@@ -7267,14 +7190,32 @@ def render_single_trial_tab(
             compare_parent_fixations = extract_trial(
                 compare_fixations_pool, compare_participant, compare_trial
             )
-            compare_screens = _part_catalog_for_display(
-                compare_parent_words, compare_parent_fixations
+            compare_samples = (
+                compare_source.raw_gaze
+                if compare_source is not None
+                else raw_gaze_all
+                if raw_gaze_all is not None
+                else raw_gaze
             )
+            compare_screens, screen_error = _screen_catalog_status(
+                compare_parent_words,
+                compare_parent_fixations,
+                extract_trial(compare_samples, compare_participant, compare_trial)
+                if compare_samples is not None and SCREEN_ID in compare_samples
+                else None,
+            )
+            if screen_error:
+                plot_notes_slot.warning(screen_error)
+                return
         else:
             compare_screens = pd.DataFrame()
         selected_compare_screen = _render_screen_navigator(
             compare_screens, key_prefix="single_compare", host=screen_cells.get("b")
         )
+        if selected_compare_screen is not None:
+            compare_screen_canvas = screen_canvas_size(
+                screen_rows(compare_screens, selected_compare_screen)
+            )
     else:
         # Compare off loads no second dataset — stop the one an
         # earlier run left loading for B.
@@ -7336,8 +7277,10 @@ def render_single_trial_tab(
         ),
         include_raw_gaze=draw_compare_raw_gaze,
         dataset_canvas=dataset_canvas,
+        screen_canvas=compare_screen_canvas,
     )
     comparing = compare_meta is not None
+    render_view_tiles(rail_slots["view_tiles"], animating=animate, comparing=comparing)
     # Compare draws raw gaze too — each reading's own samples, so the
     # layer is on when either reading has some.
     compare_raw_gaze = (
@@ -7352,7 +7295,7 @@ def render_single_trial_tab(
         not animate
         and global_raw_toggle
         and (
-            chart_axes.drawable_raw_samples(fields, trial_raw_gaze)
+            chart_axes.drawable_raw_samples(fields, trial_raw_gaze, trial_fixations)
             or (
                 compare_shows_raw_gaze
                 and chart_axes.drawable_raw_samples(("x", "y"), compare_raw_gaze)
@@ -7538,6 +7481,7 @@ def render_single_trial_tab(
             st.session_state,
             words=trial_words.columns,
             fixations=trial_fixations.columns,
+            raw_gaze=trial_raw_gaze.columns,
         ),
     )
 
@@ -7845,23 +7789,12 @@ def render_single_trial_tab(
         )
         if raw_gaze_missing:
             plot_notes_slot.warning(raw_gaze_missing, icon=ICONS["warning"])
-        # Synthesized samples say so where they are drawn, not only on
-        # the 🗂️ Data page. The replay draws no raw gaze.
-        synthetic_note = _synthetic_raw_gaze_plot_note(
-            drawn_a=effective_show_raw_gaze and not animate,
-            source_a=st.session_state.get("data_source_choice"),
-            drawn_b=compare_shows_raw_gaze and not compare_raw_gaze.empty,
-            source_b=(
-                (compare_meta.get("dataset") if compare_meta else None)
-                or st.session_state.get("data_source_choice")
-            ),
-        )
-        if synthetic_note:
-            plot_notes_slot.caption(synthetic_note)
         no_fixations_note = _no_fixations_note(
             trial_has_fixations=trial_has_fixations,
             trial_has_raw_gaze=trial_has_raw_gaze,
             raw_gaze_shown=effective_show_raw_gaze,
+            drawable_samples=trial_has_fixations
+            or chart_axes.drawable_raw_samples(fields, trial_raw_gaze, trial_fixations),
             animate_requested=animate_requested,
             compare_requested=compare_requested,
         )
@@ -10300,27 +10233,17 @@ def data_scope_text(
     combos_all: pd.DataFrame,
     words_all: pd.DataFrame,
     fixations_all: pd.DataFrame,
-) -> str:
-    """What the Data page's 📊 Stats and raw tables count, on one line.
-
-    ``12 of 24 trials · 1 of 2 readers · filtered: Participant: p1`` while a
-    trial filter narrows the pool, ``24 trials · 2 readers · whole dataset``
-    otherwise — the Corpus Analysis pool line's counts and filter names,
-    so the two pages describe the same pool the same way.
-    """
-    counts = pool_count_text(
-        len(combos),
-        len(combos_all),
-        _n_unique_readers(combos),
-        _n_unique_readers(combos_all),
-    )
+) -> str | None:
+    """Explain an active Scanpath filter once, wherever its results are shown."""
     if not has_active_trial_filters():
-        return f"{counts} · whole dataset"
-    described = " · ".join(
+        return None
+    described = ", ".join(
         md_literal(format_filter_item(i))
         for i in active_filter_items(words_all, fixations_all)
     )
-    return f"{counts} · filtered" + (f": {described}" if described else "")
+    count = f"{len(combos):,} of {plural(len(combos_all), 'trial')}"
+    note = f"Scanpath filters include {count}."
+    return f"{note} {described}" if described else note
 
 
 def render_data_scope(text: str | None, *, key: str) -> None:
@@ -10457,6 +10380,7 @@ def render_corpus_analysis_tab(
     scale_text_to_boxes: bool = True,
     canvas_renderer: Callable[[Any], None] | None = None,
     has_raw_gaze: bool = False,
+    raw_gaze: pd.DataFrame | None = None,
     recipe_context: dict | None = None,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
@@ -10485,6 +10409,7 @@ def render_corpus_analysis_tab(
             scale_text_to_boxes=scale_text_to_boxes,
             canvas_renderer=canvas_renderer,
             has_raw_gaze=has_raw_gaze,
+            raw_gaze=raw_gaze,
         )
     finally:
         _RECIPE_CONTEXT.reset(token)
@@ -10503,6 +10428,7 @@ def _render_corpus_analysis_body(
     scale_text_to_boxes: bool,
     canvas_renderer: Callable[[Any], None] | None,
     has_raw_gaze: bool,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> None:
     """The body of :func:`render_corpus_analysis_tab`."""
     # The page shows the reading measures the dataset *brought* and computes
@@ -10545,6 +10471,7 @@ def _render_corpus_analysis_body(
         fixations_filtered,
         base_font_size,
         words=words_filtered,
+        raw_gaze=raw_gaze,
         host=st,
         # This view renders true-to-scale stimulus figures from the
         # canvas / typography settings, so it hosts that panel too — the rail
@@ -13581,16 +13508,33 @@ def _render_raw_table(
     local path. Bulk export is the supported way out, and it strips those at its
     single chokepoint (``export.strip_local_paths``).
     """
-    # Bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    shown = shareable_frame(df, table=table)
-    # Headed by the dataset's own names (``table`` says whose).
+    from streamlit.dataframe_util import convert_pandas_df_to_arrow_table
+
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
-    # A copy of a partner from the same source column is shown once — left out
-    # of `column_order` rather than dropped, so a large frame is not copied.
-    hidden = names.redundant_aliases(shown)
-    order = [c for c in shown.columns if c not in hidden]
+
+    def display_source():
+        shown = shareable_frame(df, table=table)
+        hidden = names.redundant_aliases(shown)
+        order = [c for c in shown.columns if c not in hidden]
+        # A lazy grid serves slices, but first needs the entire frame in Arrow
+        # with a physical index. Keep that conversion for the three recordings.
+        source = (
+            convert_pandas_df_to_arrow_table(shown, preserve_index=True)
+            if table
+            else shown
+        )
+        return source, order
+
+    if table:
+        source, order = frame_cache(
+            f"data_table_display_{table}",
+            (frame_fingerprint(df), tuple(sorted(names.entries.items()))),
+            display_source,
+        )
+    else:
+        source, order = display_source()
     st.dataframe(
-        shown,
+        source,
         hide_index=True,
         width="stretch",
         lazy=True,
@@ -13601,49 +13545,32 @@ def _render_raw_table(
         st.caption(caption)
 
 
-def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
-    """Render the raw fixations table, as uploaded/mapped — no computation."""
-    if fixations_filtered.empty:
-        st.caption(
-            "No fixation rows. This dataset has none, or the filters exclude them all."
-        )
-        return
-    _render_raw_table(fixations_filtered, table="fixations")
-
-
-def render_words_tab(words_filtered: pd.DataFrame) -> None:
-    """Render the raw Words table, as uploaded/mapped — no computation.
-
-    The table as given: the per-word reading measures derived from it
-    (`compute_word_metrics`'s FFD/FPRT/RPD/TFD/…) are not raw data and do not
-    belong here.
-    """
-    if words_filtered.empty:
-        st.caption(
-            "No Words table rows. This dataset has none, or the filters exclude "
-            "them all."
-        )
-        return
-    _render_raw_table(words_filtered, table="words")
-
-
-def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
-    """Render raw gaze data tab."""
-    if raw_gaze_filtered.empty:
-        st.caption(
-            "No raw gaze samples. This dataset has none, or the filters exclude "
-            "them all."
-        )
-        return
-    # The bundled demo's raw gaze is synthesized from the fixation
-    # report — a table that looks like recorded samples must say it isn't.
-    # The catalogue's flag decides it, as it does at the plot.
-    if _synthesized_raw_gaze_note(st.session_state.get("data_source_choice")):
-        st.caption(
-            f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
-            "illustration. It is not recorded eye-tracker output."
-        )
-    _render_raw_table(raw_gaze_filtered, table="raw_gaze")
+# Display order also determines the links at the top of Tables.
+_RECORDING_TABLES = {
+    "fixations": ("Fixations", "One row per fixation, with its position and duration."),
+    "words": (
+        "Words",
+        "One row per word area, with its position and any supplied reading measures.",
+    ),
+    "raw_gaze": (
+        "Raw gaze samples",
+        "One row per eye-tracker sample, including samples with missing positions.",
+    ),
+}
+_ENTITY_TABLES = {
+    "participant": (
+        "Participants",
+        "One row per participant, with counts from their recordings.",
+    ),
+    "trial": (
+        "Trials",
+        "One row per participant and trial, with counts from that reading.",
+    ),
+    "text": (
+        "Texts",
+        "One row per text. Passages are assembled from the words when available.",
+    ),
+}
 
 
 def _entity_counts(frames: list[pd.DataFrame], keys: list[str]) -> pd.DataFrame:
@@ -13693,8 +13620,14 @@ def _with_constants(
         if not candidates:
             continue
         grouped = frame.groupby(keys, dropna=True, sort=False)
-        varies = grouped[candidates].nunique(dropna=True).max() > 1
-        constant = [c for c in candidates if not varies.get(c, True)]
+        constant = []
+        for column in candidates:
+            try:
+                if grouped[column].nunique(dropna=True).max() <= 1:
+                    constant.append(column)
+            except TypeError:
+                # Nested values in an extra Parquet column have no scalar group count.
+                continue
         if not constant:
             continue
         values = strip_local_paths(grouped[constant].first().reset_index())
@@ -13713,7 +13646,11 @@ def _with_constants(
 
 @st.cache_data(show_spinner=False)
 def _ids_from_data(
-    kind: str, _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+    kind: str,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    cache_key,
+    _raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """The participants / trials / texts the loaded data names, with counts.
 
@@ -13724,18 +13661,24 @@ def _ids_from_data(
     the data's own columns that hold one value per trial or per reader
     (:func:`_with_constants`).
     """
-    frames = [_fixations, _words]
+    recordings = [_fixations, _words]
+    frames = [*recordings, _raw_gaze] if _raw_gaze is not None else recordings
     pid, tid, xid = "participant_id", "trial_id", "text_id"
+    reading_texts = metadata_readings(_words, _fixations, _raw_gaze).dropna(
+        subset=[xid]
+    )
     if kind == "participant":
         out = _entity_counts(frames, [pid])
         if out.empty:
             return out
         trials = _entity_counts(frames, [pid, tid])
         out = _count_by(out, trials, [pid], "# Trials", lambda g: g.size())
-        texts = _entity_counts(frames, [pid, xid])
+        texts = reading_texts[[pid, xid]].drop_duplicates()
         out = _count_by(out, texts, [pid], "# Texts", lambda g: g.size())
         out = _count_by(out, _fixations, [pid], "# Fixations", lambda g: g.size())
-        out = _with_constants(out, frames, [pid])
+        if _raw_gaze is not None:
+            out = _count_by(out, _raw_gaze, [pid], "# Gaze samples", lambda g: g.size())
+        out = _with_constants(out, recordings, [pid])
         return out.sort_values(pid, ignore_index=True).rename(
             columns={pid: "Participant ID"}
         )
@@ -13743,7 +13686,7 @@ def _ids_from_data(
         out = _entity_counts(frames, [pid, tid])
         if out.empty:
             return out
-        texts = _entity_counts(frames, [pid, tid, xid])
+        texts = reading_texts
         if not texts.empty:
             texts = (
                 texts.astype({xid: "string"})
@@ -13755,17 +13698,26 @@ def _ids_from_data(
         out = _count_by(out, _fixations, [pid, tid], "# Fixations", lambda g: g.size())
         if "word_id" in _words.columns:
             out = _count_by(out, _words, [pid, tid], "# Words", lambda g: g.size())
-        out = _with_constants(out, frames, [pid, tid])
+        if _raw_gaze is not None:
+            out = _count_by(
+                out, _raw_gaze, [pid, tid], "# Gaze samples", lambda g: g.size()
+            )
+        out = _with_constants(out, recordings, [pid, tid])
         return out.sort_values([pid, tid], ignore_index=True).rename(
             columns={pid: "Participant ID", tid: "Trial ID", xid: "Text ID"}
         )
-    # Texts: the passage table the derived Stimuli tab builds, plus readers.
-    out = _build_stimuli_table_cached(_words, frame_fingerprint(_words))
-    if out.empty:
-        out = _entity_counts(frames, [xid]).rename(columns={xid: "Text ID"})
+    # A text can have recorded gaze or fixations without a Words table.
+    out = reading_texts[[xid]].drop_duplicates().rename(columns={xid: "Text ID"})
     if out.empty:
         return out
-    readers = _entity_counts(frames, [xid, pid]).rename(columns={xid: "Text ID"})
+    passages = _build_stimuli_table_cached(
+        _words, cache_key, _reading_texts=reading_texts
+    )
+    if not passages.empty:
+        out = out.merge(passages, on="Text ID", how="left")
+    readers = (
+        reading_texts[[xid, pid]].drop_duplicates().rename(columns={xid: "Text ID"})
+    )
     out = _count_by(out, readers, ["Text ID"], "# Participants", lambda g: g.size())
     if "# Participants" in out.columns:
         first = ["Text ID", "# Participants"]
@@ -13773,69 +13725,50 @@ def _ids_from_data(
     return out
 
 
-#: How the attach screen is named in the fallback caption.
-_ATTACH_HINT = (
-    "Attach a {grain} table (one row per {unit}) under ✏️ **Edit dataset → "
-    "Data tables & column mapping → Metadata** to add your own columns."
-)
-
-
 def _render_raw_metadata_tab(
-    label: str,
-    attached,
-    id_note: str,
-    *,
-    kind: str,
-    unit: str,
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    scope: str | None = None,
+    kind, attached, words, fixations, raw_gaze, *, filtered: bool
 ) -> None:
-    """One of the Participants/Trials/Texts sub-tabs — always present,
-    even when nothing is attached, so the Raw Data section is always the same
-    six tables rather than some appearing only once uploaded.
-
-    Without an attached table it lists the ids the fixation and AOI rows
-    carry, with counts (:func:`_ids_from_data`) — the dataset has readers,
-    trials and texts whether or not a separate table describes them.
-    """
-    if attached is None or attached.frame.empty:
-        derived = _ids_from_data(
+    """Show the supplied metadata file, or summarize the IDs in the recordings."""
+    label, description = _ENTITY_TABLES[kind]
+    if attached is not None and not attached.frame.empty:
+        note = f"From **{md_literal(attached.source_name)}**. One row per {kind}."
+        if filtered:
+            note += " This file includes all rows, regardless of the Scanpath filters."
+        st.caption(note)
+        _render_raw_table(attached.frame)
+        return
+    derived = _ids_from_data(
+        kind,
+        words,
+        fixations,
+        _raw_gaze=raw_gaze,
+        cache_key=(
             kind,
-            words,
-            fixations,
-            cache_key=(kind, frame_fingerprint(words), frame_fingerprint(fixations)),
-        )
-        if derived.empty:
-            st.caption(f"No {label.lower()} found in the data.")
-            return
-        render_data_scope(scope, key=f"data_scope_{kind}_ids")
+            *(frame_fingerprint(frame) for frame in (words, fixations, raw_gaze)),
+        ),
+    )
+    if derived.empty:
         st.caption(
-            f"{len(derived):,} {kind if len(derived) == 1 else label.lower()}, "
-            "as named in the fixation and Words tables"
-            + (
-                f", with every column that holds one value per {unit}"
-                if kind != "text"
-                else ""
-            )
-            + ". "
-            + _ATTACH_HINT.format(grain=kind, unit=unit)
-        )
-        # A canonical column carried along is headed by the user's name.
-        names = active_column_names(st.session_state, "fixations")
-        st.dataframe(
-            derived,
-            hide_index=True,
-            width="stretch",
-            column_config=column_label_config(derived.columns, names),
+            f"No {label.lower()} in the selected trials."
+            if filtered
+            else f"No {label.lower()} found."
         )
         return
-    st.caption(f"From **{attached.source_name}**, joined on {id_note}.")
-    _render_raw_table(attached.frame)
+    st.caption(description)
+    names = active_column_names(st.session_state, "fixations")
+    st.dataframe(
+        derived,
+        hide_index=True,
+        width="stretch",
+        lazy=True,
+        column_config=column_label_config(derived.columns, names),
+    )
 
 
 @st.cache_data(show_spinner="Building stimuli list…", show_time=True)
-def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame:
+def _build_stimuli_table_cached(
+    _words: pd.DataFrame, cache_key, *, _reading_texts: pd.DataFrame | None = None
+) -> pd.DataFrame:
     """One row per Text ID, with the stimulus text reconstructed from its words.
 
     The word table carries one row per word per text (and, for per-participant
@@ -13872,7 +13805,22 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
         )
         if c in _words.columns
     ]
-    sub = _words[cols].copy()
+    if _reading_texts is None:
+        sub = _words[cols].copy()
+    else:
+        # A text table uses the same identity as its participant and trial counts.
+        # A default copied from the trial ID may be superseded by another table.
+        identity = ["participant_id", "trial_id"]
+        recorded = _metadata_mod.unambiguous_readings(_reading_texts).rename(
+            columns={"text_id": "_recorded_text"}
+        )
+        sub = (
+            _words[[*identity, *cols]]
+            .astype(dict.fromkeys(identity, "str"))
+            .merge(recorded, on=identity, how="left", validate="many_to_one")
+        )
+        own = sub.get("unique_text_id", sub["text_id"]).fillna(sub["text_id"])
+        sub["text_id"] = sub.pop("_recorded_text").fillna(own)
     sub = sub.dropna(subset=["text_id"])
     if sub.empty:
         return empty
@@ -13996,73 +13944,58 @@ def _render_data_provenance() -> None:
             )
 
 
-#: The six tables a dataset can upload, in the fixed order they are always
-#: shown in (:func:`_fill_raw_data_tabs` draws them). A module constant because
-#: :func:`render_data_inspection_tab` prepends its own 📊 Stats tab and builds
-#: the whole bar in one `st.tabs` call.
-RAW_DATA_TAB_LABELS = [
-    "Fixations",
-    "Words (interest areas)",
-    "Raw gaze",
-    "Participants",
-    "Trials",
-    "Texts",
-]
-
-
-def _fill_raw_data_tabs(
-    tabs,
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
-    raw_gaze_filtered: pd.DataFrame,
+def render_data_tables(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame,
     *,
-    scope: str | None = None,
+    scope: str | None,
+    whole_dataset: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
-    """Draw the six raw-data tables into six already-created tab containers.
-
-    The Data page puts them on *one* bar with its 📊 Stats tab rather than
-    nesting a second `st.tabs` inside a tab. ``scope`` heads the three
-    tables the trial filters narrow; the metadata tables are whole.
-    """
-    from scanpath_studio import metadata as md
-
-    with tabs[0]:
-        render_data_scope(scope, key="data_scope_fixations")
-        render_fixations_tab(fixations_filtered)
-    with tabs[1]:
-        render_data_scope(scope, key="data_scope_words")
-        render_words_tab(words_filtered)
-    with tabs[2]:
-        render_data_scope(scope, key="data_scope_raw_gaze")
-        render_raw_gaze_tab(raw_gaze_filtered)
-    data = {"words": words_filtered, "fixations": fixations_filtered, "scope": scope}
-    with tabs[3]:
-        _render_raw_metadata_tab(
-            "Participants",
-            _metadata_mod.active(),
-            "the participant id",
-            kind="participant",
-            unit="participant",
-            **data,
-        )
-    with tabs[4]:
-        _render_raw_metadata_tab(
-            "Trials",
-            md.active_trials(),
-            "the trial id",
-            kind="trial",
-            unit="trial",
-            **data,
-        )
-    with tabs[5]:
-        _render_raw_metadata_tab(
-            "Texts",
-            md.active_texts(),
-            "the text id",
-            kind="text",
-            unit="text",
-            **data,
-        )
+    """Show all six tables together with direct links to their headings."""
+    links = [
+        f"[{label}](#data-table-{key})"
+        for key, (label, _) in (*_RECORDING_TABLES.items(), *_ENTITY_TABLES.items())
+    ]
+    with st.container(key="data_table_links"):
+        st.markdown("  ·  ".join(links))
+    render_data_scope(scope, key="data_scope_tables")
+    all_words, all_fixations, all_gaze = whole_dataset
+    recordings = {
+        "fixations": (fixations, all_fixations),
+        "words": (words, all_words),
+        "raw_gaze": (raw_gaze, all_gaze),
+    }
+    for key, (label, description) in _RECORDING_TABLES.items():
+        frame, whole = recordings[key]
+        with st.container(key=f"data_table_{key}"):
+            st.subheader(label, anchor=f"data-table-{key}")
+            if frame.empty:
+                if whole.empty:
+                    forget_frame_cache(f"data_table_display_{key}")
+                st.caption(
+                    "No rows match the Scanpath filters."
+                    if not whole.empty
+                    else "This dataset has no rows in this table."
+                )
+                continue
+            st.caption(description)
+            _render_raw_table(frame, table=key)
+    attachments = (
+        _metadata_mod.active(),
+        _metadata_mod.active_trials(),
+        _metadata_mod.active_texts(),
+    )
+    for (key, (label, _)), attached in zip(
+        _ENTITY_TABLES.items(), attachments, strict=True
+    ):
+        with st.container(key=f"data_table_{key}"):
+            st.subheader(label, anchor=f"data-table-{key}")
+            _render_raw_metadata_tab(
+                key, attached, words, fixations, raw_gaze, filtered=bool(scope)
+            )
+    if derived_analysis_tables_enabled():
+        _render_derived_tables(words, fixations, raw_gaze)
 
 
 # -----------------------------------------------------------------------------
@@ -14077,68 +14010,36 @@ def _dataset_statistics(
     _raw_gaze: pd.DataFrame,
     cache_key,
 ) -> dict:
-    """Compute the Data Inspection tab's summary aggregates.
-
-    Pure function of the (filtered) frames, cached on a cheap fingerprint so the
-    full-corpus ``groupby``/``unique``/``mean`` scans don't re-run on every rerun
-    (e.g. when the user merely selects a different trial)."""
-    participant_ids = set(_words["participant_id"].unique()) | set(
-        _fixations["participant_id"].unique()
-    )
-    # A trial is a **(participant, trial_id) pair**, matching both the
-    # trial picker and the dataset table beside this. Counting distinct trial
-    # ids instead would say "12 trials" for all 900 of PoTeC's, because that corpus
-    # names its trials after the text and every reader reads all twelve.
-    trial_ids = trial_keys(_words) | trial_keys(_fixations)
-    if "participant_id" in _raw_gaze.columns:
-        participant_ids |= set(_raw_gaze["participant_id"].unique())
-        trial_ids |= trial_keys(_raw_gaze)
-    # Texts from every table that names one, not the words alone.
-    texts = text_ids(_words, _fixations, _raw_gaze)
-
-    trial_source = _fixations if not _fixations.empty else _words
-    trials_per_participant = (
-        trial_source.groupby("participant_id")["trial_id"].nunique()
-        if not trial_source.empty
-        else pd.Series(dtype=float)
-    )
-    fixations_per_trial = (
-        _fixations.groupby(["participant_id", "trial_id"]).size()
-        if not _fixations.empty
-        else pd.Series(dtype=float)
-    )
-    words_per_trial = (
-        _words.groupby(["participant_id", "trial_id"]).size()
-        if not _words.empty
-        else pd.Series(dtype=float)
-    )
-    stats_df = pd.DataFrame(
-        [
-            {
-                "Metric": "Trials per participant",
-                **safe_summary(trials_per_participant),
-            },
-            {"Metric": "Fixations per trial", **safe_summary(fixations_per_trial)},
-            {"Metric": "Words per trial", **safe_summary(words_per_trial)},
-        ]
-    ).rename(
-        columns={
-            "mean": "Mean",
-            "std": "Std",
-            "min": "Min",
-            "median": "Median",
-            "max": "Max",
-        }
-    )
-
+    """Compute counts and averages for the same filtered set of readings."""
+    frames = {"fixations": _fixations, "words": _words, "raw_gaze": _raw_gaze}
+    keys = {table: trial_keys(frame) for table, frame in frames.items()}
+    trials = set.union(*keys.values())
+    per_reader = pd.Series(Counter(pid for pid, _ in trials), dtype=int)
+    spread = []
+    if trials:
+        spread.append({"Metric": "Trials per participant", **safe_summary(per_reader)})
+    for table, label in (
+        ("fixations", "Fixations per trial"),
+        ("words", "Words per trial"),
+        ("raw_gaze", "Gaze samples per trial"),
+    ):
+        if not keys[table] or (table == "raw_gaze" and keys["fixations"]):
+            continue
+        # Average among trials with this table. The coverage column shows that denominator.
+        counts = frames[table].groupby(["participant_id", "trial_id"]).size()
+        spread.append({"Metric": label, **safe_summary(counts)})
+    parts, screen_error = _screen_catalog_status(_words, _fixations, _raw_gaze)
     return {
-        "n_participants": len(participant_ids),
-        "n_texts": len(texts),
-        "n_trials": len(trial_ids),
-        "n_fixations": len(_fixations),
-        "n_words": len(_words),
-        "n_gaze": len(_raw_gaze),
-        "stats_df": stats_df,
+        "parts": parts,
+        "screen_error": screen_error,
+        "n_participants": len(per_reader),
+        "n_trials": len(trials),
+        "n_texts": len(text_ids(_words, _fixations, _raw_gaze)),
+        "recordings": {k: (len(frame), len(keys[k])) for k, frame in frames.items()},
+        "fixations_without_words": len(keys["fixations"] - keys["words"]),
+        "stats_df": pd.DataFrame(spread).rename(
+            columns={"mean": "Mean", "std": "Std", "min": "Min", "max": "Max"}
+        ),
     }
 
 
@@ -14171,14 +14072,7 @@ _FIX_MAPPING_LABELS = {
     "text_id": "Text ID",
     "word_id": "Word ID",
 }
-_RAW_GAZE_MAPPING_LABELS = {
-    "participant": "Participant ID",
-    "trial": "Trial ID",
-    "x": "X coordinate",
-    "y": "Y coordinate",
-    "timestamp": "Timestamp (ms)",
-    "text": "Word text",
-}
+_RAW_GAZE_MAPPING_LABELS = {spec["key"]: spec["label"] for spec in RAW_GAZE_FIELD_SPECS}
 _MAPPING_TABLES = [
     ("Words (interest areas)", "words", _WORD_MAPPING_LABELS),
     ("Fixations", "fixations", _FIX_MAPPING_LABELS),
@@ -14271,6 +14165,20 @@ _RAW_GAZE_REMAP_CANON = {
     "y": "y",
     "timestamp": "timestamp_ms",
     "text": "text",
+    **{
+        key: key
+        for key in (
+            "text_id",
+            "word_id",
+            "screen_id",
+            "screen_index",
+            "canvas_width",
+            "canvas_height",
+            "pupil_area",
+            "pupil_diameter",
+            "eye",
+        )
+    },
 }
 # (table_key, label, field_specs, canonical-map) for the editable remap form.
 _REMAP_TABLES = [
@@ -16539,12 +16447,8 @@ def _c_derived_tables(
     """The seven derived tables (stimuli, sentences, saccades, trial summary,
     participant summary, characters, cleaning report), built once per dataset.
 
-    They sit in tabs, and Streamlit renders every tab's body on every run —
-    only the *display* is client-side — so uncached they would be rebuilt on
-    every Data page rerun, whether or not the user ever opened them. Nothing
-    here depends on any viz setting, so it is keyed on the three
-    frame fingerprints plus the one scalar that does matter (pixels-per-degree,
-    from the experimental setup).
+    Reopening the derived tables reuses their results while the three frames
+    and the recording setup's pixels-per-degree value agree.
     """
     from scanpath_studio.measures import assign_fixations_to_words, enrich_fixations
     from scanpath_studio.preprocessing import (
@@ -16624,218 +16528,93 @@ def _spread_help(row: dict) -> str | None:
         pieces.append(f"± {std} SD")
     if low != high and "—" not in (low, high):
         pieces.append(f"range {low}–{high}")
-    spread = " · ".join(pieces) if pieces else "The same for every row"
-    return f"{spread}. Computed after the current filters."
+    spread = " · ".join(pieces) if pieces else "Same count in each group"
+    grouping = {
+        "Trials per participant": "Includes participants with a selected trial.",
+        "Fixations per trial": "Includes trials with fixation rows.",
+        "Words per trial": "Includes trials with word rows.",
+        "Gaze samples per trial": "Includes trials with gaze samples.",
+    }
+    return f"{spread}. {grouping[row['Metric']]}"
 
 
 def _render_spread_cards(spread: pd.DataFrame) -> None:
-    """The per-metric spread, as metrics beside the counts they explain.
-
-    Each metric is an ``st.metric``, the same widget as the headline counts
-    directly above, so the two rows read as one block, with the mean — the
-    number anyone actually reads first ("how long is a trial in this
-    corpus?") — on its face; the standard deviation and the range are on the
-    metric's own ❔.
-    """
     if spread is None or spread.empty:
         return
-    rows = spread.to_dict("records")
-    for row, cell in zip(rows, st.columns(len(rows), gap="small")):
-        cell.metric(
-            str(row.get("Metric", "")),
-            _format_spread_mean(row.get("Mean")),
-            help=_spread_help(row),
-        )
-
-
-def _render_dataset_stats_tab(
-    stats: dict,
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
-    *,
-    scope: str | None = None,
-) -> None:
-    """The 📊 Stats tab: every number "what's in this dataset" has to offer.
-
-    The headline counts and the per-metric spread are the same question at two
-    grains — how much is there, and how it is distributed across readers and
-    trials — so they read as one tab.
-
-    No median: mean + std + min + max already say what the row is for (is this
-    reader-balanced? is there a one-fixation trial?) — see
-    `_render_spread_cards`.
-    """
-    # These counts follow the trial filters while the table above and
-    # *Available with this dataset* count the whole dataset — say which.
-    render_data_scope(scope, key="data_scope_stats")
-    # Icons so the six counts are scannable rather than a row of
-    # equally-weighted numbers — one glyph per *kind* of thing being counted.
-    parts = part_catalog(words_filtered, fixations_filtered)
-    top_cols = st.columns(7)
-    top_cols[0].metric(
-        "Participants", f"{stats['n_participants']:,}", icon=ICONS["participants"]
-    )
-    top_cols[1].metric("Texts", f"{stats['n_texts']:,}", icon=ICONS["texts"])
-    top_cols[2].metric("Trials", f"{stats['n_trials']:,}", icon=ICONS["trials"])
-    top_cols[3].metric(
-        "Fixations", f"{stats['n_fixations']:,}", icon=ICONS["fixations"]
-    )
-    top_cols[4].metric("Word rows", f"{stats['n_words']:,}", icon=ICONS["words"])
-    # No `help=` — "Gaze points" says what it counts, and a ❔ beside it
-    # alone on the row would read as though that count meant something
-    # different from its five neighbours.
-    top_cols[5].metric(
-        "Gaze points",
-        f"{stats['n_gaze']:,}" if stats["n_gaze"] else "0",
-        icon=ICONS["gaze_points"],
-    )
-    # Always shown — the dataset table has no Screens column, so this is
-    # where the count lives. A dataset without multipart
-    # screens has exactly one per trial, which is what it says.
-    top_cols[6].metric(
-        "Screens",
-        f"{len(parts):,}" if not parts.empty else "1 per trial",
-        icon=ICONS["screens"],
-        help=None
-        if not parts.empty
-        else "Every trial is a single screen; this dataset has no screen ids.",
-    )
-
-    # The spread behind those totals, right under them.
-    _render_spread_cards(stats["stats_df"])
-
-    if not parts.empty:
-        with st.expander("Multipart trial screens", expanded=False):
-            st.caption(
-                "One row per screen of each trial, with that screen's size. "
-                "Analysis and export keep each screen apart."
+    with st.container(key="data_averages"):
+        st.markdown("#### Averages")
+        grid = st.grid(3, min_column_width=135, gap="small")
+        for row in spread.to_dict("records"):
+            grid.metric(
+                row["Metric"], _format_spread_mean(row["Mean"]), help=_spread_help(row)
             )
-            st.dataframe(parts, hide_index=True, width="stretch")
-
-    # Provenance is a fact about the *dataset*, so it sits with the counts.
-    # Silent for every source but a OneStop local export.
-    _render_data_provenance()
 
 
-#: A reading measure's short label (``"TFD"``) by canonical column.
-_MEASURE_SHORT_LABELS = {
-    column: label for _k, column, label, *_ in READING_MEASURE_FIELDS
-}
+def _inspect_recording_table(table: str) -> None:
+    st.session_state["_data_table_target"] = table
+    st.session_state[DATA_INSPECTION_KEY] = "Tables"
 
 
-def dataset_capabilities(
-    words: pd.DataFrame | None,
-    fixations: pd.DataFrame | None,
-    raw_gaze: pd.DataFrame | None,
-) -> list[str]:
-    """*Available with this dataset*: four lines, one per thing a dataset may
-    or may not support.
-
-    Read off the same checks the app already makes, never a new rule: the
-    trials with fixations (what the Scanpath view draws), the reading measures
-    the Words table brought (`data.brought_reading_measures`, all Corpus
-    Analysis shows), the trials the raw gaze covers, and the multipart
-    screens (`multipart.part_catalog`, the 📊 Stats tab's Screens count).
-    """
-    words = words if words is not None else pd.DataFrame()
-    fixations = fixations if fixations is not None else pd.DataFrame()
-    raw_gaze = raw_gaze if raw_gaze is not None else pd.DataFrame()
-    fix_trials = trial_keys(fixations)
-    gaze_trials = trial_keys(raw_gaze)
-    all_trials = fix_trials | trial_keys(words) | gaze_trials
-
-    if fix_trials and not words.empty:
-        scanpath = f"over the text, for {plural(len(fix_trials), 'trial')}"
-    elif fix_trials:
-        scanpath = (
-            f"for {plural(len(fix_trials), 'trial')}, with no text: "
-            "the dataset has no Words table"
-        )
-    elif gaze_trials:
-        scanpath = (
-            "none, as the dataset has no fixations; "
-            f"raw gaze is drawn instead, for {plural(len(gaze_trials), 'trial')}"
-        )
-    else:
-        scanpath = "none, as the dataset has no fixations"
-
-    picker_labels = {m.column: m.label for m in MEASURES.values()}
-    measures = [
-        picker_labels.get(column, _MEASURE_SHORT_LABELS[column])
-        for column in brought_reading_measures(words)
-    ]
-    measure_line = (
-        f"{', '.join(measures)}, shown by Corpus Analysis"
-        if measures
-        else "none supplied, so Corpus Analysis has nothing to show"
-    )
-
-    gaze_line = (
-        f"{len(gaze_trials):,} of {plural(len(all_trials), 'trial')}"
-        if gaze_trials
-        else "none"
-    )
-
-    try:
-        parts = part_catalog(words, fixations)
-    except ValueError:
-        parts = pd.DataFrame()
-    if parts.empty:
-        screen_line = "one per trial"
-    else:
-        n_parents = len(parts[["participant_id", "trial_id"]].drop_duplicates())
-        screen_line = (
-            f"{plural(len(parts), 'screen')} across {plural(n_parents, 'trial')}"
-        )
-
-    return [
-        f"{ICONS['view_scanpath']} **Scanpaths:** {scanpath}",
-        f"{ICONS['view_corpus']} **Reading measures:** {measure_line}",
-        f"{ICONS['raw_gaze']} **Raw gaze:** {gaze_line}",
-        f"{ICONS['screens']} **Screens:** {screen_line}",
-    ]
-
-
-@st.cache_data(show_spinner=False)
-def _c_dataset_capabilities(_words, _fixations, _raw_gaze, key) -> list[str]:
-    """`dataset_capabilities`, keyed on the three frames' fingerprints.
-
-    The Data page draws it on every rerun, and on a corpus it scans every
-    trial key of the raw gaze samples.
-    """
-    return dataset_capabilities(_words, _fixations, _raw_gaze)
-
-
-def render_dataset_capabilities(
-    words: pd.DataFrame | None,
-    fixations: pd.DataFrame | None,
-    raw_gaze: pd.DataFrame | None,
+def render_dataset_summary(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame,
     *,
-    filtered: bool = False,
+    scope: str | None,
 ) -> None:
-    """*Available with this dataset* under the *What's in…* heading.
-
-    A handful of lines for the whole dataset, before any trial filter: the
-    numbers are in 📊 Stats below, and how to change what is available is
-    ✏️ Edit dataset on the heading's line. While a trial filter narrows 📊
-    Stats, the title says these lines do not follow it.
-    """
-    lines = _c_dataset_capabilities(
+    """Overview of the selected trials, their typical size and their source tables."""
+    stats = _dataset_statistics(
         words,
         fixations,
         raw_gaze,
-        (
-            frame_fingerprint(words),
-            frame_fingerprint(fixations),
-            frame_fingerprint(raw_gaze),
+        cache_key=tuple(
+            frame_fingerprint(frame) for frame in (words, fixations, raw_gaze)
         ),
     )
-    with st.container(key="dataset_capabilities"):
-        st.caption(
-            "**Available with this dataset**"
-            + (" · whole dataset, before the trial filters" if filtered else "")
-        )
-        st.caption("  \n".join(lines))
+    render_data_scope(scope, key="data_scope_stats")
+    with st.container(key="data_totals"):
+        size = st.grid(3, min_column_width=100, gap="small")
+        for label, field, icon in (
+            ("Participants", "n_participants", "participants"),
+            ("Trials", "n_trials", "trials"),
+            ("Texts", "n_texts", "texts"),
+        ):
+            size.metric(label, f"{stats[field]:,}", icon=ICONS[icon], border=True)
+    _render_spread_cards(stats["stats_df"])
+    with st.container(key="data_recording_tables"):
+        st.markdown("#### Eye-tracking data")
+        with st.container(key="data_recording_header"):
+            st.markdown("**Table** :gray[Rows] :gray[Trials with data]")
+        for table, (label, _) in _RECORDING_TABLES.items():
+            rows, covered = stats["recordings"][table]
+            coverage = (
+                f"{covered:,} of {stats['n_trials']:,}" if stats["n_trials"] else "—"
+            )
+            st.button(
+                f"**{label}** :gray[{rows:,}] :gray[{coverage}]",
+                type="tertiary",
+                width="stretch",
+                key=f"data_inspect_{table}",
+                on_click=_inspect_recording_table,
+                args=(table,),
+                help=f"Open the {label} table",
+            )
+        missing = stats["fixations_without_words"]
+        if missing and stats["recordings"]["words"][1]:
+            st.caption(f"{plural(missing, 'trial')} with fixations but no word rows.")
+        measures = brought_reading_measures(words)
+        if measures:
+            labels = {column: label for _, column, label, *_ in READING_MEASURE_FIELDS}
+            labels.update((m.column, m.label) for m in MEASURES.values())
+            with st.expander(f"Reading measures in the Words table ({len(measures)})"):
+                st.markdown("\n".join(f"- {labels[column]}" for column in measures))
+    if stats["screen_error"]:
+        st.warning(stats["screen_error"])
+    elif not stats["parts"].empty:
+        with st.expander(f"Trial screens ({len(stats['parts']):,})"):
+            st.caption("One row per screen within a participant’s trial.")
+            st.dataframe(stats["parts"], hide_index=True, width="stretch")
+    _render_data_provenance()
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -16901,8 +16680,6 @@ def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
     lines = serious_health_lines(findings)
     if not lines:
         return
-    from scanpath_studio.url_state import _go_data
-
     box = host.container(key="data_health_notice")
     box.warning(
         "Data checks found problems that may affect this figure.  \n"
@@ -16912,11 +16689,85 @@ def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
         "remove the dataset and add its files again.",
         icon=ICONS["warning"],
     )
+    from scanpath_studio.app import open_dataset_panel
+
     box.button(
         "Open Data checks",
         icon=ICONS["view_data"],
         key="data_health_notice_open",
-        on_click=_go_data,
+        on_click=open_dataset_panel,
+        args=("Data checks",),
+    )
+
+
+def _attach_run_sheet(dataset: str, widget: str) -> None:
+    file = st.session_state.get(widget)
+    if file is None:
+        return
+    try:
+        expected = pd.read_csv(
+            io.BytesIO(file.getvalue()),
+            dtype=str,
+            keep_default_na=False,
+            encoding="utf-8-sig",
+        )
+    except (UnicodeError, ValueError) as exc:
+        expected = str(exc)
+    st.session_state.setdefault(DATA_RUN_SHEETS_KEY, {})[dataset] = (
+        file.name,
+        expected,
+    )
+
+
+def _render_run_sheet(sheet, dataset: str, frames: dict) -> None:
+    from .study_checks import reconcile_run_sheet
+
+    sheets = st.session_state.setdefault(DATA_RUN_SHEETS_KEY, {})
+    if dataset not in sheets:
+        sheet.markdown(
+            "Compare the trials you planned with the ones in this dataset to find missing or unexpected recordings."
+        )
+        sheet.caption(
+            "Upload a CSV with one row per planned trial and these two column names."
+        )
+        sheet.code("participant_id,trial_id\nP01,T01\nP01,T02", language="csv")
+        widget = f"expected_readings_{dataset}"
+        sheet.file_uploader(
+            "Planned trials (CSV)",
+            type=["csv"],
+            key=widget,
+            max_upload_size=upload_limit_mb(),
+            help="For individual screens, add `screen_id`. For trials you planned to omit, add a reason in `planned_omission`.",
+            on_change=_attach_run_sheet,
+            args=(dataset, widget),
+        )
+        return
+    name, expected = sheets[dataset]
+    row = sheet.container(horizontal=True, vertical_alignment="center")
+    row.markdown(md_literal(name), width="stretch")
+    row.button(
+        "Remove run sheet", key="remove_run_sheet", on_click=sheets.pop, args=(dataset,)
+    )
+    if isinstance(expected, str):
+        sheet.error(f"Couldn’t read this CSV. {expected}")
+        return
+    try:
+        report = reconcile_run_sheet(expected, frames)
+    except ValueError as exc:
+        sheet.error(str(exc))
+        return
+    counts = report["status"].value_counts()
+    if not counts.empty:
+        sheet.caption(
+            " · ".join(f"{label} ({count:,})" for label, count in counts.items())
+        )
+    sheet.dataframe(report, hide_index=True)
+    sheet.download_button(
+        "Download comparison (CSV)",
+        data=report.to_csv(index=False),
+        file_name="run_sheet_reconciliation.csv",
+        mime="text/csv",
+        on_click="ignore",
     )
 
 
@@ -16926,8 +16777,9 @@ def render_data_health(
     raw_gaze: pd.DataFrame | None,
     *,
     filtered: bool = False,
+    dataset: str = "",
 ) -> None:
-    """*Data checks* under *Available with this dataset*: values that parsed but
+    """Checks on the current dataset for values that parsed but
     cannot be right — a fixation of 0 ms or less, a duration, onset or position
     that is not a finite number, a word box with no area, a per-screen screen
     size that cannot be used (`data_health`).
@@ -16938,55 +16790,45 @@ def render_data_health(
     the app does with them. Nothing is removed or changed.
     """
     from .column_names import active
+    from .data_health import applicable_checks
 
+    frames = {"words": words, "fixations": fixations, "raw_gaze": raw_gaze}
+    checked = list(dict.fromkeys(c.topic for c in applicable_checks(frames)))
     findings = _dataset_health_findings(words, fixations, raw_gaze)
     with st.container(key="dataset_health"):
+        results = st.container()
         sheet = st.expander(
-            "Compare with the experiment run sheet",
+            "Compare with planned trials (optional)",
             key="data_run_sheet",
             on_change="rerun",
         )
         if sheet.open:
-            from .study_checks import reconcile_run_sheet
-
-            sheet.caption(
-                "Upload a CSV with participant_id and trial_id. Add screen_id for individual screens and a planned_omission reason for readings you intended to omit."
+            _render_run_sheet(
+                sheet,
+                dataset,
+                frames,
             )
-            run_sheet = sheet.file_uploader(
-                "Expected readings (CSV)",
-                type=["csv"],
-                key="expected_readings",
-                max_upload_size=upload_limit_mb(),
+    with results:
+        st.subheader("Recording quality checks", anchor=False)
+        if not checked:
+            st.info(
+                "The available tables have no recording values that these checks can test."
             )
-            if run_sheet is not None:
-                try:
-                    expected = pd.read_csv(
-                        io.BytesIO(run_sheet.getvalue()),
-                        dtype=str,
-                        keep_default_na=False,
-                        encoding="utf-8-sig",
-                    )
-                    report = reconcile_run_sheet(
-                        expected,
-                        {"words": words, "fixations": fixations, "raw_gaze": raw_gaze},
-                    )
-                except (UnicodeError, ValueError) as exc:
-                    sheet.error(str(exc))
-                else:
-                    sheet.dataframe(report, hide_index=True)
-                    sheet.download_button(
-                        "Download run sheet reconciliation",
-                        data=report.to_csv(index=False),
-                        file_name="run_sheet_reconciliation.csv",
-                        mime="text/csv",
-                        on_click="ignore",
-                    )
+            return
+        scope_note = (
+            " These checks include trials hidden by the Scanpath filters."
+            if filtered
+            else ""
+        )
         st.caption(
-            "**Data checks**"
-            + (" · whole dataset, before the trial filters" if filtered else "")
+            "Checked "
+            + (", ".join(checked[:-1]) + " and " if len(checked) > 1 else "")
+            + checked[-1]
+            + "."
+            + scope_note
         )
         if not findings:
-            st.caption("No issues found in the data checks.")
+            st.success("No issues found in the values checked.")
             return
         lines: dict[str, list[str]] = {"warning": [], "note": []}
         for finding in findings:
@@ -16997,14 +16839,16 @@ def render_data_health(
             trials = f"{finding.trials:,} trial" + ("" if finding.trials == 1 else "s")
             lines[finding.severity].append(
                 f"**{finding.title}**: {finding.rows:,} of {finding.total_rows:,} "
-                f"{noun} rows, in {trials} ({kinds}); from {columns}."
+                f"{noun} rows in {trials} ({kinds}). Columns: {columns}."
             )
         if lines["warning"]:
             st.warning("  \n".join(lines["warning"]), icon=ICONS["warning"])
         if lines["note"]:
             st.caption("  \n".join(lines["note"]))
-        with st.expander("What the data checks found", expanded=False):
-            st.caption("Flagged rows are kept. Details and examples:")
+        with st.expander("Examples and effects on the figure"):
+            st.caption(
+                "Flagged rows stay in the data. The examples show how each issue affects the figure."
+            )
             for finding in findings:
                 names = active(st.session_state, finding.table)
                 st.markdown(f"**{finding.title}**")
@@ -17018,7 +16862,9 @@ def render_data_health(
                     )
         reviewable = [f for f in findings if f.rows and f.trials]
         review = st.expander(
-            "Review affected readings", key="data_health_readings", on_change="rerun"
+            "Review affected readings",
+            key="data_health_readings",
+            on_change="rerun",
         )
         if review.open and reviewable:
             from .data_health import affected_rows
@@ -17073,84 +16919,18 @@ def render_data_health(
                 )
 
 
-def render_data_inspection_tab(
+def _render_derived_tables(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
-    *,
-    annotation_trials=None,
-    open_trials=None,
-    dataset_name: str = "",
-    scope: str | None = None,
-    annotation_trial_labels=None,
 ) -> None:
-    """Render the *What's in this dataset* section of the 🗂️ Data page.
-
-    **One tab bar**: 📊 Stats (the headline counts, the per-metric spread, the
-    multipart screen catalogue and the provenance banner) followed by the six
-    raw tables, in their fixed order — and **Annotations**: every annotation on
-    the dataset's trials (``annotation_trials``, its ``(participant, trial)``
-    pairs before any filtering), to export, import or delete. Without
-    ``annotation_trials`` the tab is left off. ``open_trials`` — the same
-    pairs after the trial filters — gives its rows an **Open** button.
-
-    The raw tables are not folded away: they *are* the section's job on the
-    page you open to check your data, and a collapsed expander over a tab bar
-    would make every table two clicks deep. A dataset is renamed on ✏️ Edit
-    dataset, not here.
-
-    Every tab body renders on every run — tab switching is client-side, so
-    no widget key is dropped.
-
-    ``scope`` is `data_scope_text`'s line, drawn over the counts and
-    tables the trial filters narrow; ``None`` leaves it off.
-    """
-    stats = _dataset_statistics(
-        words_filtered,
-        fixations_filtered,
-        raw_gaze_filtered,
-        cache_key=(
-            frame_fingerprint(words_filtered),
-            frame_fingerprint(fixations_filtered),
-            frame_fingerprint(raw_gaze_filtered),
-        ),
+    """Build the experimental tables when their disclosure is opened."""
+    panel = st.expander(
+        "Derived analysis tables", key="data_derived_tables", on_change="rerun"
     )
-
-    # One tab bar for the whole section: 📊 Stats first — open by default, and
-    # holding every number the section has to offer — then the six raw tables,
-    # each one click away.
-    labels = [f"{ICONS['stats']} Stats", *RAW_DATA_TAB_LABELS]
-    if annotation_trials is not None:
-        labels.append(f"{ICONS['annotations']} Annotations")
-    stats_tab, *raw_tabs = st.tabs(labels)
-    with stats_tab:
-        _render_dataset_stats_tab(
-            stats, words_filtered, fixations_filtered, scope=scope
-        )
-    if annotation_trials is not None:
-        *raw_tabs, annotations_tab = raw_tabs
-        with annotations_tab:
-            render_dataset_annotations(
-                annotation_trials,
-                dataset_name=dataset_name,
-                open_trials=open_trials,
-                trial_labels=annotation_trial_labels,
-            )
-    _fill_raw_data_tabs(
-        raw_tabs, words_filtered, fixations_filtered, raw_gaze_filtered, scope=scope
-    )
-
-    # The whole section — including the computation that backs it — is
-    # behind the experimental flag, like drift correction and preprocessing.
-    # Gated *before* `_c_derived_tables` is even
-    # called: that function is cached, but a cache lookup still means hashing
-    # the frames and running the reading-measure / saccade-classification /
-    # sentence/reader aggregation pipeline on a cache miss, on every Data page
-    # rerun, whether or not the (collapsed-by-default) expander is ever
-    # opened. Off, none of that runs; `preprocessing.py`'s own table
-    # builders stay directly callable.
-    if derived_analysis_tables_enabled():
-        # First-class derived tables, all exportable.
+    if not panel.open:
+        return
+    with panel:
         from scanpath_studio.experimental_setup import pixels_per_degree
 
         try:
@@ -17177,24 +16957,11 @@ def render_data_inspection_tab(
         # unaffected.
         if not preprocessing_enabled():
             derived = {k: v for k, v in derived.items() if k != "Cleaning report"}
-        with st.expander(
-            f"{ICONS['derived_tables']} Derived analysis tables: "
-            + " · ".join(derived),
-            expanded=False,
-        ):
-            for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
-                with tab:
-                    if table.empty:
-                        st.caption(
-                            f"No {label.lower()} table is available for this selection."
-                        )
-                    else:
-                        _render_raw_table(table)
-
-    # The "does one trial_id cover several readings?" check is its own
-    # Data-page section, rendered by `app.main` beside the mapping whose
-    # Trial ID it judges.
-
-    # The column mapping is its own section *above* this panel on the Data
-    # page, next to the source and its location, where the question is
-    # actually asked. `app.main` renders it.
+        for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
+            with tab:
+                if table.empty:
+                    st.caption(
+                        f"No {label.lower()} table is available for this selection."
+                    )
+                else:
+                    _render_raw_table(table)

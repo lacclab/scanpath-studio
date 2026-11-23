@@ -374,7 +374,9 @@ class TestTheBuilders:
             legend_layout=layout,
         )
         assert any(t.legend == "legend3" for t in static.data)
-        anim = sps.animate_scanpath(words, fixations, p1, t1, legend_layout=layout)
+        anim = sps.animate_scanpath(
+            words, fixations, p1, t1, duration_size_legend=True, legend_layout=layout
+        )
         assert any(s.type == "circle" and s.yanchor == 1 for s in anim.layout.shapes), (
             "the size key went to the top-left corner"
         )
@@ -733,8 +735,8 @@ def test_a_compare_legend_that_wraps_grows_its_band_instead_of_covering_the_text
     import scanpath_studio as sps
 
     words, fixations = sps.load_sample_data()
-    a = ("l37_1129", "l37_1129_2_2_1_Adv")
-    b = ("l7_1090", "l7_1090_2_2_1_Adv")
+    a = ("l37_273", "l37_273_2_2_1_Adv")
+    b = ("l7_183", "l7_183_2_2_1_Adv")
     short = sps.compare_scanpaths(words, fixations, a, b, labels=("A", "B"))
     long = sps.compare_scanpaths(
         words,

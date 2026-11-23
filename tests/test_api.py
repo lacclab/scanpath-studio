@@ -201,7 +201,10 @@ def test_words_schema_rejects_a_column_the_table_does_not_have():
     assert "Words schema maps 1 column name the words table doesn't have" in message
     assert "word_schema['trial'] = 'TRIAL_LABEL': no such column" in message
     assert "closest: 'IA_LABEL'" in message
-    assert "Columns present in the words table (60): participant_id" in message
+    assert (
+        f"Columns present in the words table ({len(words_raw.columns)}): participant_id"
+        in message
+    )
     assert "api.propose_schema(table, 'words')" in message
 
 
@@ -228,7 +231,7 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     words, _fixations = sps.load_scanpath_data(
         words=words_raw, fixations=fix_raw, word_schema=schema, names="canonical"
     )
-    # The demo's reader ids hold a `_` ("l37_1129"), escaped inside the
+    # The demo's reader ids hold a `_` ("l37_273"), escaped inside the
     # composite so it cannot be mistaken for the separator (`data.compose_id`).
     first = str(words_raw["participant_id"].iloc[0])
     assert words["trial_id"].iloc[0].startswith(first.replace("_", "\\_") + "_")
@@ -1041,7 +1044,7 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # An option naming a column that isn't there raises
 # ---------------------------------------------------------------------------
-_DEMO_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele")
+_DEMO_TRIAL = ("l37_273", "l37_273_2_1_1_Ele")
 
 
 @pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
@@ -1067,7 +1070,7 @@ def test_a_comparison_checks_the_column_across_both_readings():
             words,
             fixations,
             _DEMO_TRIAL,
-            ("l7_1090", "l7_1090_2_1_1_Ele"),
+            ("l7_183", "l7_183_2_1_1_Ele"),
             color_by="nosuch",
         )
 
@@ -1132,7 +1135,7 @@ def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
     """With no Chrome, Kaleido fails on the first layer — and the folder the
     call had just created must not stay behind, empty."""
     words, fixations = api.load_sample_data(names="canonical")
-    fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
+    fig = api.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
 
     def no_chrome(*_args, **_kwargs):
         raise RuntimeError("Static .png export failed: no Chrome")

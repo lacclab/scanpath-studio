@@ -1,6 +1,6 @@
 """Is there a newer Scanpath Studio than this build?
 
-Asked only when someone clicks *Check for updates* (Help → About), runs
+Asked only when someone clicks *Check for updates* (Help → About & citation), runs
 ``scanpath-studio version --check`` or calls ``api.check_for_updates`` — never
 on its own. One source serves every
 install: GitHub's latest release, which leaves out drafts and pre-releases and

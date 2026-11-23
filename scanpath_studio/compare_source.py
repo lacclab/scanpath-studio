@@ -26,7 +26,7 @@ import pandas as pd
 import streamlit as st
 
 from . import progress
-from .column_names import ColumnNames
+from .column_names import ColumnNames, from_schema
 from .constants import (
     DEMO_CHOICE,
     ONESTOP_PUBLIC_DEFAULT_DIR,
@@ -34,7 +34,12 @@ from .constants import (
     SYNTHETIC_CHOICE,
     onestop_regime_for_choice,
 )
-from .data import adopt_source, stamp_source, vouch_for_frames
+from .data import (
+    adopt_source,
+    normalized_sample_raw_gaze,
+    stamp_source,
+    vouch_for_frames,
+)
 from .experimental_setup import Provenance, SetupSnapshot
 from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
@@ -282,7 +287,7 @@ def _builtin_column_names(name: str) -> dict[str, dict]:
     """The demo's / synthetic trial's own column names, for a B drawn
     from them — read from the same raw frames and auto-detected schemas
     `_load_builtin_frames` normalizes, as payloads — with the columns that
-    load rewrites marked (the demo's word ids are shifted onto its boxes)."""
+    load rewrites marked."""
     from scanpath_studio.column_names import for_tables
     from scanpath_studio.data import (
         harmonize_frames_reporting,
@@ -324,14 +329,6 @@ def source_has_raw_gaze(name: str | None) -> bool:
         raw = stored.get("raw_gaze")
         return raw is not None and not raw.empty
     return name == DEMO_CHOICE
-
-
-@st.cache_data(show_spinner=False)
-def _load_demo_raw_gaze() -> pd.DataFrame:
-    """The bundled demo's normalized raw gaze, for a demo B."""
-    from scanpath_studio import api
-
-    return api.load_sample_raw_gaze(names="canonical")
 
 
 def snapshot_for(
@@ -421,7 +418,9 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
                 for table, payload in _builtin_column_names(name).items()
             }
             if name == DEMO_CHOICE:
-                raw_gaze = _load_demo_raw_gaze()
+                raw_gaze, schema, columns = normalized_sample_raw_gaze()
+                if schema:
+                    column_names["raw_gaze"] = from_schema("raw_gaze", schema, columns)
         else:
             return None
         composite = ()

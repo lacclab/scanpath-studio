@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .constants import DRAWABLE_PX_LIMIT, SAMPLE_INDEX
 from .data import assign_derived, synthesized_onset_mask
 
 # This axis is computed on a complete reading, before selecting a screen or window.
@@ -12,6 +13,13 @@ ELAPSED = "@elapsed_seconds"
 ELAPSED_LABEL = "Seconds since first fixation onset"
 POSITION_FIELDS = ("x", "y")
 CLOCK_FIELDS = ("timestamp_ms", ELAPSED)
+SAMPLE_FIELDS = (
+    *POSITION_FIELDS,
+    "timestamp_ms",
+    SAMPLE_INDEX,
+    "pupil_area",
+    "pupil_diameter",
+)
 
 
 _ORIGIN = "_sps_first_recorded_onset_ms"
@@ -50,26 +58,39 @@ def position_chart(fields: tuple[str, str], along: str) -> bool:
 def raw_axes_available(fields: tuple[str, str], raw: pd.DataFrame | None) -> bool:
     if raw is None or raw.empty:
         return False
-    allowed = {*POSITION_FIELDS, *CLOCK_FIELDS}
+    allowed = {*SAMPLE_FIELDS, ELAPSED}
     return all(
         field in allowed and ("timestamp_ms" if field == ELAPSED else field) in raw
         for field in fields
     )
 
 
-def drawable_raw_samples(fields: tuple[str, str], raw: pd.DataFrame | None) -> bool:
-    """Whether a point on these axes has two recorded finite coordinates."""
+def drawable_raw_samples(
+    fields: tuple[str, str],
+    raw: pd.DataFrame | None,
+    fixations: pd.DataFrame | None = None,
+) -> bool:
+    """Whether the figure can place at least one sample on these axes."""
     if not raw_axes_available(fields, raw):
         return False
+    if ELAPSED in fields and (
+        fixations is None or not np.isfinite(origin_ms(fixations))
+    ):
+        return False
     x, y = ("timestamp_ms" if field == ELAPSED else field for field in fields)
+    x_limit, y_limit = (
+        DRAWABLE_PX_LIMIT if field in POSITION_FIELDS else np.inf for field in fields
+    )
     # Normalized recordings usually answer from their first sample.
-    if np.isfinite(
-        pd.to_numeric([raw[x].iat[0], raw[y].iat[0]], errors="coerce")
-    ).all():
+    first = pd.to_numeric([raw[x].iat[0], raw[y].iat[0]], errors="coerce")
+    if np.isfinite(first).all() and (np.abs(first) <= (x_limit, y_limit)).all():
         return True
+    xs, ys = (pd.to_numeric(raw[c], errors="coerce") for c in (x, y))
     return bool(
         (
-            np.isfinite(pd.to_numeric(raw[x], errors="coerce"))
-            & np.isfinite(pd.to_numeric(raw[y], errors="coerce"))
+            np.isfinite(xs)
+            & np.isfinite(ys)
+            & xs.abs().le(x_limit)
+            & ys.abs().le(y_limit)
         ).any()
     )

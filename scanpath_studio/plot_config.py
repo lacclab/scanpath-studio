@@ -9,6 +9,7 @@ import pandas as pd
 
 from .constants import (
     DEFAULT_CROP_MARGIN_PX,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_SIGMA_PX,
@@ -342,7 +343,9 @@ def build_plot_config(
                 )
             ],
             "duration_size_legend": bool(
-                figure_settings.get("duration_size_legend", True)
+                figure_settings.get(
+                    "duration_size_legend", DEFAULT_DURATION_SIZE_LEGEND
+                )
             ),
             **{
                 name: int(figure_settings[name])
@@ -409,8 +412,7 @@ def build_plot_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
-            # The dataset's samples are made up (the bundled demo's) —
-            # provenance, like the two keys above, and not read back.
+            # Records the origin of the samples on the saved trial.
             "synthesized": raw_gaze_synthesized,
             # The layer's own style — the keys above describe the trial the
             # config was saved on and are not read back.

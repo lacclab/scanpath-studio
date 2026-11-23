@@ -78,8 +78,8 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "rail": (
-        ("🎬 Replay settings", "Speed and frame rate."),
-        ("👥 Compare", "Two readings, overlaid or side by side."),
+        ("🎬 Animation settings", "Speed and frame rate."),
+        ("👥 Compare readings", "Two readings, overlaid or side by side."),
         (
             "🎨 Layer style",
             "Colour fixations by a measure; sizes, word boxes and raw gaze.",
@@ -217,7 +217,10 @@ def mode_css(mode: str) -> str:
     else:
         cell = '[class*="st-key-railbtn_"] > div'
         sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
+        # The comparison switch stays in reach while a comparison is active.
         rules = hide + (
+            ' [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_view_modes)'
+            ":not(:has(.st-key-single_compare_toggle input:checked)) { display: none !important; }"
             # The trial summary table's wrapper would still take the page's
             # margin under each block.
             ' [data-testid="stLayoutWrapper"]'
@@ -251,29 +254,16 @@ def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
 def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
-    Marks it chosen, which is what lets the cookie script remember it. Choosing
-    Essentials ends a running tutorial, and a change of mode ends a running welcome
-    tour. Anything that is not a mode (a deselected switch) changes nothing.
+    Marks it chosen so the cookie remembers it. A deselected switch changes nothing.
     """
     import streamlit as st
 
     chosen = parse_mode(mode)
     if chosen is not None:
-        if chosen == SIMPLE and st.session_state.get("tutorial_active"):
-            # The tutorials spotlight Full-only controls: leave the one
-            # running the way its Exit does.
+        if chosen != current_mode() and st.session_state.get("tutorial_active"):
             from scanpath_studio import tour
 
-            tour._restore_tutorial_return()
-        if (
-            chosen != current_mode()
-            and st.session_state.get("tour_mode") == "spotlight"
-        ):
-            # Each mode has its own welcome tour, and a step number means a
-            # different step in the other one: end it, as Done would.
-            from scanpath_studio import tour
-
-            tour._exit_spotlight()
+            tour.change_tutorial_mode(chosen)
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
         st.session_state[COOKIE_MODE_KEY] = chosen
@@ -415,7 +405,7 @@ def hidden_settings_reasons(
 
     ``narrowed``: a trial filter shortens the pool. ``sorted_``: the trial list
     is not in its default order. ``comparing``: Compare is on. ``custom_view``:
-    the plot settings match none of Essentials' View tiles.
+    the design includes settings that can be edited in Full.
     """
     flags = {
         "narrowed": narrowed,

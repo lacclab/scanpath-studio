@@ -57,18 +57,27 @@ python -m pip install "git+https://github.com/lacclab/scanpath-studio.git@dev"
 scanpath-studio
 ```
 
-**Help** shows which channel you are running. **Help → What’s new** opens
-its release notes.
+**Help** shows which channel you are running. Its release notes are in
+**About & citation → App details**.
 
 For a Git installation, the update command keeps your repository, requested
 ref and package subdirectory. An install from an official release tag follows
 the Stable channel for updates. If you selected a commit hash, choose the new
 revision in your original install command when you are ready to move.
 
+## Replay a sample reading { #replay-a-sample-reading }
+
+On your first visit, the app opens a reading from the [OneStop demo](guides/loading-data/index.md#onestop).
+Choose **Replay this reading** to follow the reader’s fixations over the text.
+Press **Pause**, then **Next fixation** to step through the recording. You can
+return to the sample walkthrough from **Help → Task guides**.
+
+To work with your own recording, choose **Import my data** or follow
+[Add your own data](guides/loading-data/index.md#add-your-own-data).
+
 ## Your first figure { #explore }
 
-Start with the bundled demo, a subset of the [OneStop corpus](guides/loading-data/index.md#onestop).
-You can explore it without preparing any files. Choose a view, then save an interactive figure.
+Choose a reading in the demo to explore and save as an interactive figure.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/design-presets_poster.webp" data-autoplay
@@ -87,7 +96,7 @@ You can explore it without preparing any files. Choose a view, then save an inte
 
     Choose :material/local_fire_department: **Heatmap** to see where fixation time concentrates,
     or :material/timeline: **Scanpath** to follow the order of fixations.
-    These are view tiles in Essentials and **Design presets** in Full.
+    Both tiles sit under **View** in Essentials and Full.
 
 - **3 · Save your figure**
 

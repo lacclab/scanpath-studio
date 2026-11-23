@@ -28,7 +28,7 @@ For a consistent offset, check [coordinate units and screen setup](../../faq.md#
 
 ## 3. Replay the recording { #3-replay-the-recording }
 
-Turn on :material/movie: **Animate** to follow the fixation order and timing.
+Choose :material/movie: **Animation** to follow the fixation order and timing.
 To mark short or long fixations, or fixations outside the text, open
 :material/filter_list: **Filters & highlights** ▾ → **Fixations** and set
 **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an
@@ -49,7 +49,7 @@ session.
 ## 5. Save the review { #5-save-the-review }
 
 Export favorites, tags and notes from :material/database: **Data Management**
-→ **Annotations** → **Export**. The file includes participant and trial IDs.
+→ **Current dataset → Annotations → Export**. The file includes participant and trial IDs.
 **Open** on an annotation row returns to that trial.
 
 To reconcile a second reviewer's notes, choose **Import**. The preview counts

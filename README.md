@@ -55,6 +55,6 @@ Build a figure in the app, then copy its Python or CLI code from **Share** → *
 
 Using Scanpath Studio in your research? [Cite the software](https://lacclab.github.io/scanpath-studio/about/#cite-scanpath-studio) (Shubi et al., 2026). The bundled demo is a subset of [OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2).
 
-[Report a bug or request a feature](https://github.com/lacclab/scanpath-studio/issues) · [Contribute](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) · [Code of conduct](https://github.com/lacclab/scanpath-studio/blob/main/CODE_OF_CONDUCT.md)
+[Report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md) · [Suggest an improvement](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas) · [Contribute](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) · [Code of conduct](https://github.com/lacclab/scanpath-studio/blob/main/CODE_OF_CONDUCT.md)
 
 <sub>Scanpath Studio was developed with AI assistance. As with any research software, cross-check its results before you rely on them in published work.</sub>

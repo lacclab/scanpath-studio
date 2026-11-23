@@ -129,10 +129,10 @@ def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
 
     at = _boot()
     at = _break_the_mapping(at)
-    at = open_data_view(at, timeout=180)
+    pin_data_view(at, section="Saved work")
+    at.run(timeout=180)
 
-    body = " ".join(str(m.value) for m in at.markdown)
-    assert f"**Session folder:** `{tmp_path}`" in body
+    assert any(f"Session folder · `{tmp_path}`" in c.value for c in at.caption)
 
 
 # --- the upload wizard, which reaches the same pipeline -----------------------
@@ -484,10 +484,10 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
 
     assert not at.exception
     (notice,) = [w.value for w in at.warning if "Data checks found problems" in w.value]
-    assert "**Fixations lasting 0 ms or less**: 3,199 of 3,209 fixation rows." in (
+    assert "**Fixations lasting 0 ms or less**: 1,883 of 1,894 fixation rows." in (
         notice
     )
     (open_checks,) = [b for b in at.button if b.key == "data_health_notice_open"]
     open_checks.click().run(timeout=180)
     assert not at.exception
-    assert any("Data checks" in c.value for c in at.caption)
+    assert "Recording quality checks" in [h.value for h in at.subheader]

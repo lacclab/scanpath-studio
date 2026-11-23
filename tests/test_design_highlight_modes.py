@@ -45,9 +45,15 @@ def _share_query(at) -> dict:
 def test_a_mode_does_not_move_the_highlight(mode):
     at = _app()
     assert _highlight(at) == "scanpath"
-    at.toggle(key=mode).set_value(True).run()
+    if mode == "single_animate":
+        at.button(key="viz_view_animation").click().run()
+    else:
+        at.toggle(key=mode).set_value(True).run()
     assert _highlight(at) == "scanpath"
-    at.toggle(key=mode).set_value(False).run()
+    if mode == "single_animate":
+        at.button(key="viz_view_scanpath").click().run()
+    else:
+        at.toggle(key=mode).set_value(False).run()
     assert _highlight(at) == "scanpath"
 
 

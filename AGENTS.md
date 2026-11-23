@@ -35,7 +35,7 @@ scanpath_studio/
 ├─ App shell
 │  ├─ app.py             entry point: page config, the data-source registry and loaders (`prepare_data`,
 │  │                     `_normalize_pair`), trial filters, view dispatch, and the 🗂️ Data Management page
-│  │                     (📂 Available datasets, ✏️ Edit dataset, *Saved on this computer*)
+│  │                     (Current dataset and its editor, Dataset library, Saved work)
 │  ├─ menu.py            the header: Streamlit's `st.navigation(position="top")` with three views
 │  │                     (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management) and ❓ Help's action
 │  │                     entries, which arm a dialog and bounce back to the current view
@@ -52,13 +52,14 @@ scanpath_studio/
 │  ├─ url_state.py       deep links, 🔗 Share (Link · Code · File), settings-file save/restore + migrations
 │  ├─ session_keys.py    the session keys / URL params that are a wire format, as constants
 │  ├─ plot_config.py     the settings-file serializer shared by Share and the export bundle
-│  ├─ tour.py            welcome tour, task tutorials and the setup guide
+│  ├─ tour.py            sample invitation, task guides and the optional import walkthrough
+│  ├─ feedback.py        offline troubleshooting, GitHub support links and bug-report details
 │  ├─ loading.py         loading cards (revealed by a timer thread) with Cancel
 │  ├─ progress.py        a Streamlit-free progress + cancel hook for loaders and builders
 │  ├─ constants.py       palette, defaults, `ICONS`, citation metadata, experimental-feature gates
 │  ├─ styles.py          injected CSS
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
-│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About → Debug)
+│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About & citation → App details → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
 │  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
 │  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
@@ -286,8 +287,8 @@ uv run --extra test python scripts/verify_change.py  # see a change work (/verif
 uv run --extra lint ruff check .
 uv run --extra lint ruff format .
 
-# Regenerate bundled sample data (needs the full OneStop CSVs, or --source-dir)
-uv run python -m scanpath_studio.update_sample_data
+# Regenerate the bundled L1 demo from the OneStop Full paragraph reports and raw ASC files
+uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc
 
 # Standalone desktop bundle (needs `pip install . pyinstaller` — non-editable)
 # Output: dist/ScanpathStudio.app on macOS, dist/ScanpathStudio/ elsewhere.
@@ -479,8 +480,11 @@ here fails when its rule is broken.
 - **Every fingerprint is exact** — a frame hashed in full or named by its source
   (`data.stamp_source` / `adopt_source`, `frame_cache`, `assign_derived`), never
   sampled. A new large per-rerun frame needs one, or it is hashed every run.
-- The bundled `raw_gaze.{csv,parquet}` is **synthesized** from one bundled
-  trial's fixations and must stay keyed to a trial in them.
+- The bundled `raw_gaze.{csv,parquet}` carries the two L1 readers' recorded
+  EyeLink gaze positions for all 24 readings. Extract samples within the
+  fixation report's paragraph interest period and subtract its trial start
+  time to share the fixation clock. Keep every recorded tick, including missing
+  x/y values, pupil area in tracker units and the tracked eye.
 
 **Figures**
 

@@ -16,9 +16,8 @@ Each recording produces an MP4 and a WebP poster in ``docs/assets/workflows/``
 its own app on a free port, so every workflow starts from the bundled demo at
 its defaults; set ``DEMO_APP_URL`` to record an app that is already running
 instead. Each workflow gets a fresh browser context, so nothing one does
-carries into the next. The browser is a returning user's — it has opted out of
-the welcome tour and the setup guide, as the guides' own *Don't show this again*
-does — and the app saves, as a local install does, into a scratch folder emptied
+carries into the next. The browser has dismissed the sample invitation,
+and the app saves, as a local install does, into a scratch folder emptied
 before each workflow (without it, an upload brings up the hosted demo's
 "nothing is saved here" reminder).
 
@@ -53,6 +52,8 @@ from record_app_demo import (
 from record_app_demo import PARK as APP_DEMO_PARK
 from record_app_demo import VIEWPORT as APP_DEMO_VIEWPORT
 
+from scanpath_studio.tour import TOUR_OPTOUT_COOKIE
+
 ROOT = Path(__file__).resolve().parent.parent
 URL = os.environ.get("DEMO_APP_URL")
 OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
@@ -74,9 +75,6 @@ ACCENT = "#d55e00"
 #: neither.
 HUD_RIGHT = 240
 HUD_MAX_WIDTH = 700
-#: What *Don't show this again* writes (``tour.TOUR_OPTOUT_COOKIE`` and
-#: ``tour.WIZARD_GUIDE_OPTOUT_COOKIE``): a returning user's browser.
-OPT_OUT_COOKIES = ("sps_tour_optout", "sps_wizard_guide_optout")
 #: What the app shows of the recording machine itself: the Data page's download
 #: folder and its *Saved on this computer* folder. A viewer learns nothing from
 #: the recorder's scratch paths, and they would publish its home folder.
@@ -680,9 +678,11 @@ def essentials(d: Demo) -> None:
     page = d.page
     # A first visit opens on the replay, already playing.
     d.pause(2.6)
-    d.click(page.locator(".st-key-simple_view_scanpath button"), "Scanpath", hold=1.4)
+    d.click(
+        page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.4
+    )
     d.choose("global_palette", "High contrast", "palette", hold=1.2)
-    d.click(page.locator(".st-key-simple_view_heatmap button"), "Heatmap", hold=1.4)
+    d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.4)
     d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.6)
     d.click(
         page.locator(".st-key-iconpop_more_rail button"),
@@ -768,7 +768,7 @@ def trial_filtering(d: Demo) -> None:
     d.open(page.locator(".st-key-filter_difficulty_level [role=group]"))
     d.click(_option(page, "Ele"), "Ele texts only", hold=0.6)
     d.open(page.locator(".st-key-filter_participants [role=group]"))
-    d.click(_option(page, "l7_1090"), "one participant", hold=0.6)
+    d.click(_option(page, "l7_183"), "one participant", hold=0.6)
     d.close_popover()
     d.close_popover()
     d.pause(0.8)
@@ -814,9 +814,11 @@ def favorites(d: Demo) -> None:
 def replay(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(_toggle(page, "single_animate"), "Animate", hold=2.4)
     d.click(
-        page.locator(".st-key-split_mode_animate_popover button"),
+        page.get_by_role("button", name="Animation", exact=True), "Animation", hold=2.4
+    )
+    d.click(
+        page.locator(".st-key-split_mode_rail_animation_popover button"),
         "Animate ▾",
         wait=False,
         hold=0.4,
@@ -834,7 +836,9 @@ def replay(d: Demo) -> None:
 def replay_export(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(_toggle(page, "single_animate"), "Animate", hold=1.0)
+    d.click(
+        page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.0
+    )
     d.click(_tab(page, "Export"), "Export")
     d.scroll_to(page.locator(".st-key-tutorial_export"), top=150)
     d.click(page.locator("label").filter(has_text="GIF"), "GIF", hold=0.6)
@@ -883,7 +887,7 @@ def compare(d: Demo) -> None:
 def share_link(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(page.locator(".st-key-viz_view_heatmap button"), "Heatmap", hold=1.0)
+    d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.0)
     d.click(_tab(page, "Share"), "Share")
     d.scroll_to(_tab(page, "Share").first, top=HEADER + 10)
     d.click(
@@ -925,9 +929,7 @@ def record_one(browser, url: str, flow: Workflow, frames: Path) -> Path:
         accept_downloads=True,
     )
     context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
-    context.add_cookies(
-        [{"name": n, "value": "1", "url": url} for n in OPT_OUT_COOKIES]
-    )
+    context.add_cookies([{"name": TOUR_OPTOUT_COOKIE, "value": "1", "url": url}])
     context.add_init_script(OVERLAY_JS)
     page = context.new_page()
     page.goto(f"{url}/?ui={flow.ui}", wait_until="domcontentloaded")

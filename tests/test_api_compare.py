@@ -221,6 +221,7 @@ class TestSameDataset:
             layout=layout,
             labels=("Reader one", "Reader two"),
             canvas_size=(2560, 1440),
+            duration_size_legend=True,
             legend_layout=legend_layout,
         )
         _plot_w, plot_h, margin = plots._plot_px(fig)
@@ -489,13 +490,13 @@ class TestCoAnimationDrawsOneSecondReading:
 
     `compare_scanpaths` takes B's *corpus* plus a `trial_b` pair, so frames
     passed the same way to the co-animation would otherwise draw every fixation
-    in them — 3,209 on the demo, where B's trial has 89. `trial_b` picks the
+    in them. The selected reading uses only a subset. `trial_b` picks the
     reading, as it does there, and B frames holding several trials refuse
     rather than guess.
     """
 
-    _A = ("l37_1129", "l37_1129_2_1_1_Ele")
-    _B = ("l37_1129", "l37_1129_2_1_2_Ele")
+    _A = ("l37_273", "l37_273_2_1_1_Ele")
+    _B = ("l37_273", "l37_273_2_1_2_Ele")
 
     @staticmethod
     def _trace_b(fig):

@@ -40,7 +40,8 @@ Essentials shows:
 - the **Export** tab, for the figure on screen, and **Share**.
 
 The :material/add: **More** buttons show which additional controls are available
-in Full and offer **Switch to Full**. Settings you chose in Full, such as trial
+in Full and offer **Switch to Full**. The four tiles and Palette stay in the same place when you switch modes.
+An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial
 filters, remain active in Essentials; a short note tells you when they apply.
 Starting a tutorial from :material/help: **Help** switches to Full for the
 current visit. :material/bar_chart: **Corpus Analysis** and
@@ -87,11 +88,11 @@ off and a **▾** that opens its settings.
 
 | Section | What it controls |
 | --- | --- |
-| :material/movie: **Animate** | replay the fixations in the order they happened, at a speed you choose |
-| :material/compare: **Compare** | draw a second reading over this one, beside it or below it |
-| **Design presets** | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings |
-| :material/palette: **My designs** | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
-| **Palette** | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast** |
+| **View** | choose **Animation**, **Scanpath**, **Heatmap**, or **Illustration** |
+| **Palette** | choose **Default (colorblind-safe)**, **Print / grayscale**, or **High contrast** |
+| :material/compare: **Compare readings** | add a second reading over this one, beside it, or below it |
+| :material/movie: **Animation settings** | set playback speed, autoplay, and frame quality |
+| :material/palette: **My designs** | restore your last custom design, save a named design, or share one |
 | :material/blur_on: **Fixations** | the fixation markers: color, shape and size, and the fixation index |
 | :material/arrow_outward: **Saccades** | the saccade lines and arrows, in one color, by direction or by saccade type |
 | :material/article: **Stimulus** | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |
@@ -145,7 +146,7 @@ file paths with your own.
         import scanpath_studio as sps
 
         words, fixations = sps.load_sample_data()
-        fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
+        fig = sps.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
         sps.save_figure(fig, "scanpath.html")
         ```
 
@@ -153,7 +154,7 @@ file paths with your own.
 
         ```bash
         scanpath-studio render --sample \
-          -p l37_1129 -t l37_1129_2_1_1_Ele -o scanpath.html
+          -p l37_273 -t l37_273_2_1_1_Ele -o scanpath.html
         ```
 
     For your own files, use the [data loaders](../loading-data/index.md#load-and-inspect-in-code).
@@ -172,11 +173,11 @@ You can save each of these to a file and load it again:
 | What | Where |
 | --- | --- |
 | figure settings | :material/share: **Share** → **Settings file** |
-| favorites, tags and notes | :material/database: **Data Management** → **Annotations** → **Export** |
+| favorites, tags and notes | :material/database: **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | :material/edit: **Edit dataset** → **Download setup file** |
 | saved figure designs | :material/palette: **My designs** → **Export** |
 
 Keep your source data alongside these files, and load the same dataset before
 restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See :material/database: **Data
-Management** → :material/history: **Saved on this computer**.
+Management** → **Saved work → Your session**.

@@ -332,7 +332,7 @@ def test_cli_animate_compare_forwards_the_styles(tmp_path, monkeypatch):
         return real(*args, **kwargs)
 
     monkeypatch.setattr(api, "animate_scanpath", spy)
-    participant = "l37_1129"
+    participant = "l37_273"
     cli.main(
         [
             "render",
@@ -340,9 +340,9 @@ def test_cli_animate_compare_forwards_the_styles(tmp_path, monkeypatch):
             "-p",
             participant,
             "-t",
-            "l37_1129_2_1_1_Ele",
+            "l37_273_2_1_1_Ele",
             "--compare-with",
-            f"{participant}:l37_1129_2_1_3_Adv",
+            f"{participant}:l37_273_2_1_3_Adv",
             "--animate",
             "--style-a",
             "fix_color=#00ff00,opacity=0.2",

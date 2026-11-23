@@ -66,6 +66,8 @@ from .constants import (
     COLORSCALES,
     CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
+    DATA_CURRENT,
+    DATA_WORKSPACE_REQUEST,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
     FIXATION_DURATION_FLAGS,
@@ -117,6 +119,7 @@ from .constants import (
 from .controls import (
     _ALIGN_OPTIONS,
     claim_mapping,
+    clear_replay_layer_restore,
     color_field_options,
     forget_color_range,
     numeric_field_options,
@@ -1294,8 +1297,7 @@ def _apply_url_preset() -> str | None:
                                    or in an independent import by name
         &cmp_source=corpus&cmp_corpus=potec
                                  → open B from an installed public corpus
-        &tab=animation           → pre-tick the Animate toggle (legacy; Animate
-                                   is a toggle, not a tab)
+        &tab=animation           → select Animation (legacy link)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -1447,8 +1449,7 @@ def _apply_url_preset() -> str | None:
             st.session_state.setdefault("global_show_title", both)
             st.session_state.setdefault("global_show_caption", both)
 
-    # Animate is a toggle on the Scanpath view, not a tab, so a legacy
-    # `?tab=animation` deep link just pre-ticks it.
+    # Older links use the tab name to select Animation.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
     if qp.get("screen") not in (None, ""):
@@ -2698,7 +2699,10 @@ def _restore_window(
 
 
 def _restore_plot_config(
-    config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
+    config: dict,
+    combos: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[int, list]:
     """Seed session_state from an uploaded plot-config dict so the rail
     widgets render with the saved settings. Returns ``(applied, skipped)`` where
@@ -2729,6 +2733,12 @@ def _restore_plot_config(
     has_valid_plot_section = _has_plot_section(config)
 
     layers = section("layers")
+    if (
+        "fixations" in layers
+        or "saccades" in layers
+        or isinstance(section("mode").get("animate"), bool)
+    ):
+        clear_replay_layer_restore()
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
@@ -3236,7 +3246,7 @@ def _restore_plot_config(
             )
 
     axes = section("axes")
-    numeric = numeric_field_options(fixations)
+    numeric = numeric_field_options(fixations, raw_gaze)
     for cfg_key, state_key, label in (
         ("x_field", "global_x_field", "X axis field"),
         ("y_field", "global_y_field", "Y axis field"),
@@ -3675,7 +3685,9 @@ def _restore_figure_mode(
         st.session_state.pop(SINGLE_COMPARE_SCREEN_ID, None)
 
 
-def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
+def _apply_uploaded_plot_config(
+    combos: pd.DataFrame, fixations: pd.DataFrame, raw_gaze: pd.DataFrame | None = None
+) -> None:
     """Restore settings from a freshly uploaded plot-config JSON, once per file.
 
     Reads the file captured by 🔗 Share → File's ``plot_config_upload``
@@ -3708,7 +3720,7 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
         st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     try:
-        applied, skipped = _restore_plot_config(config, combos, fixations)
+        applied, skipped = _restore_plot_config(config, combos, fixations, raw_gaze)
     except Exception as exc:  # backstop for an unexpectedly shaped config
         st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return
@@ -4678,4 +4690,5 @@ def _go_scanpath() -> None:
 
 
 def _go_data() -> None:
+    st.session_state[DATA_WORKSPACE_REQUEST] = DATA_CURRENT
     st.session_state["main_nav"] = _VIEW_DATA

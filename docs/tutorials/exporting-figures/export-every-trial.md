@@ -20,6 +20,10 @@ Before you start, switch to **Full** at the top of the :material/route:
    layers later, turn on **Layers as separate files**.
 4. Click **Build export**, download the bundle, and inspect one exported figure.
 
+Large bundles are kept on temporary disk and download as one ZIP in a new tab.
+Keep the Export panel open until the download finishes. If your browser cannot
+stream the ZIP, the download page offers numbered parts and instructions for joining them.
+
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/export-bundle_poster.webp" data-autoplay
        aria-label="Exporting every trial's figures and tables as one zip">

@@ -5,13 +5,16 @@ from __future__ import annotations
 import csv
 import io
 import zipfile
+from contextlib import nullcontext
 from copy import copy
 from dataclasses import dataclass, replace
+from tempfile import TemporaryFile
 from time import perf_counter
 
 import pandas as pd
 
 from .export import _write_inventory, bulk_export, bundle_member_names
+from .export_archive import open_bundle
 from .export_status import ExportStage, emit_status
 from .progress import report
 
@@ -108,6 +111,7 @@ def retry_failed_figures(
     *,
     options,
     status_callback=None,
+    _archive=None,
     **kwargs,
 ):
     """Retain existing files and regenerate only failed figures or figure layers."""
@@ -119,7 +123,11 @@ def retry_failed_figures(
         if status_callback and status.stage != ExportStage.READY:
             status_callback(status)
 
-    with zipfile.ZipFile(io.BytesIO(cache["data"])) as previous:
+    with (
+        open_bundle(cache["data"]) as original,
+        zipfile.ZipFile(original) as previous,
+        TemporaryFile() as repaired,
+    ):
         inventory = _index(previous)
         failed = {
             _unit_key(row)
@@ -160,25 +168,29 @@ def retry_failed_figures(
                 index=False, name=None
             )
         ]
-        payload, _ = bulk_export(
-            combos.loc[selected],
-            words,
-            fixations,
-            options=renderer_options,
-            _retry=plan,
-            status_callback=on_render_status,
-            **kwargs,
-        )
+        with zipfile.ZipFile(repaired, "w", zipfile.ZIP_DEFLATED) as repair_archive:
+            bulk_export(
+                combos.loc[selected],
+                words,
+                fixations,
+                options=renderer_options,
+                _retry=plan,
+                _archive=repair_archive,
+                status_callback=on_render_status,
+                **kwargs,
+            )
         emit_status(
             status_callback,
             ExportStage.FINALIZING,
             "Combining the repaired figures with the original files…",
             started_at=started,
         )
-        output = io.BytesIO()
+        output = io.BytesIO() if _archive is None else None
         with (
-            zipfile.ZipFile(io.BytesIO(payload)) as rebuilt,
-            zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive,
+            zipfile.ZipFile(repaired) as rebuilt,
+            nullcontext(_archive)
+            if _archive is not None
+            else zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive,
         ):
             for info in previous.infolist():
                 if info.filename != "index.csv":
@@ -231,4 +243,4 @@ def retry_failed_figures(
         completed=progress.finished_trials,
         total=progress.total_trials,
     )
-    return output.getvalue(), progress
+    return output.getvalue() if output is not None else None, progress

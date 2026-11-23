@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import json
+import zipfile
 from urllib.parse import parse_qsl
 
 import numpy as np
@@ -42,6 +43,34 @@ _ID_TEXT = st.text(
 
 
 # --- Round-trips -----------------------------------------------------------
+
+
+@given(
+    st.lists(st.binary(max_size=160), min_size=1, max_size=7),
+    st.integers(min_value=4, max_value=96),
+)
+def test_disk_bundle_reads_members_across_part_boundaries(members, part_size):
+    from scanpath_studio import export_archive
+
+    def write(*, _archive):
+        for i, value in enumerate(members):
+            _archive.writestr(str(i), value)
+        return None, None
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(export_archive, "_PART_BYTES", part_size)
+        patch.setattr(export_archive, "_SMALL_ZIP", 0)
+        bundle, _ = export_archive.build_download(write)
+        try:
+            assert all(
+                bundle.part(i).stat().st_size == part_size
+                for i in range(bundle.parts - 1)
+            )
+            with bundle.open() as stream, zipfile.ZipFile(stream) as archive:
+                for i in reversed(range(len(members))):
+                    assert archive.read(str(i)) == members[i]
+        finally:
+            bundle.close()
 
 
 @given(st.lists(st.text(max_size=30), max_size=8))

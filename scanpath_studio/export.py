@@ -33,9 +33,12 @@ import json
 import re
 import zipfile
 from collections.abc import Callable, Iterable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
+from contextvars import copy_context
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import PurePosixPath
 from time import perf_counter
 
@@ -1507,6 +1510,52 @@ class UnitFiles:
     paths: dict[tuple[str, str], str]
 
 
+@dataclass
+class _ExportReading:
+    row: dict
+    layout: UnitFiles | None
+    frames: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+    width: int
+    height: int
+    settings: dict
+
+    def can_build_ahead(self, scale: int) -> bool:
+        # Only the figure specification is built ahead. Build images and dense
+        # sample traces on demand. The full recording canvas before Plotly fits
+        # it gives a conservative bound of 64 MiB for one RGBA surface.
+        return (
+            self.width * self.height * scale**2 <= 16 * 1024**2
+            and sum(len(frame) for frame in self.frames) <= 10_000
+            and not self.settings.get("background_image")
+            and any(not frame.empty for frame in self.frames)
+        )
+
+
+def _figures_for_readings(readings, build, worker, scale):
+    """Overlap building the next Plotly figure with drawing this one in Chrome.
+
+    The calling thread owns the trial slices, session-dependent settings, browser
+    and ZIP. The single worker only builds Plotly figures. At most two ordinary
+    readings are in flight. Drain them before building any oversized reading.
+    Each result (including a build error) is consumed in archive order.
+    """
+    pending = None
+    for reading in readings:
+        if worker is None or not reading.can_build_ahead(scale):
+            if pending is not None:
+                yield pending
+                pending = None
+            yield reading, partial(build, reading)
+        else:
+            previous = pending
+            pending = reading, worker.submit(copy_context().run, build, reading).result
+            if previous is not None:
+                yield previous
+                del previous
+    if pending is not None:
+        yield pending
+
+
 def _plain_tables(options, words, fixations, raw_gaze):
     return {
         name: frame
@@ -1541,26 +1590,37 @@ def _plan_unit(
     members,
     *,
     paths=None,
+    all_fields=False,
 ) -> UnitFiles:
     pid, tid = row["participant_id"], row["trial_id"]
     words, fixations, raw_gaze = frames
-    fields = pattern_fields(
-        pid,
-        tid,
-        words,
-        fixations,
-        {
-            **settings,
-            "show_raw_gaze": bool(settings.get("show_raw_gaze"))
-            and chart_axes.drawable_raw_samples(axes, raw_gaze),
-        },
-        combo_row=row,
-        dataset_name=options.dataset_name,
-        column_names=names,
-        metadata_rows=metadata_rows_for(pid, tid, row.get("text_id"))
-        if metadata_rows_for
-        else None,
-    )
+    # The default path consumes only these two fields. A custom pattern or the
+    # field picker can also use saved columns and attached metadata.
+    if (
+        not all_fields
+        and options.path_pattern == DEFAULT_PATH_PATTERN
+        and not options.title_pattern
+        and not options.caption_pattern
+    ):
+        fields = {"participant_id": pid, "trial_id": tid}
+    else:
+        fields = pattern_fields(
+            pid,
+            tid,
+            words,
+            fixations,
+            {
+                **settings,
+                "show_raw_gaze": bool(settings.get("show_raw_gaze"))
+                and chart_axes.drawable_raw_samples(axes, raw_gaze),
+            },
+            combo_row=row,
+            dataset_name=options.dataset_name,
+            column_names=names,
+            metadata_rows=metadata_rows_for(pid, tid, row.get("text_id"))
+            if metadata_rows_for
+            else None,
+        )
     if paths is not None:
         # Retry keeps names already assigned by the original full-scope plan.
         return UnitFiles(fields, paths)
@@ -1670,6 +1730,7 @@ def naming_example(
                 column_names,
                 metadata_rows_for,
                 ArchiveNames(),
+                all_fields=True,
             )
             if plan.paths:
                 artifact, ext = next(iter(plan.paths))
@@ -2781,8 +2842,12 @@ def bulk_export(
     column_names: Mapping[str, ColumnNames] | None = None,
     stimulus_image_resolver: Callable | None = None,
     _retry=None,
-) -> tuple[bytes, ExportProgress]:
+    _archive: zipfile.ZipFile | None = None,
+) -> tuple[bytes | None, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
+
+    The app passes an open ZIP in ``_archive`` to keep a large bundle
+    on temporary disk. In that case the first return value is ``None``.
 
     ``column_names`` is the dataset's map per table
     (``{"fixations": …, "words": …, "raw_gaze": …}``): each table is written
@@ -2865,8 +2930,12 @@ def bulk_export(
         "Preparing trials and export manifest…",
         started_at=started,
     )
-    buf = io.BytesIO()
-    zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
+    buf = io.BytesIO() if _archive is None else None
+    zf = (
+        _archive
+        if _archive is not None
+        else zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
+    )
     # Every member's name comes from one registry, with the bundle's own files
     # reserved first. A trial's file the path pattern names like one of them, or
     # like another trial's, gets a `-2` instead of a second member of that name —
@@ -3115,30 +3184,21 @@ def bulk_export(
             (dict(zip(units.columns, values, strict=True)), None)
             for values in units.itertuples(index=False, name=None)
         )
-    with _figure_renderer(needs_kaleido) as render_figure:
-        for combo, layout in readings:
-            # The cancel checkpoint (`progress.Cancelled`), between units so a
-            # stopped build never leaves one half-written; a no-op headlessly.
-            try:
-                report_progress(
-                    progress.finished_trials, progress.total_trials, unit="screens"
-                )
-            except BaseException:  # `progress.Cancelled`: close the zip, go
-                zf.close()
-                raise
-            participant = combo["participant_id"]
-            trial = combo["trial_id"]
-            screen_id = combo.get(SCREEN_ID)
-            screen_slug = _screen_folder(combo)
-            slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
-            if screen_slug:
-                slug += f"__{screen_slug}"
-            unit_ids = {
-                "participant_id": str(participant),
-                "trial_id": str(trial),
-                "screen_id": str(screen_id) if screen_slug else "",
-            }
 
+    def checkpoint():
+        try:
+            report_progress(
+                progress.finished_trials, progress.total_trials, unit="screens"
+            )
+        except BaseException:
+            zf.close()
+            raise
+
+    def reading_inputs():
+        for combo, layout in readings:
+            checkpoint()
+            participant, trial = combo["participant_id"], combo["trial_id"]
+            screen_id = combo.get(SCREEN_ID)
             trial_words, trial_fix, trial_raw_gaze = _unit_frames(
                 participant,
                 trial,
@@ -3149,27 +3209,12 @@ def bulk_export(
                 elapsed_axis=chart_axes.ELAPSED in (x_field, y_field),
             )
 
-            # Skip only a genuinely empty trial (nothing to draw). The figure
-            # builder renders from fixations alone (words optional — boxes/labels)
-            # or from words alone (AOI layout), and the live view does too; so a
-            # words-that-don't-join / fixations-only trial must still export
-            # instead of being skipped with "empty data". And a trial recorded
-            # as raw gaze alone is drawn from its samples.
-            if trial_words.empty and trial_fix.empty and trial_raw_gaze.empty:
-                progress.finished_trials += 1
-                progress.trials_skipped += 1
-                progress.errors.append(f"{slug}: empty data, skipped")
-                _inventory("", "reading", "skipped", unit_ids, "no data", fmt="")
-                if progress_callback:
-                    progress_callback(progress)
-                continue
-
-            exported_pairs.add((str(participant), str(trial)))
-            if text_metadata is not None and not text_metadata.empty:
-                exported_texts.update(
-                    _unit_text_ids(combo, trial_words, trial_fix, trial_raw_gaze)
+            frames = trial_words, trial_fix, trial_raw_gaze
+            if all(frame.empty for frame in frames):
+                yield _ExportReading(
+                    combo, layout, frames, canvas_width, canvas_height, settings
                 )
-
+                continue
             # A screen's own canvas, for its figure and its plot config alike.
             unit_canvas = (
                 screen_canvas_size(trial_words)
@@ -3208,6 +3253,106 @@ def bulk_export(
                 str(settings.get("illustration_label", "Auto")).title(),
                 reasons,
             )
+
+            yield _ExportReading(
+                combo, layout, frames, unit_width, unit_height, unit_settings
+            )
+
+    def build_figure(reading):
+        trial_words, trial_fix, trial_raw_gaze = reading.frames
+        unit_settings = reading.settings
+        unit_width, unit_height = reading.width, reading.height
+        # Apply the drift correction to the
+        # figure's fixations (a no-op when "Off"), so the batch
+        # matches the corrected figure on screen. `trial_fix` itself
+        # stays uncorrected — the tables below export the recording.
+        fig_fix, connector_y = _drift_corrected_for_figure(
+            trial_fix, trial_words, settings
+        )
+        render_values = {
+            name: unit_settings[name]
+            for name in STATIC_FIGURE_OPTIONS
+            if name in unit_settings
+        }
+        render_settings = FigureSettings.from_mapping(
+            render_values,
+            canvas_width=unit_width,
+            canvas_height=unit_height,
+            base_font_size=int(base_font_size),
+            font_family=font_family,
+            x_field=x_field,
+            y_field=y_field,
+            show_connectors=connector_y is not None,
+            connector_y=connector_y,
+            # A corrected figure colours by line, exactly as the
+            # on-screen static path forces it (tabs.py's drift-
+            # correction overrides) — else the batch differs in
+            # colouring.
+            color_by_line=bool(settings.get("color_by_line", False))
+            or fig_fix is not trial_fix,
+        )
+        # The trial's own samples, as the live figure
+        # gets them (the layer self-gates on `show_raw_gaze`).
+        fig = make_scanpath_figure(
+            trial_words,
+            fig_fix,
+            settings=render_settings,
+            raw_gaze=trial_raw_gaze if not trial_raw_gaze.empty else None,
+        )
+        return fig, render_settings
+
+    with (
+        _figure_renderer(needs_kaleido) as render_figure,
+        ThreadPoolExecutor(max_workers=1)
+        if needs_kaleido and len(units) > 1
+        else nullcontext(None) as worker,
+    ):
+        for reading, get_figure in _figures_for_readings(
+            reading_inputs(),
+            build_figure,
+            worker,
+            options.png_scale if options.include_png else 1,
+        ):
+            combo, layout = reading.row, reading.layout
+            trial_words, trial_fix, trial_raw_gaze = reading.frames
+            unit_width, unit_height = reading.width, reading.height
+            unit_settings = reading.settings
+            # Stop may have been pressed after this reading was prepared.
+            if worker is not None:
+                checkpoint()
+            participant = combo["participant_id"]
+            trial = combo["trial_id"]
+            screen_id = combo.get(SCREEN_ID)
+            screen_slug = _screen_folder(combo)
+            slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
+            if screen_slug:
+                slug += f"__{screen_slug}"
+            unit_ids = {
+                "participant_id": str(participant),
+                "trial_id": str(trial),
+                "screen_id": str(screen_id) if screen_slug else "",
+            }
+
+            # Skip only a genuinely empty trial (nothing to draw). The figure
+            # builder renders from fixations alone (words optional — boxes/labels)
+            # or from words alone (AOI layout), and the live view does too; so a
+            # words-that-don't-join / fixations-only trial must still export
+            # instead of being skipped with "empty data". And a trial recorded
+            # as raw gaze alone is drawn from its samples.
+            if trial_words.empty and trial_fix.empty and trial_raw_gaze.empty:
+                progress.finished_trials += 1
+                progress.trials_skipped += 1
+                progress.errors.append(f"{slug}: empty data, skipped")
+                _inventory("", "reading", "skipped", unit_ids, "no data", fmt="")
+                if progress_callback:
+                    progress_callback(progress)
+                continue
+
+            exported_pairs.add((str(participant), str(trial)))
+            if text_metadata is not None and not text_metadata.empty:
+                exported_texts.update(
+                    _unit_text_ids(combo, trial_words, trial_fix, trial_raw_gaze)
+                )
 
             retry_unit = (
                 _retry.units[(str(participant), str(trial), unit_ids["screen_id"])]
@@ -3291,43 +3436,7 @@ def bulk_export(
                 )
                 fig = None
                 try:
-                    # Apply the drift correction to the
-                    # figure's fixations (a no-op when "Off"), so the batch
-                    # matches the corrected figure on screen. `trial_fix` itself
-                    # stays uncorrected — the tables below export the recording.
-                    fig_fix, connector_y = _drift_corrected_for_figure(
-                        trial_fix, trial_words, settings
-                    )
-                    render_values = {
-                        name: unit_settings[name]
-                        for name in STATIC_FIGURE_OPTIONS
-                        if name in unit_settings
-                    }
-                    render_settings = FigureSettings.from_mapping(
-                        render_values,
-                        canvas_width=unit_width,
-                        canvas_height=unit_height,
-                        base_font_size=int(base_font_size),
-                        font_family=font_family,
-                        x_field=x_field,
-                        y_field=y_field,
-                        show_connectors=connector_y is not None,
-                        connector_y=connector_y,
-                        # A corrected figure colours by line, exactly as the
-                        # on-screen static path forces it (tabs.py's drift-
-                        # correction overrides) — else the batch differs in
-                        # colouring.
-                        color_by_line=bool(settings.get("color_by_line", False))
-                        or fig_fix is not trial_fix,
-                    )
-                    # The trial's own samples, as the live figure
-                    # gets them (the layer self-gates on `show_raw_gaze`).
-                    fig = make_scanpath_figure(
-                        trial_words,
-                        fig_fix,
-                        settings=render_settings,
-                        raw_gaze=trial_raw_gaze if not trial_raw_gaze.empty else None,
-                    )
+                    fig, render_settings = get_figure()
                     # Stamp the title/caption BEFORE measuring the output
                     # size — the bands grow the figure, and rendering at the
                     # pre-title size would crop them off.
@@ -3678,8 +3787,7 @@ def bulk_export(
     _write_inventory(zf, inventory, members.own("index.csv"))
     progress.files_written = len(zf.namelist())
     zf.close()
-    buf.seek(0)
-    result = buf.getvalue()
+    result = buf.getvalue() if buf is not None else None
     emit_status(
         status_callback,
         ExportStage.READY,

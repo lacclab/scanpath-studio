@@ -302,6 +302,7 @@ from scanpath_studio.export import (
     strip_local_paths,
     summarize_export,
 )
+from scanpath_studio.export_archive import DiskBundle, build_download
 from scanpath_studio.export_status import (
     EXPORTER_VERSION,
     ExportStage,
@@ -8643,7 +8644,8 @@ def _render_bulk_export(
                     from scanpath_studio.export_retry import retry_failed_figures
 
                     build = functools.partial(retry_failed_figures, cache, sig)
-                zip_bytes, built_progress = build(
+                bundle, built_progress = build_download(
+                    build,
                     active_combos,
                     active_words,
                     active_fix,
@@ -8676,11 +8678,11 @@ def _render_bulk_export(
         else:
             stop_slot.empty()
             progress_slot.empty()
-            cache = {"sig": sig, "data": zip_bytes, "progress": built_progress}
+            cache = {"sig": sig, "data": bundle, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
             # The status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
-            built = summarize_export(built_progress, len(zip_bytes))
+            built = summarize_export(built_progress, len(bundle))
             status_box.update(
                 label=built.message,
                 state="error" if built.level == "error" else "complete",
@@ -8688,10 +8690,10 @@ def _render_bulk_export(
             )
 
     if cache and cache.get("sig") == sig:
-        zip_bytes = cache["data"]
+        bundle = cache["data"]
         built_progress = cache["progress"]
         # What was made and what failed; a partial zip still downloads.
-        built = summarize_export(built_progress, len(zip_bytes))
+        built = summarize_export(built_progress, len(bundle))
         getattr(info_col, built.level)(built.message, icon=ICONS[built.level])
         if built_progress.errors:
             with st.expander(
@@ -8707,13 +8709,23 @@ def _render_bulk_export(
                 args=("_bulk_retry_requested", True),
                 help="Keep the successful files and retry the failed figures and layers.",
             )
-        st.download_button(
-            "⬇ Download bundle (zip)",
-            data=zip_bytes,
-            file_name=f"scanpath_export_{pd.Timestamp.now():%Y%m%d_%H%M%S}.zip",  # local time
-            mime="application/zip",
-            type="primary",
+        filename = (
+            f"scanpath_export_{pd.Timestamp.now():%Y%m%d_%H%M%S}.zip"  # local time
         )
+        if isinstance(bundle, DiskBundle):
+            st.link_button(
+                "⬇ Download bundle (zip)",
+                bundle.download_url(filename),
+                type="primary",
+            )
+        else:
+            st.download_button(
+                "⬇ Download bundle (zip)",
+                data=bundle,
+                file_name=filename,
+                mime="application/zip",
+                type="primary",
+            )
 
 
 def _comparison_image_b(

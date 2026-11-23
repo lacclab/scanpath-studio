@@ -140,6 +140,8 @@ include = ["scanpath_studio", "scanpath_studio.*"]
     # because only this list ships — a logo outside it would leave every
     # pip-installed copy with an empty header.
     "assets/*.png",
+    "assets/bundle_download/*.html",
+    "assets/bundle_download/*.js",
     "sample_data/*.csv",
     "sample_data/*.parquet",
     "sample_data/images/*.png",

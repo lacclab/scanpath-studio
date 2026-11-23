@@ -46,6 +46,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Comparisons | Full only; NLD similarity scores only with `SCANPATH_EXPERIMENTAL=1` |
 | Line assignment | Experimental only |
 | Export | Figures + tables for the filtered trials; every file carries the citation |
+| Large export download | Download a bundle over 32 MiB, open the ZIP and check its figures against `index.csv`. A browser with service workers disabled offers numbered parts that join into the same ZIP. |
 | Export retry | Fail one layer format and one whole layer set in a multi-reading bundle. Retry lists just the remaining failures in `index.csv` and preserves the contents and names of every successful file. |
 | Share → Link / Code / File | The link reopens both readings from uploads or locally available public corpora. Missing B leaves A open with recovery instructions. The code reproduces the figure (`test_render_every_option`) and the settings file restores it |
 

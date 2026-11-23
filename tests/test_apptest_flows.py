@@ -439,7 +439,7 @@ class TestBulkExportFlow:
     ``st.download_button`` is drivable from ``AppTest``, and the test clicks the
     real one — but the bytes it serves live in Streamlit's media-file manager,
     not in the element tree, so there is no way to *read* the zip back from the
-    click. The payload is therefore captured at the ``tabs.bulk_export`` seam by
+    click. The payload is therefore captured at the ``tabs.build_download`` seam by
     a wrapper that calls the real function. Everything up to and including the
     button press — the options collected from the widgets, the scope, the trial
     pool, the figure settings — is the real UI path; only the *inspection* of
@@ -461,14 +461,14 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         tabular = at.pills(key="bulk_export_tabular")
@@ -496,14 +496,14 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0], result[1]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always

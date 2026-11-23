@@ -2526,7 +2526,7 @@ class TestSampleReading:
         if start == "heatmap":
             at.button(key="viz_view_heatmap").click().run(timeout=45)
         else:
-            at.button(key="viz_view_animation").click().run(timeout=45)
+            at.toggle(key="single_animate").set_value(True).run(timeout=45)
             at.toggle(key="global_show_fix").set_value(False).run(timeout=45)
         assert not at.toggle(key="global_show_fix").value
         assert at.toggle(key="global_show_saccades").value == (start == "saccades_only")

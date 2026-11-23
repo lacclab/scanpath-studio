@@ -123,10 +123,52 @@ def test_a_harness_command_counts(tmp_path, command):
         "uv run --env-file .env pytest",
         "uv --directory app run pytest",
         "cd app\nuv run --extra test \\\n  pytest -n auto",
+        'git commit -m "don\'t"; uv run pytest -q; echo "that\'s it"',
+        "for f in a b; do uv run pytest $f; done",
+        "if uv run pytest; then echo ok; fi",
+        "! uv run pytest",
+        "{ uv run pytest; }",
+        "exec uv run pytest",
+        "env -u PYTHONPATH uv run pytest",
+        "nice -n 5 uv run pytest",
+        "ls tests | xargs -n1 uv run pytest",
+        "uv run -p 3.12 pytest",
     ],
 )
 def test_a_pytest_command_counts_as_tests(tmp_path, command):
     assert _run_gate(tmp_path, [_bash_call(command)], COMMIT).endswith("ran=tests")
+
+
+def test_a_truncated_line_does_not_hide_the_rest(tmp_path):
+    """A transcript can be cut mid-line while it is written; later lines count."""
+    (tmp_path / ".claude").mkdir(exist_ok=True)
+    transcript = tmp_path / "session.jsonl"
+    lines = [json.dumps(_user_text("hi")), '{"type": "assistant", "mess']
+    lines.append(json.dumps(_bash_call("uv run pytest -q")))
+    transcript.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    payload = {
+        "session_id": "s",
+        "transcript_path": str(transcript),
+        "tool_input": {"command": COMMIT},
+    }
+    path = os.pathsep.join([os.path.dirname(shutil.which("jq")), "/usr/bin", "/bin"])
+    subprocess.run(
+        ["sh", str(HOOK)],
+        input=json.dumps(payload),
+        text=True,
+        check=True,
+        env={"PATH": path, "CLAUDE_PROJECT_DIR": str(tmp_path)},
+    )
+    log = (tmp_path / ".claude" / "commit-gate.log").read_text(encoding="utf-8")
+    assert log.splitlines()[-1].endswith("ran=tests")
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["git -C app commit -m 'Fix'", "git -c user.name=x commit -m 'Fix'"],
+)
+def test_a_commit_in_another_directory_is_logged(tmp_path, command):
+    assert "\ttrailer=no\t" in _run_gate(tmp_path, [], command)
 
 
 def test_a_run_in_a_subagent_counts(tmp_path):
@@ -152,6 +194,7 @@ def test_a_run_in_a_subagent_counts(tmp_path):
         "gh pr create --title t --body 'Ran:\npytest -n auto'",
         "cat \\\n  scripts/verify_change.py",
         "printf '%s\\n' 'x' '(pytest -q)' > msg.txt",
+        "gh pr create --body \"It's ok\" && gh pr comment --body 'Ran (pytest -q)'",
     ],
 )
 def test_reading_about_a_tool_is_not_running_it(tmp_path, command):

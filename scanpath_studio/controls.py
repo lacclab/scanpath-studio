@@ -6301,8 +6301,7 @@ def _legends_drawn(
     static figure, with saccades coloured by type; the fixation colours with a
     categorical *Color by* (or by line), a *Highlight* filter (A's or, in
     Compare, B's) or raw gaze; the size key with fixations on a fixed scale;
-    the text-highlight note while words are highlighted — by *Mark text*, or
-    *Mark border* on any spatial figure.
+    the text-highlight note while word highlights are visible on a spatial figure.
     """
     ss = st.session_state
     color_by = ss.get("global_color_by")
@@ -6333,7 +6332,8 @@ def _legends_drawn(
         and bool(ss.get("global_show_stimulus", True))
         and (
             (
-                ss.get("global_critical_span_style", "None") == "Mark text"
+                ss.get("global_critical_span_style", "None")
+                in ("Mark text", "Underline")
                 and bool(ss.get("global_show_labels", True))
             )
             or (ss.get("global_critical_span_style") == "Mark border")
@@ -6575,14 +6575,10 @@ def _collect_viz_settings(
     if isinstance(_fr, (tuple, list)) and len(_fr) == 2:
         fix_index_range = (int(_fr[0]), int(_fr[1]))
 
-    # The highlight column applies only while its style has something to draw on:
-    # **Mark text** recolours the word labels, so it needs Text; **Mark border**
-    # is its own outline layer (independent of Text and Word boxes, as in the
-    # builder), so it needs only the 📄 Stimulus master switch.
     critical_span_style = ss.get("global_critical_span_style", "None")
     span_drawable = (
-        show_labels if critical_span_style == "Mark text" else show_stimulus
-    ) and critical_span_style in ("Mark text", "Mark border")
+        show_labels and critical_span_style in ("Mark text", "Underline")
+    ) or (show_stimulus and critical_span_style == "Mark border")
     highlight_column = None
     if span_drawable and highlight_options:
         candidate = ss.get("global_highlight_column")
@@ -8251,7 +8247,7 @@ def render_plot_controls(
 
         with detail_section("Word highlights", key="plot_detail_stim_highlight"):
             # "Highlight a span": the canonical value lives in
-            # `global_critical_span_style` ("Mark text" | "Mark border" | "None"),
+            # `global_critical_span_style` (the chosen style or "None"),
             # which is what deep links / Share / restore carry — the on/off and the
             # mode widgets are derived from it each run, and their callbacks write
             # it back on interaction.
@@ -8270,18 +8266,10 @@ def render_plot_controls(
                 ]
 
             st.session_state["global_highlight_span_on"] = canonical != "None"
-            if canonical in ("Mark text", "Mark border"):
+            if canonical in ("Mark text", "Mark border", "Underline"):
                 st.session_state["global_highlight_span_mode"] = canonical
             else:
                 st.session_state.setdefault("global_highlight_span_mode", "Mark text")
-
-            # The span's *text*-marking channel reaches all three builders —
-            # the animation and the comparison figure take `highlight_column` +
-            # `highlight_text_color` and recolour the word labels. Neither has a
-            # border-overlay layer, so **Mark border** stays a `make_scanpath_figure`
-            # feature and only its colour picker is gated (`tabs._marked_text_column`
-            # hands the other two builders `None` under that style, so nothing is
-            # marked there rather than silently falling back to text marking).
 
             span_on, span_rest = _check_row(
                 "Highlight words",
@@ -8318,7 +8306,7 @@ def render_plot_controls(
                 )
             style_help = (
                 "**Mark text** colors the span's words (needs **Text** on). "
-                "**Mark border** outlines the span. The box beside it sets the color."
+                "**Mark border** outlines the span. **Underline** draws a line beneath each marked word in its text color (needs **Text** on)."
             )
             style_field = _sub_row("Style", caption_help=style_help)
             mode_col, span_color_col = style_field.columns(
@@ -8326,7 +8314,7 @@ def render_plot_controls(
             )
             span_mode = mode_col.radio(
                 "Style",
-                options=["Mark text", "Mark border"],
+                options=["Mark text", "Mark border", "Underline"],
                 horizontal=True,
                 key="global_highlight_span_mode",
                 persist_state="session",
@@ -8348,7 +8336,7 @@ def render_plot_controls(
                     ),
                     label_visibility="collapsed",
                 )
-            else:
+            elif span_mode == "Mark text":
                 span_color_col.color_picker(
                     "Highlighted text color",
                     key="global_highlight_text_color",

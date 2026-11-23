@@ -42,7 +42,7 @@ lists the four render views. The reference and compact Share snippets use
 | heatmap (`show_heatmap`, metric / norm / colour scale / range / opacity) | ✅ | ❌ | ✅ | Compare shows word boxes with a scale shared by A and B. Word counts and dwell use recorded word assignments when mapped, and box geometry otherwise. Logarithmic legends label the original units. |
 | raw gaze (`show_raw_gaze`, size / opacity) | ✅ | ❌ | ✅ | Compare draws each reading's samples in its scanpath's colour |
 | stimulus image (`background_image*`, opacity / offset / scale) | ✅ | ✅ | ✅ | Split layouts get one image per panel |
-| `highlight_column`, `highlight_text_color`, `text_color` | ✅ | ✅ | ✅ | *Mark text* needs visible labels. *Mark border* outlines the selected stimulus even with labels and ordinary word boxes hidden. Split panels each draw their own span. A co-replay draws A for Both or A, and B for B. |
+| `highlight_column`, `highlight_text_color`, `text_color` | ✅ | ✅ | ✅ | *Mark text* and *Underline* need visible labels. Underlines follow individual words and redaction blocks in the text color. *Mark border* outlines the selected stimulus even with labels and ordinary word boxes hidden. Split panels each draw their own span. A co-replay draws A for Both or A, and B for B. |
 | `redact_text` | ✅ | ✅ | ✅ | `plots.redact_word_text` masks the words at each builder's entry; the blocks take the text / highlight colour |
 | `word_hover_measure` | ✅ | ✅ | ✅ | The measure appears when the word hover includes it. |
 | colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |

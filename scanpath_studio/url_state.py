@@ -1993,7 +1993,9 @@ _CHOICE_STATE_PARSERS = {
     "global_fixation_symbol": _closed_choice(tuple(FIXATION_SYMBOLS)),
     "global_fixation_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
     "global_heatmap_colorbar_orientation": _closed_choice(("Vertical", "Horizontal")),
-    "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
+    "global_critical_span_style": _closed_choice(
+        ("Mark text", "Mark border", "Underline", "None")
+    ),
     "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
     **{
         f"{side}_fixclass_{c}_mode": _closed_choice(tuple(FIXATION_FLAG_MODES))
@@ -3348,7 +3350,7 @@ def _restore_plot_config(
     if "critical_span_style" in highlighting:
         css = highlighting["critical_span_style"]
         put_valid(
-            css in ("Mark text", "Mark border", "None"),
+            css in ("Mark text", "Mark border", "Underline", "None"),
             "global_critical_span_style",
             css,
             "text highlighting",

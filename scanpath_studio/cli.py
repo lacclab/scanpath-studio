@@ -934,9 +934,9 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--critical-span-style",
         dest="critical_span_style",
-        choices=("mark-text", "mark-border", "none"),
+        choices=("mark-text", "mark-border", "underline", "none"),
         help="How the --highlight-column words are marked: mark-text recolors "
-        "them, mark-border outlines their boxes, none draws neither "
+        "them, mark-border outlines their boxes, underline underlines each word, none hides the marks "
         "(default: mark-text).",
     )
     viz.add_argument(
@@ -2435,6 +2435,7 @@ def _parse_fix_index_range(value: str | None) -> tuple | None:
 _CRITICAL_SPAN_STYLES = {
     "mark-text": "Mark text",
     "mark-border": "Mark border",
+    "underline": "Underline",
     "none": "None",
 }
 

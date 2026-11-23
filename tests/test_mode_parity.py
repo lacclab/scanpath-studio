@@ -859,3 +859,43 @@ def test_co_replay_border_follows_the_single_displayed_page(stimulus, expected):
     )
     assert any(s.line.color == "#b63891" for s in fig.layout.shapes) == expected
     assert fig.frames
+
+
+@pytest.mark.parametrize("view", ["static", "replay", "side_by_side", "overlay"])
+def test_underlines_follow_each_displayed_words_flag(view):
+    words, fix = _words(), _fixations()
+    words["target"] = words.word_id.isin([0, 2]) & (words.participant_id == "A")
+    settings = dict(
+        critical_span_style="Underline",
+        highlight_column="target",
+        text_color="#234567",
+        show_word_labels=True,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+    )
+    if view == "static":
+        fig = plots.make_scanpath_figure(
+            _trial(words, "A"), _trial(fix, "A"), **settings
+        )
+    elif view == "replay":
+        fig = plots.make_scanpath_animation(
+            _trial(words, "A"), _trial(fix, "A"), **settings
+        )
+    else:
+        fig = plots.make_comparison_figure(
+            words, fix, ("A", "t1"), ("B", "t1"), layout=view, **settings
+        )
+    labels = [t for t in fig.data if t.name == "words" and t.mode == "text"]
+    assert tuple(labels[0].textfont.lineposition) == (
+        "under",
+        "none",
+        "under",
+        "none",
+        "none",
+        "none",
+    )
+    assert labels[0].textfont.color == "#234567"
+    for panel in labels[1:]:
+        assert panel.textfont.lineposition is None
+    assert sum("Highlighted:" in a.text for a in fig.layout.annotations) == 1

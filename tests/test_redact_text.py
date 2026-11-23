@@ -199,3 +199,28 @@ def test_text_word_ids_that_spell_the_words_are_redacted_too(words, fixations):
         **hovers,
     )
     assert _leaks(via_api) == []
+
+
+def test_underline_marks_only_selected_redaction_blocks(words, fixations):
+    fig = make_scanpath_figure(
+        words,
+        fixations,
+        show_word_labels=True,
+        redact_text=True,
+        highlight_column="is_in_aspan",
+        critical_span_style="Underline",
+        **CANVAS,
+    )
+    assert not _leaks(fig)
+    blocks = _extents(_blocks(fig)[0])
+    lines = next(
+        t for t in fig.data if t.name == "words" and t.mode == "lines" and not t.fill
+    )
+    marked = [
+        block for block, flag in zip(blocks, words.is_in_aspan, strict=True) if flag
+    ]
+    for (left, right, top, bottom), (x0, x1, _, block_bottom) in zip(
+        _extents(lines), marked, strict=True
+    ):
+        assert (left, right) == pytest.approx((x0, x1))
+        assert top == bottom > block_bottom

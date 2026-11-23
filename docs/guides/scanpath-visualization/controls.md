@@ -193,7 +193,7 @@ Recording setup. Click **Stimulus** to adjust the text or image for this figure.
 | **Text appearance** → **Color** → text color | Choose the stimulus text color. |
 | **Word highlights** → **Show** | Highlight words in the stimulus text, such as the answer span. |
 | **Word highlights** → word column | Choose which words to highlight: a true/false word column, such as the critical span. |
-| **Word highlights** → **Style** | Choose the word highlight style, **Mark text** (colored text) or **Mark border** (a border around the words), and the highlight color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus. |
+| **Word highlights** → **Style** | **Mark text** changes the color of the selected words. **Mark border** outlines the span. Both have a color picker. **Underline** draws a line beneath each selected word in the current text color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus. |
 | **Stimulus image** → **Show** | Show the stimulus image, the screen as shown in the experiment, under the scanpath. |
 | **Stimulus image** → **File** | Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. It replaces the dataset's image and is not included in Share links. |
 | **Stimulus image** → **Opacity** | Set the stimulus image opacity. Lower it so the scanpath reads over it. |

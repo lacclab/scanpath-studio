@@ -1127,9 +1127,22 @@ REGISTER: tuple[Computation, ...] = (
         name="Per-word cohort profile",
         category=CATEGORY_AGGREGATION,
         summary="A measure per word position, aggregated across participants.",
-        formula="Group the word measures by word id and apply `agg.aggregate_value`.",
+        formula=(
+            "Two steps per word id, both with the chosen `agg.aggregate_value` "
+            "(mean, median or sum): first within each participant, over their "
+            "finite values from repeated readings of the text (z-scored within "
+            "the participant first when **Z-score per participant** is on); then "
+            "across those participant values, with the `agg.spread` band and "
+            "`n` = the contributing participants. One screen of a multipart "
+            "text at a time."
+        ),
         code="scanpath_studio/aggregation.py:cohort_word_profile",
-        missing="A minimum-participants threshold drops thinly-sampled words.",
+        missing=(
+            "A word with no finite value keeps its row with `n = 0` and no value. "
+            "A word with fewer participants than **Min participants per word** is "
+            "marked `enough = False`, and the view hides it when that minimum is "
+            "above 1."
+        ),
         tiers="C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS, _API),

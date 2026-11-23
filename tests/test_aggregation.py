@@ -524,6 +524,27 @@ class TestCohortWordProfile:
         # The guard flags rows, it never drops them.
         assert len(out) == 3
 
+    def test_aggregates_within_each_participant_then_across_and_keeps_empty_words(
+        self,
+    ):
+        # p1 read the text twice. The median within p1 (200) and then across
+        # participants (125) differs from a median of the pooled values (100).
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p1", "p1", "p2"],
+                "trial_id": ["t1", "t2", "t1", "t1", "t2", "t1"],
+                "word_id": [1, 1, 1, 2, 2, 2],
+                "total_fixation_duration_ms": [100.0, 300.0, 50.0, *[np.nan] * 3],
+            }
+        ).assign(text_id="A", text="w")
+        out = cohort_word_profile(words, "text_id", "A", MEASURES["tfd"], agg="median")
+        assert out["word_id"].tolist() == [1, 2]
+        assert out.loc[0, "value"] == 125.0
+        assert out.loc[0, "n"] == 2
+        assert np.isnan(out.loc[1, "value"])
+        assert out.loc[1, "n"] == 0
+        assert not out.loc[1, "enough"]
+
     def test_iqr_band(self):
         out = cohort_word_profile(
             _tidy_words(), "text_id", "A", MEASURES["tfd"], spread="IQR"

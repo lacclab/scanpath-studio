@@ -186,6 +186,19 @@ def test_view_mode_settings_neither_drift_nor_change_with_a_tile(monkeypatch):
         current = tile
 
 
+def test_a_view_sets_both_readings_marker_size(monkeypatch):
+    """A view's marker size reaches Compare's per-reading sizes, and the next
+    view puts them back with the rest of its defaults."""
+    store = _viz_store()
+    store.update({"cmp0_marker_size_range": (10, 30), "cmp1_marker_size_range": (5, 9)})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    for name, expected in (("gaze_over_time", (4, 4)), ("heatmap", (8, 24))):
+        controls._apply_view_preset(name)
+        assert store["global_marker_size_range"] == expected
+        assert store["cmp0_marker_size_range"] == expected
+        assert store["cmp1_marker_size_range"] == expected
+
+
 def test_scanpath_quick_view_clears_custom_configuration(monkeypatch):
     store = _viz_store()
     store.update(

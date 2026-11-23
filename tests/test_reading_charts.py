@@ -177,6 +177,29 @@ def test_fixations_say_why_they_grey_on_axes_they_lack():
     assert not any("Turn the layer on" in caption for caption in captions)
 
 
+def test_gaze_over_time_keeps_its_small_onset_markers_in_compare():
+    """Each reading draws its own marker size in Compare, so the view sets
+    both: a large duration-scaled marker would hide a short fixation's bar."""
+    from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
+
+    def sizes():
+        figure = at.session_state[SNIPPET_STATE_KEY]
+        assert figure.kind == "comparison"
+        return [
+            tuple(figure.settings[style]["marker_size_range"])
+            for style in ("style_a", "style_b")
+        ]
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.toggle(key="single_animate").set_value(False).run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    assert not at.exception
+    assert sizes() == [(4, 4), (4, 4)]
+    at.button(key="viz_view_scanpath").click().run()
+    assert sizes() == [(8, 24), (8, 24)]
+
+
 def test_missing_timestamps_never_supply_elapsed_seconds():
     w, f = example_import_tables()
     f = f.iloc[:3].copy()

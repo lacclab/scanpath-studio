@@ -1787,6 +1787,10 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
 
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = deepcopy(value)
+    # Compare draws each reading's markers at its own size, so the view's
+    # marker size is written to both readings too, as a palette's colours are.
+    for idx, _ in _COMPARE_SCANPATHS:
+        ss[f"cmp{idx}_marker_size_range"] = deepcopy(ss["global_marker_size_range"])
     ss[_QUICK_VIEW_SELECTION_KEY] = name
     # The complete baseline is captured by `_active_quick_view` after the
     # next rerun has restored data-dependent defaults.

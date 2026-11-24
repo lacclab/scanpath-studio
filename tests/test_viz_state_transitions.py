@@ -292,6 +292,46 @@ def test_full_monitor_changes_only_framing_state_and_cache_input(monkeypatch):
     assert dict(key_off)["fit_to_monitor"] is False
 
 
+@pytest.mark.parametrize("key", ["background_image", "background_image_b"])
+def test_a_stimulus_page_replaced_on_disk_misses_the_figure_cache(key, tmp_path):
+    """The figure embeds the page's bytes, so its cache key follows the file at
+    that path, not only the path: a page re-exported over the old one shows."""
+    import os
+
+    words = pd.DataFrame({"word_id": [1], "x": [0.0], "y": [0.0]})
+    fixations = pd.DataFrame({"x": [1.0], "y": [1.0], "duration_ms": [200.0]})
+    page = tmp_path / "page.png"
+    page.write_bytes(b"\x89PNG first")
+    first = tabs._figure_input_key(words, fixations, {key: str(page)})
+    assert tabs._figure_input_key(words, fixations, {key: str(page)}) == first
+    # A copy that keeps the old page's size and modification time (`cp -p`).
+    stamp = page.stat()
+    page.write_bytes(b"\x89PNG other")
+    os.utime(page, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    assert page.stat().st_size == stamp.st_size
+    assert tabs._figure_input_key(words, fixations, {key: str(page)}) != first
+    # A missing file and an inline page still make a key.
+    page.unlink()
+    assert tabs._figure_input_key(words, fixations, {key: str(page)})
+    assert tabs._figure_input_key(words, fixations, {key: "data:image/png;base64,AA=="})
+
+
+def test_every_page_path_the_figure_embeds_is_stamped_in_its_key():
+    """The figure settings that name a page file are the ones
+    `_figure_input_key` stamps; a new one must be added there."""
+    from dataclasses import fields
+
+    from scanpath_studio.plots import FigureSettings
+
+    paths = {
+        f.name
+        for f in fields(FigureSettings)
+        if f.name.startswith("background_image")
+        and not f.name.removesuffix("_b").endswith(("_size", "_origin", "_opacity"))
+    }
+    assert paths == tabs._IMAGE_PATH_INPUTS
+
+
 # --- narrowing the trial pool is not a design edit ---------------------------
 
 

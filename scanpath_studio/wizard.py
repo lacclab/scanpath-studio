@@ -1371,7 +1371,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         # `line_count` was already read (and the lines above already drawn
         # with it) before this button was evaluated, so raising it here alone
         # would only take effect on the *next* interaction — a click that
-        # visibly does nothing. `st.rerun()` restarts the script now, so
+        # visibly does nothing. `rerun()` restarts the script now, so
         # the new line appears immediately, same run.
         st.session_state[_FILENAME_DERIVE_LINE_COUNT_KEY] = line_count + 1
         rerun()

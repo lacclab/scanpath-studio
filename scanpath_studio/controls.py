@@ -1731,17 +1731,14 @@ def keep_holds_through_rerun() -> None:
 
     `reassert_pending_writes` reads a held key that still has its written value
     as the browser having taken it, and ends the hold. A rerun the script
-    starts (`st.rerun()`) brings no values from the browser, so a held key
-    that has its written value now would read that way and end before the
-    browser's echo arrives; marked fresh, it waits for the run after, which is
-    the browser's. A key holding something else is left as it is: in a dialog
-    or fragment run the holds were not re-applied, so a key there can hold the
-    browser's echo, which the next run's `reassert_pending_writes` must still
-    see to put the write back."""
-    ss = st.session_state
-    for key, write in (ss.get(_PENDING_WRITES_KEY) or {}).items():
-        if _write_match_key(ss.get(key)) == _write_match_key(write.value):
-            write.fresh = True
+    starts (`st.rerun()`, `st.switch_page`) brings no values from the browser,
+    so every hold would read that way and end before the browser's echo
+    arrives. Marked, the next run keeps a hold whose key has its written value
+    instead of ending it, and checks any other value as always: an echo the
+    browser sent in a dialog or fragment run, where no hold was re-applied, is
+    put back, and a value the user picked ends the hold."""
+    for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
+        write.through_rerun = True
 
 
 #: Design keys no widget draws, which `_hold_view_writes` and
@@ -2750,6 +2747,8 @@ class _PendingWidgetWrite:
     stale_echo: object
     fresh: bool  # The script run that made the write hasn't started yet.
     popover_key: str | None = None
+    #: The next run is one the script started itself (`keep_holds_through_rerun`).
+    through_rerun: bool = False
 
 
 _PENDING_WRITES_KEY = "_pending_widget_writes"
@@ -2824,6 +2823,7 @@ def reassert_pending_writes() -> None:
         return
     kept = {}
     for key, write in pending.items():
+        through_rerun, write.through_rerun = write.through_rerun, False
         if write.fresh:
             # The run the callback wrote in: the write itself is what reads
             # back, and the browser has not answered yet.
@@ -2836,7 +2836,11 @@ def reassert_pending_writes() -> None:
             continue
         current = _write_match_key(ss.get(key))
         if current == _write_match_key(write.value):
-            continue  # the browser has it
+            if through_rerun:
+                # A run the script started: nothing came from the browser,
+                # so the value in place is ours, not its answer.
+                kept[key] = write
+            continue  # otherwise the browser has it
         if write.stale_echo == _ECHO_UNKNOWN:
             write.stale_echo = deepcopy(ss.get(key))
         elif current != _write_match_key(write.stale_echo):

@@ -19,7 +19,7 @@ STYLE = "global_saccade_style"
 
 
 def test_the_package_starts_every_rerun_through_the_helper():
-    """`st.rerun` itself only inside `reruns.rerun`."""
+    """`st.rerun` and `st.switch_page` themselves only inside `reruns`."""
     package = Path(scanpath_studio.__file__).parent
     direct = []
     for path in sorted(package.glob("*.py")):
@@ -29,14 +29,14 @@ def test_the_package_starts_every_rerun_through_the_helper():
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "rerun"
+                and node.func.attr in ("rerun", "switch_page")
                 and isinstance(node.func.value, ast.Name)
                 and node.func.value.id == "st"
             ):
                 direct.append(f"{path.name}:{node.lineno}")
     assert not direct, (
-        "start a rerun with `reruns.rerun`, which keeps the held widget "
-        f"writes through it: {direct}"
+        "start a rerun with `reruns.rerun` / `reruns.switch_page`, which keep "
+        f"the held widget writes through it: {direct}"
     )
 
 
@@ -69,6 +69,30 @@ def test_a_dialog_rerun_leaves_an_echoed_hold_for_the_next_run(state):
     assert state[STYLE] == "Dashed"
 
 
+def test_a_click_that_reaches_the_rerun_still_meets_the_hold(state):
+    """The run the script asked for can arrive with the browser's values (a
+    click sent while it was pending): the closed menu's old value is still
+    put back, not let through for a run."""
+    state[STYLE] = "Solid"
+    controls.reassert_pending_writes()
+    controls.keep_holds_through_rerun()
+    state[STYLE] = "Solid"  # the browser's echo arrives with that run
+    controls.reassert_pending_writes()
+    assert state[STYLE] == "Dashed"
+
+
+def test_the_hold_ends_once_the_browser_shows_it_after_a_rerun(state):
+    """Kept through the script's own rerun, the hold still ends when the
+    browser shows the value, so a later pick of the old value stands."""
+    controls.keep_holds_through_rerun()
+    controls.reassert_pending_writes()  # the script's rerun
+    controls.reassert_pending_writes()  # the browser shows Dashed
+    state[STYLE] = "Solid"  # the user picks Solid
+    controls.reassert_pending_writes()
+    assert state[STYLE] == "Solid"
+    assert STYLE not in (state.get(controls._PENDING_WRITES_KEY) or {})
+
+
 @pytest.mark.parametrize("scope", ["app", "fragment"])
 def test_rerun_keeps_the_holds_only_for_a_rerun_of_the_app(scope, state, monkeypatch):
     """A fragment's rerun runs no `reassert_pending_writes`, so it keeps none."""
@@ -77,4 +101,4 @@ def test_rerun_keeps_the_holds_only_for_a_rerun_of_the_app(scope, state, monkeyp
     reruns.rerun(scope=scope)
     assert started == [{"scope": scope}]
     write = state[controls._PENDING_WRITES_KEY][STYLE]
-    assert write.fresh is (scope == "app")
+    assert write.through_rerun is (scope == "app")

@@ -10721,34 +10721,41 @@ def render_trial_chip_picker(
     if shown_now:
         host.caption("Field colors: an optional highlight for each shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
+        generations = dict(st.session_state.get("_trial_chip_color_gen") or {})
 
         def _reset_to_gray(field: str) -> None:
-            # Only the picker goes back to the default gray; the loop below
-            # reads that as "no highlight", as it does a gray picked by hand.
-            # Through `write_through`, since the picker sits in a popover and
-            # the browser would otherwise send its old color back.
-            write_through(f"trial_chip_color_{field}", _neutral)
+            # A fresh key gives the field a new picker, drawn at the default
+            # gray, which the loop below reads as "no highlight". Writing the
+            # old key would not hold: the picker sits in a popover, and the
+            # browser would send its old color back.
+            stored = dict(st.session_state.get("trial_chip_colors") or {})
+            stored.pop(field, None)
+            st.session_state["trial_chip_colors"] = stored
+            gens = dict(st.session_state.get("_trial_chip_color_gen") or {})
+            gens[field] = gens.get(field, 0) + 1
+            st.session_state["_trial_chip_color_gen"] = gens
 
         for key in shown_now:
             label_col, swatch_col, clear_col = host.columns(
                 [3, 1, 1], vertical_alignment="center"
             )
             label_col.caption(key_to_label[key])
-            widget_key = f"trial_chip_color_{key}"
-            # The stored color seeds a picker the first time it is drawn; after
-            # that its own state holds it (a value= beside a written key would
-            # draw Streamlit's double-default warning).
-            seed = (
-                {}
-                if widget_key in st.session_state
-                else {"value": colors.get(key) or _neutral}
+            generation = generations.get(key, 0)
+            widget_key = f"trial_chip_color_{key}" + (
+                f"_{generation}" if generation else ""
             )
+            # The stored color is the picker's value on every run, never only
+            # the first. The menu's pickers mount in the browser only when it
+            # opens, and one the browser has not shown yet mounts at the value
+            # sent as its default and sends that back on the next rerun.
+            # Without `value=`, that default is Streamlit's black. Nothing
+            # writes this key, so the value never meets a Session State write.
             picked = swatch_col.color_picker(
                 key_to_label[key],
+                value=colors.get(key) or _neutral,
                 key=widget_key,
                 label_visibility="collapsed",
                 help="Highlight this field in a color.",
-                **seed,
             )
             if picked.lower() == _neutral.lower():
                 colors.pop(key, None)

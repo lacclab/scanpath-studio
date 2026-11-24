@@ -2733,6 +2733,7 @@
 <li>Stimulus &amp; context keeps its highlighted spans when you step through a screen with no highlighted words, such as a title, and picks them up even when a trial opens on such a screen.</li>
 <li>On multi-screen trials the experimental per-word reading measures (<code>compute_word_metrics</code>, behind <code>SCANPATH_EXPERIMENTAL=1</code>) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.</li>
 <li>The Data page's Texts table no longer passes off one reader's version of a screen as every reader's: a screen, or a text, that readers saw differently — the demo's answer orders and feedback — is shown once per version with the readers who saw it, and a Differs by reader column names those screens.</li>
+<li>The Data page's checks no longer flag a fixation that a screen's recording end cuts to 0 ms, as in the bundled demo.</li>
 <li><code>api.app_link</code> and <code>scanpath-studio open</code> open the bundled demo and the public corpora by the name the dataset list shows, instead of saying the dataset isn't available here.</li>
 <li>The blank band between the header and the dataset and trial pickers is gone.</li>
 <li>The trial summary's chips no longer turn black after the ✏️ menu is opened for the first time in a session.</li>

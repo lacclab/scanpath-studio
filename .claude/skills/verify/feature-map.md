@@ -87,6 +87,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Saved work | Local recovery and downloaded corpora are accessible even when the current dataset fails to load. |
 | Mapping recovery | Upload a Fixations table with an unrecognized duration, press Add dataset, activate the blocker with Enter, and map a seconds column. The duration picker receives focus and shows two converted values. |
 | Dataset credit | Credit an unpublished lab dataset and a second comparison dataset. The saved README identifies which supplies the exported trials and BibTeX contains both references. |
+| Texts table | On the demo, each text lists every screen once, except Answers (and Feedback where a reader answered wrong): one copy per reader, marked *seen by*, with the *Differs by reader* column naming them. |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |
 | Data checks | Each check that found rows says how many, where, and what happens to them |
 | Run sheet | A missing planned reading, a raw-gaze-only reading and a planned omission have separate outcomes |

@@ -1,8 +1,10 @@
 """A hand-edited share link must never crash the app.
 
 Every URL param that feeds a min/max-bounded widget is clamped on the way in
-(`url_state._URL_BOUNDED`), and every colour param is read as ``#rrggbb`` or
-dropped with the "Ignored bad URL param" warning (`_parse_hex_color`). Without
+(`url_state._URL_BOUNDED`), every colour param is read as ``#rrggbb`` or
+dropped with the "Ignored bad URL param" warning (`_parse_hex_color`), and
+every param whose control offers a closed set of options is checked against
+that set (`_CHOICE_STATE_PARSERS`, the recovery cache's rule too). Without
 a bound, ``?raw_gaze_opacity=5`` would crash the slider; read as any string,
 ``?order_font_color=zzz`` would crash Plotly inside the figure builder. This boots
 the real app with garbage in *every* such param at once, so a param added later
@@ -81,6 +83,40 @@ def test_garbage_colours_are_dropped_with_a_warning():
         state_key = _URL_PRESETS[param][0]
         if state_key in at.session_state:
             assert at.session_state[state_key] != "zzz", param
+
+
+def _choice_params() -> dict[str, str]:
+    """``url param → session key`` for every link param whose control offers a
+    closed set of options (`url_state._CHOICE_STATE_PARSERS`). A param of a
+    feature this build has off is ignored silently, by design, so it is left
+    out."""
+    from scanpath_studio.url_state import (
+        _CHOICE_STATE_PARSERS,
+        _GATED_URL_PARAMS,
+        _URL_PRESETS,
+    )
+
+    return {
+        url_key: state_key
+        for url_key, (state_key, _coerce) in _URL_PRESETS.items()
+        if state_key in _CHOICE_STATE_PARSERS
+        and (url_key not in _GATED_URL_PARAMS or _GATED_URL_PARAMS[url_key]())
+    }
+
+
+def test_garbage_choices_are_dropped_with_a_warning():
+    """A value a control does not offer is reported and dropped, as a colour
+    is — not stored for the widget to reset silently."""
+    params = _choice_params()
+    assert len(params) > 30
+    at = _boot({param: "zzz-not-an-option" for param in params})
+
+    assert not at.exception, [e.message for e in at.exception]
+    warned = " ".join(w.value for w in at.warning)
+    for param, state_key in params.items():
+        assert f"invalid {param}=zzz-not-an-option" in warned, param
+        if state_key in at.session_state:
+            assert at.session_state[state_key] != "zzz-not-an-option", param
 
 
 def test_a_valid_colour_still_lands():

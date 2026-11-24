@@ -1,0 +1,1 @@
+A share link with a value a menu does not offer (a misspelt line style or palette, say) now says it ignored that value, as it already did for colours and numbers, instead of quietly using the default.

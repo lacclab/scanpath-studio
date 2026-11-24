@@ -1384,6 +1384,11 @@ def _apply_url_preset() -> str | None:
             if len(str(raw)) > _MAX_LINK_VALUE_CHARS:
                 raise ValueError(f"longer than {_MAX_LINK_VALUE_CHARS} characters")
             value = coerce(raw)
+            # A control with a closed set of options takes only one of them,
+            # by the same rule the recovery cache applies, so a value it does
+            # not offer is reported here rather than reset by the widget unseen.
+            if value is not None and state_key in _CHOICE_STATE_PARSERS:
+                value = _CHOICE_STATE_PARSERS[state_key](value)
         except (ValueError, TypeError, OverflowError):
             _warn_invalid_link_param(url_key, raw)
             continue

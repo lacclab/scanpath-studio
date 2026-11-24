@@ -324,6 +324,21 @@ def test_deep_link_seeds_frozen_state_keys():
     validated["cmp_b_saccade_classes"] = "forward,regression"
     # The print width's unit.
     validated["export_width_unit"] = "in"
+    # The rest of the closed vocabularies: each control's own option.
+    validated.update(
+        {
+            "critical_span_style": "Underline",
+            "fixation_symbol": "square",
+            "heatmap_metric": "duration_ms",
+            "heatmap_norm": "Log",
+            "illustration_label": "Auto",
+            "palette": "Print / grayscale",
+            "preproc_short_policy": "Merge",
+            "saccade_color_mode": "By type",
+            "saccade_render_mode": "Arc",
+            "saccade_style": "Dashed",
+        }
+    )
     # A per-scanpath line style is the selectbox's own label.
     validated.update(
         {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}

@@ -407,6 +407,21 @@ def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
 # canonical value is mirrored back into the box *before* either widget renders,
 # so a slider drag, a deep link, a restored config and a Quick-view preset all
 # move the box too — one-way sync each direction, no feedback loop.
+#
+# In shadow mode (``value=``) neither is seeded: the slider and each box are
+# drawn under `shadow_widget_key` names of their own, and each moves to a fresh
+# key when the value changes without it — the boxes after a drag, the slider
+# after a typed value — since Streamlit ignores a new ``value=`` under a key
+# it already holds.
+
+
+def _shadow_stem(widget_key: str) -> str:
+    """The name a `shadow_widget_key` key was made from (``_{name}__w{n}``),
+    or ``widget_key`` itself when it is not one."""
+    name, sep, generation = widget_key.rpartition("__w")
+    if sep and name.startswith("_") and generation.isdigit():
+        return name[1:]
+    return widget_key
 
 
 def _shadow_key_missing(*keys: str) -> bool:
@@ -485,6 +500,10 @@ def _numeric_slider(
         # A shadow (`shadow_widget_key(seed=False)`): both halves take ``value``
         # as their own default and hand a change to ``on_change(new_value)``;
         # neither is seeded through session state (see `shadow_widget_key`).
+        # The box is a shadow of its own, so it moves to a fresh key showing
+        # the new value after a drag.
+        num_key = shadow_widget_key(f"{_shadow_stem(key)}__num", value, seed=False)
+
         def _from(widget_key: str):
             def call() -> None:
                 if _shadow_key_missing(widget_key):
@@ -606,6 +625,11 @@ def _range_slider(
     slider_change = on_change
     defaults: dict = {key: {}, lo_key: {}, hi_key: {}}
     if value is not None:
+        # Each box a shadow of its own endpoint, so a drag moves it to a fresh
+        # key showing the new one.
+        stem = _shadow_stem(key)
+        lo_key = shadow_widget_key(f"{stem}__num_lo", value[0], seed=False)
+        hi_key = shadow_widget_key(f"{stem}__num_hi", value[1], seed=False)
         defaults = {
             key: {"value": tuple(value)},
             lo_key: {"value": value[0]},
@@ -4649,9 +4673,9 @@ def _explicit_pair(val) -> tuple | None:
 # The canonical `global_*` key therefore means **explicit**: it is present only
 # when a range was chosen — dragged or typed here, un-ticking *Auto*, or
 # arriving on a Share link / saved config / saved design — and `None` reaches
-# the builders otherwise, i.e. the API's rule, not a copy of it. The slider
-# draws a private *view* key instead, seeded from the canonical value or (auto)
-# the dataset span it is bounded by, so rendering it never pins a number into
+# the builders otherwise, i.e. the API's rule, not a copy of it. The slider is
+# a shadow instead (`_render_color_range`), showing the canonical value or
+# (auto) the dataset span it is bounded by, so rendering it never pins a number into
 # every link, config and bulk export. (Seeding the canonical key with the
 # dataset's span would put the app's heatmap on the dataset's longest single
 # fixation while the headless one used the trial's own per-word values.) The

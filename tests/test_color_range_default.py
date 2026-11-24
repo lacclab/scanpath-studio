@@ -36,15 +36,6 @@ def _w(widgets, stem: str):
     return next(w for w in widgets if re.fullmatch(rf"_{stem}__w\d+", w.key or ""))
 
 
-def _box(at, stem: str, side: str):
-    """The range's typed ``lo`` / ``hi`` box, beside the slider ``stem``."""
-    return next(
-        w
-        for w in at.number_input
-        if re.fullmatch(rf"_{stem}__w\d+__num_{side}", w.key or "")
-    )
-
-
 FIX_AUTO = "fixation_color_range_auto"
 HEAT_AUTO = "heatmap_color_range_auto"
 CANVAS = (2560, 1440)

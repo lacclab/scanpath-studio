@@ -315,6 +315,12 @@ def test_a_colour_range_a_settings_file_sets_holds_against_the_menus_echo(before
     )
     at.run()
     assert at.session_state[state] == (10.0, 50.0)
+    # The controls whose value the file changed moved to fresh keys: the ones
+    # the browser knew are gone, so what it sends back under them reaches no
+    # widget and no callback. *Auto* moves only when it changed (from Auto).
+    drawn = {w.key for w in (*at.checkbox, *at.slider, *at.number_input)}
+    assert view.key not in drawn
+    assert (auto.key in drawn) is (before is not None)
     for key, value in shown.items():
         at.session_state[key] = value
     at.run()

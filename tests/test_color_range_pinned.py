@@ -34,7 +34,7 @@ def _box(at, stem: str, side: str):
     return next(
         w
         for w in at.number_input
-        if re.fullmatch(rf"_{stem}__w\d+__num_{side}", w.key or "")
+        if re.fullmatch(rf"_{stem}__num_{side}__w\d+", w.key or "")
     )
 
 
@@ -248,6 +248,19 @@ class TestTheWordHeatmapRangeIsInDwell:
         fills = _heat_fills(_static(viz))
         assert fills == auto_fills
         assert len(set(fills)) == 2
+
+    def test_after_a_drag_the_boxes_show_it_and_a_typed_end_keeps_the_other(self):
+        """The boxes follow a drag (each is a shadow of its own end), so typing
+        one end afterwards keeps the dragged other end."""
+        at = _rail(**WORD_HEAT, **{HEAT_KEY: (0.0, 600.0)})
+        _w(at.slider, HEAT_VIEW).set_value((100.0, 500.0))
+        _rerun(at)
+        assert at.session_state["_viz"]["heatmap_range"] == (100.0, 500.0)
+        assert _box(at, HEAT_VIEW, "lo").value == 100.0
+        assert _box(at, HEAT_VIEW, "hi").value == 500.0
+        _box(at, HEAT_VIEW, "hi").set_value(550)
+        _rerun(at)
+        assert at.session_state["_viz"]["heatmap_range"] == (100.0, 550.0)
 
     def test_an_endpoint_beyond_the_observed_dwell_can_be_typed(self):
         at = _rail(**WORD_HEAT)

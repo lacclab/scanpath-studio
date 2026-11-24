@@ -716,6 +716,12 @@ class FigureState:
     canvas: tuple[int, int] | None = None
     base_font_size: int = 16
     font_family: str = ""
+    #: The stimulus font the reading's data declares, which the builders draw
+    #: when no ``font_family`` is named.
+    declared_font_family: str | None = None
+    #: The font was named by the caller (``figure_code``, ``render
+    #: --font-family``), so it is written even where it is the default.
+    font_named: bool = False
     title: str = ""
     caption: str = ""
     fix_index_range: tuple[int, int] | None = None
@@ -1731,7 +1737,7 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
         out.append(("canvas_size", (int(state.canvas[0]), int(state.canvas[1]))))
     if explicit or state.base_font_size != 16:
         out.append(("base_font_size", int(state.base_font_size)))
-    if state.font_family and (explicit or _non_default_font(state.font_family)):
+    if state.font_family and (explicit or _non_default_font(state)):
         out.append(("font_family", str(state.font_family)))
     if state.kind == "animation":
         if explicit or state.playback_speed != 1.0:
@@ -1770,10 +1776,14 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     return out
 
 
-def _non_default_font(name: str) -> bool:
+def _non_default_font(state: FigureState) -> bool:
+    """Whether the figure's font differs from what the builders draw unnamed:
+    the data's declared stimulus font, else the generic monospace."""
     from .constants import FONT_FAMILY
 
-    return str(name) != FONT_FAMILY
+    if state.font_named:
+        return True
+    return str(state.font_family) != (state.declared_font_family or FONT_FAMILY)
 
 
 #: What a snippet names for a raw-gaze table it can't name — one that was
@@ -2145,7 +2155,7 @@ def cli_snippet(
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
     if explicit or state.base_font_size != 16:
         argv += ["--font-size", str(int(state.base_font_size))]
-    if state.font_family and (explicit or _non_default_font(state.font_family)):
+    if state.font_family and (explicit or _non_default_font(state)):
         argv += ["--font-family", str(state.font_family)]
     if explicit or str(state.illustration_label).lower() != "auto":
         argv += ["--illustration-label", str(state.illustration_label).lower()]

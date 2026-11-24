@@ -1642,7 +1642,10 @@ def _render_parser() -> argparse.ArgumentParser:
         "--font-family",
         default=None,
         metavar="NAME",
-        help=f"Font for all figure text (default: {FONT_FAMILY}).",
+        help=(
+            "Font for all figure text (default: the font the data declares for "
+            f"its stimulus, else {FONT_FAMILY})."
+        ),
     )
     viz.add_argument(
         "--title",
@@ -2724,7 +2727,10 @@ def _print_reproduction_code(
         screen=args.screen,
         canvas=canvas,
         base_font_size=args.font_size,
-        font_family=args.font_family or FONT_FAMILY,
+        font_family=args.font_family or "",
+        # A font named on the command line is a choice: written even when it
+        # is the default.
+        font_named=args.font_family is not None,
         title=args.title or "",
         caption=args.caption or "",
         illustration_label=str(args.illustration_label or "auto").lower(),
@@ -3604,7 +3610,7 @@ def render(argv: list[str]) -> None:
     common = dict(
         canvas_size=canvas,
         base_font_size=args.font_size,
-        font_family=args.font_family or FONT_FAMILY,
+        font_family=args.font_family,
         title=args.title or "",
         caption=args.caption or "",
         # The figure's text and the column flags in the dataset's own

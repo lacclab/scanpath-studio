@@ -885,6 +885,14 @@ PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_CHOICE = "PoTeC — Potsdam Textbook Corpus"
 POTEC_DEFAULT_DIR = "data/PoTeC"
 ONESTOP_CHOICE = "OneStop (local export)"
+# OneStop's typeface, as its experiment drew every screen: Lucida Sans
+# Typewriter in a 19 px letter cell (Berzak et al. 2025, Methods), and the
+# experiment's own screen images show exactly that font. The size is the cell
+# over the font's advance (1234 / 2048 em), so a label drawn in the font steps
+# 19 px per letter as the images do. The font is not free to ship: where it is
+# not installed the label falls back to the browser's monospace.
+ONESTOP_FONT_FAMILY = "'Lucida Sans Typewriter', monospace"
+ONESTOP_FONT_PX = 19 / (1234 / 2048)
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
 # flat data-source picker, holding every part of that regime; these are their

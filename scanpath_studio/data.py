@@ -31,6 +31,8 @@ from .constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     DRAWABLE_PX_LIMIT,
+    ONESTOP_FONT_FAMILY,
+    ONESTOP_FONT_PX,
     PACKAGE_NAME,
     SAMPLE_INDEX,
     UPLOAD_FILE_TYPES,
@@ -859,7 +861,7 @@ def load_onestop_server_bundle(
             # Parse only the columns the mapping + registry keep.
             return stamp_source(
                 (
-                    read_mapped_table(ia_shard, kind="words"),
+                    _with_onestop_font(read_mapped_table(ia_shard, kind="words")),
                     read_mapped_table(fix_shard, kind="fixations"),
                 )
             )
@@ -895,7 +897,7 @@ def load_onestop_server_bundle(
     # ~25 GB resident before a single measure is computed.
     words = read_mapped_table(ia_path, kind="words")
     fixations = read_mapped_table(fix_path, kind="fixations")
-    return stamp_source((words, fixations))
+    return stamp_source((_with_onestop_font(words), fixations))
 
 
 _TRAILING_UNIT = re.compile(r"\s*[\[(][^\[\]()]*[\])]\s*$")
@@ -5192,7 +5194,40 @@ def read_sample_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
         raise FileNotFoundError(
             "The bundled demo is missing from this installation. Reinstall Scanpath Studio."
         )
-    return words, fixations
+    return _with_onestop_font(words), fixations
+
+
+def _with_onestop_font(words: pd.DataFrame) -> pd.DataFrame:
+    """OneStop's words, declaring the font its experiment drew them in."""
+    return with_stimulus_font(words, ONESTOP_FONT_PX, ONESTOP_FONT_FAMILY)
+
+
+def declared_font_family(words: pd.DataFrame | None) -> str | None:
+    """The stimulus font family the words declare (``stimulus_font_family``),
+    or ``None``."""
+    if words is None or "stimulus_font_family" not in words.columns:
+        return None
+    family = words["stimulus_font_family"].dropna().astype(str).str.strip()
+    family = family[family != ""]
+    return str(family.iloc[0]) if not family.empty else None
+
+
+def with_stimulus_font(
+    words: pd.DataFrame, font_px: float | None, family: str | None
+) -> pd.DataFrame:
+    """``words`` declaring the typeface its stimulus was drawn in, on every row
+    (``stimulus_font_px`` / ``stimulus_font_family``).
+
+    A declared size is exact: word labels are drawn at it, and the app's font
+    family control snaps to the family on opening the dataset. Nothing is
+    declared without a size."""
+    if words.empty or font_px is None:
+        return words
+    words = words.copy()
+    words["stimulus_font_px"] = float(font_px)
+    if family:
+        words["stimulus_font_family"] = family
+    return words
 
 
 @st.cache_data

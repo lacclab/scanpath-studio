@@ -1136,6 +1136,10 @@ def onestop_raw_frames(
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
     if len(part_list) > 1:
         words, fixations = _onestop_drop_unmatched_screens(words, fixations)
+    from .constants import ONESTOP_FONT_FAMILY, ONESTOP_FONT_PX
+    from .data import with_stimulus_font
+
+    words = with_stimulus_font(words, ONESTOP_FONT_PX, ONESTOP_FONT_FAMILY)
     return _onestop_parts_as_screens(words, fixations)
 
 
@@ -2500,13 +2504,9 @@ def _multipleye_stamp_font(
     The values are dataset-constant (`MultiplEYEScreen`); the app snaps its font
     controls to them so the reading text renders at the exact size
     and typeface the stimulus images were drawn with."""
-    if df.empty or font_px is None:
-        return df
-    df = df.copy()
-    df["stimulus_font_px"] = float(font_px)
-    if family:
-        df["stimulus_font_family"] = family
-    return df
+    from .data import with_stimulus_font
+
+    return with_stimulus_font(df, font_px, family)
 
 
 def multipleye_inventory(

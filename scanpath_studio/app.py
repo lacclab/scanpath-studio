@@ -3271,10 +3271,10 @@ SETUP_DEFAULTS = {
 
 #: The font controls a declared stimulus typeface overwrites, and where
 #: `seed_canvas_state` parks their pre-snap values so leaving that corpus can put
-#: them back. All three are wire format (share link + saved config), which is why
-#: leaking one across a source switch outlives the session that caused it.
+#: them back. All are wire format (share link + saved config), which is why
+#: leaking one across a source switch outlives the session that caused it. The
+#: base size is not one: it is the axis, legend and hover text, the user's own.
 _FONT_SNAP_KEYS = (
-    "global_base_font_size",
     "global_font_family",
     "global_scale_text_to_boxes",
     "global_use_stimulus_font_pt",
@@ -3439,7 +3439,9 @@ def _dataset_font(words: pd.DataFrame) -> tuple[float | None, str | None]:
     return float(px.iloc[0]), family
 
 
-def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | None:
+def _stimulus_font_install_hint(
+    css_family: str | None,
+) -> tuple[str, str | None] | None:
     """``(primary font name, download URL)`` for a stimulus font's CSS stack.
 
     The overlaid reading text only matches the stimulus image when the exact
@@ -3448,13 +3450,16 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
     drifts (URLs/digits render too wide). Returns the human-readable family name
     (first quoted entry of the stack) + a best-effort download link, or None when
     the stack names no specific (quoted) family — a bare CSS generic like
-    ``monospace`` has nothing to install."""
+    ``monospace`` has nothing to install. A commercial font Google Fonts does
+    not carry (`_UNLINKED_FONTS`) is named with no link."""
     if not css_family:
         return None
     match = re.search(r"'([^']+)'", css_family)
     if match is None:
         return None
     name = match.group(1)
+    if name.lower() in _UNLINKED_FONTS:
+        return name, None
     # Best-effort source: the experiment fonts are from Google's Noto project.
     url = (
         "https://github.com/notofonts/noto-cjk"
@@ -3462,6 +3467,27 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
         else f"https://fonts.google.com/?query={name.replace(' ', '+')}"
     )
     return name, url
+
+
+#: Commercial fonts that come with an operating system or Office, not from
+#: Google Fonts, so a search link there would find nothing.
+_UNLINKED_FONTS = frozenset(
+    name.lower()
+    for name in (
+        "Lucida Sans Typewriter",
+        "Lucida Console",
+        "Courier New",
+        "Consolas",
+        "Menlo",
+        "Monaco",
+        "Calibri",
+        "Arial",
+        "Helvetica",
+        "Verdana",
+        "Times New Roman",
+        "Georgia",
+    )
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -8071,18 +8097,17 @@ def seed_canvas_state(
 
     # Authoritative reading font: a dataset can carry its stimulus font size +
     # family on the words. Snap the font controls to it when the source
-    # changes (same gate as the canvas), so the reading text renders at the exact
-    # size and (CJK) typeface the stimulus images were drawn with. We also turn off
-    # "scale text to boxes" since the precise px is known — box geometry can only
-    # approximate it. Manual edits within a source stick (the key is unchanged, so
-    # the snap doesn't re-fire); a returning source re-snaps to the known font.
+    # changes (same gate as the canvas), so the reading text renders in the
+    # typeface the stimulus images were drawn with, and "scale text to boxes"
+    # on, under which the labels take the declared size itself. Manual edits
+    # within a source stick (the key is unchanged, so the snap doesn't
+    # re-fire); a returning source re-snaps to the known font.
     #
     # **And the snap is undone on the way out.** Otherwise a source that
-    # declares no typeface simply inherits the previous corpus': Demo → a
-    # font-declaring corpus → Demo would come back with that corpus' px, its
-    # font stack, and *scale-to-boxes off* — the demo's reading text visibly
-    # smaller, with nothing on screen saying why, for the rest of the session
-    # (and into the recovery cache, and into any link or config saved from it).
+    # declares no typeface simply inherits the previous corpus': PoTeC → the
+    # demo → PoTeC would come back in Lucida Sans Typewriter, with nothing on
+    # screen saying why, for the rest of the session (and into the recovery
+    # cache, and into any link or config saved from it).
     #
     # The general shape, worth stating because the other two source-switch snaps
     # in this file share it: a snap writes **session**-scoped state to express a
@@ -8093,11 +8118,15 @@ def seed_canvas_state(
     # it overwrote and put it back.
     #
     # Restoring the *stashed* values rather than the factory defaults is what
-    # keeps a hand-tuned font across a detour: tune the demo, look at a
-    # font-declaring corpus, come back, and your own size is still there. Stashed
+    # keeps a hand-tuned font across a detour: tune PoTeC, look at the demo,
+    # come back, and your own font is still there. Stashed
     # only on the **first** snap of a run of them, so one font-declaring corpus →
-    # another → Demo restores the state before the first and not the first's.
-    if st.session_state.get("_font_seeded_for") != source_key:
+    # another → PoTeC restores the state before the first and not the first's.
+    # A list once it has been through the recovery cache's JSON.
+    font_seeded_for = st.session_state.get("_font_seeded_for")
+    if isinstance(font_seeded_for, list):
+        font_seeded_for = tuple(font_seeded_for)
+    if font_seeded_for != source_key:
         # Read only when the snap can fire: on a font-declaring corpus it is a
         # numeric parse over every word row, and every other run discards it.
         font_px, font_css = _dataset_font(words_filtered)
@@ -8112,9 +8141,11 @@ def seed_canvas_state(
                     for key in _FONT_SNAP_KEYS
                 },
             )
+            # The base size is left alone: it is the axis, legend and hover
+            # text, and the labels take the declared size under "scale text
+            # to boxes", which is turned on for them.
             snapped = {
-                "global_base_font_size": font_size_px(font_px, "px", None),
-                "global_scale_text_to_boxes": False,
+                "global_scale_text_to_boxes": True,
                 # The size is in px — a point size left on would replace it.
                 "global_use_stimulus_font_pt": False,
             }
@@ -8475,10 +8506,13 @@ def _rail_text_rows(
         hint = _stimulus_font_install_hint(font_css)
         if hint is not None:
             font_name, font_url = hint
+            get_it = (
+                f"[download]({font_url}) and install it" if font_url else "install it"
+            )
             st.caption(
                 f"{ICONS['info']} This corpus was rendered in **{font_name}**, "
                 "which isn't bundled. To make the overlaid text match the "
-                f"stimulus image, [download]({font_url}) and install it, then "
+                f"stimulus image, {get_it}, then "
                 "reload. Without it, labels can drift, especially URLs and Latin "
                 "text. Or turn on the stimulus **Image** to see the original text."
             )

@@ -4,11 +4,10 @@ A dataset can carry its stimulus font size + family on its words
 (`stimulus_font_px` / `stimulus_font_family`), and `app.seed_canvas_state`
 snaps the font controls to them so the reading text matches the stimulus
 exactly. A one-way snap — gated on the *new* source declaring a font — would
-let a source that declares none (the demo, OneStop, PoTeC, most uploads)
-silently inherit the previous corpus' answer: Demo → a font-declaring corpus →
-Demo would come back with that corpus' px, its CJK stack and **scale-to-boxes
-off**, so the demo's reading text would render visibly smaller with nothing on
-screen saying why.
+let a source that declares none (PoTeC, most uploads)
+silently inherit the previous corpus' answer: PoTeC → a font-declaring corpus
+→ PoTeC would come back with that corpus' CJK stack, so PoTeC's
+reading text would render in the wrong font with nothing on screen saying why.
 
 The general shape is worth pinning, not just the symptom: a source-switch snap
 writes *session*-scoped state to express a *source*-scoped fact, and that only
@@ -86,38 +85,39 @@ class TestTheRoundTrip:
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
 
         size, family, scale = _font(session)
-        assert size == 22
+        # The base size is the axis and legend text; the labels take the
+        # declared px itself under scale-to-boxes.
+        assert size == 16
         assert "Noto Sans Mono CJK SC" in family
-        # The precise px is known, so box geometry can only approximate it.
-        assert scale is False
+        assert scale is True
 
     def test_leaving_that_corpus_puts_the_controls_back(self, session):
         """Without the restore this comes back as (22, CJK, False)."""
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
         before = _font(session)
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         assert _font(session) != before
 
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
         assert _font(session) == before
 
     def test_a_hand_tuned_font_survives_the_detour(self, session):
         """Restoring the stashed values rather than the factory defaults is what
         makes "look at that corpus and come back" non-destructive."""
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
         session["global_base_font_size"] = 29
         tuned = _font(session)
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
 
         assert _font(session) == tuned
 
     def test_two_font_declaring_corpora_in_a_row_restore_the_original(self, session):
         """The stash is taken on the *first* snap of a run of them, so the third
         source gets the state before the first corpus and not the first's."""
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
         before = _font(session)
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
@@ -125,20 +125,47 @@ class TestTheRoundTrip:
             "Another corpus",
             _WORDS.assign(stimulus_font_px=[31.0], stimulus_font_family=["serif"]),
         )
-        assert _font(session)[0] == 31
+        assert _font(session)[1] == "serif"
 
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
         assert _font(session) == before
 
     def test_staying_on_one_source_does_not_re_snap(self, session):
         """Manual edits within a source stick — the key is unchanged, so the
         snap must not re-fire over them."""
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
-        session["global_base_font_size"] = 40
+        session["global_font_family"] = "Georgia, serif"
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
 
-        assert session["global_base_font_size"] == 40
+        assert session["global_font_family"] == "Georgia, serif"
+
+    def test_a_base_size_set_on_a_font_declaring_corpus_survives_leaving_it(
+        self, session
+    ):
+        """The base size is the axis, legend and hover text — the user's, not
+        the corpus': the snap neither writes nor restores it."""
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
+        session["global_base_font_size"] = 20
+
+        _seed("PoTeC", _WORDS)
+
+        assert session["global_base_font_size"] == 20
+
+    def test_a_relaunch_from_the_recovery_cache_does_not_re_snap(self, session):
+        """The cache keeps which source the font was decided for, as JSON — a
+        list — and a font the user changed must survive the relaunch."""
+        from scanpath_studio import persistence
+
+        assert {"_font_seeded_for", "_font_snap_restore"} <= persistence._SESSION_KEYS
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
+        seeded = list(session["_font_seeded_for"])
+        session["global_font_family"] = "Georgia, serif"
+        session["_font_seeded_for"] = seeded
+
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
+
+        assert session["global_font_family"] == "Georgia, serif"
 
 
 class TestWhatMustNotBeTouched:
@@ -150,7 +177,7 @@ class TestWhatMustNotBeTouched:
         session["global_scale_text_to_boxes"] = False
         linked = _font(session)
 
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
 
         assert _font(session) == linked
 
@@ -158,7 +185,7 @@ class TestWhatMustNotBeTouched:
         """Popping it lets the `defaults` pin restore the factory value in the
         same run, rather than freezing whatever the last corpus left."""
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
-        _seed("Bundled demo", _WORDS)
+        _seed("PoTeC", _WORDS)
 
         assert session["global_base_font_size"] == 16
         assert session["global_scale_text_to_boxes"] is True

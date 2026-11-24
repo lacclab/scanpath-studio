@@ -242,6 +242,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # decides again and turns back on a layer the user switched off.
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    # The same for the dataset's declared font (`app.seed_canvas_state`): a
+    # relaunch must not snap a font the user changed back to the corpus'.
+    "_font_seeded_for",
+    "_font_snap_restore",
     # The folder the user chose for corpus downloads. A preference, like the
     # design library: a restart must not send the next download back to the
     # default folder.
@@ -2150,6 +2154,17 @@ def _leave_dataset_values(values: dict, token: str) -> None:
     seeded = values.get(RAW_GAZE_SEEDED_FOR_KEY)
     if isinstance(seeded, str) and seeded.split("\x1f", 1)[0] == token:
         values.pop(RAW_GAZE_SEEDED_FOR_KEY, None)
+    # Its declared font comes off too, putting back what the font controls
+    # held before it (`app.seed_canvas_state`).
+    font_for = values.get("_font_seeded_for")
+    if isinstance(font_for, list | tuple) and font_for and font_for[0] == token:
+        values.pop("_font_seeded_for", None)
+        stashed = values.pop("_font_snap_restore", None)
+        for key, value in _as_mapping(stashed or {}).items():
+            if value is None:
+                values.pop(key, None)
+            else:
+                values[key] = value
 
 
 def restore_local_state(

@@ -1,21 +1,21 @@
 {
  "animation-default": {
-  "digest": "105e5b425b6a5115021b7f8ace5ade7cf596318d581e78400a34e538c8f29756",
+  "digest": "eec0a2b6c004c0040926154d6861db500fed8ab6beb30b64f75fc56ab780c77c",
   "kind": "animation",
   "options": {}
  },
  "comparison-default": {
-  "digest": "97edd86b74dc983d6c3395097b3116bcba60a69d2fc73ed66ebab1eeaad88aef",
+  "digest": "67dccbd8f6f56c1a29e24502682e7fb759fd985eb1f185afee1c4c5fa972e25f",
   "kind": "comparison",
   "options": {}
  },
  "static-default": {
-  "digest": "9716a94ab6d6e7fbae2906c4e45213f5812be210cfe2c6a36912bcaab0841377",
+  "digest": "f2ea22ae57eb17ce1cb2d0549b7bebdcf5302a1ce7fa906df338e403657e3d8c",
   "kind": "static",
   "options": {}
  },
  "static-maximal": {
-  "digest": "3b9025e86240b2c450bd9d537ff712732df4cbcfea015d91b693fb3570388bf2",
+  "digest": "4cb3fb0e18a928e4d83a16ed401c2970a4bcaaba3947d0d90eecb746441a8079",
   "kind": "static",
   "options": {
    "color_by": "duration_ms",

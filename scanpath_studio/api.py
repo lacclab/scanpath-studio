@@ -2740,6 +2740,17 @@ ILLUSTRATION_PRESET = {
 }
 
 
+def _declared_font_family(words: pd.DataFrame | None, font_family: str | None) -> str:
+    """``font_family``, or, left out (``None``), the stimulus font the words
+    declare (OneStop's Lucida Sans Typewriter), else the generic monospace —
+    as the app's font control snaps to it."""
+    if font_family is not None:
+        return font_family
+    from .data import declared_font_family
+
+    return declared_font_family(words) or FONT_FAMILY
+
+
 def plot_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2749,7 +2760,7 @@ def plot_scanpath(
     screen: str | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     raw_gaze: pd.DataFrame | None = None,
     drift_correction: str | None = None,
     drift_connectors: bool = False,
@@ -2788,7 +2799,8 @@ def plot_scanpath(
             data's extent by default; pass the real resolution (``(2560, 1440)`` for
             OneStop) to keep coordinates true to scale.
         base_font_size: The base font size in px.
-        font_family: The font family.
+        font_family: The font family. Left out, the font the data declares for
+            its stimulus (OneStop's Lucida Sans Typewriter), else ``monospace``.
         raw_gaze: Samples from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze],
             filtered to the trial and drawn as recorded, under the fixations. It can be
             the only table: with ``words`` and ``fixations`` ``None``, the trial is
@@ -2941,7 +2953,7 @@ def plot_scanpath(
         canvas_width=int(canvas_size[0]),
         canvas_height=int(canvas_size[1]),
         base_font_size=int(base_font_size),
-        font_family=font_family,
+        font_family=_declared_font_family(trial_words, font_family),
         x_field=x_field,
         y_field=y_field,
         column_labels=_column_labels(
@@ -2978,7 +2990,7 @@ def animate_scanpath(
     screen_b: str | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     playback_speed: float = 1.0,
     autoplay: bool = True,
     fix_index_range: tuple[int, int] | None = None,
@@ -3028,7 +3040,8 @@ def animate_scanpath(
         canvas_size: A's monitor size, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         base_font_size: The base font size in px.
-        font_family: The font family.
+        font_family: The font family. Left out, the font the data declares for
+            its stimulus (OneStop's Lucida Sans Typewriter), else ``monospace``.
         playback_speed: The replay lasts the reading time divided by this. Any other
             value than ``1`` makes the automatic Illustration label say the timing was
             changed.
@@ -3271,7 +3284,7 @@ def animate_scanpath(
         canvas_width=int(setup_a.canvas_width),
         canvas_height=int(setup_a.canvas_height),
         base_font_size=int(base_font_size),
-        font_family=font_family,
+        font_family=_declared_font_family(trial_words, font_family),
         playback_speed=playback_speed,
         autoplay=autoplay,
         column_labels=_column_labels(
@@ -3675,7 +3688,7 @@ def compare_scanpaths(
     style_a: dict | None = None,
     style_b: dict | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     fix_index_range: tuple[int, int] | None = None,
     fix_index_range_b: tuple[int, int] | None = None,
     drift_correction: str | None = None,
@@ -3760,7 +3773,8 @@ def compare_scanpaths(
         style_a: A's style, with the keys above.
         style_b: B's style.
         base_font_size: The base font size in px.
-        font_family: The font family.
+        font_family: The font family. Left out, the font the data declares for
+            its stimulus (OneStop's Lucida Sans Typewriter), else ``monospace``.
         fix_index_range: ``(start, end)``: draw only that window of both scanpaths'
             fixations.
         fix_index_range_b: B's own window, as the app's B slider sets it.
@@ -4059,7 +4073,7 @@ def compare_scanpaths(
         canvas_width=int(setup_a.canvas_width),
         canvas_height=int(setup_a.canvas_height),
         base_font_size=int(base_font_size),
-        font_family=font_family,
+        font_family=_declared_font_family(words, font_family),
         layout=resolved_layout,
         compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
@@ -4511,7 +4525,7 @@ def figure_code(
     compare_source_options: dict | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     title: str = "",
     caption: str = "",
     fix_index_range: tuple[int, int] | None = None,
@@ -4657,7 +4671,9 @@ def figure_code(
         screen=screen,
         canvas=canvas_size,
         base_font_size=base_font_size,
-        font_family=font_family,
+        font_family=font_family or "",
+        # A font named here is a choice: written even when it is the default.
+        font_named=font_family is not None,
         title=title,
         caption=caption,
         fix_index_range=fix_index_range,

@@ -4432,9 +4432,8 @@ def _link_defaults(data_choice: str) -> dict:
       physical width the recipient will have. Those are the sender's own (each
       either on the link or re-resolved to the same value), so a DPI that still
       follows from them is re-derived identically and need not be sent.
-    * **Base font** — the factory 16, except on a source that declares its own
-      typeface: that one snaps the font on first seeding, so it has no default
-      the sender can leave off and always travels.
+    * **Base font** — the factory 16. A source that declares its typeface
+      snaps the font family, which every link carries, and not this size.
     * **Everything else** — the factory values a fresh session pins
       (`app.SETUP_DEFAULTS`, `controls.compare_style_defaults`).
 
@@ -4443,18 +4442,12 @@ def _link_defaults(data_choice: str) -> dict:
     left off takes the recipient's cached value rather than the default.
     """
     from scanpath_studio.app import (
-        _FONT_SNAP_RESTORE_KEY,
         SETUP_DEFAULTS,
         resolve_source_monitor,
     )
     from scanpath_studio.controls import compare_style_defaults
 
     defaults = dict(SETUP_DEFAULTS)
-    if _FONT_SNAP_RESTORE_KEY in st.session_state:
-        # The source declares its typeface, so its first seeding
-        # snaps the base font to *that* — a sender who chose the factory 16
-        # there has to say so, or the recipient gets the corpus' size.
-        defaults.pop("global_base_font_size")
     # What the source itself declares: the recipient has none of this
     # session's own saved setup for it, so a canvas the sender saved travels.
     width, height, authoritative = resolve_source_monitor(

@@ -199,3 +199,70 @@ def test_an_image_drawn_at_another_size_stops_the_build(tmp_path):
     screen = DrawnScreen(0, (255, 255, 255), [DrawnImage("word.png", 0, 0, (8, 4))])
     with pytest.raises(ValueError, match="draws it at 8x4"):
         compose_screen(screen, tmp_path)
+
+
+def test_the_demo_declares_onestops_font_on_every_screen():
+    """The experiment drew every screen in Lucida Sans Typewriter, 19 px per letter."""
+    from scanpath_studio import api
+    from scanpath_studio.constants import ONESTOP_FONT_FAMILY, ONESTOP_FONT_PX
+
+    words = api.load_sample_data(names="canonical").words
+    assert (words["stimulus_font_family"] == ONESTOP_FONT_FAMILY).all()
+    assert words["stimulus_font_px"].eq(ONESTOP_FONT_PX).all()
+    assert ONESTOP_FONT_PX * 1234 / 2048 == pytest.approx(19.0)
+
+
+def test_plot_scanpath_draws_the_declared_font_unless_told_otherwise():
+    from scanpath_studio import api
+
+    data = api.load_sample_data(names="canonical")
+    words, fixations = data.words, data.fixations
+    trial = "l37_273_2_2_1_Adv"
+
+    def label_font(**kw):
+        fig = api.plot_scanpath(
+            words, fixations, "l37_273", trial, screen="Feedback", **kw
+        )
+        return next(t for t in fig.data if t.name == "words").textfont.family
+
+    assert "Lucida Sans Typewriter" in label_font()
+    assert label_font(font_family="Georgia, serif") == "Georgia, serif"
+
+
+def test_an_explicit_monospace_is_drawn_even_where_a_font_is_declared():
+    from scanpath_studio import api
+
+    data = api.load_sample_data(names="canonical")
+    fig = api.plot_scanpath(
+        data.words,
+        data.fixations,
+        "l37_273",
+        "l37_273_2_2_1_Adv",
+        screen="Feedback",
+        font_family="monospace",
+    )
+    assert next(t for t in fig.data if t.name == "words").textfont.family == "monospace"
+
+
+def test_share_code_names_a_font_that_differs_from_the_declared_one():
+    """Picking plain Monospace on the demo must reach the snippet, or the
+    recipe redraws in the demo's declared font."""
+    from scanpath_studio import code_snippet as cs
+    from scanpath_studio.constants import ONESTOP_FONT_FAMILY
+
+    def names_font(font, declared):
+        state = cs.FigureState(font_family=font, declared_font_family=declared)
+        return "font_family" in dict(cs._call_kwargs(state, explicit=False))
+
+    assert names_font("monospace", ONESTOP_FONT_FAMILY)
+    assert not names_font(ONESTOP_FONT_FAMILY, ONESTOP_FONT_FAMILY)
+    assert not names_font("monospace", None)
+
+
+def test_a_font_named_by_the_caller_is_always_written():
+    """`figure_code(font_family="monospace")` / `render --font-family monospace`
+    name a choice, which the recipe must keep on a font-declaring dataset."""
+    from scanpath_studio import code_snippet as cs
+
+    state = cs.FigureState(font_family="monospace", font_named=True)
+    assert "font_family" in dict(cs._call_kwargs(state, explicit=False))

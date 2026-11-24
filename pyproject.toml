@@ -64,16 +64,14 @@ dependencies = [
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
     "pillow>=13.0",
     "imageio[ffmpeg]>=2.38.2",
-    # pandas' .xlsx engine. Not optional in practice: the upload path reads
-    # spreadsheets (`data._read_one`), and MultiplEYE's comprehension questions
-    # come as a workbook.
-    "openpyxl>=3.1.5",
     # Dataset downloads verify HTTPS against the OS certificate store, so a
     # python.org Python without its CA bundle, or a TLS-inspecting network,
     # can still fetch OneStop / PoTeC (`datasets._open_url`).
     "truststore>=0.10.5",
-    # The Excel 97–2003 (.xls) engine, for the same readers.
-    "xlrd>=2.0.2",
+    # The workbook engine (`data.EXCEL_ENGINE`), for .xlsx and legacy .xls
+    # alike. Not optional in practice: the upload path reads spreadsheets, and
+    # MultiplEYE's comprehension questions come as a workbook.
+    "python-calamine>=0.9.1",
 ]
 
 [project.optional-dependencies]
@@ -88,6 +86,9 @@ test = [
     # Property tests (`tests/test_properties.py`): invariants checked against
     # generated inputs rather than hand-picked examples.
     "hypothesis>=6.170.0",
+    # Writes the .xlsx fixtures the readers are tested on; the app itself
+    # reads workbooks with calamine and writes none.
+    "openpyxl>=3.1.5",
 ]
 # The linter, pinned to exactly what CI runs (.github/workflows/ci.yml). An
 # unpinned ruff means a local run and CI can disagree — a new release lands new

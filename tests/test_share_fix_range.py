@@ -195,9 +195,10 @@ class TestTheContract:
         """The four-surface rule: UI slider · link · CLI flag · API argument.
 
         The slider writing ``single_fix_range`` is driven in
-        test_axes_gating.py (`test_hidden_markers_leave_window_for_fixation_
-        derived_layers`), the flag in test_cli.py
-        (`test_render_forwards_the_fixation_index_window`)."""
+        test_axes_gating.py, by
+        `test_hidden_markers_leave_window_for_fixation_derived_layers`; the
+        flag in test_cli.py, by
+        `test_render_forwards_the_fixation_index_window`."""
         import inspect
 
         from scanpath_studio import api

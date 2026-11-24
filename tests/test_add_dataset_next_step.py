@@ -88,13 +88,27 @@ def test_the_next_step_dialogs_act_on_return_values():
             if kw.arg in ("on_click", "on_change")
         ]
         assert not callbacks, dialog.name
+        # Every `if <col>.button(...):` branch ends in a whole-app rerun:
         # `reruns.rerun`, the app's `st.rerun`, or Streamlit's own.
-        reruns = [c for c in calls if ast.unparse(c.func) in ("rerun", "st.rerun")]
-        assert reruns, dialog.name
-        for call in reruns:
+        branches = [
+            node
+            for node in ast.walk(dialog)
+            if isinstance(node, ast.If)
+            and isinstance(node.test, ast.Call)
+            and ast.unparse(node.test.func).endswith(".button")
+        ]
+        assert len(branches) == 2, dialog.name
+        for branch in branches:
+            last = branch.body[-1]
+            assert isinstance(last, ast.Expr) and isinstance(last.value, ast.Call), (
+                dialog.name,
+                branch.lineno,
+            )
+            call = last.value
+            assert ast.unparse(call.func) in ("rerun", "st.rerun"), branch.lineno
             assert [(kw.arg, ast.literal_eval(kw.value)) for kw in call.keywords] == [
                 ("scope", "app")
-            ], dialog.name
+            ], (dialog.name, branch.lineno)
 
 
 def _added_app(trial_columns=None):

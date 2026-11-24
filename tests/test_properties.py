@@ -771,11 +771,16 @@ def _edited_and_added(raw, first, second, kept, kind):
         if isinstance(column, str):
             names.setdefault(column, _CANONICAL[field])
 
+    # What the stored frame holds, from the inputs: each used column under its
+    # field's name, the kept columns and a composite's parts under their own.
+    available = set(names.values()) | kept | (set(parts) if len(parts) > 1 else set())
+
     def stored_name(column):
         if isinstance(column, list):
             return [stored_name(c) for c in column]
         name = names.get(column, column)
-        assume(name in stored.columns)
+        assume(name in available)
+        assert name in stored.columns, name
         return name
 
     remap = {f: stored_name(c) for f, c in second.items()}

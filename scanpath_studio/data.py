@@ -7814,26 +7814,38 @@ _REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id")
 
 
 def _composite_copies(
-    frame: pd.DataFrame, stored_schema: dict | None, referenced
+    frame: pd.DataFrame, stored_schema: dict | None, schema: dict
 ) -> list[str]:
-    """The stored composite Trial ID's part columns that another field also
-    mapped, so the frame holds their values under that field's name too, and
-    that no field of the new mapping uses (`remap_normalized_frame`)."""
+    """The stored composite Trial ID's part columns that only copy a column
+    the new mapping still uses (`remap_normalized_frame`): no field of the new
+    mapping names the part, and one names a column with the same values row
+    for row (a Participant column in the Trial ID). Decided by the values, so
+    it holds whether the stored mapping names the files' columns (after an
+    add) or the stored frame's (after an edit), and a part whose field the new
+    mapping clears stays, as the only copy of its values."""
     if not stored_schema:
         return []
     parts = trial_mapping_columns(stored_schema.get("trial") or [])
     if len(parts) < 2:
         return []
-    others = {
-        column
-        for field, value in stored_schema.items()
-        if field != "trial"
-        for column in trial_mapping_columns(value or [])
-    }
+    referenced = set(_schema_source_columns(schema))
+    used = [
+        value
+        for field, value in schema.items()
+        if field != "trial" and isinstance(value, str) and value in frame.columns
+    ]
+
+    def copies(part: str) -> bool:
+        values = frame[part].astype(str)
+        return any(
+            column != part and frame[column].astype(str).equals(values)
+            for column in used
+        )
+
     return [
         part
         for part in parts
-        if part in others and part in frame.columns and part not in referenced
+        if part in frame.columns and part not in referenced and copies(part)
     ]
 
 
@@ -7973,9 +7985,6 @@ def remap_normalized_frame(
     working = frame.drop(
         columns=[c for c in derived if c in frame.columns and c not in referenced]
     )
-    working = working.drop(
-        columns=_composite_copies(working, stored_schema, referenced)
-    )
     if (
         kind == "fixations"
         and repeat_of
@@ -8032,6 +8041,9 @@ def remap_normalized_frame(
             working = working.assign(trial_id=working[AOI_TRIAL_ID]).drop(
                 columns=[AOI_TRIAL_ID]
             )
+    # Last, after the collapse and the repeat ids above, which read
+    # `participant_id`: a part named so would be the column itself.
+    working = working.drop(columns=_composite_copies(working, stored_schema, schema))
     keep = set(working.columns)
     if kind == "words":
         result = normalize_words(

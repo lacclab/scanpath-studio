@@ -10,6 +10,7 @@ import html
 import io
 import itertools
 import json
+import os
 import pickle
 import re
 import warnings
@@ -2397,6 +2398,20 @@ def _amend_snippet_compare_labels(labels: tuple[str, str]) -> None:
     )
 
 
+#: Build inputs that name an image file the figure embeds (`plots._image_to_data_uri`).
+_IMAGE_PATH_INPUTS = frozenset({"background_image", "background_image_b"})
+
+
+def _file_version(path: str) -> tuple[int, int] | None:
+    """``(size, modification time in ns)`` of the file at ``path``, or ``None``
+    when there is none: what tells a file replaced at the same path apart."""
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return stat.st_size, stat.st_mtime_ns
+
+
 def _figure_input_key(
     words: pd.DataFrame, fixations: pd.DataFrame, build_kwargs: dict
 ) -> tuple:
@@ -2412,7 +2427,11 @@ def _figure_input_key(
     ]
     for k in sorted(build_kwargs):
         v = build_kwargs[k]
-        if isinstance(v, pd.DataFrame):
+        if k in _IMAGE_PATH_INPUTS and isinstance(v, str) and not v.startswith("data:"):
+            # The figure embeds the page's bytes, so a page re-exported over
+            # the old one at the same path must build a new figure.
+            parts.append((k, (v, _file_version(v))))
+        elif isinstance(v, pd.DataFrame):
             parts.append((k, frame_fingerprint(v)))
         elif isinstance(v, dict):
             # `repr`, not `str`: `{1: …}` and `{"1": …}` must not share a key.

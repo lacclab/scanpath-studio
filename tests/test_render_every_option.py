@@ -27,6 +27,7 @@ import pytest
 from scanpath_studio import api, cli
 from scanpath_studio import code_snippet as cs
 from scanpath_studio.constants import SACCADE_CLASS_COLORS
+from scanpath_studio.figure_views import options_for_view
 
 #: A 1x1 PNG, for the stimulus-image flags.
 _PNG_1x1 = bytes.fromhex(
@@ -387,6 +388,103 @@ def test_each_static_flag_reaches_its_keyword(monkeypatch, flags, kwarg, expecte
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, *flags])
     assert cs._comparable(seen[kwarg]) == cs._comparable(expected)
+
+
+_BUILDER_FOR_KIND = {
+    "static": "plot_scanpath",
+    "animation": "animate_scanpath",
+    "comparison": "compare_scanpaths",
+}
+#: A value the command writes and the builder receives in another spelling of
+#: the same meaning.
+_SAME_MEANING = {"heatmap_metric": (None, "counts")}
+
+
+#: The same options with every layer the maximal table switches off back on, so
+#: the styling those layers take is written and checked too.
+_LAYERS_ON = {
+    "show_fixations": True,
+    "show_saccades": True,
+    "show_plot_frame": True,
+    "critical_span_style": "Mark text",
+    # A smoothed heatmap scales to its own peak, so its range is not written.
+    "heatmap_style": api.figure_options("static")["heatmap_style"],
+}
+
+
+def _command_reaches_builder(kind, settings, monkeypatch) -> tuple[set, list]:
+    """Run the Share → Code command for `settings`; return the options it wrote
+    and those that reached the builder changed."""
+    state = _maximal_state(kind)
+    state.settings.update(settings)
+    command, _ = cs.cli_snippet(DEMO, state)
+    argv = shlex.split(command.replace(" \\\n", " "))[1:]
+    if "-o" in argv:
+        index = argv.index("-o")
+        del argv[index : index + 2]
+    seen = _spy(monkeypatch, _BUILDER_FOR_KIND[kind])
+    cli.main([*argv, "-o", "out.html"])
+
+    def written(flags: list[str]) -> bool:
+        n = len(flags)
+        return n > 0 and any(argv[i : i + n] == flags for i in range(len(argv)))
+
+    checked, wrong = set(), []
+    for key, value in state.settings.items():
+        emit = cs._CLI_EMITTERS.get(key)
+        if emit is None or not written(emit(value)):
+            continue
+        checked.add(key)
+        got = seen.get(key, "<not passed>")
+        if _SAME_MEANING.get(key) == (value, got):
+            continue
+        if cs._comparable(got) != cs._comparable(value):
+            wrong.append(f"{key}: wrote {value!r}, builder got {got!r}")
+    return checked, wrong
+
+
+#: Options no command for that figure writes as their own flags, each with why;
+#: every other option the builder takes must be written and checked.
+_NOT_WRITTEN_ALONE = {
+    "saccade_class_colors": "merged into --saccade-type-color pairs, checked in "
+    "test_each_static_flag_reaches_its_keyword",
+    "style_b": "a single replay writes a reduced --style-b spec",
+}
+
+
+@pytest.mark.parametrize("kind", cs.KINDS)
+def test_every_option_the_command_writes_reaches_the_builder(
+    kind, monkeypatch, tmp_path
+):
+    """Run the 🔗 Share → Code command for every option changed, and check each
+    option it writes arrives at the builder with its value.
+
+    Parsing the command (above) proves each flag exists; a flag also has to be
+    handed on (`cli._DIRECT_OPTION_FLAGS`, `_SWITCH_OPTION_FLAGS` or its own
+    code), or `render` accepts it and draws the default. A layer that is off
+    takes no styling, so the command runs twice: as the maximal table has it,
+    and with those layers on. Between them every option with an emitter must be
+    checked, or the coverage silently shrinks."""
+    monkeypatch.chdir(tmp_path)
+    for name in ("page.png", "page_b.png"):
+        (tmp_path / name).write_bytes(_PNG_1x1)
+    # `render` refuses a replay with both fixations and saccades off, so a
+    # replay draws one in each pass: fixations first, then saccades.
+    replay = kind == "animation"
+    first = {"show_fixations": True} if replay else {}
+    layered = {**_LAYERS_ON, "show_fixations": False} if replay else _LAYERS_ON
+    checked, wrong = _command_reaches_builder(kind, first, monkeypatch)
+    more, more_wrong = _command_reaches_builder(kind, layered, monkeypatch)
+    assert not wrong + more_wrong, wrong + more_wrong
+    # What this figure draws with (`figure_views`, the render-path owner).
+    comparing = kind != "static"
+    expected = options_for_view(
+        api.figure_options(kind), kind, comparing=comparing
+    ) & set(cs._CLI_EMITTERS)
+    unchecked = expected - checked - more - set(_NOT_WRITTEN_ALONE)
+    assert not unchecked, (
+        f"never written by the command, so never checked: {sorted(unchecked)}"
+    )
 
 
 def test_a_bare_render_passes_none_of_them(monkeypatch):

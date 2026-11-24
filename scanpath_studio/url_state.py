@@ -120,6 +120,7 @@ from .constants import (
 from .controls import (
     _ALIGN_OPTIONS,
     _AUTO_REPLAY_FIXATIONS,
+    BG_CHOICES,
     claim_mapping,
     clear_replay_layer_restore,
     color_field_options,
@@ -1384,6 +1385,11 @@ def _apply_url_preset() -> str | None:
             if len(str(raw)) > _MAX_LINK_VALUE_CHARS:
                 raise ValueError(f"longer than {_MAX_LINK_VALUE_CHARS} characters")
             value = coerce(raw)
+            # A control with a closed set of options takes only one of them,
+            # by the same rule the recovery cache applies, so a value it does
+            # not offer is reported here rather than reset by the widget unseen.
+            if value is not None and state_key in _CHOICE_STATE_PARSERS:
+                value = _CHOICE_STATE_PARSERS[state_key](value)
         except (ValueError, TypeError, OverflowError):
             _warn_invalid_link_param(url_key, raw)
             continue
@@ -1949,12 +1955,36 @@ _FREE_RANGE_STATE_KEYS = frozenset(
 
 
 def _closed_choice(options) -> Callable[[object], object]:
+    """A parser for one of ``options``, matched ignoring case and returned as
+    the option is spelt (``log`` → ``Log``), as the CLI and API accept it."""
+    spelt = {str(option).casefold(): option for option in options}
+
     def parse(value):
-        if value not in options:
-            raise ValueError(f"not one of the widget's options: {value!r}")
-        return value
+        if value in options:
+            return value
+        if isinstance(value, str) and value.casefold() in spelt:
+            return spelt[value.casefold()]
+        raise ValueError(f"not one of the widget's options: {value!r}")
 
     return parse
+
+
+def _colorscale_value(value) -> str:
+    """A colour scale the figure can draw: one of the menu's, matched ignoring
+    case, or any other Plotly named scale (``Jet``, ``Viridis_r``), which a
+    link has always drawn and the CLI and API accept."""
+    text = str(value).strip()
+    for name in COLORSCALES:
+        if name.casefold() == text.casefold():
+            return name
+    from plotly.colors import get_colorscale
+    from plotly.exceptions import PlotlyError
+
+    try:
+        get_colorscale(text)
+    except PlotlyError as exc:
+        raise ValueError(f"not a colour scale: {value!r}") from exc
+    return text
 
 
 def _legend_size(value) -> int:
@@ -2020,8 +2050,9 @@ _CHOICE_STATE_PARSERS = {
     "global_heatmap_style": _parse_heatmap_style,
     "global_heatmap_norm": _closed_choice(("Linear", "Log")),
     "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
-    "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
-    "global_heatmap_colorscale": _closed_choice(tuple(COLORSCALES)),
+    "global_fixation_colorscale": _colorscale_value,
+    "global_heatmap_colorscale": _colorscale_value,
+    "global_bg_choice": _closed_choice(BG_CHOICES),
     # "" follows the figure's colour scale.
     **{
         f"cmp{i}_heatmap_colorscale": _closed_choice(("", *COLORSCALES)) for i in (0, 1)

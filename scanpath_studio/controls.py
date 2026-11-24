@@ -6989,13 +6989,23 @@ def corpus_style_controls(
     ) as style_panel:
         active = _active_palette()
         options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
-        st.session_state["global_palette"] = active or CUSTOM_PALETTE
+        shown = active or CUSTOM_PALETTE
+        st.session_state["global_palette"] = shown
+        # A shadow of the palette the colours make: a settings file or a
+        # design changes them without this control, and under the palette's
+        # own key a closed menu would send its last pick back and re-apply it.
+        palette_key = shadow_widget_key("corpus_palette", shown, seed=False)
+
+        def _pick_palette() -> None:
+            if palette_key in st.session_state:
+                _on_palette_change(st.session_state[palette_key])
+
         st.selectbox(
             "Palette",
             options=options,
-            key="global_palette",
-            persist_state="session",
-            on_change=_on_palette_change,
+            index=options.index(shown),
+            key=palette_key,
+            on_change=_pick_palette,
             help="Same palette as the Scanpath View; designs and Share links keep it.",
         )
         columns = st.columns(2)

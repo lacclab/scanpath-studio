@@ -3683,8 +3683,15 @@ def _stimulus_fields(trial_words: pd.DataFrame) -> tuple[list[str], list[str]]:
         or _STIMULUS_QA_KEY not in st.session_state
     ):
         st.session_state[_STIMULUS_SIG_KEY] = signature
-        st.session_state[_STIMULUS_SPAN_KEY] = _detect_span_columns(trial_words)
-        st.session_state[_STIMULUS_QA_KEY] = _detect_question_columns(trial_words)
+        # Held (`write_through`): a browser that had the ⚙ Fields menu open
+        # sends back the previous dataset's columns, which this one lacks, and
+        # the panel would show none of its own.
+        write_through(
+            _STIMULUS_SPAN_KEY, _detect_span_columns(trial_words), in_callback=False
+        )
+        write_through(
+            _STIMULUS_QA_KEY, _detect_question_columns(trial_words), in_callback=False
+        )
     spans = [
         c for c in st.session_state.get(_STIMULUS_SPAN_KEY, []) if c in span_options
     ]

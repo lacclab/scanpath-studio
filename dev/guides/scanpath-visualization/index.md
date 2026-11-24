@@ -107,13 +107,15 @@ Python and CLI: render the demo
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-fig = sps.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+fig = sps.plot_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 sps.save_figure(fig, "scanpath.html")
 ```
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele -o scanpath.html
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph -o scanpath.html
 ```
 
 For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#load-and-inspect-in-code). The [figure options table](https://lacclab.github.io/scanpath-studio/dev/api/#figure-options) lists every figure setting with its Python keyword and CLI flag. For more CLI examples, see [Common tasks](https://lacclab.github.io/scanpath-studio/dev/cli/#common-tasks).

@@ -2651,6 +2651,7 @@
 <li>The "Stopped loading" notice is now a light banner with a clearer Try again button and a ✕ to close it.</li>
 <li>Plot controls stay in view and scroll on their own beside the figure; Reset visualization is now a compact Reset, with larger Undo and Redo buttons.</li>
 <li>Plot controls are grouped under Presets, Palette, Modes and Customize: View is now Presets, My views is now My presets, the Animation switch is now Playback, and Axis preset is now Axis layout.</li>
+<li>The bundled demo keeps every screen of each reading — title, question preview, paragraph, question, answers and feedback — each with the experiment's own stimulus image placed where the experiment drew it, and raw gaze for every screen. A demo trial opens on its first screen and numbers its fixations across all its screens; a demo link or settings file saved by an earlier release still opens the paragraph on the same fixations, but a script must now name the paragraph (<code>--screen Paragraph</code>, <code>screen="Paragraph"</code>) to draw it, a fixation-index window counts from the trial's first screen, and the demo's export bundle files each screen under <code>screens/</code>.</li>
 </ul>
 <h3 id="exec-18--removed">Removed<a class="headerlink" href="#exec-18--removed" title="Permanent link">&para;</a></h3>
 <ul>
@@ -2726,6 +2727,10 @@
 <li>Choosing participants no longer brings back readings a condition leaves out: a condition only the Words table carries now still applies when the chosen readers have no Words rows.</li>
 <li>Legends placed at neighbouring spots (along one edge, or round one corner) no longer overlap each other when one is wide or tall for the figure: the later one moves aside, unless that would carry it out of the figure.</li>
 <li>The Plot controls rail stays below the header and inside the window, so its last controls show without scrolling the page.</li>
+<li>Corpus Analysis no longer stops with an error on a screen whose reading-measure flags are all missing.</li>
+<li>On a phone, a trial with several screens names its screen in a line of text beside its ◀ ▶ in place of the dropdown, so the screen steps take a short line and the figure's view choices stay on the first screen in Essentials.</li>
+<li>The screen you picked in a multi-screen trial stays picked after a visit to Corpus Analysis or Data Management, and turning Compare off no longer stops undo from recording your next plot edit.</li>
+<li>Stimulus &amp; context keeps its highlighted spans when you step through a screen with no highlighted words, such as a title, and picks them up even when a trial opens on such a screen.</li>
 <li>On multi-screen trials the experimental per-word reading measures (<code>compute_word_metrics</code>, behind <code>SCANPATH_EXPERIMENTAL=1</code>) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.</li>
 </ul>
 <h2 id="exec-18--release-v0480">Release v0.48.0<a class="headerlink" href="#exec-18--release-v0480" title="Permanent link">&para;</a></h2>

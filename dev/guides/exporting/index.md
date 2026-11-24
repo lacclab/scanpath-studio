@@ -82,7 +82,8 @@ out = Path("figures")
 out.mkdir(exist_ok=True)
 
 for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    # Each demo reading has several screens; this saves its paragraph.
+    fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
     sps.save_figure(fig, out / f"{pid}_{tid}.html")
 ```
 
@@ -103,7 +104,9 @@ import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
 words, fixations = sps.load_sample_data()
-replay = sps.animate_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+replay = sps.animate_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 ```
 

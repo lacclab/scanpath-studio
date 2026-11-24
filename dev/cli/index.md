@@ -25,7 +25,7 @@ Each command takes `--help`, and `scanpath-studio --version` prints the version.
 Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```
-scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio render --sample --screen Paragraph --width-mm 85 -o reading.publication.json
 scanpath-studio publication reading.publication.json -o reading.html
 scanpath-studio publication figure-2.json -o figure-2.pdf
 ```
@@ -59,8 +59,8 @@ Served on a network, the app turns off the controls that read or write the serve
 # List the trials to pick from
 scanpath-studio render --sample --list-trials
 
-# The bundled demo
-scanpath-studio render --sample -o scanpath.html
+# The bundled demo: each reading has several screens, so name the one to draw
+scanpath-studio render --sample --screen Paragraph -o scanpath.html
 
 # Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
@@ -105,22 +105,22 @@ Hover fields appear in the order you list them. For a column named `pupil, left`
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -183,7 +183,7 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 `--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
@@ -247,7 +247,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 | Option                                                                 | Value                                                                              | Default         | Description                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each (`--list-trials` shows them).                                                                                                                                                                                                                                                                    |
+| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each, every screen of a trial from title to feedback (`--list-trials` shows them; `--screen` picks one).                                                                                                                                                                                              |
 | `--authoring`                                                          | `PATH`                                                                             | —               | A draft file from the app's Draw a scanpath screen.                                                                                                                                                                                                                                                                                                                 |
 | `--words`                                                              | `PATH [PATH ...]`                                                                  | —               | The Words table: CSV, TSV, TXT, TAB, Parquet, Feather, XLSX or XLS, or a .zip of them. Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Several paths, or a quoted glob, are stacked into one table.                                                                                                                 |
 | `--fixations`                                                          | `PATH [PATH ...]`                                                                  | —               | The Fixations table, in the formats `--words` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table (e.g. one file per participant).                                                                                                                                                                                    |

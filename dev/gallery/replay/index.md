@@ -11,7 +11,7 @@ Replay a reading in fixation order. Press **▶ Play** above the text to start t
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --animate --fix-index-range 1:40 --playback-speed 2 \
   --highlight-column '' \
   -o replay.html
@@ -27,6 +27,7 @@ fig = sps.animate_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     fix_index_range=(1, 40),
     playback_speed=2.0,
 )

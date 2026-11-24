@@ -10,7 +10,7 @@ Fixation time within each word box.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --heatmap --heatmap-style word-boxes --no-fixations --no-saccades \
   --highlight-column '' \
   -o word-boxes.html
@@ -26,6 +26,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     show_heatmap=True,
     heatmap_style="Word boxes",
     show_fixations=False,

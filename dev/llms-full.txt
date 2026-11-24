@@ -654,7 +654,8 @@ out = Path("figures")
 out.mkdir(exist_ok=True)
 
 for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    # Each demo reading has several screens; this saves its paragraph.
+    fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
     sps.save_figure(fig, out / f"{pid}_{tid}.html")
 ```
 
@@ -675,7 +676,9 @@ import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
 words, fixations = sps.load_sample_data()
-replay = sps.animate_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+replay = sps.animate_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 ```
 
@@ -697,7 +700,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 
 Pick a dataset in **Select dataset** above the plot or open **Dataset library** on the **Data Management** page.
 
-- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. The 1,000 Hz EyeLink samples run from paragraph onset to the keypress that ended reading. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates and the pupil area are blank.
+- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. Each reading keeps every screen the reader saw: the article's title (first paragraph only), the question preview, the paragraph, the question, the answers and the feedback. Each screen shows the experiment's own stimulus image, placed where the experiment drew it. The 1,000 Hz EyeLink samples cover each screen from its onset to the response that ended it. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates and the pupil area are blank.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text, which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each downloads the first time you open it.
 - **+** → **Import files**: your own tables.
@@ -976,13 +979,15 @@ Python and CLI: render the demo
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-fig = sps.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+fig = sps.plot_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 sps.save_figure(fig, "scanpath.html")
 ```
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele -o scanpath.html
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph -o scanpath.html
 ```
 
 For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#load-and-inspect-in-code). The [figure options table](https://lacclab.github.io/scanpath-studio/dev/api/#figure-options) lists every figure setting with its Python keyword and CLI flag. For more CLI examples, see [Common tasks](https://lacclab.github.io/scanpath-studio/dev/cli/#common-tasks).
@@ -1193,7 +1198,7 @@ The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to s
 
 To inspect samples from one reading, open **Axes → Axis layout**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
 
-In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A sample with missing gaze coordinates has no pupil area either, so the pupil chart shows a gap there. The raw table and its exports keep those samples.
+In the OneStop demo, the clock starts at trial onset and each screen's samples start when the reader sees that screen. A sample with missing gaze coordinates has no pupil area either, so the pupil chart shows a gap there. The raw table and its exports keep those samples.
 
 ### Filters & highlights
 
@@ -1492,10 +1497,10 @@ print(words[columns].head(3))
 0        l37_273  l37_273_2_1_1_Ele
 1        l37_273  l37_273_2_1_2_Ele
 2        l37_273  l37_273_2_1_3_Adv
-   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-0      1    Robert                       243.0            243
-1      2  Myslajek                       192.0            192
-2      3     stops                       140.0            140
+   IA_ID IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
+0      1       On                         NaN              0
+1      2      the                       153.0            383
+2      3    Trail                       119.0            175
 ```
 
 ## Load your data
@@ -1780,7 +1785,7 @@ load_sample_data(*, names=NAMES_SOURCE)
 
 Load the bundled demo, normalized and ready to plot.
 
-The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
+The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. Each trial has the screens its reader saw (`screen_id`: Title on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers, Feedback), each with the experiment's stimulus image. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
 
 Parameters:
 
@@ -1798,7 +1803,7 @@ load_sample_raw_gaze(*, names=NAMES_SOURCE)
 
 Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
+The table includes each sample while each screen of a reading was shown, with the screen it belongs to (`part` / `screen_index`), screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
 
 Parameters:
 
@@ -3269,7 +3274,7 @@ Each command takes `--help`, and `scanpath-studio --version` prints the version.
 Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```
-scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio render --sample --screen Paragraph --width-mm 85 -o reading.publication.json
 scanpath-studio publication reading.publication.json -o reading.html
 scanpath-studio publication figure-2.json -o figure-2.pdf
 ```
@@ -3303,8 +3308,8 @@ Served on a network, the app turns off the controls that read or write the serve
 # List the trials to pick from
 scanpath-studio render --sample --list-trials
 
-# The bundled demo
-scanpath-studio render --sample -o scanpath.html
+# The bundled demo: each reading has several screens, so name the one to draw
+scanpath-studio render --sample --screen Paragraph -o scanpath.html
 
 # Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
@@ -3349,22 +3354,22 @@ Hover fields appear in the order you list them. For a column named `pupil, left`
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -3427,7 +3432,7 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 `--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
@@ -3491,7 +3496,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 | Option                                                                 | Value                                                                              | Default         | Description                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each (`--list-trials` shows them).                                                                                                                                                                                                                                                                    |
+| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each, every screen of a trial from title to feedback (`--list-trials` shows them; `--screen` picks one).                                                                                                                                                                                              |
 | `--authoring`                                                          | `PATH`                                                                             | —               | A draft file from the app's Draw a scanpath screen.                                                                                                                                                                                                                                                                                                                 |
 | `--words`                                                              | `PATH [PATH ...]`                                                                  | —               | The Words table: CSV, TSV, TXT, TAB, Parquet, Feather, XLSX or XLS, or a .zip of them. Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Several paths, or a quoted glob, are stacked into one table.                                                                                                                 |
 | `--fixations`                                                          | `PATH [PATH ...]`                                                                  | —               | The Fixations table, in the formats `--words` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table (e.g. one file per participant).                                                                                                                                                                                    |
@@ -4020,7 +4025,7 @@ You don't have to add the citation to your files by hand: every figure `render` 
 
 # Across the experiment
 
-Mean total fixation duration per word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
+Mean total fixation duration per paragraph word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
 
 1. Open your data in the **Corpus Analysis** view and select **Participants**.
 1. Choose a participant and select **Open participant profile**. In **Chart settings**, set **View** to **Per-trial trend**.
@@ -4044,7 +4049,9 @@ from scanpath_studio.data import derive_trial_index
 from scanpath_studio.plots import make_trend_figure
 
 words, fixations = sps.load_sample_data(names="canonical")
-reader = words[words["participant_id"] == "l37_273"].copy()
+reader = words[
+    (words["participant_id"] == "l37_273") & (words["screen_id"] == "Paragraph")
+].copy()
 reader["trial_index"] = derive_trial_index(reader)
 trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
 fig = make_trend_figure(
@@ -4079,8 +4086,9 @@ Two complete readings of a shorter text, labeled Participant A and Participant B
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_2_4_Ele \
-  --compare-with l7_183:l7_183_2_2_4_Ele --compare-legend --label-a "Participant A" --label-b "Participant B" \
+  -p l37_273 -t l37_273_2_2_4_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_2_4_Ele --compare-screen Paragraph \
+  --compare-legend --label-a "Participant A" --label-b "Participant B" \
   --legend compare=top-center-outside,side-by-side,24 \
   --crop-to-data --crop-margin 50 \
   --highlight-column '' \
@@ -4097,6 +4105,8 @@ fig = sps.compare_scanpaths(
     fixations,
     (pid, tid),
     ("l7_183", "l7_183_2_2_4_Ele"),
+    screen="Paragraph",
+    screen_b="Paragraph",
     labels=("Participant A", "Participant B"),
     fit_to_monitor=False,
     crop_margin=50,
@@ -4196,7 +4206,7 @@ Where fixation time concentrates.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --heatmap --heatmap-style smoothed --no-fixations --no-saccades \
   --highlight-column '' \
   -o heatmap.html
@@ -4212,6 +4222,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     show_heatmap=True,
     heatmap_style="Smoothed",
     show_fixations=False,
@@ -4235,7 +4246,7 @@ Highlight a selected text span alongside its fixations.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --highlight-column is_in_aspan --critical-span-style mark-text \
   --no-saccades -o highlighted-text.html
 ```
@@ -4250,6 +4261,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     highlight_column="is_in_aspan",
     critical_span_style="Mark text",
     show_saccades=False,
@@ -4319,7 +4331,7 @@ sps.save_figure(fig, "illustration.html")
 
 EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
-1. Open the bundled demo in the **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
+1. Open the bundled demo in the **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`, and set **Screen** to **Paragraph**.
 1. Turn on **Raw gaze** and turn off **Saccades**.
 1. In **Fixations** → **Opacity**, set 0.35 so the samples show through.
 
@@ -4327,7 +4339,7 @@ EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_2_2_Adv \
+  -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
   --highlight-column '' \
   -o raw-gaze.html
@@ -4344,6 +4356,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     raw_gaze=raw_gaze,
     fixation_opacity=0.35,
     show_saccades=False,
@@ -4365,7 +4378,7 @@ Show where the text was without showing what it said. Each word is drawn as a ro
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --redact-text --highlight-column '' \
   -o redacted-text.html
 ```
@@ -4375,7 +4388,9 @@ import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
+fig = sps.plot_scanpath(
+    words, fixations, pid, tid, screen="Paragraph", redact_text=True
+)
 
 sps.save_figure(fig, "redacted-text.html")
 ```
@@ -4395,7 +4410,7 @@ Replay a reading in fixation order. Press **▶ Play** above the text to start t
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --animate --fix-index-range 1:40 --playback-speed 2 \
   --highlight-column '' \
   -o replay.html
@@ -4411,6 +4426,7 @@ fig = sps.animate_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     fix_index_range=(1, 40),
     playback_speed=2.0,
 )
@@ -4434,7 +4450,7 @@ ForwardSkipRefixationReturn sweepRegressionOff the text
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --saccade-color-by-type --no-saccade-type-legend \
   --highlight-column '' \
   -o saccade-types.html
@@ -4450,6 +4466,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     saccade_color_mode="By type",
     saccade_type_legend=False,
 )
@@ -4471,7 +4488,7 @@ Fixations and saccades over the text.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --highlight-column '' \
   -o scanpath.html
 ```
@@ -4481,7 +4498,7 @@ import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-fig = sps.plot_scanpath(words, fixations, pid, tid)
+fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
 
 sps.save_figure(fig, "scanpath.html")
 ```
@@ -4500,7 +4517,7 @@ Fixations colored by their nearest text line.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --color-by-line \
   --highlight-column '' \
   -o text-lines.html
@@ -4511,7 +4528,9 @@ import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
+fig = sps.plot_scanpath(
+    words, fixations, pid, tid, screen="Paragraph", color_by_line=True
+)
 
 sps.save_figure(fig, "text-lines.html")
 ```
@@ -4532,7 +4551,7 @@ A figure ready for a slide or a paper. It has a title above the plot, a caption 
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --saccade-color-by-type \
   --title "One participant, one article" --title-size 34 \
   --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
@@ -4552,6 +4571,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     saccade_color_mode="By type",
     title="One participant, one article",
     title_font_size=34,
@@ -4583,7 +4603,7 @@ Fixation time within each word box.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --heatmap --heatmap-style word-boxes --no-fixations --no-saccades \
   --highlight-column '' \
   -o word-boxes.html
@@ -4599,6 +4619,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     show_heatmap=True,
     heatmap_style="Word boxes",
     show_fixations=False,
@@ -4704,6 +4725,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - The "Stopped loading" notice is now a light banner with a clearer Try again button and a ✕ to close it.
 - Plot controls stay in view and scroll on their own beside the figure; Reset visualization is now a compact Reset, with larger Undo and Redo buttons.
 - Plot controls are grouped under Presets, Palette, Modes and Customize: View is now Presets, My views is now My presets, the Animation switch is now Playback, and Axis preset is now Axis layout.
+- The bundled demo keeps every screen of each reading — title, question preview, paragraph, question, answers and feedback — each with the experiment's own stimulus image placed where the experiment drew it, and raw gaze for every screen. A demo trial opens on its first screen and numbers its fixations across all its screens; a demo link or settings file saved by an earlier release still opens the paragraph on the same fixations, but a script must now name the paragraph (`--screen Paragraph`, `screen="Paragraph"`) to draw it, a fixation-index window counts from the trial's first screen, and the demo's export bundle files each screen under `screens/`.
 
 ### Removed
 
@@ -4779,6 +4801,10 @@ Developed with AI assistance. Cross-check results before publishing.
 - Choosing participants no longer brings back readings a condition leaves out: a condition only the Words table carries now still applies when the chosen readers have no Words rows.
 - Legends placed at neighbouring spots (along one edge, or round one corner) no longer overlap each other when one is wide or tall for the figure: the later one moves aside, unless that would carry it out of the figure.
 - The Plot controls rail stays below the header and inside the window, so its last controls show without scrolling the page.
+- Corpus Analysis no longer stops with an error on a screen whose reading-measure flags are all missing.
+- On a phone, a trial with several screens names its screen in a line of text beside its ◀ ▶ in place of the dropdown, so the screen steps take a short line and the figure's view choices stay on the first screen in Essentials.
+- The screen you picked in a multi-screen trial stays picked after a visit to Corpus Analysis or Data Management, and turning Compare off no longer stops undo from recording your next plot edit.
+- Stimulus & context keeps its highlighted spans when you step through a screen with no highlighted words, such as a title, and picks them up even when a trial opens on such a screen.
 - On multi-screen trials the experimental per-word reading measures (`compute_word_metrics`, behind `SCANPATH_EXPERIMENTAL=1`) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.
 
 ## Release v0.48.0

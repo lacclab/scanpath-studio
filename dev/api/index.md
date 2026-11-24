@@ -94,10 +94,10 @@ print(words[columns].head(3))
 0        l37_273  l37_273_2_1_1_Ele
 1        l37_273  l37_273_2_1_2_Ele
 2        l37_273  l37_273_2_1_3_Adv
-   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-0      1    Robert                       243.0            243
-1      2  Myslajek                       192.0            192
-2      3     stops                       140.0            140
+   IA_ID IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
+0      1       On                         NaN              0
+1      2      the                       153.0            383
+2      3    Trail                       119.0            175
 ```
 
 ## Load your data
@@ -382,7 +382,7 @@ load_sample_data(*, names=NAMES_SOURCE)
 
 Load the bundled demo, normalized and ready to plot.
 
-The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
+The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. Each trial has the screens its reader saw (`screen_id`: Title on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers, Feedback), each with the experiment's stimulus image. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
 
 Parameters:
 
@@ -400,7 +400,7 @@ load_sample_raw_gaze(*, names=NAMES_SOURCE)
 
 Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
+The table includes each sample while each screen of a reading was shown, with the screen it belongs to (`part` / `screen_index`), screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
 
 Parameters:
 

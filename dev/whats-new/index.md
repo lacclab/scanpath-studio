@@ -22,6 +22,7 @@
 - animate_scanpath refuses the raw-gaze style and heatmap colour-bar options by name, which the replay never draws, instead of accepting and ignoring them.
 - Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.
 - A scanpath figure or replay built directly with the plotting module (FigureSettings, make_scanpath_figure, make_scanpath_animation) now draws fixations at the app's, the API's and the CLI's default opacity, 0.7, not 1.0.
+- Changing a dataset's mapping in Edit dataset no longer adds unique_trial_id / unique_text_id columns that adding the same files with that mapping would not, so an edited dataset exports the columns a freshly added one does.
 
 ### Removed
 

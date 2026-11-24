@@ -68,6 +68,7 @@
 - An emptied caption in Prepare figure no longer leaves a blank caption line below the figure when the caption is set to print with it.
 - Preparing a PDF or the offline editor in Prepare figure now shows a loading card with its progress, as the clip does, instead of a page that seems to hang.
 - Two Prepare figure sections open at once, such as a Corpus Analysis chart and its text's stimulus, no longer rebuild each other's editor on every rerun.
+- Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
 
 ## Release v0.48.0
 

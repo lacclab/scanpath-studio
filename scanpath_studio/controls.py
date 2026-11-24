@@ -1680,8 +1680,9 @@ def _hold_view_writes(
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        # The rail derives the palette name from its colors; the tiles have no value to echo.
-        if key == "global_palette" or key in _MOUNTED_VIEW_KEYS or key not in ss:
+        # No widget draws these keys, so nothing echoes them; a hold would
+        # only read a later pick equal to the old value as an echo and undo it.
+        if key in _UNDRAWN_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
@@ -1692,6 +1693,14 @@ def _hold_view_writes(
             # previous design would overwrite it when the script starts.
             pending.pop(key)
 
+
+#: Design keys no widget draws, which `_hold_view_writes` leaves alone. The
+#: palette name is derived from the colours (the rail's tiles hold no value);
+#: the highlight style and the replay's quality are shown through shadows
+#: (`shadow_widget_key`), whose own keys move instead.
+_UNDRAWN_VIEW_KEYS = frozenset(
+    {"global_palette", "global_critical_span_style", "global_anim_quality"}
+)
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
 #: preset clears their guards — see `_hold_view_writes`.
@@ -2198,14 +2207,19 @@ def _capture_quick_view_state() -> dict[str, object]:
 
 
 #: `global_*` keys that *mirror* a setting rather than hold one, so
-#: they are left out of the drift check below. The highlight-span pair is
-#: re-derived from `global_critical_span_style` on every run the Stimulus
-#: popover draws, and each `__num*` key is the typed box beside a slider,
-#: registered the first time its popover renders — neither is anything the user
-#: set apart from the canonical key, which the check does compare.
+#: they are left out of the drift check below. The highlight-span pair is an
+#: older form of `global_critical_span_style` that a saved design can still
+#: hold; no widget draws it. Each `__num*` key is the typed box beside
+#: a slider, registered the first time its popover renders. Neither is anything
+#: the user set apart from the canonical key, which the check does compare.
 _DRIFT_MIRROR_KEYS = frozenset(
     {"global_highlight_span_on", "global_highlight_span_mode"}
 )
+#: The highlight styles, in the order the Style control lists them.
+_SPAN_STYLES = ("Mark text", "Mark border", "Underline")
+#: The style the Style control shows while the highlight is off: the last one
+#: in use, so switching the highlight back on keeps it.
+_SPAN_STYLE_SHOWN_KEY = "_highlight_span_style_shown"
 _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
@@ -2769,6 +2783,29 @@ def reassert_pending_writes() -> None:
         ss[_PENDING_WRITES_KEY] = kept
     else:
         ss.pop(_PENDING_WRITES_KEY, None)
+
+
+def echoes_a_held_write(*keys: str) -> bool:
+    """Whether a key's value is a closed popover's echo of what its widget
+    showed before a `write_through` that is still held, not the user's change.
+
+    A widget's ``on_change`` runs on that echo before the script starts, and
+    so before `reassert_pending_writes` puts the write back. A callback that
+    acted on the echo would undo the write by other means (a preset's name, a
+    derived setting), so it returns when this is true and the hold restores
+    the written value."""
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY) or {}
+    for key in keys:
+        write = pending.get(key)
+        if write is None or write.fresh or write.stale_echo == _ECHO_UNKNOWN:
+            continue
+        if write.popover_key and ss.get(write.popover_key):
+            continue  # its menu is open: the widget is mounted, the value a pick
+        shown = _write_match_key(ss.get(key))
+        if shown == _write_match_key(write.stale_echo):
+            return True
+    return False
 
 
 def _palette_match_key(value):
@@ -4904,6 +4941,7 @@ def _check_row(
     on_change=None,
     args: tuple = (),
     persist_state: str | None = None,
+    value: bool | None = None,
 ):
     """A ``label | ☑ Show | …`` row; return ``(value, rest)``.
 
@@ -4913,7 +4951,9 @@ def _check_row(
     hiding them. The help goes on the title's tooltip, not the checkbox, so the
     row carries no ``?`` icon. ``persist_state`` is forwarded to the checkbox,
     and every caller on a wire-format key spells out ``"session"`` —
-    `test_widget_value_sync` checks for it at the call site.
+    `test_widget_value_sync` checks for it at the call site. ``value`` is for a
+    shadow (`shadow_widget_key` with ``seed=False``), which takes its value as
+    its own default; a wire-format key never passes one.
     """
     disabled, help = _layer_gate(disabled, help)
     label_w = _label_w()
@@ -4932,6 +4972,7 @@ def _check_row(
             on_change=on_change,
             args=args,
             persist_state=persist_state,
+            **({} if value is None else {"value": value}),
         ),
         rest_col,
     )
@@ -7046,13 +7087,23 @@ def corpus_style_controls(
     ) as style_panel:
         active = _active_palette()
         options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
-        st.session_state["global_palette"] = active or CUSTOM_PALETTE
+        shown = active or CUSTOM_PALETTE
+        st.session_state["global_palette"] = shown
+        # A shadow of the palette the colours make: a settings file or a
+        # design changes them without this control, and under the palette's
+        # own key a closed menu would send its last pick back and re-apply it.
+        palette_key = shadow_widget_key("corpus_palette", shown, seed=False)
+
+        def _pick_palette() -> None:
+            if palette_key in st.session_state:
+                _on_palette_change(st.session_state[palette_key])
+
         st.selectbox(
             "Palette",
             options=options,
-            key="global_palette",
-            persist_state="session",
-            on_change=_on_palette_change,
+            index=options.index(shown),
+            key=palette_key,
+            on_change=_pick_palette,
             help="Same palette as the Scanpath View; designs and Share links keep it.",
         )
         columns = st.columns(2)
@@ -8432,34 +8483,39 @@ def render_plot_controls(
         with detail_section("Word highlights", key="plot_detail_stim_highlight"):
             # "Highlight a span": the canonical value lives in
             # `global_critical_span_style` (the chosen style or "None"),
-            # which is what deep links / Share / restore carry — the on/off and the
-            # mode widgets are derived from it each run, and their callbacks write
-            # it back on interaction.
+            # which is what deep links / Share / restore carry. The on/off and
+            # the style are shadows of it (`shadow_widget_key`): Undo, a design
+            # or a settings file changes it without them, and under fixed keys
+            # a closed menu would send back the switch and style it last
+            # showed, and their callbacks would write that old style back.
             canonical = st.session_state.get("global_critical_span_style", "None")
+            if canonical in _SPAN_STYLES:
+                st.session_state[_SPAN_STYLE_SHOWN_KEY] = canonical
+            span_style = st.session_state.get(_SPAN_STYLE_SHOWN_KEY, _SPAN_STYLES[0])
+            on_key = shadow_widget_key(
+                "highlight_span_on", canonical != "None", seed=False
+            )
+            mode_key = shadow_widget_key("highlight_span_mode", span_style, seed=False)
 
             def _on_span_toggle():
+                if on_key not in st.session_state:
+                    return  # the menu was not drawn: no change to apply
                 st.session_state["global_critical_span_style"] = (
-                    st.session_state.get("global_highlight_span_mode", "Mark text")
-                    if st.session_state["global_highlight_span_on"]
-                    else "None"
+                    span_style if st.session_state[on_key] else "None"
                 )
 
             def _on_span_mode():
-                st.session_state["global_critical_span_style"] = st.session_state[
-                    "global_highlight_span_mode"
-                ]
-
-            st.session_state["global_highlight_span_on"] = canonical != "None"
-            if canonical in ("Mark text", "Mark border", "Underline"):
-                st.session_state["global_highlight_span_mode"] = canonical
-            else:
-                st.session_state.setdefault("global_highlight_span_mode", "Mark text")
+                if mode_key not in st.session_state:
+                    return
+                chosen = st.session_state[mode_key]
+                st.session_state[_SPAN_STYLE_SHOWN_KEY] = chosen
+                st.session_state["global_critical_span_style"] = chosen
 
             span_on, span_rest = _check_row(
                 "Highlight words",
-                key="global_highlight_span_on",
+                key=on_key,
+                value=canonical != "None",
                 disabled=not has_words or not highlight_options,
-                persist_state="session",
                 on_change=_on_span_toggle,
                 help="Mark the words where the chosen true/false column is true "
                 "(e.g. a target span).",
@@ -8498,10 +8554,10 @@ def render_plot_controls(
             )
             span_mode = mode_col.radio(
                 "Style",
-                options=["Mark text", "Mark border", "Underline"],
+                options=list(_SPAN_STYLES),
+                index=_SPAN_STYLES.index(span_style),
                 horizontal=True,
-                key="global_highlight_span_mode",
-                persist_state="session",
+                key=mode_key,
                 on_change=_on_span_mode,
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
@@ -9851,6 +9907,8 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_canvas_seeded_for", None)
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
+    # The highlight's style comes back to the first one, as on a fresh start.
+    st.session_state.pop(_SPAN_STYLE_SHOWN_KEY, None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
     forget_set_aside_values()
     # And the raw-gaze layer's dataset default, the same way.

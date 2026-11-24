@@ -89,6 +89,31 @@ def test_a_star_added_under_favorites_only_joins_the_pool():
 
 
 @pytest.mark.timeout(180)
+def test_the_annotation_filter_keeps_its_copies_of_the_pool_only_while_on():
+    from scanpath_studio import api, app, data
+
+    words, fixations = api.load_sample_data(names="canonical")
+    starred = tuple(map(str, api.list_trials(words, fixations).iloc[0, :2]))
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.session_state["trial_annotations"] = {
+        starred: {"star": True, "tags": [], "note": ""}
+    }
+    at.run(timeout=90)
+
+    def kept_after(favorites_only: bool) -> set[str]:
+        # A filter set from outside its widget applies from the next run.
+        at.session_state["filter_favorites"] = favorites_only
+        at.run(timeout=90)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        store = at.session_state[data._FRAME_CACHE_KEY]
+        return {slot for slot in app.ANNOTATION_FILTER_SLOTS if slot in store}
+
+    assert kept_after(True) == set(app.ANNOTATION_FILTER_SLOTS)
+    assert kept_after(False) == set()
+
+
+@pytest.mark.timeout(180)
 def test_empty_trial_filters_leave_the_dataset_open_for_inspection():
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)

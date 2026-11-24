@@ -15,8 +15,9 @@ Three signals are counted:
 - `progress.report`, which a slow step calls while it works.
 
 What runs while a figure builder draws is that figure's drawing, but it must
-stay the size of a trial: a builder handed the whole corpus would make every
-redraw corpus-sized.
+stay the size of a trial: the tables a builder is handed and the data work it
+does hold a few trials' rows, and its gaze samples two readings'. A builder
+handed the whole corpus would make every redraw corpus-sized.
 """
 
 from __future__ import annotations
@@ -62,9 +63,13 @@ FIGURE_WORK = [
     (plots, "build_scanpath_replay"),
     (plots, "make_comparison_figure"),
 ]
-#: The most rows a figure's own data work may see: a few trials' worth, far
-#: below the bundled demo's whole corpus (about 1,700 fixations, 2,400 words).
+#: The most rows a figure builder's tables, or the data work it does, may hold:
+#: a few trials' worth, far below the bundled demo's whole corpus (about 1,700
+#: fixations, 2,400 words).
 TRIAL_ROWS = 1000
+#: The most gaze samples a builder may be handed: Compare's two readings (the
+#: demo's longest has about 25,500), far below the demo's 401,200.
+TRIAL_SAMPLES = 60_000
 
 
 def _demo_reading() -> tuple[str, str]:
@@ -127,9 +132,24 @@ FIGURE_CACHES = (
 
 
 class Work(Counter):
-    """Counts of the work done, and the most rows a figure's data work saw."""
+    """Counts of the work done, the most rows a figure's tables or its data
+    work held, and the most gaze samples a builder was handed."""
 
     drawn_rows = 0
+    drawn_samples = 0
+
+    def reset(self) -> None:
+        self.clear()
+        self.drawn_rows = self.drawn_samples = 0
+
+    def check_drawn_sizes(self) -> None:
+        assert self.drawn_rows <= TRIAL_ROWS, (
+            f"a figure drew from {self.drawn_rows} rows, more than a trial's"
+        )
+        assert self.drawn_samples <= TRIAL_SAMPLES, (
+            f"a figure was handed {self.drawn_samples} gaze samples, more than "
+            "two readings'"
+        )
 
 
 @pytest.fixture()
@@ -154,6 +174,11 @@ def work(monkeypatch) -> Work:
                 record(name, args, kwargs)
             else:
                 calls[name] += 1
+                samples = kwargs.get("raw_gaze")
+                tables = {k: v for k, v in kwargs.items() if k != "raw_gaze"}
+                calls.drawn_rows = max(calls.drawn_rows, rows(args, tables))
+                if isinstance(samples, pd.DataFrame):
+                    calls.drawn_samples = max(calls.drawn_samples, len(samples))
             drawing.append(builder)
             try:
                 return original(*args, **kwargs)
@@ -221,8 +246,7 @@ def _drawn(view: str, state: dict, then: dict | None = None) -> AppTest:
 @pytest.mark.parametrize("view", VIEWS)
 def test_a_rerun_that_changes_nothing_does_no_work(view, work):
     at = _drawn(*VIEWS[view])
-    work.clear()
-    work.drawn_rows = 0
+    work.reset()
     at.run()
     assert not at.exception, at.exception
     known = UNCACHED.get(view, {})
@@ -230,17 +254,14 @@ def test_a_rerun_that_changes_nothing_does_no_work(view, work):
     assert not redone, f"a rerun with nothing changed redid: {redone}"
     stopped = set(known) - set(work)
     assert not stopped, f"no longer redone on a rerun; drop from UNCACHED: {stopped}"
-    assert work.drawn_rows <= TRIAL_ROWS, (
-        f"a figure drew from {work.drawn_rows} rows, more than a trial's"
-    )
+    work.check_drawn_sizes()
 
 
 @pytest.mark.timeout(300)
 @pytest.mark.parametrize("view", ["scanpath", "replay", "compare"])
 def test_a_plot_setting_only_redraws_the_figure(view, work):
     at = _drawn(*VIEWS[view])
-    work.clear()
-    work.drawn_rows = 0
+    work.reset()
     at.session_state["global_saccade_width"] = 3.5
     at.run()
     assert not at.exception, at.exception
@@ -248,6 +269,6 @@ def test_a_plot_setting_only_redraws_the_figure(view, work):
     figure |= {f"miss in {name}" for name in FIGURE_CACHES}
     redone = {name: n for name, n in work.items() if name not in figure}
     assert not redone, f"a plot setting redid data work: {redone}"
-    assert work.drawn_rows <= TRIAL_ROWS, (
-        f"a figure drew from {work.drawn_rows} rows, more than a trial's"
-    )
+    # The redraw is what puts a builder's own tables on the scale.
+    assert work.keys() & {name for _module, name in FIGURE_WORK}, "nothing redrew"
+    work.check_drawn_sizes()

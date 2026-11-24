@@ -2414,7 +2414,8 @@ def _figure_input_key(
         if isinstance(v, pd.DataFrame):
             parts.append((k, frame_fingerprint(v)))
         elif isinstance(v, dict):
-            parts.append((k, tuple(sorted((str(a), str(b)) for a, b in v.items()))))
+            # `repr`, not `str`: `{1: …}` and `{"1": …}` must not share a key.
+            parts.append((k, tuple(sorted((repr(a), repr(b)) for a, b in v.items()))))
         elif isinstance(v, (list, tuple)):
             parts.append((k, tuple(v)))
         else:

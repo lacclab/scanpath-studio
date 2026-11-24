@@ -210,6 +210,7 @@ from scanpath_studio.data import (
     filter_frame_to_keys,
     filter_to_keys,
     filter_trials,
+    forget_frame_cache,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
@@ -9401,6 +9402,14 @@ def main() -> None:
         _run_app()
 
 
+#: The `frame_cache` slots the annotation filter keeps its copies of the pool in.
+ANNOTATION_FILTER_SLOTS = (
+    "annotation_filter_readings",
+    "annotation_filter",
+    "raw_gaze_annotations",
+)
+
+
 def _run_app() -> None:
     """One script run, top to bottom (``main`` wraps it in a loading scope).
 
@@ -10658,6 +10667,10 @@ def _run_app() -> None:
                 (sample_key, hashable_key(kept)),
                 lambda: filter_frame_to_keys(raw_gaze_df, kept),
             )
+    else:
+        # The filtered copies of the pool are not kept once the filter is off.
+        for slot in ANNOTATION_FILTER_SLOTS:
+            forget_frame_cache(slot)
 
     # Apply filters (participant/trial/text selection). For a raw-gaze-only
     # dataset (no words/fixations) derive the participant/trial options from the

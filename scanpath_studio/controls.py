@@ -1707,8 +1707,9 @@ def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
     the browser shows what an earlier hold recorded, not what ``before`` has;
     a key the script left as it was keeps its hold. The browser answers on the
     next run, unless the script reruns itself first (``rerun_follows``), and
-    then the hold waits one run more. Keys no widget draws, and keys drawn
-    outside every popover, are written plainly, as in `_hold_view_writes`.
+    then every hold waits one run more (`keep_holds_through_rerun`). Keys no
+    widget draws, and keys drawn outside every popover, are written plainly,
+    as in `_hold_view_writes`.
     """
     ss = st.session_state
     pending = ss.get(_PENDING_WRITES_KEY) or {}
@@ -1719,10 +1720,25 @@ def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
             continue
         earlier = pending.get(key)
         shown = earlier.stale_echo if earlier is not None else old
-        write_through(key, ss[key], shown=shown, in_callback=rerun_follows)
+        write_through(key, ss[key], shown=shown, in_callback=False)
+    if rerun_follows:
+        keep_holds_through_rerun()
 
 
-#: Design keys no widget draws, which `_hold_view_writes` leaves alone. The
+def keep_holds_through_rerun() -> None:
+    """Keep every held write through a rerun the script starts itself.
+
+    `reassert_pending_writes` reads a held key that still has its written value
+    as the browser having taken it, and ends the hold. A rerun the script
+    starts (`st.rerun()`) brings no values from the browser, so every hold
+    would read that way and end before the browser's echo arrives. Marked
+    fresh, each waits for the run after, which is the browser's."""
+    for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
+        write.fresh = True
+
+
+#: Design keys no widget draws, which `_hold_view_writes` and
+#: `hold_script_writes` write plainly, never held. The
 #: palette name is derived from the colours (the rail's tiles hold no value);
 #: the highlight style, the replay's quality and the typeface are shown through
 #: shadows (`shadow_widget_key`), whose own keys move instead; the screen's

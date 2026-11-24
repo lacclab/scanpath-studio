@@ -1,1 +1,1 @@
-The settings a settings file restores, and an added dataset's own text size and spacing, now stay on the figure; a menu you had opened before no longer puts the old values back.
+Settings restored from a settings file, and an added dataset's own text size and spacing, no longer revert when a menu you had opened before sends back its old values; a colour range switched to or from Auto by a settings file can still revert.

@@ -150,12 +150,15 @@ def test_a_dataset_switch_reseeds_the_stimulus_fields_against_the_menus_echo(
     assert (spans, qa) == (["in_span"], ["answer"])
 
 
+@pytest.mark.parametrize("rerun", [False, True], ids=["plain", "script-rerun"])
 def test_a_script_write_over_a_held_value_holds_against_the_older_echo(
-    monkeypatch,
+    rerun, monkeypatch
 ):
     """A view tile holds two values; before the browser answers, a settings
     file changes one and leaves the other. The closed menus still send back
-    what they showed before the tile, so both must hold against that."""
+    what they showed before the tile, so both must hold against that — also
+    when the restore runs the script once more first, a run that brings no
+    values from the browser."""
     from scanpath_studio import controls
 
     state: dict = {
@@ -174,7 +177,9 @@ def test_a_script_write_over_a_held_value_holds_against_the_older_echo(
     controls.reassert_pending_writes()
     before = controls.design_state()
     state["global_saccade_style"] = "Dotted"
-    controls.hold_script_writes(before)
+    controls.hold_script_writes(before, rerun_follows=rerun)
+    if rerun:
+        controls.reassert_pending_writes()  # the script's own rerun
     # The run after: the menus echo what they showed before the tile.
     state["global_saccade_style"] = "Solid"
     state["global_order_label_position"] = "top"

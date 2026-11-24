@@ -3840,6 +3840,7 @@ def _apply_uploaded_plot_config(
         st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     from . import publication, publication_ui
+    from .controls import design_state, hold_script_writes, keep_holds_through_rerun
 
     if config.get("schema") == publication.SCHEMA:
         try:
@@ -3847,8 +3848,8 @@ def _apply_uploaded_plot_config(
         except ValueError as exc:
             st.toast(str(exc), icon=ICONS["warning"])
             return
+        keep_holds_through_rerun()
         st.rerun()
-    from .controls import design_state, hold_script_writes
 
     # The file writes the rail's values before its widgets draw, and a menu the
     # user had open sends back what it last showed on the next run.

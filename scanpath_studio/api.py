@@ -3759,6 +3759,8 @@ def compare_scanpaths(
         The Plotly figure.
 
     Raises:
+        ValueError: ``fixations`` is ``None``: a dataset recorded as raw gaze alone, or
+            one with words only, has no scanpath to compare.
         ValueError: An overlay of two different screens (see the overlay gate), or a
             ``screen`` / ``screen_b`` the trial does not have or that names a screen of
             a single-screen trial.
@@ -3784,6 +3786,13 @@ def compare_scanpaths(
         _COMPARISON_FIGURE_PARAMS | {"palette"},
         "compare_scanpaths",
     )
+    if fixations is None:
+        raise ValueError(
+            "compare_scanpaths compares two readings' fixations, and this dataset "
+            "has none (one recorded as raw gaze alone, or one with words only). "
+            "Scanpath Studio does not detect fixations from gaze samples; draw each "
+            "reading's samples with plot_scanpath(..., raw_gaze=...)."
+        )
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.

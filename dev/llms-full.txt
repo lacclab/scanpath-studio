@@ -4293,6 +4293,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - The stimulus image's offset boxes and the fixation-flag threshold boxes now stop at the range a share link carries (±5000 px, 1–60,000 ms). Before, a value past it showed on screen but a share link cut it back to the limit. A settings file holding such a value is now restored at the limit too.
 - Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
 - A closed settings menu no longer brings back a value you changed elsewhere for four controls: undoing the replay's Smoothness or a word highlight now holds, a palette set by a settings file stays on Corpus Analysis, and a new dataset gets its own Stimulus & context fields.
+- Settings restored from a settings file, and an added dataset's own text size and spacing, no longer revert when a menu you had opened before sends back its old values; a colour range switched to or from Auto by a settings file can still revert.
 
 ## Release v0.48.0
 

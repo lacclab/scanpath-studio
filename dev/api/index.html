@@ -2946,6 +2946,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.read_annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;read_annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.write_annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;write_annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.AnnotationsWriteResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;AnnotationsWriteResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.cache_status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3890,6 +3923,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.read_annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;read_annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.write_annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;write_annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.AnnotationsWriteResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;AnnotationsWriteResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.cache_status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4251,6 +4317,23 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a></td>
 <td>Remove a dataset from the app's dataset list from a script.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;read_annotations&lt;/span&gt;" href="#scanpath_studio.api.read_annotations"><code>read_annotations</code></a></td>
+<td>Read the favorites, tags and notes saved on a dataset's readings.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;write_annotations&lt;/span&gt;" href="#scanpath_studio.api.write_annotations"><code>write_annotations</code></a></td>
+<td>Save favorites, tags and notes on a dataset's readings from a script.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;AnnotationsWriteResult&lt;/span&gt;
+
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-dataclass&quot;&gt;&lt;code&gt;dataclass&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt;" href="#scanpath_studio.api.AnnotationsWriteResult"><code>AnnotationsWriteResult</code></a></td>
+<td>What <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;write_annotations&lt;/span&gt;" href="#scanpath_studio.api.write_annotations"><code>write_annotations</code></a> did.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cache_status&lt;/span&gt;" href="#scanpath_studio.api.cache_status"><code>cache_status</code></a></td>
@@ -9812,6 +9895,374 @@ version. Nothing is removed then.</p>
     <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.remove_dataset--__codelineno-0-1" name="scanpath_studio.api.remove_dataset--__codelineno-0-1" href="#scanpath_studio.api.remove_dataset--__codelineno-0-1"></a><span class="n">sps</span><span class="o">.</span><span class="n">remove_dataset</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">)</span>
 </code></pre></div>
 
+
+    </div>
+
+</div><p>A saved dataset's favorites, tags and notes can be read and written too:
+<code>write_annotations</code> tags the readings a script flags, so reviewers find them in
+the app, and <code>read_annotations</code> gives back what they marked.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">flags</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"participant_id"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"p01"</span><span class="p">],</span> <span class="s2">"trial_id"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"3"</span><span class="p">],</span> <span class="s2">"tags"</span><span class="p">:</span> <span class="s2">"Review"</span><span class="p">})</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">sps</span><span class="o">.</span><span class="n">write_annotations</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">,</span> <span class="n">flags</span><span class="p">)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">sps</span><span class="o">.</span><span class="n">read_annotations</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">)</span>
+</code></pre></div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.read_annotations" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">read_annotations</span>
+
+
+<a href="#scanpath_studio.api.read_annotations" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">read_annotations</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Read the favorites, tags and notes saved on a dataset's readings.</p>
+<p>What the 🗂️ <strong>Data</strong> page's <strong>Annotations</strong> shows for a dataset you added
+(in the app or with <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>), read
+from the app's saved work on this computer: what reviewers marked in the app,
+for an analysis to use. An app that is open saves an edit within moments of
+it being made.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>dataset</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The name the dataset list shows, ignoring case.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>One row per annotated reading: <code>participant_id</code>, <code>trial_id</code>,</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p><code>screen_id</code> on a dataset recorded over several screens (blank on an</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>annotation of the whole trial), <code>favorite</code> (bool), <code>tags</code> (a list of</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>text) and <code>note</code> (text, <code>""</code> when none). Ids are text, spelled as the</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>app's trial picker lists them. The columns carry these names whatever the</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>dataset calls its own, as the app's <code>annotations.json</code> does. Empty, with</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>the same columns, when the dataset has no annotations.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="scanpath_studio.persistence.StoredDatasetNotFoundError">StoredDatasetNotFoundError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>No saved dataset has this name. The built-in
+and public datasets' annotations are exported in the app. A
+<code>LookupError</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>The saved work can't be read or was written by another version.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.read_annotations--__codelineno-0-1" name="scanpath_studio.api.read_annotations--__codelineno-0-1" href="#scanpath_studio.api.read_annotations--__codelineno-0-1"></a><span class="n">marked</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">read_annotations</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">)</span>
+<a id="scanpath_studio.api.read_annotations--__codelineno-0-2" name="scanpath_studio.api.read_annotations--__codelineno-0-2" href="#scanpath_studio.api.read_annotations--__codelineno-0-2"></a><span class="n">excluded</span> <span class="o">=</span> <span class="n">marked</span><span class="p">[</span><span class="n">marked</span><span class="p">[</span><span class="s2">"tags"</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">tags</span><span class="p">:</span> <span class="s2">"To exclude"</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">)]</span>
+</code></pre></div>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.write_annotations" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">write_annotations</span>
+
+
+<a href="#scanpath_studio.api.write_annotations" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">write_annotations</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">annotations</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">'merge'</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Save favorites, tags and notes on a dataset's readings from a script.</p>
+<p>A quality-control script can tag the readings it flags, and reviewers find
+them in the app — under the trial's <strong>Annotations</strong>, and with the ⭐ / tag trial
+filters. The dataset is one you added (in the app or with
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>); the annotations are saved
+with it on this computer, as the 🗂️ <strong>Data</strong> page's <strong>Annotations → Import</strong>
+saves an imported file.</p>
+<p>In <code>"merge"</code> mode a reading's tags are added to the ones it has, and a
+favorite or note you give replaces its own; what a row leaves blank, an empty
+note included, stays as it was. This differs from the app's <strong>Import</strong>, which
+adds new readings and keeps or swaps a reading's whole entry. <code>"replace"</code>
+makes the dataset's annotations exactly the ones given, and is refused when
+none of the given readings is in the dataset, so a file made for another
+dataset deletes nothing.</p>
+<p>Each reading is looked up in the dataset's tables, as the trial picker lists
+it. One the dataset does not have is left out and listed in the result's
+<code>unknown</code>. A browser tab that has the app open shows the new annotations
+once reloaded. Edits made in it in the meantime are kept beside them, except
+an edit of the same reading, which the tab reports as a conflict.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>dataset</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The name the dataset list shows, ignoring case.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>annotations</code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a> | <a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#list">list</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a>] | <a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | <a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>A table with <code>participant_id</code>, <code>trial_id</code> (or
+<code>unique_trial_id</code>, which wins when there are both, as the trial
+picker lists it), optionally <code>screen_id</code>, and any of <code>favorite</code> (true/false), <code>tags</code> (a list,
+or text with tags separated by <code>;</code>) and <code>note</code> — what
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;read_annotations&lt;/span&gt;" href="#scanpath_studio.api.read_annotations"><code>read_annotations</code></a> returns.
+Rows on the same reading add their tags together. Or the app's
+exported <code>annotations.json</code>: its records, the parsed file, or the
+path to it, where two records on one reading must agree. A path
+ending in <code>.csv</code> is read as a table.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>mode</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
+                  <code>&#39;merge&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p><code>"merge"</code> (the default) or <code>"replace"</code>.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;AnnotationsWriteResult&lt;/span&gt;
+
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-dataclass&quot;&gt;&lt;code&gt;dataclass&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt; (&lt;code&gt;scanpath_studio.api.AnnotationsWriteResult&lt;/code&gt;)" href="#scanpath_studio.api.AnnotationsWriteResult">AnnotationsWriteResult</a></code>
+          –
+          <div class="doc-md-description">
+            <p>An <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;AnnotationsWriteResult&lt;/span&gt;
+
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-dataclass&quot;&gt;&lt;code&gt;dataclass&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt;" href="#scanpath_studio.api.AnnotationsWriteResult"><code>AnnotationsWriteResult</code></a>:
+how many readings were written, how many are annotated now, and the
+ones the dataset does not have.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="scanpath_studio.persistence.StoredDatasetNotFoundError">StoredDatasetNotFoundError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>No saved dataset has this name. A
+<code>LookupError</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p><code>mode</code> is neither <code>"merge"</code> nor <code>"replace"</code>; the
+annotations are not in a form above (a missing id column, a favorite
+that is not true or false, two rows on one reading with different
+notes); <code>"replace"</code> names no reading the dataset has; or the saved
+work can't be read or was written by another version. Nothing is
+saved then.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#TypeError">TypeError</a></code>
+            –
+          <div class="doc-md-description">
+            <p><code>annotations</code> is none of the forms above.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#RuntimeError">RuntimeError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>Saving is turned off (<code>SCANPATH_STUDIO_PERSIST=0</code>).</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.write_annotations--__codelineno-0-1" name="scanpath_studio.api.write_annotations--__codelineno-0-1" href="#scanpath_studio.api.write_annotations--__codelineno-0-1"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_scanpath_data</span><span class="p">(</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-2" name="scanpath_studio.api.write_annotations--__codelineno-0-2" href="#scanpath_studio.api.write_annotations--__codelineno-0-2"></a>    <span class="s2">"pilot3/ia_report.csv"</span><span class="p">,</span> <span class="s2">"pilot3/fixation_report.csv"</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="s2">"canonical"</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-3" name="scanpath_studio.api.write_annotations--__codelineno-0-3" href="#scanpath_studio.api.write_annotations--__codelineno-0-3"></a><span class="p">)</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-4" name="scanpath_studio.api.write_annotations--__codelineno-0-4" href="#scanpath_studio.api.write_annotations--__codelineno-0-4"></a><span class="n">counts</span> <span class="o">=</span> <span class="n">fixations</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"participant_id"</span><span class="p">,</span> <span class="s2">"trial_id"</span><span class="p">])</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-5" name="scanpath_studio.api.write_annotations--__codelineno-0-5" href="#scanpath_studio.api.write_annotations--__codelineno-0-5"></a><span class="n">flagged</span> <span class="o">=</span> <span class="n">counts</span><span class="p">[</span><span class="n">counts</span> <span class="o">&lt;</span> <span class="mi">20</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()[[</span><span class="s2">"participant_id"</span><span class="p">,</span> <span class="s2">"trial_id"</span><span class="p">]]</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-6" name="scanpath_studio.api.write_annotations--__codelineno-0-6" href="#scanpath_studio.api.write_annotations--__codelineno-0-6"></a><span class="n">flagged</span><span class="p">[</span><span class="s2">"tags"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"Few fixations"</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-7" name="scanpath_studio.api.write_annotations--__codelineno-0-7" href="#scanpath_studio.api.write_annotations--__codelineno-0-7"></a><span class="n">result</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">write_annotations</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">,</span> <span class="n">flagged</span><span class="p">)</span>
+<a id="scanpath_studio.api.write_annotations--__codelineno-0-8" name="scanpath_studio.api.write_annotations--__codelineno-0-8" href="#scanpath_studio.api.write_annotations--__codelineno-0-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">written</span><span class="p">,</span> <span class="s2">"readings tagged;"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">unknown</span><span class="p">),</span> <span class="s2">"not found"</span><span class="p">)</span>
+</code></pre></div>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="scanpath_studio.api.AnnotationsWriteResult" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">AnnotationsWriteResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#scanpath_studio.api.AnnotationsWriteResult" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">AnnotationsWriteResult</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">written</span><span class="p">,</span> <span class="n">annotated</span><span class="p">,</span> <span class="n">unknown</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>What <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;write_annotations&lt;/span&gt;" href="#scanpath_studio.api.write_annotations"><code>write_annotations</code></a> did.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><span title="scanpath_studio.api.AnnotationsWriteResult.dataset">dataset</span></code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The dataset's name, as the dataset list shows it.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="scanpath_studio.api.AnnotationsWriteResult.written">written</span></code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>How many readings the annotations were written on.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="scanpath_studio.api.AnnotationsWriteResult.annotated">annotated</span></code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>How many readings of the dataset are annotated now.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><span title="scanpath_studio.api.AnnotationsWriteResult.unknown">unknown</span></code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The readings the dataset does not have, which were left out:
+<code>participant_id</code>, <code>trial_id</code> and <code>screen_id</code> (blank on a whole
+trial). Empty when every reading was found.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
 
     </div>
 

@@ -131,13 +131,38 @@ The link is the one **Share** → **Link** writes for that view, so settings it 
 
 To take a dataset off the list again, use remove_dataset or `scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this way, with its annotations and metadata tables, as its **Remove** on the Data Management page does.
 
+### Annotations from a script
+
+A script can also read and write the favorites, tags and notes on a dataset you added. A quality-control script can tag the readings it flags, and reviewers find them in the app with the tag filter. An analysis can read back what the reviewers marked.
+
+```
+import pandas as pd
+import scanpath_studio as sps
+
+flags = pd.DataFrame(
+    {"participant_id": ["p01", "p02"], "trial_id": ["3", "7"], "tags": "Short"}
+)
+result = sps.write_annotations("Pilot 3", flags)
+print(result.unknown)  # readings the dataset does not have, left out
+
+marked = sps.read_annotations("Pilot 3")
+excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+```
+
+```
+scanpath-studio annotations import "Pilot 3" flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.csv
+```
+
+The table has one row per reading: `participant_id`, `trial_id`, `screen_id` for one screen of a trial recorded over several, and any of `favorite`, `tags` and `note`. In a CSV file, separate tags with `;`. The app's exported `annotations.json` works too. Writing adds a reading's tags to the ones it has, and a favorite or note you give replaces its own. Pass `mode="replace"` (`--replace`) to make the dataset's annotations exactly the ones given; it is refused when none of the given readings is in the dataset. A reading the dataset does not have is left out and listed. An app already open shows the new annotations once its browser tab is reloaded. See write_annotations for every option.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
 
 Click a table name to jump to its rows. **Tables** shows fixations, words, raw gaze samples, participants, trials and texts on one page. When you attach a participant, trial or text metadata file, that table shows the complete file.
 
-**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes.
+**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes. A script can read and write them too; see [Annotations from a script](#annotations-from-a-script).
 
 To switch datasets, open **Dataset library**. Search by name or filter by source, then click a dataset to open its overview. **Saved work** shows what will reopen next time. On a local install, **Dataset downloads** lists the public datasets on disk and lets you choose where future downloads go.
 

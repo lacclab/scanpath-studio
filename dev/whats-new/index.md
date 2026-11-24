@@ -9,6 +9,7 @@
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
 - Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
 - Each part of Plot controls (Presets, Palette, Modes, Customize) can be folded away with the chevron beside its label; a folded line names the current choice, and the browser remembers what you folded.
+- Read and write a saved dataset's favorites, tags and notes from a script with `read_annotations` / `write_annotations` or `scanpath-studio annotations export` / `import`, so a quality-control script's tags show up in the app's trial filters.
 - A script can open the app on a dataset it added, at one reading and figure: `api.app_link` writes the link Share would, and `scanpath-studio open` opens it in the browser (starting the app if it isn't running) with the figure set by the same flags `render` takes.
 
 ### Changed

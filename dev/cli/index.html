@@ -2651,6 +2651,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="annotations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#annotations-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotations-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations import
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3172,6 +3211,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="annotations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#annotations-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotations-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations import
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3314,6 +3392,10 @@ check data and manage saved work without opening the app:</p>
 <tr>
 <td><a href="#remove"><code>remove</code></a></td>
 <td>Remove a dataset you added from that list</td>
+</tr>
+<tr>
+<td><a href="#annotations"><code>annotations</code></a></td>
+<td>Read or write a dataset's favorites, tags and notes</td>
 </tr>
 <tr>
 <td><a href="#open"><code>open</code></a></td>
@@ -5657,15 +5739,123 @@ input, output and <code>--stimulus-image</code> flags are refused, and
 </tbody>
 </table>
 </div>
+<h2 id="annotations">annotations<a class="headerlink" href="#annotations" title="Permanent link">&para;</a></h2>
+<p><code>annotations</code> reads and writes the favorites, tags and notes on a dataset you
+added. <code>export</code> writes the same <code>annotations.json</code> as <strong>Data Management →
+Annotations → Export</strong>, or a CSV table with one row per annotated reading. <code>import</code> reads either: a CSV needs <code>participant_id</code> and
+<code>trial_id</code>, optionally <code>screen_id</code>, and any of <code>favorite</code>, <code>tags</code> (separated by
+<code>;</code>, so a tag can't contain one in a CSV) and <code>note</code>. Importing adds a reading's tags to the ones it has, and a
+favorite or note in the file replaces its own; a blank stays as it was. This
+differs from the app's <strong>Import</strong>, which keeps or swaps a reading's whole entry.
+<code>--replace</code> makes the dataset's annotations exactly the file's, and is refused
+when none of the file's readings is in the dataset. Readings the dataset does not have are listed
+and left out. If the app is open, reload its browser tab to see the new ones.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scanpath-studio<span class="w"> </span>annotations<span class="w"> </span>import<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>qc_flags.csv
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>scanpath-studio<span class="w"> </span>annotations<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-o<span class="w"> </span>annotations.json
+</code></pre></div>
+<p>In Python, use <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;write_annotations&lt;/span&gt;" href="../api/#scanpath_studio.api.write_annotations"><code>write_annotations</code></a> and
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;read_annotations&lt;/span&gt;" href="../api/#scanpath_studio.api.read_annotations"><code>read_annotations</code></a>.</p>
+<h3 id="annotations-export">annotations export<a class="headerlink" href="#annotations-export" title="Permanent link">&para;</a></h3>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows (case does not matter).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-o</code><br><code>--output</code></td>
+<td><code>FILE</code></td>
+<td>required</td>
+<td>The file to write, .json or .csv.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="annotations-import">annotations import<a class="headerlink" href="#annotations-import" title="Permanent link">&para;</a></h3>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows (case does not matter).</td>
+</tr>
+<tr>
+<td></td>
+<td><code>FILE</code></td>
+<td>required</td>
+<td>The .json or .csv file to read.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--replace</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Make the dataset's annotations exactly the file's, instead of adding the file's to them. Refused when none of the file's readings is in the dataset, so a file made for another dataset deletes nothing.</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="cache">cache<a class="headerlink" href="#cache" title="Permanent link">&para;</a></h2>
 <p>A local or desktop run saves your session on your computer, so a refresh or a
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5729,8 +5919,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5766,9 +5956,9 @@ app, open <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></s
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>

@@ -822,13 +822,38 @@ The link is the one **Share** → **Link** writes for that view, so settings it 
 
 To take a dataset off the list again, use remove_dataset or `scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this way, with its annotations and metadata tables, as its **Remove** on the Data Management page does.
 
+### Annotations from a script
+
+A script can also read and write the favorites, tags and notes on a dataset you added. A quality-control script can tag the readings it flags, and reviewers find them in the app with the tag filter. An analysis can read back what the reviewers marked.
+
+```
+import pandas as pd
+import scanpath_studio as sps
+
+flags = pd.DataFrame(
+    {"participant_id": ["p01", "p02"], "trial_id": ["3", "7"], "tags": "Short"}
+)
+result = sps.write_annotations("Pilot 3", flags)
+print(result.unknown)  # readings the dataset does not have, left out
+
+marked = sps.read_annotations("Pilot 3")
+excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+```
+
+```
+scanpath-studio annotations import "Pilot 3" flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.csv
+```
+
+The table has one row per reading: `participant_id`, `trial_id`, `screen_id` for one screen of a trial recorded over several, and any of `favorite`, `tags` and `note`. In a CSV file, separate tags with `;`. The app's exported `annotations.json` works too. Writing adds a reading's tags to the ones it has, and a favorite or note you give replaces its own. Pass `mode="replace"` (`--replace`) to make the dataset's annotations exactly the ones given; it is refused when none of the given readings is in the dataset. A reading the dataset does not have is left out and listed. An app already open shows the new annotations once its browser tab is reloaded. See write_annotations for every option.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
 
 Click a table name to jump to its rows. **Tables** shows fixations, words, raw gaze samples, participants, trials and texts on one page. When you attach a participant, trial or text metadata file, that table shows the complete file.
 
-**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes.
+**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes. A script can read and write them too; see [Annotations from a script](#annotations-from-a-script).
 
 To switch datasets, open **Dataset library**. Search by name or filter by source, then click a dataset to open its overview. **Saved work** shows what will reopen next time. On a local install, **Dataset downloads** lists the public datasets on disk and lets you choose where future downloads go.
 
@@ -1435,6 +1460,9 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | add_dataset                                   | Add a dataset to the app's dataset list from a script.                                |
 | app_link                                      | A link that opens the local app on a dataset, a reading and a figure.                 |
 | remove_dataset                                | Remove a dataset from the app's dataset list from a script.                           |
+| read_annotations                              | Read the favorites, tags and notes saved on a dataset's readings.                     |
+| write_annotations                             | Save favorites, tags and notes on a dataset's readings from a script.                 |
+| AnnotationsWriteResult                        | What write_annotations did.                                                           |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
 | clear_cache                                   | Delete the recovery cache.                                                            |
 | **Version and updates**                       |                                                                                       |
@@ -2987,6 +3015,109 @@ Examples:
 sps.remove_dataset("Pilot 3")
 ```
 
+A saved dataset's favorites, tags and notes can be read and written too: `write_annotations` tags the readings a script flags, so reviewers find them in the app, and `read_annotations` gives back what they marked.
+
+```
+flags = pd.DataFrame({"participant_id": ["p01"], "trial_id": ["3"], "tags": "Review"})
+sps.write_annotations("Pilot 3", flags)
+sps.read_annotations("Pilot 3")
+```
+
+### read_annotations
+
+```
+read_annotations(dataset)
+```
+
+Read the favorites, tags and notes saved on a dataset's readings.
+
+What the 🗂️ **Data** page's **Annotations** shows for a dataset you added (in the app or with add_dataset), read from the app's saved work on this computer: what reviewers marked in the app, for an analysis to use. An app that is open saves an edit within moments of it being made.
+
+Parameters:
+
+- **`dataset`** (`str`) – The name the dataset list shows, ignoring case.
+
+Returns:
+
+- `DataFrame` – One row per annotated reading: participant_id, trial_id,
+- `DataFrame` – screen_id on a dataset recorded over several screens (blank on an
+- `DataFrame` – annotation of the whole trial), favorite (bool), tags (a list of
+- `DataFrame` – text) and note (text, "" when none). Ids are text, spelled as the
+- `DataFrame` – app's trial picker lists them. The columns carry these names whatever the
+- `DataFrame` – dataset calls its own, as the app's annotations.json does. Empty, with
+- `DataFrame` – the same columns, when the dataset has no annotations.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name. The built-in and public datasets' annotations are exported in the app. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version.
+
+Examples:
+
+```
+marked = sps.read_annotations("Pilot 3")
+excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+```
+
+### write_annotations
+
+```
+write_annotations(dataset, annotations, *, mode='merge')
+```
+
+Save favorites, tags and notes on a dataset's readings from a script.
+
+A quality-control script can tag the readings it flags, and reviewers find them in the app — under the trial's **Annotations**, and with the ⭐ / tag trial filters. The dataset is one you added (in the app or with add_dataset); the annotations are saved with it on this computer, as the 🗂️ **Data** page's **Annotations → Import** saves an imported file.
+
+In `"merge"` mode a reading's tags are added to the ones it has, and a favorite or note you give replaces its own; what a row leaves blank, an empty note included, stays as it was. This differs from the app's **Import**, which adds new readings and keeps or swaps a reading's whole entry. `"replace"` makes the dataset's annotations exactly the ones given, and is refused when none of the given readings is in the dataset, so a file made for another dataset deletes nothing.
+
+Each reading is looked up in the dataset's tables, as the trial picker lists it. One the dataset does not have is left out and listed in the result's `unknown`. A browser tab that has the app open shows the new annotations once reloaded. Edits made in it in the meantime are kept beside them, except an edit of the same reading, which the tab reports as a conflict.
+
+Parameters:
+
+- **`dataset`** (`str`) – The name the dataset list shows, ignoring case.
+- **`annotations`** (`DataFrame | list[dict] | dict | str | Path`) – A table with participant_id, trial_id (or unique_trial_id, which wins when there are both, as the trial picker lists it), optionally screen_id, and any of favorite (true/false), tags (a list, or text with tags separated by ;) and note — what read_annotations returns. Rows on the same reading add their tags together. Or the app's exported annotations.json: its records, the parsed file, or the path to it, where two records on one reading must agree. A path ending in .csv is read as a table.
+- **`mode`** (`str`, default: `'merge'` ) – "merge" (the default) or "replace".
+
+Returns:
+
+- `AnnotationsWriteResult` – An AnnotationsWriteResult: how many readings were written, how many are annotated now, and the ones the dataset does not have.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name. A LookupError.
+- `ValueError` – mode is neither "merge" nor "replace"; the annotations are not in a form above (a missing id column, a favorite that is not true or false, two rows on one reading with different notes); "replace" names no reading the dataset has; or the saved work can't be read or was written by another version. Nothing is saved then.
+- `TypeError` – annotations is none of the forms above.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+words, fixations = sps.load_scanpath_data(
+    "pilot3/ia_report.csv", "pilot3/fixation_report.csv", names="canonical"
+)
+counts = fixations.groupby(["participant_id", "trial_id"]).size()
+flagged = counts[counts < 20].reset_index()[["participant_id", "trial_id"]]
+flagged["tags"] = "Few fixations"
+result = sps.write_annotations("Pilot 3", flagged)
+print(result.written, "readings tagged;", len(result.unknown), "not found")
+```
+
+### AnnotationsWriteResult
+
+```
+AnnotationsWriteResult(dataset, written, annotated, unknown)
+```
+
+What write_annotations did.
+
+Attributes:
+
+- **`dataset`** (`str`) – The dataset's name, as the dataset list shows it.
+- **`written`** (`int`) – How many readings the annotations were written on.
+- **`annotated`** (`int`) – How many readings of the dataset are annotated now.
+- **`unknown`** (`DataFrame`) – The readings the dataset does not have, which were left out: participant_id, trial_id and screen_id (blank on a whole trial). Empty when every reading was found.
+
 ### cache_status
 
 ```
@@ -3125,6 +3256,7 @@ Raises:
 | [`check`](#check)                           | Run the Data checks on your tables                           |
 | [`add`](#add)                               | Add your tables to the app's dataset list                    |
 | [`remove`](#remove)                         | Remove a dataset you added from that list                    |
+| [`annotations`](#annotations)               | Read or write a dataset's favorites, tags and notes          |
 | [`open`](#open)                             | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache)                           | Show or clear the recovery cache                             |
 | [`version`](#version)                       | Show the build, and whether a newer release is out           |
@@ -3785,6 +3917,46 @@ The link is the one **Share** → **Link** writes for the same view. Settings it
 | `--animate`          | switch        | —       | Open the replay of the reading.                                |
 | `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501). |
 | `--print`            | switch        | —       | Print the link and exit, without opening or starting anything. |
+
+## annotations
+
+`annotations` reads and writes the favorites, tags and notes on a dataset you added. `export` writes the same `annotations.json` as **Data Management → Annotations → Export**, or a CSV table with one row per annotated reading. `import` reads either: a CSV needs `participant_id` and `trial_id`, optionally `screen_id`, and any of `favorite`, `tags` (separated by `;`, so a tag can't contain one in a CSV) and `note`. Importing adds a reading's tags to the ones it has, and a favorite or note in the file replaces its own; a blank stays as it was. This differs from the app's **Import**, which keeps or swaps a reading's whole entry. `--replace` makes the dataset's annotations exactly the file's, and is refused when none of the file's readings is in the dataset. Readings the dataset does not have are listed and left out. If the app is open, reload its browser tab to see the new ones.
+
+```
+scanpath-studio annotations import "Pilot 3" qc_flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.json
+```
+
+In Python, use write_annotations and read_annotations.
+
+### annotations export
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option          | Value  | Default  | Description                       |
+| --------------- | ------ | -------- | --------------------------------- |
+| `-o` `--output` | `FILE` | required | The file to write, .json or .csv. |
+
+### annotations import
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+|        | `FILE` | required | The .json or .csv file to read.                         |
+
+**Options**
+
+| Option      | Value  | Default | Description                                                                                                                                                                                              |
+| ----------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--replace` | switch | —       | Make the dataset's annotations exactly the file's, instead of adding the file's to them. Refused when none of the file's readings is in the dataset, so a file made for another dataset deletes nothing. |
 
 ## cache
 
@@ -4511,6 +4683,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
 - Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
 - Each part of Plot controls (Presets, Palette, Modes, Customize) can be folded away with the chevron beside its label; a folded line names the current choice, and the browser remembers what you folded.
+- Read and write a saved dataset's favorites, tags and notes from a script with `read_annotations` / `write_annotations` or `scanpath-studio annotations export` / `import`, so a quality-control script's tags show up in the app's trial filters.
 - A script can open the app on a dataset it added, at one reading and figure: `api.app_link` writes the link Share would, and `scanpath-studio open` opens it in the browser (starting the app if it isn't running) with the figure set by the same flags `render` takes.
 
 ### Changed

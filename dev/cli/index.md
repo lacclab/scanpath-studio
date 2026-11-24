@@ -12,6 +12,7 @@
 | [`check`](#check)                           | Run the Data checks on your tables                           |
 | [`add`](#add)                               | Add your tables to the app's dataset list                    |
 | [`remove`](#remove)                         | Remove a dataset you added from that list                    |
+| [`annotations`](#annotations)               | Read or write a dataset's favorites, tags and notes          |
 | [`open`](#open)                             | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache)                           | Show or clear the recovery cache                             |
 | [`version`](#version)                       | Show the build, and whether a newer release is out           |
@@ -672,6 +673,46 @@ The link is the one **Share** → **Link** writes for the same view. Settings it
 | `--animate`          | switch        | —       | Open the replay of the reading.                                |
 | `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501). |
 | `--print`            | switch        | —       | Print the link and exit, without opening or starting anything. |
+
+## annotations
+
+`annotations` reads and writes the favorites, tags and notes on a dataset you added. `export` writes the same `annotations.json` as **Data Management → Annotations → Export**, or a CSV table with one row per annotated reading. `import` reads either: a CSV needs `participant_id` and `trial_id`, optionally `screen_id`, and any of `favorite`, `tags` (separated by `;`, so a tag can't contain one in a CSV) and `note`. Importing adds a reading's tags to the ones it has, and a favorite or note in the file replaces its own; a blank stays as it was. This differs from the app's **Import**, which keeps or swaps a reading's whole entry. `--replace` makes the dataset's annotations exactly the file's, and is refused when none of the file's readings is in the dataset. Readings the dataset does not have are listed and left out. If the app is open, reload its browser tab to see the new ones.
+
+```
+scanpath-studio annotations import "Pilot 3" qc_flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.json
+```
+
+In Python, use write_annotations and read_annotations.
+
+### annotations export
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option          | Value  | Default  | Description                       |
+| --------------- | ------ | -------- | --------------------------------- |
+| `-o` `--output` | `FILE` | required | The file to write, .json or .csv. |
+
+### annotations import
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+|        | `FILE` | required | The .json or .csv file to read.                         |
+
+**Options**
+
+| Option      | Value  | Default | Description                                                                                                                                                                                              |
+| ----------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--replace` | switch | —       | Make the dataset's annotations exactly the file's, instead of adding the file's to them. Refused when none of the file's readings is in the dataset, so a file made for another dataset deletes nothing. |
 
 ## cache
 

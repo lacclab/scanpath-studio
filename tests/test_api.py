@@ -522,6 +522,24 @@ def test_plot_scanpath_rejects_unnormalized_raw_gaze(sample):
         sps.plot_scanpath(words, fixations, pid, tid, raw_gaze=raw)
 
 
+def test_an_unset_fixation_opacity_draws_the_default_in_both_builders(sample):
+    """``fixation_opacity=None`` is the option's default in the static figure
+    and in the replay alike."""
+    from scanpath_studio.constants import FIXATION_OPACITY
+
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    static = sps.plot_scanpath(words, fixations, pid, tid, fixation_opacity=None)
+    replay = sps.animate_scanpath(words, fixations, pid, tid, fixation_opacity=None)
+    drawn = [
+        trace.marker.opacity
+        for figure in (static, replay)
+        for trace in figure.data
+        if trace.name in ("Fixations", "Scanpath A")
+    ]
+    assert drawn == [FIXATION_OPACITY.default] * 2
+
+
 def test_animate_scanpath_rejects_static_only_options(sample):
     # Static-only keys raise a clear ValueError, not an opaque TypeError.
     # (color_by is not one — the replay honours it like the static figure;

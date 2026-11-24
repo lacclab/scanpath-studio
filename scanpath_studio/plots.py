@@ -7823,8 +7823,13 @@ def _render_scanpath_animation(
             **s["marker_extra"],
         )
         # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
-        # default for variable-size scatter markers.
-        marker["opacity"] = float(s["opacity"] if s["opacity"] is not None else 1.0)
+        # default for variable-size scatter markers. An unset one is the
+        # option's default, as in the static figure.
+        marker["opacity"] = float(
+            s["opacity"]
+            if s["opacity"] is not None
+            else OPACITY_OPTIONS["fixation_opacity"].default
+        )
         if s["hollow"]:
             marker = _make_hollow(marker)
         return marker

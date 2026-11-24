@@ -1316,8 +1316,8 @@ SETTINGS_FILE_STATE_KEYS = (
 NOT_IN_SETTINGS_FILE: Mapping[str, str] = MappingProxyType(
     {
         SINGLE_SHOW_CHIPS: (
-            "The trial summary above the plot belongs to the view, not the figure, "
-            "and the file describes the figure and nothing else."
+            "The trial summary is view chrome above the plot, not part of the "
+            "figure the file restores; the recovery cache keeps it."
         ),
         "global_word_hover_measure": (
             "Superseded by global_word_hover_fields, which the file carries: the "

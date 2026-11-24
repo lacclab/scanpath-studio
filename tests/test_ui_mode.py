@@ -1191,7 +1191,12 @@ def _move_off_current_value(widget, kind: str) -> bool:
             return False
         return True
     if kind in ("selectbox", "radio", "segmented_control", "pills"):
-        others = [o for o in widget.options if o != widget.value]
+        # By position: `options` are the shown labels, `value` the raw value,
+        # and a format function makes them differ.
+        current = getattr(widget, "index", None)
+        others = [o for i, o in enumerate(widget.options) if i != current]
+        if current is None:
+            others = [o for o in widget.options if o != widget.value]
         if not others:
             return False
         widget.set_value(others[-1])
@@ -1211,9 +1216,9 @@ def _move_off_current_value(widget, kind: str) -> bool:
 def test_a_trip_through_essentials_keeps_every_export_choice():
     """The bulk-export panel's choices survive Full → Essentials → Full.
 
-    Every keyed control on the panel is moved off its value, so a control
-    added later without `persist_state` fails here the way the export choices
-    did when Essentials first shipped."""
+    Essentials draws no bulk-export panel, so a control there without
+    `persist_state` loses its value on the trip. Every keyed control the panel
+    draws, and every one those choices reveal, is moved off its value first."""
     prefix = "bulk_export"
     at = _boot(mode="full")
     at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT

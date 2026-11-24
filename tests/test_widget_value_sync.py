@@ -98,26 +98,16 @@ def test_a_value_survives_a_run_whose_widget_did_not_render():
         )
 
 
-#: The widgets that hold a value. Buttons, uploaders and the like keep none.
-_STATEFUL_WIDGETS = frozenset(
-    {
-        "checkbox",
-        "color_picker",
-        "date_input",
-        "multiselect",
-        "number_input",
-        "pills",
-        "radio",
-        "segmented_control",
-        "select_slider",
-        "selectbox",
-        "slider",
-        "text_area",
-        "text_input",
-        "time_input",
-        "toggle",
-    }
-)
+#: Calls that take a ``key=`` but hold no value of their own, each with why.
+#: Every other call with a saved key is a widget or a wrapper that forwards
+#: ``persist_state`` to one (``_numeric_slider``, ``_check_row``, ``panel_field``…).
+_NOT_VALUE_HOLDERS = {
+    "card": "loading.card's key names the card's container, not a value.",
+    "_render_fix_range_slider": (
+        "draws its own slider and Apply-to-all checkbox, each with "
+        'persist_state="session", from the key it is given.'
+    ),
+}
 
 
 def _saved_keys() -> frozenset[str]:
@@ -136,12 +126,14 @@ def _saved_keys() -> frozenset[str]:
 
 
 def _saved_widgets():
-    """``(where, keys, kwargs)`` for each widget, in every module, whose ``key=``
-    can name a saved key.
+    """``(where, keys, kwargs)`` for each call, in every module, whose ``key=``
+    can name a saved key: a Streamlit widget or a helper that draws one.
 
     A literal or a module constant (``key=SINGLE_SHOW_CHIPS``, ``key=sk.X``)
-    names one key; an f-string names every saved key its pattern matches. A key
-    computed at run time names none it can be checked against."""
+    names one key. An f-string names every saved key its pattern matches,
+    reading each ``{…}`` as one underscore-free word (``{prefix}``, ``{kind}``)
+    so ``f"{key_prefix}_scale"`` does not match ``global_marker_size_scale``. A
+    key computed at run time names none it can be checked against."""
     import ast
     import importlib
     import pkgutil
@@ -159,16 +151,22 @@ def _saved_widgets():
             if not isinstance(node, ast.Call):
                 continue
             func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else None
+            name = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", None)
+            )
             kwargs = {kw.arg: kw.value for kw in node.keywords if kw.arg}
             key = kwargs.get("key")
-            if name not in _STATEFUL_WIDGETS or key is None:
+            if key is None or name in _NOT_VALUE_HOLDERS:
                 continue
             if isinstance(key, ast.Constant):
                 keys = {key.value} & saved
             elif isinstance(key, ast.JoinedStr):
                 pattern = "".join(
-                    re.escape(part.value) if isinstance(part, ast.Constant) else ".+"
+                    re.escape(part.value)
+                    if isinstance(part, ast.Constant)
+                    else "[A-Za-z0-9]*"
                     for part in key.values
                 )
                 keys = {k for k in saved if re.fullmatch(pattern, k)}
@@ -184,7 +182,7 @@ def _saved_widgets():
             else:
                 keys = set()
             if keys:
-                yield f"{info.name}:{node.lineno}", keys, kwargs
+                yield f"{info.name}:{node.lineno} {name}", keys, kwargs
 
 
 def test_every_saved_widget_declares_persist_state():

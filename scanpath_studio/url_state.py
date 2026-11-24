@@ -1993,6 +1993,7 @@ _LEGEND_STATE_PARSERS = {
 _CHOICE_STATE_PARSERS = {
     **_LEGEND_STATE_PARSERS,
     "global_align_algorithm": _parse_align_algorithm,
+    "export_figure_width_unit": _parse_print_unit,
     **{
         key: lambda v: _parse_saccade_classes(
             ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
@@ -2062,6 +2063,11 @@ def _bounded_number(value, lo, hi):
     return int(number) if integral else number
 
 
+#: Number boxes that may be left blank: the print Width (blank keeps the
+#: figure's own size). `None` is a value their control accepts.
+_BLANK_NUMBER_STATE_KEYS = frozenset({"export_figure_width"})
+
+
 def sanitize_session_value(key: str, value):
     """A stored session value as it may be seeded, or ``ValueError``/``TypeError``.
 
@@ -2084,6 +2090,8 @@ def sanitize_session_value(key: str, value):
         ):
             return value  # follows the scanpath's colour / the figure's fill
         return _parse_hex_color(value)
+    if value is None and key in _BLANK_NUMBER_STATE_KEYS:
+        return None
     bounds = _URL_BOUNDED.get(key)
     if bounds is not None:
         lo, hi = bounds

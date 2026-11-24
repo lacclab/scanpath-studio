@@ -2957,13 +2957,13 @@ app_link(
 
 A link that opens the local app on a dataset, a reading and a figure.
 
-The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset. The same as `scanpath-studio open --print`.
+The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset, or one the app has itself: the bundled demo or a public corpus, named as its list shows it. The same as `scanpath-studio open --print`.
 
 For a dataset saved on this computer the link also carries its share ID and a digest of its tables, as Share's does, so the app checks it is the same data; its tables are read to compute it. Settings the link leaves out keep the values the app has. A link whose dataset the app doesn't have opens nothing from it, and says which dataset is missing.
 
 Parameters:
 
-- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case for one saved on this computer.
+- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case.
 - **`participant`** (`str | None`, default: `None` ) – The participant ID. Without it, a trial ID that only one participant has still opens that reading.
 - **`trial`** (`str | None`, default: `None` ) – The trial ID. Without it, the app opens the participant's first trial, or the reading it last showed.
 - **`screen`** (`str | None`, default: `None` ) – The screen ID of a trial recorded over several screens.
@@ -2974,7 +2974,7 @@ Parameters:
 
 Returns:
 
-- `str` – The link, http://localhost:<port>/?dataset=….
+- `str` – The link, http://localhost:<port>/?….
 
 Raises:
 
@@ -3897,14 +3897,14 @@ In Python, use remove_dataset.
 
 ## open
 
-`open` opens the app on a dataset you added, at one reading, with the figure set by the same flags [`render`](#render-flags) takes. If the app is running on this computer, the link opens in your browser. Otherwise `open` starts the app and opens the link once it is up. `--print` prints the link instead.
+`open` opens the app on a dataset you added, or one the app has itself (the bundled demo, a public corpus), at one reading, with the figure set by the same flags [`render`](#render-flags) takes. If the app is running on this computer, the link opens in your browser. Otherwise `open` starts the app and opens the link once it is up. `--print` prints the link instead.
 
 ```
 scanpath-studio open "Pilot 3" -p p07 -t t12
 scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
 ```
 
-The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so it opens only where that dataset was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. In Python, use app_link.
+The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. In Python, use app_link.
 
 **Positional arguments**
 
@@ -4807,6 +4807,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - Stimulus & context keeps its highlighted spans when you step through a screen with no highlighted words, such as a title, and picks them up even when a trial opens on such a screen.
 - On multi-screen trials the experimental per-word reading measures (`compute_word_metrics`, behind `SCANPATH_EXPERIMENTAL=1`) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.
 - The Data page's Texts table no longer passes off one reader's version of a screen as every reader's: a screen, or a text, that readers saw differently — the demo's answer orders and feedback — is shown once per version with the readers who saw it, and a Differs by reader column names those screens.
+- `api.app_link` and `scanpath-studio open` open the bundled demo and the public corpora by the name the dataset list shows, instead of saying the dataset isn't available here.
 - The blank band between the header and the dataset and trial pickers is gone.
 - The trial summary's chips no longer turn black after the ✏️ menu is opened for the first time in a session.
 - Switching subtabs while scrolled to the bottom of a tall one, such as Export, no longer makes the page jump.

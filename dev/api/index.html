@@ -9659,8 +9659,9 @@ its participant and trial IDs, and the figure by the options
 <strong>Share → Link</strong> writes the same view. Open it in a browser while the app runs
 on this computer (<code>scanpath-studio</code> serves it at <code>localhost:8501</code>), or let
 <code>scanpath-studio open</code> start the app and open it. The dataset is one added in
-the app or with <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>. The same as
-<code>scanpath-studio open --print</code>.</p>
+the app or with <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>, or one the
+app has itself: the bundled demo or a public corpus, named as its list shows
+it. The same as <code>scanpath-studio open --print</code>.</p>
 <p>For a dataset saved on this computer the link also carries its share ID and
 a digest of its tables, as Share's does, so the app checks it is the same
 data; its tables are read to compute it. Settings the link leaves out keep
@@ -9675,8 +9676,7 @@ nothing from it, and says which dataset is missing.</p>
               (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
           –
           <div class="doc-md-description">
-            <p>The dataset's name in the app's dataset list, ignoring case for
-one saved on this computer.</p>
+            <p>The dataset's name in the app's dataset list, ignoring case.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -9770,7 +9770,7 @@ its own patterns.</p>
               <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>
           –
           <div class="doc-md-description">
-            <p>The link, <code>http://localhost:&lt;port&gt;/?dataset=…</code>.</p>
+            <p>The link, <code>http://localhost:&lt;port&gt;/?…</code>.</p>
           </div>
         </li>
     </ul>

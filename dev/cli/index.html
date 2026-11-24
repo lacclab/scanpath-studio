@@ -5654,7 +5654,8 @@ opens on its default dataset.</p>
 </table>
 </div>
 <h2 id="open">open<a class="headerlink" href="#open" title="Permanent link">&para;</a></h2>
-<p><code>open</code> opens the app on a dataset you added, at one reading, with the figure set
+<p><code>open</code> opens the app on a dataset you added, or one the app has itself (the
+bundled demo, a public corpus), at one reading, with the figure set
 by the same flags <a href="#render-flags"><code>render</code></a> takes. If the app is running on this
 computer, the link opens in your browser. Otherwise <code>open</code> starts the app and
 opens the link once it is up. <code>--print</code> prints the link instead.</p>
@@ -5662,8 +5663,8 @@ opens the link once it is up. <code>--print</code> prints the link instead.</p>
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>open<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-p<span class="w"> </span>p07<span class="w"> </span>-t<span class="w"> </span>t12<span class="w"> </span>--heatmap<span class="w"> </span>--saccade-style<span class="w"> </span>dash<span class="w"> </span>--print
 </code></pre></div>
 <p>The link is the one <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Link</strong> writes for the same view.
-Settings it leaves out keep the values the app has. It names the dataset, so it
-opens only where that dataset was added. A link carries no file: <code>render</code>'s
+Settings it leaves out keep the values the app has. It names the dataset, so a
+dataset you added opens only where it was added. A link carries no file: <code>render</code>'s
 input, output and <code>--stimulus-image</code> flags are refused, and
 <code>--show-stimulus-image</code> draws the dataset's own pages. In Python, use
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;app_link&lt;/span&gt;" href="../api/#scanpath_studio.api.app_link"><code>app_link</code></a>.</p>

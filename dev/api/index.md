@@ -1554,13 +1554,13 @@ app_link(
 
 A link that opens the local app on a dataset, a reading and a figure.
 
-The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset. The same as `scanpath-studio open --print`.
+The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset, or one the app has itself: the bundled demo or a public corpus, named as its list shows it. The same as `scanpath-studio open --print`.
 
 For a dataset saved on this computer the link also carries its share ID and a digest of its tables, as Share's does, so the app checks it is the same data; its tables are read to compute it. Settings the link leaves out keep the values the app has. A link whose dataset the app doesn't have opens nothing from it, and says which dataset is missing.
 
 Parameters:
 
-- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case for one saved on this computer.
+- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case.
 - **`participant`** (`str | None`, default: `None` ) – The participant ID. Without it, a trial ID that only one participant has still opens that reading.
 - **`trial`** (`str | None`, default: `None` ) – The trial ID. Without it, the app opens the participant's first trial, or the reading it last showed.
 - **`screen`** (`str | None`, default: `None` ) – The screen ID of a trial recorded over several screens.
@@ -1571,7 +1571,7 @@ Parameters:
 
 Returns:
 
-- `str` – The link, http://localhost:<port>/?dataset=….
+- `str` – The link, http://localhost:<port>/?….
 
 Raises:
 

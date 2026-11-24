@@ -2373,17 +2373,24 @@ class TestPlotEnhancements:
         assert float(fix.marker.line.width) >= 1.0
 
     def test_fixation_opacity(self, synthetic_words_df, synthetic_fixations_df):
-        # The opacity is set explicitly (even at the 1.0 default) so the
-        # control overrides Plotly's ~0.7 default for variable-size markers — i.e.
-        # "opacity at 1" really renders fully opaque.
+        # The opacity is always set explicitly, so the control overrides
+        # Plotly's own default for variable-size markers: "opacity at 1" really
+        # renders fully opaque, and the builder's default is the rail's and the
+        # API's.
+        from scanpath_studio.constants import FIXATION_OPACITY
+
         fig = self._figure(
             synthetic_words_df, synthetic_fixations_df, fixation_opacity=0.4
         )
         fix = next(t for t in fig.data if t.name == "Fixations")
         assert fix.marker.opacity == 0.4
+        opaque = self._figure(
+            synthetic_words_df, synthetic_fixations_df, fixation_opacity=1.0
+        )
+        assert next(t for t in opaque.data if t.name == "Fixations").marker.opacity == 1
         default = self._figure(synthetic_words_df, synthetic_fixations_df)
         fix_default = next(t for t in default.data if t.name == "Fixations")
-        assert fix_default.marker.opacity == 1.0
+        assert fix_default.marker.opacity == FIXATION_OPACITY.default == 0.7
 
     def test_saccade_style_dash(self, synthetic_words_df, synthetic_fixations_df):
         fig = self._figure(

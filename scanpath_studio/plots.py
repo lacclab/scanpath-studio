@@ -220,7 +220,8 @@ class FigureSettings:
     fixation_snap_to_line: bool = False
     fixation_snap_position: float = DEFAULT_SNAP_POSITION
     hollow_fixations: bool = False
-    fixation_opacity: float = 1.0
+    #: The rail's, the link's and the API's default too (`FIXATION_OPACITY`).
+    fixation_opacity: float = OPACITY_OPTIONS["fixation_opacity"].default
     #: The outline round each filled fixation marker (0 draws none). A
     #: hollow marker's ring and a comparison's metric-coloured ring are their
     #: scanpath's colour, so they keep their own.
@@ -5412,7 +5413,9 @@ def _render_scanpath_figure(
         # variable-size scatter markers otherwise render at a ~0.7 default, so an
         # unset 1.0 would look translucent.
         marker["opacity"] = float(
-            fixation_opacity if fixation_opacity is not None else 1.0
+            fixation_opacity
+            if fixation_opacity is not None
+            else OPACITY_OPTIONS["fixation_opacity"].default
         )
         if hollow_fixations:
             marker = _make_hollow(marker)

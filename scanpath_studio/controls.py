@@ -2219,6 +2219,13 @@ _VIEW_MODE_KEYS = frozenset(
 _QUICK_VIEW_DATASET = "_quick_view_dataset"
 
 
+def forget_quick_view_dataset(session, dataset: str) -> None:
+    """Forget that the design baseline was taken on ``dataset`` once it is
+    removed, so a dataset that later takes the name retakes the baseline."""
+    if (session.get(_QUICK_VIEW_DATASET) or (None,))[0] == dataset:
+        session.pop(_QUICK_VIEW_DATASET, None)
+
+
 def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 

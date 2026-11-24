@@ -1327,38 +1327,6 @@ class TestDatasetTable:
         assert "Published figures" not in tree
         assert "Where the coordinates come from" not in tree
 
-    def test_delete_is_wired_to_the_remover(self):
-        """`wizard._remove_dataset` must keep a caller: this table's ✕ is the
-        only way to delete an upload, and nothing else would notice it going.
-
-        The Remove click that arms the confirmation is driven for real in
-        `test_remove_arms_the_confirmation_for_its_own_row`; the confirmation's
-        own button is inside an ``st.dialog``, which AppTest does not run, and
-        the remover itself is covered by `tests/test_wizard_helpers.py`. What
-        is left untested is that the dialog still calls it — a source-level
-        fact, so it is checked as one."""
-        import inspect
-
-        # A confirmation sits between the two: the table's ✕ arms the pending
-        # token, and the confirm button in a modal is what calls the remover.
-        # The invariant is that something still calls the remover.
-        from scanpath_studio.app import (
-            _delete_confirmation_dialog,
-            _render_dataset_table_row,
-            _render_delete_confirmation,
-            render_dataset_table,
-        )
-
-        table_source = inspect.getsource(render_dataset_table)
-        assert "_render_delete_confirmation(" in table_source
-        row_source = inspect.getsource(_render_dataset_table_row)
-        assert "args=(PENDING_DELETE_KEY, row.token)" in row_source
-        gate_source = inspect.getsource(_render_delete_confirmation)
-        assert "_delete_confirmation_dialog(" in gate_source
-        dialog_source = inspect.getsource(_delete_confirmation_dialog)
-        assert "from scanpath_studio.wizard import _remove_dataset" in dialog_source
-        assert "_remove_dataset(" in dialog_source
-
 
 @pytest.mark.timeout(90)
 class TestDatasetRename:

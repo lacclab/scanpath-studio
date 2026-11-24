@@ -9104,6 +9104,30 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     return preprocessing
 
 
+def forget_source_state(session, token: str) -> None:
+    """Drop what this module keeps for the dataset ``token`` once it is removed.
+
+    Its stashed trial filters, the marker that its filters are the live ones
+    (left in place, the next switch would stash them under ``token`` again),
+    its *Loaded* status and the share selection resolved on it. A dataset that
+    later takes the same token, as the wizard's next "Dataset 1" does, starts
+    without them.
+    """
+    stash = session.get("_filter_stash") or {}
+    if any(key[0] == token for key in stash):
+        session["_filter_stash"] = {k: v for k, v in stash.items() if k[0] != token}
+    if (session.get("_filters_for") or (None,))[0] == token:
+        session.pop("_filters_for", None)
+    loaded = session.get(LOADED_THIS_SESSION_KEY)
+    if loaded and token in loaded:
+        session[LOADED_THIS_SESSION_KEY] = set(loaded) - {token}
+    if session.get("_share_selection_source") == token:
+        session.pop("_share_selection", None)
+        session.pop("_share_selection_source", None)
+    if session.get(LAST_LOADED_SOURCE_KEY) == token:
+        session.pop(LAST_LOADED_SOURCE_KEY, None)
+
+
 #: The last dataset a run left on screen — where Cancel goes back to
 #: (`_remember_open_dataset`). Not the wizard's `_prev_source`, which only
 #: records where leaving the add-dataset wizard returns to.

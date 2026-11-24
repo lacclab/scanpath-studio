@@ -473,6 +473,13 @@ def _remove_dataset(name: str) -> None:
     switches back to the bundled demo via ``_pending_source_choice`` (applied
     before the radio re-instantiates, like the wizard finalize/cancel switch).
 
+    **Everything the session keeps for it goes too**, through each owning
+    module's ``forget_*``: the next upload can take the same token ("Dataset
+    1"), and anything left behind would open it filtered, on another
+    dataset's reading, or marked Loaded. `tests/test_dataset_lifecycle.py`
+    removes a dataset through the real confirmation and fails on any key that
+    still names it, so a per-dataset key added later is caught there.
+
     **Deleting a dataset drops the computations derived from it.** Every
     figure, table and normalization the app cached for this dataset is dead the
     moment its frames leave the session — keeping them only holds memory and
@@ -504,6 +511,14 @@ def _remove_dataset(name: str) -> None:
     from scanpath_studio import metadata as _metadata
 
     _metadata.forget_dataset(st.session_state, name)
+    # Its filters, Loaded status, remembered readings, design baseline and
+    # place as scanpath B.
+    from scanpath_studio import compare_source, controls, utils
+
+    app.forget_source_state(st.session_state, name)
+    utils.forget_trial_memory(st.session_state, name)
+    controls.forget_quick_view_dataset(st.session_state, name)
+    compare_source.forget_compare_dataset(st.session_state, name)
     if st.session_state.get("data_source_choice") == name:
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
     app.clear_computation_cache()

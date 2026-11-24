@@ -41,7 +41,11 @@ from .data import (
     vouch_for_frames,
 )
 from .experimental_setup import Provenance, SetupSnapshot
-from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
+from .session_keys import (
+    COMPARE_IDENTITY_STATE_KEY,
+    COMPARE_SOURCE_STATE_KEY,
+    SAME_DATASET,
+)
 
 #: The picker's "stay in this dataset" entry — B out of A's own pool, the
 #: default.
@@ -52,6 +56,30 @@ THIS_DATASET = SAME_DATASET
 #: two literals for one wire-format name is exactly the drift `session_keys.py`
 #: exists to prevent.
 COMPARE_SOURCE_KEY = COMPARE_SOURCE_STATE_KEY
+
+#: The comparison dataset the last run resolved, so a switch can be told from a
+#: re-render. Not a widget key — the picker's own key is the user's *pick*, and
+#: this is what was actually loaded and filtered against.
+COMPARE_SOURCE_RESOLVED_KEY = "_compare_source_resolved"
+
+
+def forget_compare_dataset(session, token: str) -> None:
+    """Let go of ``token`` as scanpath B's dataset once it is removed: the pick,
+    what the last run resolved, B's remembered reading, and B's entry in the
+    share selection. Until the Compare row draws again they would name a
+    dataset that is gone, and a dataset that later takes the name would open
+    as B on the old reading."""
+    if session.get(COMPARE_SOURCE_KEY) == token:
+        session.pop(COMPARE_SOURCE_KEY, None)
+        session.pop(COMPARE_IDENTITY_STATE_KEY, None)
+    if session.get(COMPARE_SOURCE_RESOLVED_KEY) == token:
+        session.pop(COMPARE_SOURCE_RESOLVED_KEY, None)
+    selection = session.get("_share_selection") or {}
+    if (selection.get("compare") or {}).get("source") == token:
+        session["_share_selection"] = {
+            k: v for k, v in selection.items() if k != "compare"
+        }
+
 
 #: Label substrings that route a registry entry to its loader. The locations
 #: come from the `<key_prefix>_dir` session keys `app._dataset_dir_input` writes,

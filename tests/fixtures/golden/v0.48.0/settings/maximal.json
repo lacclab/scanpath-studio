@@ -1,0 +1,344 @@
+{
+ "animation": {
+  "grid_step_ms": 225,
+  "max_frames": 874,
+  "playback_speed": 1.0
+ },
+ "app": {
+  "name": "Scanpath Studio",
+  "version": "0.48.0"
+ },
+ "axes": {
+  "coordinate_grid": true,
+  "coordinate_grid_auto": false,
+  "coordinate_grid_spacing": 1856.3,
+  "crop_margin_auto": false,
+  "crop_margin_px": 740.0,
+  "x_field": "x",
+  "y_field": "y"
+ },
+ "canvas_px": {
+  "height": 1440,
+  "width": 2560
+ },
+ "coloring": {
+  "color_by": "(uniform)",
+  "color_by_line": false,
+  "drift_connectors": false,
+  "drift_correction": "Off",
+  "fixation_color": "#0072B2",
+  "fixation_colorbar_length": 0.43,
+  "fixation_colorbar_orientation": "Vertical",
+  "fixation_colorbar_thickness": 19,
+  "fixation_colorbar_tickangle": -13,
+  "fixation_colorbar_tickfont_size": 7,
+  "fixation_colorscale": "Blues",
+  "fixation_opacity": 0.37,
+  "fixation_range": null,
+  "fixation_snap_position": -0.52,
+  "fixation_snap_to_line": true,
+  "fixation_symbol": "circle",
+  "heatmap_colorbar_length": 0.43,
+  "heatmap_colorbar_orientation": "Vertical",
+  "heatmap_colorbar_thickness": 19,
+  "heatmap_colorbar_tickangle": -13,
+  "heatmap_colorbar_tickfont_size": 7,
+  "heatmap_colorscale": "Blues",
+  "heatmap_metric": "duration_ms",
+  "heatmap_norm": "Linear",
+  "heatmap_range": null,
+  "heatmap_sigma_auto": false,
+  "heatmap_sigma_px": 185.63,
+  "heatmap_style": "Word boxes",
+  "hollow_fixations": true,
+  "palette": "Default (colorblind-safe)",
+  "saccade_class_colors": {
+   "forward": "#009E73",
+   "refixation": "#CC79A7",
+   "regression": "#D55E00",
+   "return_sweep": "#E69F00",
+   "skip": "#56B4E9"
+  },
+  "saccade_classes": [
+   "forward",
+   "skip",
+   "refixation",
+   "return_sweep",
+   "regression",
+   "other"
+  ],
+  "saccade_color": "#CC79A7",
+  "saccade_color_mode": "One color",
+  "saccade_opacity": 0.37,
+  "saccade_render_mode": "Straight",
+  "saccade_style": "Solid",
+  "saccade_type_legend": false,
+  "saccade_width": 4.02,
+  "show_color_legend": false,
+  "show_fixation_colorbar": false,
+  "show_heatmap_colorbar": false,
+  "show_highlight_legend": false,
+  "stimulus_image_offset_x": -1300.0,
+  "stimulus_image_offset_y": -1300.0,
+  "stimulus_image_opacity": 0.43,
+  "stimulus_image_scale": 1.27
+ },
+ "compare": [
+  {
+   "box_color": "",
+   "box_fill_color": "",
+   "box_fill_opacity": null,
+   "box_line_opacity": null,
+   "fix_color": "#1f77b4",
+   "heatmap_colorscale": "",
+   "hollow": false,
+   "label_pattern": "",
+   "marker_size_range": [
+    8,
+    24
+   ],
+   "opacity": 0.7,
+   "raw_gaze_color": "",
+   "saccade_color": "#1f77b4",
+   "saccade_style": "Solid",
+   "saccade_width": 2.0
+  },
+  {
+   "box_color": "",
+   "box_fill_color": "",
+   "box_fill_opacity": null,
+   "box_line_opacity": null,
+   "fix_color": "#e45756",
+   "fixation_flags": {
+    "blink": {
+     "mode": "Off"
+    },
+    "long": {
+     "mode": "Off",
+     "threshold_ms": 800.0
+    },
+    "oob": {
+     "mode": "Off"
+    },
+    "short": {
+     "mode": "Off",
+     "threshold_ms": 80.0
+    }
+   },
+   "heatmap_colorscale": "",
+   "hollow": false,
+   "label_pattern": "",
+   "marker_size_range": [
+    8,
+    24
+   ],
+   "opacity": 0.7,
+   "raw_gaze_color": "",
+   "saccade_classes": [
+    "forward",
+    "skip",
+    "refixation",
+    "return_sweep",
+    "regression",
+    "other"
+   ],
+   "saccade_color": "#e45756",
+   "saccade_style": "Solid",
+   "saccade_width": 2.0
+  }
+ ],
+ "compare_view": {
+  "layout": "Overlay",
+  "legend": false,
+  "stimulus": "Both"
+ },
+ "data_source": "Bundled demo",
+ "design": {
+  "caption_color": "#555555",
+  "caption_font_size": 18,
+  "coordinate_grid_font_size": 7,
+  "fixation_colorbar_length": 0.43,
+  "fixation_colorbar_length_auto": false,
+  "fixation_colorbar_thickness": 19,
+  "fixation_outline_color": "#111111",
+  "fixation_outline_width": 1.85,
+  "heatmap_colorbar_length": 0.43,
+  "heatmap_colorbar_length_auto": false,
+  "heatmap_colorbar_thickness": 19,
+  "heatmap_opacity": 0.4,
+  "heatmap_opacity_auto": false,
+  "plot_frame_color": "#000000",
+  "saccade_arrow_size": 17.32,
+  "show_credit": true,
+  "show_plot_frame": false,
+  "title_font_size": 25
+ },
+ "experimental_setup": {
+  "display_dpi": 108.92,
+  "monitor_width_mm": 597.0,
+  "provenance": {
+   "geometry": "assumed",
+   "screen": "measured",
+   "text": "measured"
+  },
+  "stimulus_font_pt": 12.0,
+  "use_stimulus_font_pt": true,
+  "viewing_distance_mm": 800.0,
+  "viewing_distance_provenance": "assumed"
+ },
+ "export": {
+  "dpi": 300,
+  "unit": "mm",
+  "width": null
+ },
+ "exported_at": "2026-11-24T00:33:47",
+ "highlighting": {
+  "background_color": "#ffffff",
+  "critical_span_style": "None",
+  "fixation_flags": {
+   "blink": {
+    "color": "#17becf",
+    "mode": "Off",
+    "symbol": "diamond-open"
+   },
+   "long": {
+    "color": "#9467bd",
+    "mode": "Off",
+    "symbol": "square-open",
+    "threshold_ms": 25714.0
+   },
+   "oob": {
+    "color": "#d62728",
+    "mode": "Off",
+    "symbol": "x"
+   },
+   "short": {
+    "color": "#ff7f0e",
+    "mode": "Off",
+    "symbol": "triangle-up-open",
+    "threshold_ms": 25714.0
+   }
+  },
+  "highlight_column": null,
+  "highlight_text_color": "#D55E00",
+  "span_border_color": "#000000"
+ },
+ "illustration": {
+  "label_mode": "Auto",
+  "reasons": [],
+  "text": ""
+ },
+ "labels": {
+  "caption_pattern": "",
+  "show_caption": true,
+  "show_title": true,
+  "title_pattern": ""
+ },
+ "layers": {
+  "autoplay": false,
+  "fixations": false,
+  "full_monitor": false,
+  "heatmap": true,
+  "order_labels": true,
+  "raw_gaze": true,
+  "saccade_arrows": false,
+  "saccades": false,
+  "stimulus": false,
+  "stimulus_image": false,
+  "word_labels": false,
+  "words": true
+ },
+ "legends": {
+  "colors": {
+   "arrangement": "auto",
+   "position": "auto",
+   "size": null
+  },
+  "compare": {
+   "arrangement": "auto",
+   "position": "auto",
+   "size": null
+  },
+  "highlight": {
+   "arrangement": "auto",
+   "position": "auto",
+   "size": null
+  },
+  "saccades": {
+   "arrangement": "auto",
+   "position": "auto",
+   "size": null
+  },
+  "size_key": {
+   "arrangement": "auto",
+   "position": "auto",
+   "size": null
+  }
+ },
+ "mode": {
+  "animate": false,
+  "compare": false
+ },
+ "preprocessing": {
+  "discard_blink_adjacent": true,
+  "enabled": true,
+  "merge_distance_chars": 1.0,
+  "short_policy": "Off",
+  "short_threshold_ms": 80.0
+ },
+ "raw_gaze": {
+  "available": true,
+  "color": "#888888",
+  "marker_size": 5.07,
+  "opacity": 0.43,
+  "points": 18583,
+  "synthesized": false
+ },
+ "schema": 10,
+ "selection": {
+  "fixation_window": null,
+  "participant_id": "l37_273",
+  "trial_id": "l37_273_2_2_2_Adv",
+  "window_all_trials": false
+ },
+ "sizing": {
+  "base_font_size": 16,
+  "duration_size_legend": true,
+  "marker_duration_range": [
+   160,
+   490
+  ],
+  "marker_size_range": [
+   11,
+   20
+  ],
+  "marker_size_scale": "sqrt",
+  "order_font_color": "#111111",
+  "order_font_size": 34,
+  "order_label_position": "above"
+ },
+ "text": {
+  "fixation_hover_fields": [
+   "order_in_trial",
+   "duration_ms",
+   "word_id"
+  ],
+  "font_family": "monospace",
+  "line_spacing": 3.0,
+  "redact_text": true,
+  "scale_text_to_boxes": true,
+  "text_color": "#000000",
+  "word_hover_fields": [
+   "text",
+   "word_id",
+   "line_idx",
+   "total_fixation_duration_ms"
+  ]
+ },
+ "word_boxes": {
+  "color": "#6c757d",
+  "fill_color": "#646464",
+  "fill_opacity": 0.37,
+  "line_opacity": 0.37
+ }
+}

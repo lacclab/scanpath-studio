@@ -3,6 +3,16 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # main is tested after every merge as well: two PRs that are green on their
+  # own can break it together, and nothing else runs the suite there.
+  push:
+    branches: [main]
+  # Weekly, on whatever versions resolve that day. The install is unpinned, so
+  # a dependency release can turn main red with no code change; this finds it
+  # before the next unrelated PR does.
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
 
 # Least privilege for the default GITHUB_TOKEN: every job here checks out,
 # installs and runs pytest/ruff — none of them write anything back. Declared at
@@ -145,8 +155,8 @@ jobs:
       - name: Install Chromium and WebKit
         run: playwright install --with-deps chromium webkit
 
-      - name: Run the browser smoke test
-        run: pytest -q tests/test_browser_smoke.py
+      - name: Run the browser smoke test and the download page's link checks
+        run: pytest -q tests/test_browser_smoke.py tests/test_bundle_download_page.py
 
       - name: Check keyboard navigation, narrow imports, and offline downloads in WebKit
         env:

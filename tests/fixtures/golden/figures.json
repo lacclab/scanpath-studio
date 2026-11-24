@@ -1,0 +1,45 @@
+{
+ "animation-default": {
+  "digest": "afa259a2e9439a94283ca26479c8ff34efe272dccc559bcc206cc0c90c58f6d1",
+  "kind": "animation",
+  "options": {}
+ },
+ "comparison-default": {
+  "digest": "f8a403d7aead8c370356e9b961f8cf6c15b2ba639273201893d1630e34107fcb",
+  "kind": "comparison",
+  "options": {}
+ },
+ "static-default": {
+  "digest": "9b8a2ddb650084efb60426527df876be2205edad441f05ee943f6089cda69dd4",
+  "kind": "static",
+  "options": {}
+ },
+ "static-maximal": {
+  "digest": "77d01baea63cd8eef1d0400eb7f60361e482e81b1fa5c854625ed023eafbb986",
+  "kind": "static",
+  "options": {
+   "color_by": "duration_ms",
+   "fixation_colorscale": "Viridis",
+   "fixation_opacity": 0.5,
+   "fixation_outline_color": "#336699",
+   "heatmap_colorscale": "Greens",
+   "heatmap_opacity": 0.8,
+   "heatmap_style": "Smoothed",
+   "marker_size_range": [
+    5,
+    20
+   ],
+   "marker_size_scale": "log",
+   "saccade_color": "#123456",
+   "saccade_opacity": 0.5,
+   "show_fixations": true,
+   "show_heatmap": true,
+   "show_order": true,
+   "show_raw_gaze": true,
+   "show_saccade_arrows": true,
+   "show_saccades": true,
+   "show_word_labels": true,
+   "show_words": true
+  }
+ }
+}

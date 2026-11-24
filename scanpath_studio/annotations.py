@@ -516,8 +516,9 @@ def rename_dataset(session, old: str, new: str) -> bool:
     Saving a drawn scanpath moves the draft's notes to the dataset it becomes
     (``app._save_authored_dataset``). Refuses — changing nothing — when ``new``
     already holds a store of its own, which the move would otherwise
-    overwrite; the saved dataset's name comes from ``_safe_dataset_name``,
-    which avoids :func:`dataset_names`, so it never does.
+    overwrite; the saved dataset's key comes from ``wizard._new_dataset_token``,
+    which takes a fresh ``upload-…`` key over any key :func:`dataset_names`
+    holds, so it never does.
     """
     old, new = str(old), str(new)
     if old == new:

@@ -2069,9 +2069,7 @@ def get_app_css() -> str:
        the page's own background — not a tinted, bordered card, whose fill would
        put a second surface behind rows that already carry their own outline. A
        hair more breathing room between the stacked toggles than the app-wide
-       gap:0 rule. The controls stay in page flow, beside both the plot and its
-       subtabs, so every control can use the space below the figure without a
-       nested scrollbar. */
+       gap:0 rule. */
     .st-key-scanpath_rail {
         border-left: 1px solid var(--sps-border);
         padding: 0.1rem 0.35rem 1.5rem 1rem;
@@ -2083,16 +2081,28 @@ def get_app_css() -> str:
         container-type: inline-size;
         container-name: sps-rail;
     }
-    /* Beside the figure, the rail's column sticks to the top of the page's scroll area and scrolls
-       on its own, as tall as the window and never capped at the plot's height:
-       a long rail stays reachable while the figure stays in view. Phones stack
-       the two columns into one flow (the max-width: 639px block below). */
+    /* Beside the figure, the rail's column sticks and scrolls on its own, as
+       tall as the room under the page's top band and never capped at the
+       plot's height: a long rail stays reachable while the figure stays in
+       view. Phones stack the two columns into one flow (the max-width: 639px
+       block below).
+
+       It sticks where it starts: 7.5rem down, which clears Streamlit's 3.75rem
+       header (opaque, drawn over the page), the 3rem top padding of
+       `.stMainBlockContainer` and the zero-height embeds and empty notice
+       strip above the view. So it never moves while the page scrolls, and the
+       box fits the window at every scroll position: sticking any higher would
+       slide its top under the header, and a box as tall as the window would
+       leave its last controls below the window's edge until the page itself
+       scrolled. A notice above the view (a recovery warning,
+       the hosted server's backup reminder) starts the rail that much lower,
+       until the page has scrolled past it. */
     @media (min-width: 640px) {
         [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail) {
             position: sticky;
-            top: 0.5rem;
+            top: 7.5rem;
             align-self: flex-start;
-            max-height: calc(100dvh - 1rem);
+            max-height: calc(100dvh - 8rem);
             overflow-y: auto;
             overscroll-behavior-y: contain;
             scrollbar-width: thin;

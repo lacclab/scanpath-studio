@@ -1158,3 +1158,104 @@ def test_cookie_follows_the_viewers_choice_not_the_session_mode():
         ui_mode._choose_mode("essentials")
         state[sk.UI_MODE] = "full"
         assert ui_mode.cookie_mode() == "essentials"
+
+
+_PANEL_WIDGETS = (
+    "checkbox",
+    "toggle",
+    "selectbox",
+    "radio",
+    "segmented_control",
+    "pills",
+    "multiselect",
+    "number_input",
+    "text_input",
+)
+
+
+def _move_off_current_value(widget, kind: str) -> bool:
+    """Give `widget` a different valid value; False when it has none to give."""
+    if kind in ("checkbox", "toggle"):
+        widget.set_value(not widget.value)
+        return True
+    if kind in ("multiselect", "pills", "segmented_control") and isinstance(
+        widget.value, (list, tuple)
+    ):
+        # Choosing every option reveals whatever depends on one (PNG's options).
+        chosen = list(widget.value)
+        if any(o not in chosen for o in widget.options):
+            widget.set_value(list(widget.options))
+        elif chosen:
+            widget.set_value(chosen[:-1])
+        else:
+            return False
+        return True
+    if kind in ("selectbox", "radio", "segmented_control", "pills"):
+        # By position: `options` are the shown labels, `value` the raw value,
+        # and a format function makes them differ.
+        current = getattr(widget, "index", None)
+        others = [o for i, o in enumerate(widget.options) if i != current]
+        if current is None:
+            others = [o for o in widget.options if o != widget.value]
+        if not others:
+            return False
+        widget.set_value(others[-1])
+        return True
+    if kind == "number_input":
+        step = widget.step or 1
+        value = widget.value if widget.value is not None else (widget.min or 0)
+        upper = widget.max if widget.max is not None else value + step
+        widget.set_value(value + step if value + step <= upper else value - step)
+        return True
+    if kind == "text_input":
+        widget.set_value((widget.value or "") + "x")
+        return True
+    return False
+
+
+def test_a_trip_through_essentials_keeps_every_export_choice():
+    """The bulk-export panel's choices survive Full → Essentials → Full.
+
+    Essentials draws no bulk-export panel, so a control there without
+    `persist_state` loses its value on the trip. Every keyed control the panel
+    draws, and every one those choices reveal, is moved off its value first."""
+    prefix = "bulk_export"
+    at = _boot(mode="full")
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception, at.exception
+    moved: list[str] = []
+    # A choice can reveal more controls (a PNG format, its options), so keep
+    # moving whatever is newly drawn until nothing new appears.
+    for _ in range(4):
+        fresh = []
+        for kind in _PANEL_WIDGETS:
+            for widget in getattr(at, kind):
+                key = getattr(widget, "key", None) or ""
+                if (
+                    key.startswith(prefix)
+                    and key not in moved
+                    and not widget.disabled
+                    and _move_off_current_value(widget, kind)
+                ):
+                    fresh.append(key)
+        if not fresh:
+            break
+        moved += fresh
+        at.run()
+        assert not at.exception, at.exception
+    assert len(moved) >= 5, f"too few export controls found to test: {moved}"
+    before = {key: at.session_state[key] for key in moved if key in at.session_state}
+
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
+    assert not at.exception, at.exception
+    at.segmented_control(key=SWITCH).set_value("full").run()
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception, at.exception
+    lost = {
+        key: (value, at.session_state[key] if key in at.session_state else "<gone>")
+        for key, value in before.items()
+        if key not in at.session_state or at.session_state[key] != value
+    }
+    assert not lost, f"export choices reset by a trip through Essentials: {lost}"

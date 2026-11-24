@@ -98,44 +98,142 @@ def test_a_value_survives_a_run_whose_widget_did_not_render():
         )
 
 
-def test_every_wire_format_widget_declares_persist_state():
-    """The contract that keeps a conditionally rendered widget's value.
+#: Calls that take a ``key=`` but hold no value of their own, each with why.
+#: Every other call with a saved key is a widget or a wrapper that forwards
+#: ``persist_state`` to one (``_numeric_slider``, ``_check_row``, ``panel_field``…).
+_NOT_VALUE_HOLDERS = {
+    "card": "loading.card's key names the card's container, not a value.",
+    "_render_fix_range_slider": (
+        "draws its own slider and Apply-to-all checkbox, each with "
+        'persist_state="session", from the key it is given.'
+    ),
+}
 
-    A widget on a share-link / saved-config key can render conditionally, and one
-    without ``persist_state="session"`` silently loses the user's value the first
-    time its panel doesn't render. That is invisible until someone reports a
-    setting resetting itself, so it is pinned here instead.
-    """
-    import ast
-    import inspect
 
-    from scanpath_studio import app, metadata_editor, session_keys, tabs, wizard
+def _saved_keys() -> frozenset[str]:
+    """Every key a user gets back: a share link, a settings file, the recovery
+    cache, a link's seeded selection, or a pinned viz default."""
+    from scanpath_studio import persistence, session_keys
 
-    keys = (
-        set(controls._VIZ_WIDGET_DEFAULTS)
+    return (
+        session_keys.LINK_STATE_KEYS
+        | session_keys.SETTINGS_FILE_STATE_KEYS
+        | persistence._SESSION_KEYS
+        | session_keys.URL_SEEDED_STATE_KEYS
+        | set(controls._VIZ_WIDGET_DEFAULTS)
         | {"global_marker_size_range"}
-        | set(session_keys.PLOT_CONFIG_STATE_KEYS)
-        | set(session_keys.URL_SEEDED_STATE_KEYS)
     ) - _NO_PERSIST_STATE
-    offenders = []
-    for module in (app, controls, metadata_editor, tabs, wizard):
-        tree = ast.parse(inspect.getsource(module))
+
+
+def _saved_widgets():
+    """``(where, keys, kwargs)`` for each call, in every module, whose ``key=``
+    can name a saved key: a Streamlit widget or a helper that draws one.
+
+    A literal or a module constant (``key=SINGLE_SHOW_CHIPS``, ``key=sk.X``)
+    names one key. An f-string names every saved key its pattern matches,
+    reading each ``{…}`` as one underscore-free word (``{prefix}``, ``{kind}``)
+    so ``f"{key_prefix}_scale"`` does not match ``global_marker_size_scale``. A
+    key computed at run time names none it can be checked against."""
+    import ast
+    import importlib
+    import pkgutil
+    import re
+    from pathlib import Path
+
+    import scanpath_studio
+
+    saved = _saved_keys()
+    package = Path(scanpath_studio.__file__).parent
+    for info in pkgutil.iter_modules([str(package)]):
+        tree = ast.parse((package / f"{info.name}.py").read_text(encoding="utf-8"))
+        module = None
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            kwargs = {kw.arg: kw for kw in node.keywords if kw.arg}
+            func = node.func
+            name = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", None)
+            )
+            kwargs = {kw.arg: kw.value for kw in node.keywords if kw.arg}
             key = kwargs.get("key")
-            if key is None or not isinstance(key.value, ast.Constant):
+            if key is None or name in _NOT_VALUE_HOLDERS:
                 continue
-            if key.value.value not in keys:
-                continue
-            persist = kwargs.get("persist_state")
-            if persist is None or getattr(persist.value, "value", None) != "session":
-                offenders.append(f"{module.__name__}:{node.lineno} {key.value.value}")
+            if isinstance(key, ast.Constant):
+                keys = {key.value} & saved
+            elif isinstance(key, ast.JoinedStr):
+                pattern = "".join(
+                    re.escape(part.value)
+                    if isinstance(part, ast.Constant)
+                    else "[A-Za-z0-9]*"
+                    for part in key.values
+                )
+                keys = {k for k in saved if re.fullmatch(pattern, k)}
+            elif isinstance(key, (ast.Name, ast.Attribute)):
+                # Imported only when needed: a module constant names the key.
+                module = module or importlib.import_module(
+                    f"scanpath_studio.{info.name}"
+                )
+                value = module
+                for part in ast.unparse(key).split("."):
+                    value = getattr(value, part, None)
+                keys = {value} & saved if isinstance(value, str) else set()
+            else:
+                keys = set()
+            if keys:
+                yield f"{info.name}:{node.lineno} {name}", keys, kwargs
+
+
+def test_every_saved_widget_declares_persist_state():
+    """The contract that keeps a conditionally rendered widget's value.
+
+    A widget on a key a link, a settings file or the cache restores can render
+    conditionally, and one without ``persist_state="session"`` silently loses
+    the user's value the first time its panel doesn't render. That is
+    invisible until someone reports a setting resetting itself, so it is
+    pinned here, for every module and however the key is written."""
+    offenders = sorted(
+        f"{where} {sorted(keys)}"
+        for where, keys, kwargs in _saved_widgets()
+        if getattr(kwargs.get("persist_state"), "value", None) != "session"
+    )
     assert not offenders, (
-        "these widgets sit on a persisted key but do not declare "
-        f'persist_state="session", so their value is lost the first time their '
+        "these widgets sit on a saved key but do not declare "
+        'persist_state="session", so their value is lost the first time their '
         f"panel does not render: {offenders}"
+    )
+
+
+def test_no_saved_widget_passes_a_default():
+    """A saved key is written into session state *before* its widget exists
+    (by a link, a settings file or the cache), so the widget must take its
+    value from state alone and seed a missing default with ``setdefault``
+    (``controls._pin``). A ``value=`` / ``index=`` / ``default=`` beside it
+    fights the restored value and makes Streamlit log "default value but also
+    had its value set via the Session State API" on every run. A literal
+    ``None`` is not a default: it lets the widget be empty, and Streamlit does
+    not warn about it."""
+    import ast
+
+    def defaults(kwargs) -> list[str]:
+        return sorted(
+            name
+            for name in ("value", "index", "default")
+            if name in kwargs
+            and not (
+                isinstance(kwargs[name], ast.Constant) and kwargs[name].value is None
+            )
+        )
+
+    offenders = sorted(
+        f"{where} {sorted(keys)}: {defaults(kwargs)}"
+        for where, keys, kwargs in _saved_widgets()
+        if defaults(kwargs)
+    )
+    assert not offenders, (
+        "a widget on a saved key passes an explicit default; seed it with "
+        f"st.session_state.setdefault instead so a restored value wins: {offenders}"
     )
 
 
@@ -157,86 +255,6 @@ def test_pin_keeps_an_existing_value():
     assert not at.exception, at.exception
     assert at.session_state["k"] == "kept"
     assert at.session_state["fresh"] == "fallback"
-
-
-def test_no_pinned_widget_passes_a_default():
-    """The invariant ``_pin`` relies on: widgets take their value from state only.
-
-    A ``value=``/``index=``/``default=`` beside a pinned ``key=`` would fight the
-    stored value *and* make Streamlit log its "default value but also had its
-    value set via Session State API" warning. (The colour pickers that do pass
-    ``value=`` — the compare styles and the saccade class colours — work around
-    the same desync per widget; they are keyless or unpinned, so they don't
-    collide.)
-    """
-    import ast
-    import inspect
-
-    pinned = set(controls._VIZ_WIDGET_DEFAULTS) | {"global_marker_size_range"}
-    tree = ast.parse(inspect.getsource(controls))
-    offenders = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        kwargs = {kw.arg: kw for kw in node.keywords if kw.arg}
-        key = kwargs.get("key")
-        if key is None or not isinstance(key.value, ast.Constant):
-            continue
-        if key.value.value not in pinned:
-            continue
-        clashes = sorted({"value", "index", "default"} & set(kwargs))
-        if clashes:
-            offenders.append(f"{key.value.value}: {clashes} (line {node.lineno})")
-    assert not offenders, (
-        "a pinned viz widget now passes an explicit default — see "
-        f"controls._pin: {offenders}"
-    )
-
-
-def test_no_wire_format_widget_passes_a_default():
-    """The same invariant, for every module — not just ``controls.py``.
-
-    ``test_no_pinned_widget_passes_a_default`` only scans ``controls.py`` for
-    keys in ``_VIZ_WIDGET_DEFAULTS``, so it cannot see the same bug in another
-    module — e.g. a ``global_preproc_*`` widget in ``app.py`` passing ``value=``
-    beside a key that ``url_state`` writes pre-widget, which makes Streamlit log
-    "was created with a default value but also had its value set via the Session
-    State API" on every run of a restored session.
-
-    Any key in the wire format (``session_keys``) is written into session state
-    *before* its widget exists, so the widget must take its value from state
-    alone and seed a missing default with ``setdefault``.
-    """
-    import ast
-    import inspect
-
-    from scanpath_studio import app, metadata_editor, session_keys, tabs, wizard
-
-    wire = set(session_keys.PLOT_CONFIG_STATE_KEYS) | set(
-        session_keys.URL_SEEDED_STATE_KEYS
-    )
-    offenders = []
-    for module in (app, controls, metadata_editor, tabs, wizard):
-        tree = ast.parse(inspect.getsource(module))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            kwargs = {kw.arg: kw for kw in node.keywords if kw.arg}
-            key = kwargs.get("key")
-            if key is None or not isinstance(key.value, ast.Constant):
-                continue
-            if key.value.value not in wire:
-                continue
-            clashes = sorted({"value", "index", "default"} & set(kwargs))
-            if clashes:
-                offenders.append(
-                    f"{module.__name__}:{node.lineno} {key.value.value}: {clashes}"
-                )
-    assert not offenders, (
-        "a widget whose key is part of the share-link / saved-config wire format "
-        "now passes an explicit default; seed it with st.session_state.setdefault "
-        f"instead so a restored value wins: {offenders}"
-    )
 
 
 def test_canvas_settings_survive_a_corpus_analysis_round_trip():

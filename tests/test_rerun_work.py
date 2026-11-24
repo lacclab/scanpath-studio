@@ -111,10 +111,6 @@ VIEWS = {
 #: Work that runs on every rerun of a view today, each with why. It must keep
 #: running there, so an entry is dropped once it stops.
 UNCACHED = {
-    "compare": {
-        "make_comparison_figure": "the comparison figure is drawn uncached: "
-        "about 50–115 ms a rerun on the demo, more with heatmaps on a full page",
-    },
     "scanpath · Comparisons": {
         "make_scanpath_figure": "the Comparisons subtab draws its grid of matching "
         "readings uncached: one static figure per match, about 30 ms each",
@@ -124,6 +120,7 @@ UNCACHED = {
 #: The caches a figure is drawn through: a plot setting misses them by design.
 FIGURE_CACHES = (
     "_cached_scanpath_figure",
+    "_cached_comparison_figure",
     "_cached_scanpath_animation",
     "_cached_replay_view",
 )

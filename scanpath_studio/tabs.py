@@ -2484,6 +2484,47 @@ def _cached_scanpath_figure(
         )
 
 
+def _comparison_figure_key(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    settings: FigureSettings,
+    raw_gaze: pd.DataFrame | None,
+    trials: tuple,
+) -> tuple:
+    """Cache key for a comparison figure: both readings' frames, the two
+    trials, the samples, and every field of its settings. Every field, not the
+    comparison's own options: its layout, both styles, B's screen and page and
+    the per-render overrides all live in the settings."""
+    inputs = {
+        field.name: getattr(settings, field.name)
+        for field in dataclass_fields(settings)
+    }
+    return _figure_input_key(
+        words, fixations, {**inputs, "raw_gaze": raw_gaze, "trials": trials}
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _cached_comparison_figure(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _trials: tuple,
+    _settings: FigureSettings,
+    _raw_gaze: pd.DataFrame | None,
+    fig_key,
+):
+    """Build + cache a comparison figure, as `_cached_scanpath_figure` does for
+    the static one, so a click that changes nothing in it reuses it."""
+    with timed(
+        "build comparison figure (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_comparison_figure(
+            _words, _fixations, *_trials, settings=_settings, raw_gaze=_raw_gaze
+        )
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _cached_scanpath_animation(
     _words: pd.DataFrame,
@@ -9137,13 +9178,19 @@ def _render_comparison_figure(
             overrides["heatmap_metric"] = "duration_ms"
     comparison_settings = settings.with_overrides(**overrides)
     _amend_snippet_settings(comparison_settings, "comparison")
-    fig_compare = make_comparison_figure(
-        words_filtered,
-        fixations_filtered,
+    trials = (
         (selected_participant, selected_trial),
         (frame_participant_b, compare_trial),
-        settings=comparison_settings,
-        raw_gaze=raw_gaze,
+    )
+    fig_compare = _cached_comparison_figure(
+        words_filtered,
+        fixations_filtered,
+        trials,
+        comparison_settings,
+        raw_gaze,
+        fig_key=_comparison_figure_key(
+            words_filtered, fixations_filtered, comparison_settings, raw_gaze, trials
+        ),
     )
     add_illustration_label(
         fig_compare,

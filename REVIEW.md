@@ -75,32 +75,39 @@ cheaper than a reviewer and never forgets.
     **Check:** the frame is hashed in full or named by its source
     (`data.frame_fingerprint`, `data.stamp_source`), never sampled.
     **Why:** BUG-103 / #314 (sampled keys served stale results); #342.
-13. **Trigger:** a new slow step (a loop over trials, a file read, a build).
+13. **Trigger:** a step that narrows a pool every rerun: a filter on the
+    app's trial pool (`app._run_app`) or B's (`tabs._narrow_secondary`).
+    **Check:** it goes through `data.select_trials_cached` or
+    `data.filter_to_keys_cached`, whose slot is emptied once the filter is
+    off, and a `tests/test_rerun_work.py` case turns that filter on.
+    **Why:** #586 — the annotation filter, the trial-metadata filter and B's
+    annotation filter each re-filtered the whole dataset on every click.
+14. **Trigger:** a new slow step (a loop over trials, a file read, a build).
     **Check:** a `loading.card` with `progress.report()`, not `st.spinner`.
 
 ## Figures and export
 
-14. **Trigger:** a new figure option (a parameter on a `make_*` builder or
+15. **Trigger:** a new figure option (a parameter on a `make_*` builder or
     `FigureSettings`).
     **Check:** all four surfaces — UI, link / settings file, `render` flag,
     `api.py` keyword with a `CANONICAL_FIGURE_DEFAULTS` entry — plus a
     `code_snippet` emitter and a row in `RENDER_PATHS.md`.
     **Why:** `tests/test_render_every_option.py`; the `surface-parity-reviewer`.
-15. **Trigger:** a spatial figure rendered outside the Scanpath view's plot
+16. **Trigger:** a spatial figure rendered outside the Scanpath view's plot
     (Corpus Analysis, a dialog).
     **Check:** through `tabs._render_true_scale_chart`, never `st.plotly_chart`.
-16. **Trigger:** a new code path that writes a file for the user.
+17. **Trigger:** a new code path that writes a file for the user.
     **Check:** the citation is stamped into it (`file_citation`).
-17. **Trigger:** a use of Kaleido.
+18. **Trigger:** a use of Kaleido.
     **Check:** under `animation_export.KALEIDO_LOCK`.
     **Why:** #440 (export hung on macOS).
 
 ## Compare
 
-18. **Trigger:** code that shows or exports a scanpath B id.
+19. **Trigger:** code that shows or exports a scanpath B id.
     **Check:** it goes through `utils.unqualify_for_export` — the namespaced id
     exists only in the throwaway compare frames.
-19. **Trigger:** a scanpath-B counterpart of something A has: a `cmp*` key, a
+20. **Trigger:** a scanpath-B counterpart of something A has: a `cmp*` key, a
     `--compare-*` flag, a `CompareTarget` field, a `*_b` keyword.
     **Check:** B's side carries everything A's does for it — saving and
     restoring, options, mappings and the warnings that go with them.
@@ -110,11 +117,11 @@ cheaper than a reviewer and never forgets.
 
 ## Tests and docs
 
-20. **Trigger:** a test changed by adding a `sleep`, a retry, a `skip`, or a
+21. **Trigger:** a test changed by adding a `sleep`, a retry, a `skip`, or a
     looser assertion.
     **Check:** the flake's cause is fixed instead — or the test is deleted with
     the reason in the commit message.
-21. **Trigger:** a test that checks a rule by scanning the code (an AST walk,
+22. **Trigger:** a test that checks a rule by scanning the code (an AST walk,
     a spy) or by running every case of something (a matrix, a registry).
     **Check:** a mutation written in the code's most common style fails it, not
     only a hand-picked example; and its expected values come from the inputs or
@@ -122,10 +129,10 @@ cheaper than a reviewer and never forgets.
     **Why:** #588 (the `persist_state` scan skipped widgets drawn by helpers),
     #591 (the cache check skipped unannotated parameters), #592 (the shape
     matrix read its expected counts back from the loaded frames).
-22. **Trigger:** a comment or docstring added or edited.
+23. **Trigger:** a comment or docstring added or edited.
     **Check:** it describes the code as it is now — no issue numbers, dates or
     "used to" history.
-23. **Trigger:** a user-visible change.
+24. **Trigger:** a user-visible change.
     **Check:** a `changelog.d/` fragment; `CHANGELOG.md` untouched; a
     `feature-map.md` row in `.claude/skills/verify/` when a feature was added.
 

@@ -259,7 +259,7 @@ from scanpath_studio.data import (
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
-    filter_to_keys,
+    filter_to_keys_cached,
     forget_frame_cache,
     frame_cache,
     frame_fingerprint,
@@ -3009,17 +3009,20 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         (source.words, source.fixations),
         trial_filter_params(filters),
     )
-    selected_keys = filters.get("trial_keys")
-    if selected_keys is not None:
-        pool = (words, fixations)
-        words, fixations = filter_to_keys(words, fixations, set(selected_keys))
-        assign_derived((words, fixations), "filter_to_keys", pool, set(selected_keys))
+    words, fixations = filter_to_keys_cached(
+        words, fixations, filters.get("trial_keys"), slot="cmp_trial_metadata_filter"
+    )
+    kept = None
     if (
         filters.get("favorites_only")
         or filters.get("required_tags")
         or filters.get("excluded_tags")
     ):
-        present = trial_keys(words) | trial_keys(fixations)
+        present = frame_cache(
+            "cmp_annotation_filter_readings",
+            (frame_fingerprint(words), frame_fingerprint(fixations)),
+            lambda: trial_keys(words) | trial_keys(fixations),
+        )
         kept = set(
             filter_keys(
                 list(present),
@@ -3029,9 +3032,11 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
                 prefix=_COMPARE_FILTER_PREFIX,
             )
         )
-        pool = (words, fixations)
-        words, fixations = filter_to_keys(words, fixations, kept)
-        assign_derived((words, fixations), "filter_to_keys", pool, kept)
+    else:
+        forget_frame_cache("cmp_annotation_filter_readings")
+    words, fixations = filter_to_keys_cached(
+        words, fixations, kept, slot="cmp_annotation_filter"
+    )
     if fixations is source.fixations and words is source.words:
         return source
     combos, _, _ = build_combo_options_for(fixations, source.composite_trial_columns)

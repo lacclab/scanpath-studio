@@ -32,12 +32,14 @@ from streamlit.testing.v1 import AppTest
 
 import scanpath_studio.app  # noqa: F401 — every importer exists before the patch
 from scanpath_studio import aggregation, api, data, measures, plots, progress
+from scanpath_studio import metadata as md
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
     DATA_INSPECTION_KEY,
 )
+from scanpath_studio.controls import trial_metadata_filter_key
 from scanpath_studio.session_keys import CORPUS_SUBTAB
 from tests.conftest import APP_SCRIPT, pin_view
 
@@ -72,9 +74,20 @@ TRIAL_ROWS = 1000
 TRIAL_SAMPLES = 60_000
 
 
-def _demo_reading() -> tuple[str, str]:
-    words, fixations = api.load_sample_data(names="canonical")
-    return tuple(map(str, api.list_trials(words, fixations).iloc[0, :2]))
+_WORDS, _FIXATIONS = api.load_sample_data(names="canonical")
+_STAR = {"star": True, "tags": [], "note": ""}
+
+
+def _demo_reading(row: int = 0) -> tuple[str, str]:
+    return tuple(map(str, api.list_trials(_WORDS, _FIXATIONS).iloc[row, :2]))
+
+
+def _trial_halves():
+    """A trial metadata table splitting the demo's trials in two by ``half``."""
+    ids = sorted(_FIXATIONS["trial_id"].astype(str).unique())
+    halves = ["x" if i % 2 else "y" for i in range(len(ids))]
+    frame = pd.DataFrame({"trial_id": ids, "half": halves})
+    return md.build_trial_metadata(frame, "trial_id", source_name="trials.csv")
 
 
 def _subtab(name: str) -> str:
@@ -97,12 +110,25 @@ VIEWS = {
     },
     "scanpath · filtered": (
         _VIEW_SCANPATH,
-        {"trial_annotations": {_READING: {"star": True, "tags": [], "note": ""}}},
+        {"trial_annotations": {_READING: _STAR}},
         # Filters are seeded on the first run, so they are set after it.
         {"filter_participants": [_READING[0]], "filter_favorites": True},
     ),
+    "scanpath · trial metadata filter": (
+        _VIEW_SCANPATH,
+        {md.TRIAL_SESSION_KEY: _trial_halves()},
+        {trial_metadata_filter_key("half"): ["x"]},
+    ),
     "replay": (_VIEW_SCANPATH, {"single_animate": True}),
     "compare": (_VIEW_SCANPATH, {"single_compare_toggle": True}),
+    "compare · B filtered": (
+        _VIEW_SCANPATH,
+        {
+            "single_compare_toggle": True,
+            "trial_annotations": {_READING: _STAR, _demo_reading(1): _STAR},
+        },
+        {"cmpfilter_favorites": True},
+    ),
     **{
         f"corpus · {name}": (_VIEW_CORPUS, {CORPUS_SUBTAB: name})
         for name in ("Overview", "Per text", "Per participant", "Groups")

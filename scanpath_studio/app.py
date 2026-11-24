@@ -209,6 +209,7 @@ from scanpath_studio.data import (
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
+    filter_to_keys_cached,
     filter_trials,
     forget_frame_cache,
     frame_cache,
@@ -10619,10 +10620,9 @@ def _run_app() -> None:
         if samples_only_dataset
         else None,
     )
-    if trialmeta_keys is not None:
-        pool = (words_df, fixations_df)
-        words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
-        assign_derived((words_df, fixations_df), "filter_to_keys", pool, trialmeta_keys)
+    words_df, fixations_df = filter_to_keys_cached(
+        words_df, fixations_df, trialmeta_keys, slot="trial_metadata_filter"
+    )
     # The raw-gaze samples table has to travel through the same annotation
     # filter as words + fixations, or a sample row for an unstarred trial
     # survives "⭐ Favorites only" — which would also keep the all-three-empty
@@ -10654,13 +10654,9 @@ def _run_app() -> None:
                 excluded_tags=trial_filters["excluded_tags"],
             )
         )
-        pool = (words_df, fixations_df)
-        words_df, fixations_df = frame_cache(
-            "annotation_filter",
-            (*pool_key, hashable_key(kept)),
-            lambda: filter_to_keys(*pool, kept),
+        words_df, fixations_df = filter_to_keys_cached(
+            words_df, fixations_df, kept, slot="annotation_filter"
         )
-        assign_derived((words_df, fixations_df), "filter_to_keys", pool, kept)
         if not sample_trials.issubset(kept):
             raw_gaze_scoped = frame_cache(
                 "raw_gaze_annotations",

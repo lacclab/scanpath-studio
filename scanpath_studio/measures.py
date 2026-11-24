@@ -1,9 +1,10 @@
 """Compute reading measures from fixations and word bounding boxes.
 
 Definitions follow standard reading-research conventions (Rayner 1998;
-Inhoff & Radach 1998). All measures are per (participant, trial, word). When a
-column already exists on the words dataframe (e.g. pre-aggregated EyeLink IA
-metrics) it is preserved; we only compute values that are not present.
+Inhoff & Radach 1998). All measures are per (participant, trial[, screen],
+word). When a column already exists on the words dataframe (e.g. pre-aggregated
+EyeLink IA metrics) it is preserved; we only compute values that are not
+present.
 
 Canonical output columns added to words:
 - first_fixation_ms           — FFD: duration of the first fixation on this word

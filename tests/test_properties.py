@@ -547,6 +547,91 @@ def test_tiling_boxes_hold_each_point_exactly_once(widths, left, height, draw):
     assert hits == (1 if on_line else 0)
 
 
+# A reading's screens, each a word count; every screen numbers its words from 0
+# and is read at least once (a screen with no fixations is refused on load).
+_SCREEN_LAYOUTS = st.lists(
+    st.integers(min_value=1, max_value=4), min_size=1, max_size=3
+)
+
+
+@given(
+    st.lists(_SCREEN_LAYOUTS, min_size=1, max_size=3),
+    st.booleans(),
+    st.data(),
+)
+@settings(max_examples=40)
+def test_word_metrics_name_every_word_once(readings, screened, draw):
+    """Every word of the input has exactly one row of measures, found by the
+    words' own key — participant, trial, the screen when there is one, word —
+    so the measures merge back one-to-one, however the screens repeat ids."""
+    from scanpath_studio import api
+    from scanpath_studio.multipart import SCREEN_ID, SCREEN_INDEX, grouping_columns
+
+    if not screened:
+        readings = [layout[:1] for layout in readings]
+    word_rows, fixation_rows = [], []
+    clock = 0
+    for reading, layout in enumerate(readings):
+        trial = f"t{reading}"
+        for number, n_words in enumerate(layout, start=1):
+            screen = {SCREEN_ID: f"s{number}", SCREEN_INDEX: number}
+            word_rows += [
+                dict(
+                    participant_id="p",
+                    trial_id=trial,
+                    **screen,
+                    word_id=word,
+                    text=f"w{word}",
+                    x=10.0 + 50 * word,
+                    y=100.0,
+                    width=50.0,
+                    height=20.0,
+                    line_idx=1,
+                )
+                for word in range(n_words)
+            ]
+            for word in draw.draw(
+                st.lists(
+                    st.integers(min_value=0, max_value=n_words - 1),
+                    min_size=1,
+                    max_size=4,
+                )
+            ):
+                clock += 200
+                fixation_rows.append(
+                    dict(
+                        participant_id="p",
+                        trial_id=trial,
+                        **screen,
+                        timestamp_ms=float(clock),
+                        duration_ms=150.0,
+                        x=35.0 + 50 * word,
+                        y=110.0,
+                        word_id=word,
+                    )
+                )
+    words = pd.DataFrame(word_rows)
+    fixations = pd.DataFrame(fixation_rows)
+    if not screened:
+        words = words.drop(columns=[SCREEN_ID, SCREEN_INDEX])
+        fixations = fixations.drop(columns=[SCREEN_ID, SCREEN_INDEX])
+    words, fixations = api.load_scanpath_data(words, fixations, names="canonical")
+
+    metrics = api.compute_word_metrics(words, fixations)
+
+    key = grouping_columns(words, include_word=True)
+    assert (SCREEN_ID in key) == screened
+    screen_columns = {SCREEN_ID, SCREEN_INDEX}
+    assert screen_columns & set(metrics.columns) == (
+        screen_columns if screened else set()
+    )
+    merged = words[key].merge(
+        metrics[key], on=key, how="outer", validate="one_to_one", indicator=True
+    )
+    assert len(merged) == len(words)
+    assert merged["_merge"].eq("both").all()
+
+
 @pytest.mark.parametrize("value", ["1e309", "nan", "-inf"])
 def test_non_finite_range_is_refused(value):
     with pytest.raises(ValueError):

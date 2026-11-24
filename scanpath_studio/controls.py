@@ -4397,21 +4397,70 @@ def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     return cols
 
 
+#: Values a dataset-dependent control held that the current data does not offer,
+#: by session key: ``{"held": value, "shown": what the control fell back to}``.
+#: Set aside rather than discarded, so a trip to another dataset and back does
+#: not cost the user a choice (`_drop_stale`, `_drop_stale_multi`).
+_SET_ASIDE_KEY = "_set_aside_values"
+
+
+def _set_aside(state_key: str, held) -> None:
+    st.session_state.setdefault(_SET_ASIDE_KEY, {})[state_key] = {
+        "held": held,
+        "shown": None,
+    }
+
+
+def _bring_back(state_key: str, options: list, *, multi: bool) -> None:
+    """Restore a set-aside value once ``options`` offer it again.
+
+    Only while the control still shows what it fell back to: a choice made on
+    the other dataset (or a link or settings file restored there) is the
+    user's, and the set-aside value is forgotten."""
+    ss = st.session_state
+    aside = ss.get(_SET_ASIDE_KEY) or {}
+    entry = aside.get(state_key)
+    if entry is None:
+        return
+    current = ss.get(state_key)
+    if entry["shown"] is None:
+        entry["shown"] = current
+    if current != entry["shown"]:
+        aside.pop(state_key, None)
+        return
+    held = entry["held"]
+    if multi:
+        restored = [item for item in held if item in options]
+        if restored != current:
+            ss[state_key] = restored
+            entry["shown"] = restored
+        if all(item in options for item in held):
+            aside.pop(state_key, None)
+    elif held in options:
+        ss[state_key] = held
+        aside.pop(state_key, None)
+
+
 def _drop_stale(state_key: str, options: list) -> None:
     """Clear a persisted selectbox value that isn't valid for the current
     ``options`` (e.g. after switching datasets, or restoring a config built on
     different data) so ``st.selectbox`` falls back to its ``index=`` default
-    instead of raising."""
+    instead of raising. The value is set aside and comes back on data that
+    offers it again (`_bring_back`)."""
+    _bring_back(state_key, options, multi=False)
     if state_key in st.session_state and st.session_state[state_key] not in options:
-        del st.session_state[state_key]
+        _set_aside(state_key, st.session_state.pop(state_key))
 
 
 def _drop_stale_multi(state_key: str, options: list) -> None:
-    """Keep only still-valid values in a persisted multiselect list."""
+    """Keep only still-valid values in a persisted multiselect list; the rest
+    are set aside and come back on data that offers them again."""
+    _bring_back(state_key, options, multi=True)
     value = st.session_state.get(state_key)
     if isinstance(value, (list, tuple)):
         filtered = [item for item in value if item in options]
         if list(value) != filtered:
+            _set_aside(state_key, list(value))
             st.session_state[state_key] = filtered
     elif value is not None:
         st.session_state.pop(state_key, None)

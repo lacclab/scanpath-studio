@@ -194,3 +194,62 @@ def test_saving_a_drawing_takes_its_annotations_and_metadata_along(monkeypatch):
     assert session[metadata.SESSION_KEY].source_name == "readers.csv"
     metadata.activate_dataset(session, AUTHOR_CHOICE)
     assert metadata.SESSION_KEY not in session, "the next draft inherits the table"
+def _other_study() -> dict:
+    """A one-reader upload with none of the demo's measure columns."""
+    words, fixations = api.build_authored_scanpath("A different study entirely")
+    return {
+        "words": words.assign(participant_id="r1", trial_id="t1"),
+        "fixations": fixations.assign(participant_id="r1", trial_id="t1"),
+        "raw_gaze": pd.DataFrame(),
+        "filter_fields": [],
+        "composite_trial_columns": [],
+    }
+
+
+def _switch(at: AppTest, dataset: str) -> None:
+    at.session_state["_pending_source_choice"] = dataset
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+
+
+#: A user's choice of columns only the demo has.
+_DEMO_ONLY_CHOICES = {
+    "global_color_by": "next_saccade_amplitude_deg",
+    "global_word_hover_fields": ["text", "gpt2_surprisal", "word_id"],
+}
+
+
+@pytest.mark.timeout(300)
+def test_a_trip_to_another_dataset_keeps_choices_it_cannot_show():
+    """Colour by a column, or hover a field, that the next dataset lacks: the
+    control falls back there, and the choice is back on returning."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {"Other": _other_study()}
+    for key, value in _DEMO_ONLY_CHOICES.items():
+        at.session_state[key] = value
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+    _switch(at, "Other")
+    assert at.session_state["global_color_by"] != "next_saccade_amplitude_deg"
+    _switch(at, "Bundled demo")
+    for key, value in _DEMO_ONLY_CHOICES.items():
+        assert at.session_state[key] == value, key
+
+
+@pytest.mark.timeout(300)
+def test_a_choice_made_on_the_other_dataset_wins():
+    """Set aside is not forced back: a control changed while away keeps the
+    new choice."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {"Other": _other_study()}
+    at.session_state["global_word_hover_fields"] = ["text", "gpt2_surprisal"]
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    _switch(at, "Other")
+    at.session_state["global_word_hover_fields"] = ["word_id"]
+    at.run()
+    _switch(at, "Bundled demo")
+    assert at.session_state["global_word_hover_fields"] == ["word_id"]

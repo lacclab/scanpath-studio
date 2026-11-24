@@ -43,6 +43,7 @@ from .code_snippet import (
     SOURCE_RAW_GAZE,
     SOURCE_SYNTHETIC,
     SOURCE_UNKNOWN,
+    SOURCE_UPLOAD,
     UNKNOWN_SOURCE_NOTE,
     FigureState,
     SnippetSource,
@@ -4612,6 +4613,21 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         label=shown,
         note=UNKNOWN_SOURCE_NOTE,
     )
+
+
+def second_dataset_schemas(data_choice: str) -> dict[str, dict]:
+    """The column mappings Share → Code loads scanpath B's tables with when B
+    comes from ``data_choice``: an uploaded dataset's own, exactly as A's would
+    be written, keyed ``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``.
+    Empty for a corpus or a session set, whose loader needs none."""
+    source = _snippet_source(data_choice)
+    if source.kind != SOURCE_UPLOAD:
+        return {}
+    return {
+        option: source.options[option]
+        for option in ("word_schema", "fix_schema", "raw_gaze_schema")
+        if source.options.get(option)
+    }
 
 
 def _has_rows(frame) -> bool:

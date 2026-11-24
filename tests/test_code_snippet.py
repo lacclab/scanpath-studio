@@ -1635,6 +1635,268 @@ def test_print_code_names_the_second_dataset_it_was_given(
     assert "canvas_width=2560" in printed
 
 
+@pytest.fixture()
+def hand_mapped_second_dataset(tmp_path):
+    """The bundled demo's tables with every mapped column renamed past
+    auto-detection, and the mappings that read them: a B uploaded and mapped by
+    hand in the app."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    from scanpath_studio import data
+
+    sample = Path(cs.__file__).parent / "sample_data"
+    paths, schemas = [], {}
+    for name, infer, option in (
+        ("ia", data.infer_word_schema, "word_schema"),
+        ("fixations", data.infer_fix_schema, "fix_schema"),
+    ):
+        frame = pd.read_parquet(sample / f"{name}.parquet")
+        mapped = {field: column for field, column in infer(frame).items() if column}
+        opaque = {column: f"col{i}" for i, column in enumerate(mapped.values())}
+        path = tmp_path / f"b_{name}.parquet"
+        frame.rename(columns=opaque).to_parquet(path)
+        paths.append(str(path))
+        schemas[option] = {field: opaque[column] for field, column in mapped.items()}
+    return paths[0], paths[1], schemas
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_a_hand_mapped_second_dataset_reproduces_from_both_halves(
+    kind, demo_trial, hand_mapped_second_dataset, tmp_path, monkeypatch
+):
+    """B's files load only with the mapping the app read them with, so both
+    recipes carry it (``word_schema=`` / ``--compare-word-schema``) and draw
+    the figure B's own corpus draws."""
+    words, fixations, participant, trial = demo_trial
+    b_words, b_fixations, schemas = hand_mapped_second_dataset
+    with pytest.raises(api.SchemaError):
+        api.load_scanpath_data(b_words, b_fixations)
+    combos = api.list_trials(words, fixations)
+    other = combos[combos["trial_id"] != trial].iloc[0]
+    reader_b = (str(other["participant_id"]), str(other["trial_id"]))
+    state = cs.FigureState(
+        kind=kind,
+        settings=api.figure_options(kind),
+        participant=participant,
+        trial=trial,
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(
+            participant=reader_b[0],
+            trial=reader_b[1],
+            layout="side_by_side",
+            dataset="Pilot",
+            canvas=(2560, 1440),
+            schemas=schemas,
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state, output=str(tmp_path / "figure.html"))
+    figures: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **_: figures.append(fig))
+    python = code.python.replace("'B_WORDS'", repr(b_words)).replace(
+        "'B_FIXATIONS'", repr(b_fixations)
+    )
+    exec(compile(python, "<snippet>", "exec"), {})  # noqa: S102
+    swap = {"B_WORDS": b_words, "B_FIXATIONS": b_fixations}
+    argv = [swap.get(t, t) for t in shlex.split(code.cli.replace(" \\\n", " "))]
+    cli.main(argv[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    # B is the reading its renamed copy holds, read under its own mapping.
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+
+    words_b, fixations_b = api.load_scanpath_data(
+        b_words, b_fixations, **schemas, names="canonical"
+    )
+    common = {
+        "words_b": words_b,
+        "fixations_b": fixations_b,
+        "dataset_b": "Pilot",
+        "setup_b": SetupSnapshot(
+            canvas_width=2560,
+            canvas_height=1440,
+            screen_provenance=Provenance.MEASURED,
+        ),
+        "canvas_size": (2560, 1440),
+    }
+    expected = (
+        api.compare_scanpaths(
+            words,
+            fixations,
+            (participant, trial),
+            reader_b,
+            layout="side_by_side",
+            **common,
+        )
+        if kind == "comparison"
+        else api.animate_scanpath(
+            words, fixations, participant, trial, trial_b=reader_b, **common
+        )
+    )
+    assert _figure_fingerprint(cli_fig) == _figure_fingerprint(expected)
+
+
+def test_print_code_carries_bs_mappings(
+    demo_trial, hand_mapped_second_dataset, tmp_path, capsys
+):
+    """`render` reads B's files with ``--compare-word-schema`` /
+    ``--compare-fix-schema``, and the recipe it prints passes the same mappings
+    on."""
+    _words, _fixations, participant, trial = demo_trial
+    b_words, b_fixations, schemas = hand_mapped_second_dataset
+    word_schema = json.dumps(schemas["word_schema"], separators=(",", ":"))
+    fix_schema = json.dumps(schemas["fix_schema"], separators=(",", ":"))
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            participant,
+            "-t",
+            trial,
+            "--compare-with",
+            f"{participant}:{trial}",
+            "--compare-words",
+            b_words,
+            "--compare-word-schema",
+            word_schema,
+            "--compare-fixations",
+            b_fixations,
+            "--compare-fix-schema",
+            fix_schema,
+            "--compare-layout",
+            "side-by-side",
+            "--print-code",
+            "both",
+            "-o",
+            str(tmp_path / "cmp.html"),
+        ]
+    )
+    printed = _one_line(capsys.readouterr().out)
+    assert f"--compare-word-schema {shlex.quote(word_schema)}" in printed
+    assert f"--compare-fix-schema {shlex.quote(fix_schema)}" in printed
+    assert "word_schema={" in printed and "fix_schema={" in printed
+
+
+@pytest.mark.parametrize(
+    ("flag", "table"),
+    [
+        ("--compare-word-schema", "--compare-words"),
+        ("--compare-fix-schema", "--compare-fixations"),
+        ("--compare-raw-gaze-schema", "--compare-raw-gaze"),
+    ],
+)
+def test_a_mapping_for_b_needs_bs_table(flag, table, demo_trial, tmp_path):
+    _words, _fixations, participant, trial = demo_trial
+    with pytest.raises(SystemExit, match=f"{flag} maps the {table} table"):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                participant,
+                "-t",
+                trial,
+                "--compare-with",
+                f"{participant}:{trial}",
+                flag,
+                '{"x": "X"}',
+                "-o",
+                str(tmp_path / "cmp.png"),
+            ]
+        )
+
+
+def test_bs_raw_gaze_mapping_reaches_both_halves():
+    state = _state(
+        kind="comparison",
+        figure={"show_raw_gaze": True},
+        compare=cs.CompareTarget(
+            participant="p2",
+            trial="t2",
+            dataset="Pilot",
+            raw_gaze=("b_gaze.csv",),
+            schemas={"raw_gaze_schema": {"x": "gx", "y": "gy"}},
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert (
+        "raw_gaze_b = sps.load_raw_gaze('b_gaze.csv', "
+        "raw_gaze_schema={'x': 'gx', 'y': 'gy'})"
+    ) in code.python
+    assert (
+        "--compare-raw-gaze b_gaze.csv --compare-raw-gaze-schema "
+        """'{"x":"gx","y":"gy"}'"""
+    ) in _one_line(code.cli)
+
+
+def test_figure_code_takes_bs_tables_and_mappings():
+    out = _one_line(
+        api.figure_code(
+            kind="comparison",
+            participant="p1",
+            trial="t1",
+            compare=("p2", "t2"),
+            compare_dataset="Pilot",
+            compare_source_options={
+                "words": "b_words.csv",
+                "fixations": ["b_fix_1.csv", "b_fix_2.csv"],
+                "word_schema": {"participant": "Reader"},
+            },
+            flavor="both",
+        )
+    )
+    assert "B_WORDS" not in out and "B_FIXATIONS" not in out
+    assert "'b_words.csv'" in out and "['b_fix_1.csv', 'b_fix_2.csv']" in out
+    assert "word_schema={ 'participant': 'Reader', }" in out
+    assert "--compare-words b_words.csv" in out
+    assert """--compare-word-schema '{"participant":"Reader"}'""" in out
+    assert "--compare-fixations b_fix_1.csv b_fix_2.csv" in out
+
+
+@pytest.mark.timeout(300)
+def test_the_app_publishes_an_uploaded_bs_mapping():
+    """Compare B from an upload mapped by hand: the figure's snippet state
+    carries B's mapping, as written in B's own files, so Share → Code reads B's
+    files as the app did."""
+    import pandas as pd
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+
+    words, fixations = api.build_authored_scanpath("Read this short line")
+    schemas = {
+        "words": {"participant": "Reader", "trial": "Item"},
+        "fixations": {"participant": "Reader", "x": "Gaze X"},
+    }
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {
+        "Pilot": {
+            "words": words.assign(participant_id="reader", trial_id="t1"),
+            "fixations": fixations.assign(participant_id="reader", trial_id="t1"),
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+            "source_recipe": {"schemas": schemas},
+        }
+    }
+    at.session_state["single_compare_toggle"] = True
+    at.session_state[COMPARE_SOURCE_STATE_KEY] = "Pilot"
+    at.run()
+    assert not at.exception, at.exception
+    state = at.session_state[cs.SNIPPET_STATE_KEY]
+    assert state.kind == "comparison" and state.compare.dataset == "Pilot"
+    assert state.compare.schemas == {
+        "word_schema": schemas["words"],
+        "fix_schema": schemas["fixations"],
+    }
+    cli_line = _one_line(cs.reproduction_code(DEMO, state).cli)
+    assert """--compare-word-schema '{"participant":"Reader","trial":"Item"}'""" in (
+        cli_line
+    )
+
+
 def test_figure_code_takes_bs_screen():
     out = api.figure_code(
         kind="animation",

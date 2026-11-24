@@ -4397,6 +4397,32 @@ def save_figure_layers(
     return written
 
 
+def _snippet_compare_tables(options: dict | None, dataset: str) -> dict:
+    """`CompareTarget`'s table fields from ``figure_code``'s
+    ``compare_source_options``: B's paths and mappings, beside a second dataset."""
+    options = dict(options or {})
+    if not (dataset and options):
+        return {}
+
+    def paths(name: str) -> tuple[str, ...]:
+        value = options.get(name) or ()
+        return (
+            (str(value),) if isinstance(value, (str, Path)) else tuple(map(str, value))
+        )
+
+    raw_gaze = paths("raw_gaze")
+    return {
+        "words": paths("words"),
+        "fixations": paths("fixations"),
+        **({"raw_gaze": raw_gaze} if raw_gaze else {}),
+        "schemas": {
+            option: dict(options[option])
+            for option in ("word_schema", "fix_schema", "raw_gaze_schema")
+            if options.get(option)
+        },
+    }
+
+
 def figure_code(
     *,
     kind: str = "static",
@@ -4412,6 +4438,7 @@ def figure_code(
     compare_dataset: str = "",
     compare_canvas: tuple[int, int] | None = None,
     compare_labels: tuple[str, str] | None = None,
+    compare_source_options: dict | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
@@ -4462,14 +4489,20 @@ def figure_code(
         compare_stimulus: Whose stimulus an overlay draws, as
             [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
         compare_dataset: The dataset B was loaded from, when it is a second one. Both
-            forms then load B's own tables, from the placeholder paths ``B_WORDS`` /
-            ``B_FIXATIONS`` that you point at its files (``words_b=`` / ``fixations_b=``
-            / ``dataset_b=``, and ``--compare-words`` / ``--compare-fixations``).
+            forms then load B's own tables (``words_b=`` / ``fixations_b=`` /
+            ``dataset_b=``, and ``--compare-words`` / ``--compare-fixations``), from
+            ``compare_source_options``, else from the placeholder paths ``B_WORDS`` /
+            ``B_FIXATIONS`` that you point at its files.
         compare_canvas: B's screen, ``(width, height)``, with ``compare_dataset``:
             written as ``setup_b=`` and ``--compare-canvas``, which a co-animation
             across datasets needs.
         compare_labels: The two trace labels, when they are not the composed defaults:
             ``labels=`` and ``--label-a`` / ``--label-b``.
+        compare_source_options: With ``compare_dataset``, how B's tables load, as
+            ``source_options`` says it for A's files: ``"words"`` / ``"fixations"``
+            / ``"raw_gaze"`` paths in place of the placeholders, and
+            ``"word_schema"`` / ``"fix_schema"`` / ``"raw_gaze_schema"`` mappings
+            (``--compare-word-schema`` and its siblings).
         canvas_size: The monitor size. Defaults to the screen ``render`` assumes for the
             source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the
             same figure.
@@ -4575,6 +4608,7 @@ def figure_code(
                     if compare_labels
                     else None
                 ),
+                **_snippet_compare_tables(compare_source_options, compare_dataset),
             )
             if compare is not None
             else None

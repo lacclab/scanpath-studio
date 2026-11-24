@@ -275,18 +275,18 @@ def _files_python(source: SnippetSource) -> list[str]:
         "words, fixations = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
-        *_schema_python(source),
+        *_schema_python(source.options),
         *_keep_python(source),
         ")",
     ]
 
 
-def _schema_python(source: SnippetSource) -> list[str]:
+def _schema_python(options: Mapping) -> list[str]:
     """The ``word_schema=`` / ``fix_schema=`` arguments a file or upload source
-    was loaded with, one field per line."""
+    (or a second dataset, B) was loaded with, one field per line."""
     lines: list[str] = []
     for option in ("word_schema", "fix_schema"):
-        schema = source.options.get(option)
+        schema = options.get(option)
         if schema:
             lines.append(f"    {option}={{")
             lines += [f"        {_py(k)}: {_py(v)}," for k, v in schema.items()]
@@ -548,7 +548,7 @@ def _upload_python(source: SnippetSource) -> list[str]:
     for name in ("words", "fixations"):
         if source.options.get(name):
             lines.append(f"    {name}={_py(source.options[name])},")
-    lines += _schema_python(source)
+    lines += _schema_python(source.options)
     lines += _keep_python(source)
     lines.append(")")
     return lines
@@ -673,6 +673,11 @@ class CompareTarget:
     #: when B's dataset alone brings samples, so the recipe loads B's and not a
     #: placeholder for A's.
     primary_raw_gaze: bool = True
+    #: Only beside a ``dataset``: the column mapping each of B's tables was
+    #: loaded with, under ``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``
+    #: (in its own files' column names), so the recipe reads B's files as the app
+    #: did. Empty when B's columns were auto-detected.
+    schemas: Mapping[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -1888,6 +1893,7 @@ def _second_dataset_python(compare: CompareTarget, keep: list[str]) -> list[str]
         "words_b, fixations_b = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
+        *_schema_python(compare.schemas),
         *([f"    keep_columns={_py(keep)},"] if keep else []),
         ")",
     ]
@@ -1918,9 +1924,16 @@ def _second_dataset_kwargs(compare: CompareTarget) -> list[str]:
 
 def _second_dataset_cli(compare: CompareTarget, *, explicit: bool) -> list[str]:
     words, fixations = _second_dataset_tables(compare)
-    argv = ["--compare-words", *words] if words else []
-    if fixations:
-        argv += ["--compare-fixations", *fixations]
+    argv = []
+    for flag, paths, schema_flag, option in (
+        ("--compare-words", words, "--compare-word-schema", "word_schema"),
+        ("--compare-fixations", fixations, "--compare-fix-schema", "fix_schema"),
+    ):
+        if not paths:
+            continue
+        argv += [flag, *paths]
+        if schema := compare.schemas.get(option):
+            argv += [schema_flag, json.dumps(schema, separators=(",", ":"))]
     if explicit or compare.dataset != _DEFAULT_DATASET_B:
         argv += ["--compare-dataset-name", str(compare.dataset)]
     if compare.canvas:
@@ -1964,7 +1977,12 @@ def python_snippet(
         lines += _second_dataset_python(other, _kept_columns(state.settings))
     raw_gaze_b = _second_raw_gaze(state)
     if raw_gaze_b is not None:
-        lines.append(f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))})")
+        # Only a second dataset brings B's own samples, so `other` is set.
+        schema = other.schemas.get("raw_gaze_schema")
+        extra = f", raw_gaze_schema={_py(schema)}" if schema else ""
+        lines.append(
+            f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))}{extra})"
+        )
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
@@ -2170,6 +2188,11 @@ def cli_snippet(
         raw_gaze_b = _second_raw_gaze(state)
         if raw_gaze_b is not None:
             argv += ["--compare-raw-gaze", *raw_gaze_b]
+            if schema := other.schemas.get("raw_gaze_schema"):
+                argv += [
+                    "--compare-raw-gaze-schema",
+                    json.dumps(schema, separators=(",", ":")),
+                ]
         argv += ["--compare-layout", _CLI_COMPARE_LAYOUT.get(compare.layout, "overlay")]
         if explicit or compare.compare_stimulus != "both":
             argv += ["--compare-stimulus", str(compare.compare_stimulus).lower()]

@@ -1071,7 +1071,7 @@ class TestTextWordIds:
             data_module.harmonize_frames(words, remapped)
 
     def test_the_cli_says_it_in_its_own_terms(self):
-        from scanpath_studio.cli import _load_error_message
+        from scanpath_studio.cli import _COMPARE_SCHEMA_FLAGS, _load_error_message
 
         words = normalize_words(self._words(ids=(1, 2)), self.WORD_SCHEMA)
         fixations = normalize_fixations(self._fixations(), self.FIX_SCHEMA)
@@ -1082,7 +1082,10 @@ class TestTextWordIds:
         assert "`" not in said
         assert "the Word IDs are text (e.g. 'w1', 'w2')" in said
         assert "--fix-schema" in said
-        assert "--fix-schema" not in _load_error_message(exc, schema_flags=False)
+        # Scanpath B's tables name B's own flag.
+        said_b = _load_error_message(exc, schema_flags=_COMPARE_SCHEMA_FLAGS)
+        assert "--compare-fix-schema" in said_b
+        assert " --fix-schema" not in said_b
 
     def test_snapping_skips_a_box_with_no_id(self):
         """Looking boxes up by id through `Series.map` matches a NaN key to a

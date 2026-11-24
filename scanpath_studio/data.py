@@ -5410,6 +5410,10 @@ TIMESTAMP_SYNTHESIZED = "_timestamp_synthesized"
 #: so `harmonize_frames` may renumber it to match the other table
 #: (`_align_derived_screen_order`).
 SCREEN_ORDER_DERIVED = "_screen_order_derived"
+#: On a fixation: its duration was blank or unreadable and loaded as 0 ms.
+#: Present only on a table that has such a fixation, so the data checks can
+#: tell it from a recorded 0 ms.
+DURATION_MISSING = "_duration_missing"
 #: Bookkeeping columns the pipeline needs and the user never sees: kept in the
 #: frames and the recovery cache, dropped from exports and the Data page's
 #: tables (`drop_internal_columns`), and never offered as a field — their
@@ -5424,6 +5428,7 @@ INTERNAL_COLUMNS = frozenset(
         *fixation_source.PRIVATE_COLUMNS,
         TIMESTAMP_SYNTHESIZED,
         SCREEN_ORDER_DERIVED,
+        DURATION_MISSING,
     }
 )
 
@@ -7693,7 +7698,15 @@ def normalize_fixations(
     # in seconds (Gazepoint), microseconds (Tobii) or nanoseconds (Pupil Labs
     # Neon) is read in milliseconds.
     duration = schema["duration"]
-    df["duration_ms"] = _as_ms(_to_number(fixations[duration]), duration).fillna(0)
+    duration_ms = _as_ms(_to_number(fixations[duration]), duration)
+    missing = duration_ms.isna()
+    if _renormalizing and duration == "duration_ms" and DURATION_MISSING in fixations:
+        # Re-reading its own filled durations: the blanks are already 0 ms,
+        # so the stored mark is the only record of them.
+        missing |= fixations[DURATION_MISSING].fillna(False).astype(bool)
+    if missing.any():
+        df[DURATION_MISSING] = missing
+    df["duration_ms"] = duration_ms.fillna(0)
 
     if schema.get("timestamp"):
         onset = schema["timestamp"]
@@ -7732,7 +7745,7 @@ def normalize_fixations(
             keep_columns,
             _schema_source_columns(schema)
             | emitted
-            | {WORD_KEY}
+            | {WORD_KEY, DURATION_MISSING}
             | fixation_source.PRIVATE_COLUMNS,
         )
 

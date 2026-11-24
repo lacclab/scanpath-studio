@@ -2,16 +2,16 @@
 
 A dataset's session state is spread over keys that different modules own: its
 filters (`_filter_stash`), the reading each picker was last on
-(`_trial_by_dataset`), its *Loaded* status, Compare B's pointer to it, its
-annotations, metadata, description, credit, image folder and identity. A
-removal that misses one leaves the token behind, and the next dataset to take
-the same token (the wizard reuses a free name, "Dataset 1") inherits it: it
-opens filtered, on another dataset's reading, marked Loaded.
+(`_trial_by_dataset`), its *Loaded* status, Compare B's pointer to it, the
+editor open on it, its annotations, metadata, description, credit, image
+folder and identity. A removal that misses one leaves the token behind, and
+the next dataset to take the same token (the wizard reuses a free name)
+inherits it: it opens filtered, on another dataset's reading, marked Loaded.
 
-So these tests drive the real flow (open, filter, compare, remove through the
-confirmation's own button) and then search the whole session for the token. A
-per-dataset key added later is created by the app in this flow, so it fails
-here unless removing a dataset forgets it too.
+So these tests drive the real flow (open, filter, compare, edit, remove
+through the confirmation's own button) and then search the whole session for
+the token. A per-dataset key these steps create is caught here when it is
+added, unless removing a dataset forgets it too.
 """
 
 from __future__ import annotations
@@ -23,10 +23,17 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import api, app
-from scanpath_studio.constants import _VIEW_SCANPATH, DATA_LIBRARY
+from scanpath_studio.constants import (
+    _VIEW_SCANPATH,
+    DATA_LIBRARY,
+    DATASET_EDITOR_OPEN_KEY,
+    DEMO_CHOICE,
+)
+from scanpath_studio.utils import reading_key
 from tests.conftest import APP_SCRIPT, pin_data_view, pin_view
 
-TOKEN = "Dataset 1"
+#: Distinctive, so no default name or label in the app matches it by chance.
+TOKEN = "Pilot study 7"
 
 
 @pytest.fixture(autouse=True)
@@ -80,17 +87,6 @@ def _references(value, token: str, path: str) -> list[str]:
     return found
 
 
-def _remove(at: AppTest, token: str) -> None:
-    """The Data page's Remove: arm the confirmation, then press its button."""
-    pin_data_view(at, section=DATA_LIBRARY)
-    at.run()
-    at.session_state[app.PENDING_DELETE_KEY] = token
-    at.run()
-    at.button(key="dataset_delete_confirm").click().run()
-    assert not at.exception, at.exception
-    assert token not in at.session_state["_datasets"]
-
-
 def _left_behind(at: AppTest, token: str) -> list[str]:
     return sorted(
         path
@@ -98,6 +94,19 @@ def _left_behind(at: AppTest, token: str) -> list[str]:
         for path in _references(at.session_state[key], token, str(key))
         + ([str(key)] if _names(key, token) else [])
     )
+
+
+def _remove(at: AppTest, token: str) -> None:
+    """The Data page's Remove: arm the confirmation, then press its button.
+    The token must be all over the session first, or the walk proves nothing."""
+    assert len(_left_behind(at, token)) > 3, "the dataset never took hold"
+    pin_data_view(at, section=DATA_LIBRARY)
+    at.run()
+    at.session_state[app.PENDING_DELETE_KEY] = token
+    at.run()
+    at.button(key="dataset_delete_confirm").click().run()
+    assert not at.exception, at.exception
+    assert token not in at.session_state["_datasets"]
 
 
 def _session(**state) -> AppTest:
@@ -111,13 +120,35 @@ def _session(**state) -> AppTest:
     return at
 
 
+def _back_on_scanpath(at: AppTest) -> None:
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+
+
 @pytest.mark.timeout(300)
 def test_removing_the_open_dataset_leaves_no_trace():
     at = _session(data_source_choice=TOKEN)
-    at.session_state["filter_participants"] = [
-        "reader"
-    ]  # a filter, as a user leaves it
+    at.session_state["filter_participants"] = ["reader"]  # as a user leaves it
     at.run()
+    design = at.session_state["_quick_view_selection"]
+    _remove(at, TOKEN)
+    assert _left_behind(at, TOKEN) == []
+    # The design in force stays highlighted on the dataset that opens next.
+    _back_on_scanpath(at)
+    assert at.session_state["_quick_view_selection"] == design
+
+
+@pytest.mark.timeout(300)
+def test_removing_a_dataset_opened_earlier_leaves_no_trace():
+    """Opened, filtered, then left for another: its filters wait in the stash."""
+    at = _session(data_source_choice=TOKEN)
+    at.session_state["filter_participants"] = ["reader"]
+    at.run()
+    at.session_state["_pending_source_choice"] = DEMO_CHOICE
+    at.run()
+    assert (TOKEN, None) in at.session_state["_filter_stash"]
     _remove(at, TOKEN)
     assert _left_behind(at, TOKEN) == []
 
@@ -125,26 +156,44 @@ def test_removing_the_open_dataset_leaves_no_trace():
 @pytest.mark.timeout(300)
 def test_removing_the_dataset_compare_b_shows_leaves_no_trace():
     at = _session(
-        data_source_choice="Bundled demo", single_compare_toggle=True, cmp_dataset=TOKEN
+        data_source_choice=DEMO_CHOICE, single_compare_toggle=True, cmp_dataset=TOKEN
     )
+    at.run()
+    assert at.session_state["_compare_source_resolved"] == TOKEN
     _remove(at, TOKEN)
     assert _left_behind(at, TOKEN) == []
 
 
 @pytest.mark.timeout(300)
-def test_a_dataset_added_again_under_the_same_name_opens_unfiltered():
-    """The wizard hands a removed dataset's free name to the next upload."""
+def test_removing_the_dataset_being_edited_closes_the_editor():
+    """Left open, the editor would sit on the next dataset with this one's
+    name, and ✅ Save changes would rename that dataset."""
     at = _session(data_source_choice=TOKEN)
-    at.session_state["filter_participants"] = ["reader"]
+    at.session_state[DATASET_EDITOR_OPEN_KEY] = True
+    pin_data_view(at)
+    at.run()
+    assert not at.exception, at.exception
+    _remove(at, TOKEN)
+    assert DATASET_EDITOR_OPEN_KEY not in at.session_state, "the editor stayed open"
+    assert _left_behind(at, TOKEN) == []
+
+
+@pytest.mark.timeout(300)
+def test_a_dataset_added_again_under_the_same_name_starts_clean():
+    """The wizard hands a removed dataset's free name to the next upload; it
+    opens unfiltered and on its own first trial."""
+    at = _session(
+        data_source_choice=TOKEN, single_trial_id=reading_key("second_reader", "t1")
+    )
+    at.session_state["filter_participants"] = ["reader", "second_reader"]
     at.run()
     _remove(at, TOKEN)
     at.session_state["_datasets"][TOKEN] = _upload("A different study entirely")
     at.session_state["_pending_source_choice"] = TOKEN
-    pin_view(at, _VIEW_SCANPATH)
-    at.run()
-    assert not at.exception, at.exception
+    _back_on_scanpath(at)
     assert at.session_state["data_source_choice"] == TOKEN
     assert not at.session_state["_trial_filters_raw"].get("filter_participants")
+    assert "second_reader" not in str(at.session_state["single_trial_id"])
 
 
 class _FakeSt:

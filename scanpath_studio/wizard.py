@@ -479,8 +479,9 @@ def _remove_dataset(name: str) -> None:
     module's ``forget_*``: the next upload can take the same token ("Dataset
     1"), and anything left behind would open it filtered, on another
     dataset's reading, or marked Loaded. `tests/test_dataset_lifecycle.py`
-    removes a dataset through the real confirmation and fails on any key that
-    still names it, so a per-dataset key added later is caught there.
+    opens, filters, compares and edits a dataset, removes it through the real
+    confirmation, and fails on any key that still names it — so a per-dataset
+    key those steps create is caught there when it is added.
 
     **Deleting a dataset drops the computations derived from it.** Every
     figure, table and normalization the app cached for this dataset is dead the
@@ -522,6 +523,12 @@ def _remove_dataset(name: str) -> None:
     controls.forget_quick_view_dataset(st.session_state, name)
     compare_source.forget_compare_dataset(st.session_state, name)
     if st.session_state.get("data_source_choice") == name:
+        # ✏️ Edit dataset, open on it, closes with it, drafts unsaved: left
+        # open it would sit on the next dataset holding this one's name and
+        # mapping, and ✅ Save changes would apply them there. Nothing of the
+        # removed dataset is restored on the way out.
+        st.session_state.pop(app._EDITOR_SNAPSHOT_KEY, None)
+        app._close_dataset_editor()
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
     app.clear_computation_cache()
 

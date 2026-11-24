@@ -3463,6 +3463,10 @@ at the last colon.</p>
 <td><code>--compare-words PATH… --compare-fixations PATH…</code>, plus <code>--compare-raw-gaze PATH…</code> and <code>--compare-dataset-name NAME</code></td>
 </tr>
 <tr>
+<td>map B's columns yourself</td>
+<td><code>--compare-word-schema JSON</code>, <code>--compare-fix-schema JSON</code>, <code>--compare-raw-gaze-schema JSON</code>, as <code>--word-schema</code> and its siblings map A's</td>
+</tr>
+<tr>
 <td>set the two screen sizes</td>
 <td><code>--canvas WxH</code>, <code>--compare-canvas WxH</code></td>
 </tr>
@@ -3623,7 +3627,9 @@ a <code>.json</code> file, with <code>--word-schema</code> (the <code>--words</c
 </code></pre></div>
 <p>A mapping replaces auto-detection for that table, so it has to name every
 required field, not only the one that failed. It is the same dict
-<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python.</p>
+<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python. A second
+dataset's tables in a comparison take theirs as <code>--compare-word-schema</code>,
+<code>--compare-fix-schema</code> and <code>--compare-raw-gaze-schema</code>.</p>
 <h2 id="render-flags">render flags<a class="headerlink" href="#render-flags" title="Permanent link">&para;</a></h2>
 <p>Every <code>render</code> flag, generated from the command's parser, with the defaults
 and help that <code>--help</code> prints. The figure flags are grouped like the
@@ -4971,6 +4977,24 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>PATH [PATH ...]</code></td>
 <td>—</td>
 <td>The Raw gaze table for the second dataset, drawn under B's scanpath. Same formats as <code>--raw-gaze</code>. With no second dataset, <code>--raw-gaze</code> already covers both scanpaths.</td>
+</tr>
+<tr>
+<td><code>--compare-word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--compare-words</code> table, replacing auto-detection. Same form as <code>--word-schema</code>.</td>
+</tr>
+<tr>
+<td><code>--compare-fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--compare-fixations</code> table, replacing auto-detection. Same form as <code>--fix-schema</code>.</td>
+</tr>
+<tr>
+<td><code>--compare-raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--compare-raw-gaze</code> table, replacing auto-detection. Same form as <code>--raw-gaze-schema</code>.</td>
 </tr>
 <tr>
 <td><code>--compare-dataset-name</code></td>

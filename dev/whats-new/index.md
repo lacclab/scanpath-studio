@@ -18,6 +18,7 @@
 - `animate_scanpath` and `render --animate` now refuse a replay with both fixations and saccades hidden, which used to produce an empty replay, with a message naming the two settings.
 - Comparison links that use the Print / grayscale palette and were made before v0.48.0 draw the two readers in dark and light grey since v0.48.0, scanpath B with hollow markers and dashed saccades, instead of blue and red; set each scanpath's colors again under Scanpath A and Scanpath B in the Fixations and Saccades settings to bring blue and red back.
 - The fixation size legend is also off by default in `plot_scanpath` and `render` output since v0.48.0; turn it on with `duration_size_legend=True`, `render --duration-size-legend`, or Fixation sizes under Figure → Legends in the app.
+- `render` now stops with a message when `--compare-words`, `--compare-fixations` or their mapping flags are given without `--compare-with`, which they need; before, it ignored them.
 - animate_scanpath refuses the raw-gaze style and heatmap colour-bar options by name, which the replay never draws, instead of accepting and ignoring them.
 - Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.
 
@@ -78,6 +79,8 @@
 - Saving a drawn scanpath keeps the participant, trial and text tables attached to the draft, as it already kept the draft's annotations.
 - A share link with a value a menu does not offer (a misspelt line style or background, say) now says it ignored that value, as it already did for colours and numbers, instead of quietly using the default. Menu values are matched ignoring capitalisation, and a colour scale may be any Plotly scale, as on the command line.
 - Colouring by, hovering, or picking a column that the next dataset you open lacks no longer forgets the choice: it comes back when you return to a dataset that has the column, unless you changed it in between.
+- Share → Code for a comparison whose scanpath B comes from a second, hand-mapped dataset now passes B's column mapping on, so the code reads B's files as the app did. `render` takes it as `--compare-word-schema`, `--compare-fix-schema` and `--compare-raw-gaze-schema`, and `figure_code` as `compare_source_options`.
+- `compare_scanpaths` and `animate_scanpath` on a dataset recorded as raw gaze alone now say that they need fixations. Before, the comparison failed with a `TypeError` and the replay said no trial existed.
 - Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
 - A closed settings menu no longer brings back a value you changed elsewhere for four controls: undoing the replay's Smoothness or a word highlight now holds, a palette set by a settings file stays on Corpus Analysis, and a new dataset gets its own Stimulus & context fields.
 

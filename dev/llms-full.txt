@@ -2218,6 +2218,7 @@ Returns:
 
 Raises:
 
+- `ValueError` – fixations is None: a dataset recorded as raw gaze alone has no scanpath to compare.
 - `ValueError` – An overlay of two different screens (see the overlay gate), or a screen / screen_b the trial does not have or that names a screen of a single-screen trial.
 - `TypeError` – An unknown keyword. The message names the closest valid ones.
 
@@ -2576,6 +2577,7 @@ figure_code(
     compare_dataset="",
     compare_canvas=None,
     compare_labels=None,
+    compare_source_options=None,
     canvas_size=None,
     base_font_size=16,
     font_family=FONT_FAMILY,
@@ -2611,9 +2613,10 @@ Parameters:
 - **`compare_screen`** (`str | None`, default: `None` ) – B's screen (screen_b=, --compare-screen).
 - **`compare_layout`** (`str`, default: `'overlay'` ) – The comparison's layout, as compare_scanpaths takes it.
 - **`compare_stimulus`** (`str`, default: `'both'` ) – Whose stimulus an overlay draws, as compare_scanpaths takes it.
-- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables, from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations).
+- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations), from compare_source_options, else from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files.
 - **`compare_canvas`** (`tuple[int, int] | None`, default: `None` ) – B's screen, (width, height), with compare_dataset: written as setup_b= and --compare-canvas, which a co-animation across datasets needs.
 - **`compare_labels`** (`tuple[str, str] | None`, default: `None` ) – The two trace labels, when they are not the composed defaults: labels= and --label-a / --label-b.
+- **`compare_source_options`** (`dict | None`, default: `None` ) – How B's tables load when B is a second dataset, as source_options says it for A's files: "words" / "fixations" / "raw_gaze" paths in place of the placeholders, and "word_schema" / "fix_schema" / "raw_gaze_schema" mappings (--compare-word-schema and its siblings). Without compare_dataset, B is named "Dataset B", as render names it.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size. Defaults to the screen render assumes for the source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the same figure.
 - **`base_font_size`** (`int`, default: `16` ) – As the builders take it.
 - **`font_family`** (`str`, default: `FONT_FAMILY` ) – As the builders take it.
@@ -2637,7 +2640,7 @@ Returns:
 
 Raises:
 
-- `ValueError` – An unknown flavor.
+- `ValueError` – An unknown flavor, or a key compare_source_options does not take.
 - `TypeError` – An option the builder does not take.
 
 Examples:
@@ -3033,19 +3036,20 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
   -o cross.html
 ```
 
-| Goal                                                       | Flags                                                                                                                |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                        |
-| pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                              |
-| arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                |
-| choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                     |
-| name the two scanpaths                                     | `--label-a TEXT --label-b TEXT` (both or neither)                                                                    |
-| style each scanpath                                        | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys))                                                       |
-| leave out the A/B legend                                   | `--no-compare-legend`                                                                                                |
-| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y`                      |
-| take B from another dataset                                | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME` |
-| set the two screen sizes                                   | `--canvas WxH`, `--compare-canvas WxH`                                                                               |
-| replay both on one clock                                   | add `--animate` (HTML output)                                                                                        |
+| Goal                                                       | Flags                                                                                                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                                            |
+| pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                                                  |
+| arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                                    |
+| choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                                         |
+| name the two scanpaths                                     | `--label-a TEXT --label-b TEXT` (both or neither)                                                                                        |
+| style each scanpath                                        | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys))                                                                           |
+| leave out the A/B legend                                   | `--no-compare-legend`                                                                                                                    |
+| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y`                                          |
+| take B from another dataset                                | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME`                     |
+| map B's columns yourself                                   | `--compare-word-schema JSON`, `--compare-fix-schema JSON`, `--compare-raw-gaze-schema JSON`, as `--word-schema` and its siblings map A's |
+| set the two screen sizes                                   | `--canvas WxH`, `--compare-canvas WxH`                                                                                                   |
+| replay both on one clock                                   | add `--animate` (HTML output)                                                                                                            |
 
 `--label-a` / `--label-b` and `--style-a` / `--style-b` apply to the `--animate` replay too.
 
@@ -3121,7 +3125,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   --fix-schema fix_schema.json -o scanpath.html
 ```
 
-A mapping replaces auto-detection for that table, so it has to name every required field, not only the one that failed. It is the same dict `load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+A mapping replaces auto-detection for that table, so it has to name every required field, not only the one that failed. It is the same dict `load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python. A second dataset's tables in a comparison take theirs as `--compare-word-schema`, `--compare-fix-schema` and `--compare-raw-gaze-schema`.
 
 ## render flags
 
@@ -3393,6 +3397,9 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--compare-words`                        | `PATH [PATH ...]`                    | —           | The Words table for a second dataset, B's. Same formats and globbing as `--words`.                                                                                                                                                                                                                                                        |
 | `--compare-fixations`                    | `PATH [PATH ...]`                    | —           | The Fixations table for a second dataset, B's. Same formats and globbing as `--fixations`.                                                                                                                                                                                                                                                |
 | `--compare-raw-gaze`                     | `PATH [PATH ...]`                    | —           | The Raw gaze table for the second dataset, drawn under B's scanpath. Same formats as `--raw-gaze`. With no second dataset, `--raw-gaze` already covers both scanpaths.                                                                                                                                                                    |
+| `--compare-word-schema`                  | `JSON`                               | —           | Column mapping for the `--compare-words` table, replacing auto-detection. Same form as `--word-schema`.                                                                                                                                                                                                                                   |
+| `--compare-fix-schema`                   | `JSON`                               | —           | Column mapping for the `--compare-fixations` table, replacing auto-detection. Same form as `--fix-schema`.                                                                                                                                                                                                                                |
+| `--compare-raw-gaze-schema`              | `JSON`                               | —           | Column mapping for the `--compare-raw-gaze` table, replacing auto-detection. Same form as `--raw-gaze-schema`.                                                                                                                                                                                                                            |
 | `--compare-dataset-name`                 | `NAME`                               | `Dataset B` | Name of the second dataset, used in the trace names (default: 'Dataset B').                                                                                                                                                                                                                                                               |
 | `--compare-canvas`                       | `WxH`                                | —           | The second dataset's screen size in px, e.g. 1680x1050. Estimated from its data when left out. An overlay, or `--animate` with both scanpaths, checks it against `--canvas`.                                                                                                                                                              |
 
@@ -4219,6 +4226,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - `animate_scanpath` and `render --animate` now refuse a replay with both fixations and saccades hidden, which used to produce an empty replay, with a message naming the two settings.
 - Comparison links that use the Print / grayscale palette and were made before v0.48.0 draw the two readers in dark and light grey since v0.48.0, scanpath B with hollow markers and dashed saccades, instead of blue and red; set each scanpath's colors again under Scanpath A and Scanpath B in the Fixations and Saccades settings to bring blue and red back.
 - The fixation size legend is also off by default in `plot_scanpath` and `render` output since v0.48.0; turn it on with `duration_size_legend=True`, `render --duration-size-legend`, or Fixation sizes under Figure → Legends in the app.
+- `render` now stops with a message when `--compare-words`, `--compare-fixations` or their mapping flags are given without `--compare-with`, which they need; before, it ignored them.
 - animate_scanpath refuses the raw-gaze style and heatmap colour-bar options by name, which the replay never draws, instead of accepting and ignoring them.
 - Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.
 
@@ -4279,6 +4287,8 @@ Developed with AI assistance. Cross-check results before publishing.
 - Saving a drawn scanpath keeps the participant, trial and text tables attached to the draft, as it already kept the draft's annotations.
 - A share link with a value a menu does not offer (a misspelt line style or background, say) now says it ignored that value, as it already did for colours and numbers, instead of quietly using the default. Menu values are matched ignoring capitalisation, and a colour scale may be any Plotly scale, as on the command line.
 - Colouring by, hovering, or picking a column that the next dataset you open lacks no longer forgets the choice: it comes back when you return to a dataset that has the column, unless you changed it in between.
+- Share → Code for a comparison whose scanpath B comes from a second, hand-mapped dataset now passes B's column mapping on, so the code reads B's files as the app did. `render` takes it as `--compare-word-schema`, `--compare-fix-schema` and `--compare-raw-gaze-schema`, and `figure_code` as `compare_source_options`.
+- `compare_scanpaths` and `animate_scanpath` on a dataset recorded as raw gaze alone now say that they need fixations. Before, the comparison failed with a `TypeError` and the replay said no trial existed.
 - Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
 - A closed settings menu no longer brings back a value you changed elsewhere for four controls: undoing the replay's Smoothness or a word highlight now holds, a palette set by a settings file stays on Corpus Analysis, and a new dataset gets its own Stimulus & context fields.
 

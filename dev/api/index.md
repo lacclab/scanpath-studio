@@ -880,6 +880,7 @@ Returns:
 
 Raises:
 
+- `ValueError` – fixations is None: a dataset recorded as raw gaze alone has no scanpath to compare.
 - `ValueError` – An overlay of two different screens (see the overlay gate), or a screen / screen_b the trial does not have or that names a screen of a single-screen trial.
 - `TypeError` – An unknown keyword. The message names the closest valid ones.
 
@@ -1238,6 +1239,7 @@ figure_code(
     compare_dataset="",
     compare_canvas=None,
     compare_labels=None,
+    compare_source_options=None,
     canvas_size=None,
     base_font_size=16,
     font_family=FONT_FAMILY,
@@ -1273,9 +1275,10 @@ Parameters:
 - **`compare_screen`** (`str | None`, default: `None` ) – B's screen (screen_b=, --compare-screen).
 - **`compare_layout`** (`str`, default: `'overlay'` ) – The comparison's layout, as compare_scanpaths takes it.
 - **`compare_stimulus`** (`str`, default: `'both'` ) – Whose stimulus an overlay draws, as compare_scanpaths takes it.
-- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables, from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations).
+- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations), from compare_source_options, else from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files.
 - **`compare_canvas`** (`tuple[int, int] | None`, default: `None` ) – B's screen, (width, height), with compare_dataset: written as setup_b= and --compare-canvas, which a co-animation across datasets needs.
 - **`compare_labels`** (`tuple[str, str] | None`, default: `None` ) – The two trace labels, when they are not the composed defaults: labels= and --label-a / --label-b.
+- **`compare_source_options`** (`dict | None`, default: `None` ) – How B's tables load when B is a second dataset, as source_options says it for A's files: "words" / "fixations" / "raw_gaze" paths in place of the placeholders, and "word_schema" / "fix_schema" / "raw_gaze_schema" mappings (--compare-word-schema and its siblings). Without compare_dataset, B is named "Dataset B", as render names it.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size. Defaults to the screen render assumes for the source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the same figure.
 - **`base_font_size`** (`int`, default: `16` ) – As the builders take it.
 - **`font_family`** (`str`, default: `FONT_FAMILY` ) – As the builders take it.
@@ -1299,7 +1302,7 @@ Returns:
 
 Raises:
 
-- `ValueError` – An unknown flavor.
+- `ValueError` – An unknown flavor, or a key compare_source_options does not take.
 - `TypeError` – An option the builder does not take.
 
 Examples:

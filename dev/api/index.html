@@ -7106,6 +7106,14 @@ dataset's frames may come under their own names.</p>
               <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
             –
           <div class="doc-md-description">
+            <p><code>fixations</code> is <code>None</code>: a dataset recorded as raw gaze alone
+has no scanpath to compare.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
             <p>An overlay of two different screens (see the overlay gate), or a
 <code>screen</code> / <code>screen_b</code> the trial does not have or that names a screen of
 a single-screen trial.</p>
@@ -8362,23 +8370,24 @@ to get the same figure. <code>figure_code</code> writes the same code without th
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">compare_dataset</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">compare_canvas</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">compare_labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">caption</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">fix_index_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">fix_index_range_b</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">illustration_label</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">drift_correction</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">drift_connectors</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">playback_speed</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">autoplay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="n">flavor</span><span class="o">=</span><span class="s2">"python"</span><span class="p">,</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="n">explicit</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="n">output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>    <span class="o">**</span><span class="n">figure_overrides</span><span class="p">,</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="p">)</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">compare_source_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">caption</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">fix_index_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">fix_index_range_b</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">illustration_label</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">drift_correction</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">drift_connectors</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">playback_speed</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="n">autoplay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="n">flavor</span><span class="o">=</span><span class="s2">"python"</span><span class="p">,</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="n">explicit</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>    <span class="n">output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>    <span class="o">**</span><span class="n">figure_overrides</span><span class="p">,</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -8514,9 +8523,10 @@ available trial, as <code>render</code> does.</p>
           –
           <div class="doc-md-description">
             <p>The dataset B was loaded from, when it is a second one. Both
-forms then load B's own tables, from the placeholder paths <code>B_WORDS</code> /
-<code>B_FIXATIONS</code> that you point at its files (<code>words_b=</code> / <code>fixations_b=</code>
-/ <code>dataset_b=</code>, and <code>--compare-words</code> / <code>--compare-fixations</code>).</p>
+forms then load B's own tables (<code>words_b=</code> / <code>fixations_b=</code> /
+<code>dataset_b=</code>, and <code>--compare-words</code> / <code>--compare-fixations</code>), from
+<code>compare_source_options</code>, else from the placeholder paths <code>B_WORDS</code> /
+<code>B_FIXATIONS</code> that you point at its files.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8540,6 +8550,21 @@ across datasets needs.</p>
           <div class="doc-md-description">
             <p>The two trace labels, when they are not the composed defaults:
 <code>labels=</code> and <code>--label-a</code> / <code>--label-b</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>compare_source_options</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>How B's tables load when B is a second dataset, as
+<code>source_options</code> says it for A's files: <code>"words"</code> / <code>"fixations"</code>
+/ <code>"raw_gaze"</code> paths in place of the placeholders, and
+<code>"word_schema"</code> / <code>"fix_schema"</code> / <code>"raw_gaze_schema"</code> mappings
+(<code>--compare-word-schema</code> and its siblings). Without
+<code>compare_dataset</code>, B is named <code>"Dataset B"</code>, as <code>render</code> names it.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8737,7 +8762,8 @@ as <code># Note:</code> comments, as the app's ⚠️ captions and the <code>Not
               <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
             –
           <div class="doc-md-description">
-            <p>An unknown <code>flavor</code>.</p>
+            <p>An unknown <code>flavor</code>, or a key <code>compare_source_options</code> does
+not take.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">

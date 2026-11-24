@@ -1136,3 +1136,97 @@ def test_folded_rail_sections_round_trip_through_their_cookie(folded, junk):
     # Stray parts in a cookie never drop a section, nor name an unknown one.
     assert controls.parse_folded_sections(f"{junk}.{value}") >= folded
     assert controls.parse_folded_sections(junk) <= set(controls.RAIL_SECTIONS)
+
+
+def _linkable_values() -> dict[str, list]:
+    """Each option a link carries, at its API default and at another value."""
+    from scanpath_studio import api, script_link
+    from tests.test_render_every_option import NON_DEFAULT
+
+    # The player's and the window's, which are no figure options.
+    extra_defaults = {
+        "playback_speed": 1.0,
+        "autoplay": True,
+        "illustration_label": "auto",
+        "fix_index_range": None,
+    }
+    defaults = {
+        **api.figure_options("static"),
+        **api.figure_options("animation"),
+        **extra_defaults,
+    }
+    other = {
+        **NON_DEFAULT,
+        "palette": "Print / grayscale",
+        "playback_speed": 2.0,
+        "autoplay": False,
+        "illustration_label": "show",
+        "fix_index_range": (2, 9),
+    }
+    return {
+        name: [defaults.get(name, other[name]), other[name]]
+        for name in sorted(script_link.LINKED_OPTIONS)
+    }
+
+
+_LINK_TEXT = st.text(min_size=1, max_size=20).filter(lambda s: s == s.strip())
+
+
+@settings(max_examples=60, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    name=_LINK_TEXT,
+    participant=st.one_of(st.none(), _LINK_TEXT),
+    trial=st.one_of(st.none(), _LINK_TEXT),
+    screen=st.one_of(st.none(), _LINK_TEXT),
+    data=st.data(),
+)
+def test_a_script_link_opens_its_dataset_reading_and_settings(
+    name, participant, trial, screen, data
+):
+    """`api.app_link`, read by the app: the dataset it names is the one opened,
+    the reading is the one it names, and every setting it carries lands in the
+    session keys the rail draws from."""
+    from urllib.parse import urlsplit
+
+    from scanpath_studio import api, script_link
+    from scanpath_studio.code_snippet import _comparable
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+
+    values = _linkable_values()
+    chosen = data.draw(st.sets(st.sampled_from(sorted(values)), max_size=12))
+    options = {key: data.draw(st.sampled_from(values[key])) for key in chosen}
+    if trial is None:
+        screen = None
+    with pytest.MonkeyPatch.context() as patch:
+        # Nothing saved: the link names the dataset alone, never from the
+        # user's own saved work.
+        patch.setenv("SCANPATH_STUDIO_STATE_DIR", "/nonexistent/scanpath-studio")
+        url = api.app_link(
+            name, participant, trial, screen=screen, port=8765, **options
+        )
+    parts = urlsplit(url)
+    assert (parts.scheme, parts.netloc, parts.path) == ("http", "localhost:8765", "/")
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+    recipient = {
+        "_datasets": {"their key": {}, "another": {}},
+        DATASET_ALIASES_KEY: {"their key": name, "another": name + " (2)"},
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", query)
+        assert url_state.resolve_link_dataset((), None) == "their key"
+        url_state._apply_url_preset()
+    assert query.get("participant") == participant
+    assert query.get("trial_id") == trial
+    assert query.get("screen") == screen
+    if participant is not None:
+        assert recipient["single_participant"] == participant
+    expected = script_link.options_state(
+        {**options, "palette": api.resolve_palette(options["palette"])}
+        if "palette" in options
+        else options
+    )
+    for key, value in expected.items():
+        assert key in recipient, key
+        assert _comparable(recipient[key]) == _comparable(value), key

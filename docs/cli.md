@@ -17,6 +17,7 @@ check data and manage saved work without opening the app:
 | [`check`](#check) | Run the Data checks on your tables |
 | [`add`](#add) | Add your tables to the app's dataset list |
 | [`remove`](#remove) | Remove a dataset you added from that list |
+| [`open`](#open) | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache) | Show or clear the recovery cache |
 | [`version`](#version) | Show the build, and whether a newer release is out |
 | [`cite`](#cite) | Print how to cite Scanpath Studio |
@@ -430,6 +431,31 @@ In Python, use [`remove_dataset`][scanpath_studio.api.remove_dataset].
 from docs_support import cli_reference
 
 print(cli_reference("remove"))
+```
+
+## open
+
+`open` opens the app on a dataset you added, at one reading, with the figure set
+by the same flags [`render`](#render-flags) takes. If the app is running on this
+computer, the link opens in your browser. Otherwise `open` starts the app and
+opens the link once it is up. `--print` prints the link instead.
+
+```bash
+scanpath-studio open "Pilot 3" -p p07 -t t12
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
+```
+
+The link is the one :material/share: **Share** → **Link** writes for the same view.
+Settings it leaves out keep the values the app has. It names the dataset, so it
+opens only where that dataset was added. A link carries no file: `render`'s
+input, output and `--stimulus-image` flags are refused, and
+`--show-stimulus-image` draws the dataset's own pages. In Python, use
+[`app_link`][scanpath_studio.api.app_link].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("open"))
 ```
 
 ## cache

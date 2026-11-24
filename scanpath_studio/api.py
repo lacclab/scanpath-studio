@@ -1574,7 +1574,11 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
     columns in ``words`` (EyeLink IA exports) are preserved; anything missing is
     computed from fixations + word bounding boxes. Takes the normalized frames
     from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], and
-    answers in the names they carry."""
+    answers in the names they carry.
+
+    One row per word of each reading. On multi-screen data a word is one screen's
+    word: the rows keep the words' screen ID and screen number, so they merge
+    back onto ``words`` by participant, trial, screen and word ID."""
     _require_computed_measures("compute_word_metrics")
     words, word_names = _named_in(words, "words")
     fixations, _fix_names = _named_in(fixations, "fixations")

@@ -170,6 +170,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | leave out the A/B legend | `--no-compare-legend` |
 | give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | take B from another dataset | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME` |
+| map B's columns yourself | `--compare-word-schema JSON`, `--compare-fix-schema JSON`, `--compare-raw-gaze-schema JSON`, as `--word-schema` and its siblings map A's |
 | set the two screen sizes | `--canvas WxH`, `--compare-canvas WxH` |
 | replay both on one clock | add `--animate` (HTML output) |
 
@@ -289,7 +290,9 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 
 A mapping replaces auto-detection for that table, so it has to name every
 required field, not only the one that failed. It is the same dict
-`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python. A second
+dataset's tables in a comparison take theirs as `--compare-word-schema`,
+`--compare-fix-schema` and `--compare-raw-gaze-schema`.
 
 ## render flags
 

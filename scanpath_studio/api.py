@@ -3071,6 +3071,12 @@ def animate_scanpath(
             "Scanpath Studio does not detect fixations from gaze samples. Draw the "
             "samples with plot_scanpath(..., raw_gaze=...) instead."
         )
+    if fixations is None:
+        raise ValueError(
+            "This dataset has no fixations to replay (one recorded as raw gaze "
+            "alone) — the replay is built from fixations. Draw its samples with "
+            "plot_scanpath(..., raw_gaze=...); they are not turned into fixations."
+        )
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
     animation_overrides = _expand_palette(
@@ -3759,6 +3765,8 @@ def compare_scanpaths(
         The Plotly figure.
 
     Raises:
+        ValueError: ``fixations`` is ``None``: a dataset recorded as raw gaze alone
+            has no scanpath to compare.
         ValueError: An overlay of two different screens (see the overlay gate), or a
             ``screen`` / ``screen_b`` the trial does not have or that names a screen of
             a single-screen trial.
@@ -3784,6 +3792,13 @@ def compare_scanpaths(
         _COMPARISON_FIGURE_PARAMS | {"palette"},
         "compare_scanpaths",
     )
+    if fixations is None:
+        raise ValueError(
+            "compare_scanpaths compares two readings' fixations, and this dataset "
+            "has none (one recorded as raw gaze alone). Scanpath Studio does not "
+            "detect fixations from gaze samples; draw each reading's samples with "
+            "plot_scanpath(..., raw_gaze=...)."
+        )
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.
@@ -4397,6 +4412,62 @@ def save_figure_layers(
     return written
 
 
+#: What ``figure_code``'s ``compare_source_options`` takes: B's table paths and
+#: their mappings, as ``source_options`` takes A's.
+_COMPARE_SOURCE_KEYS = (
+    "words",
+    "fixations",
+    "raw_gaze",
+    "word_schema",
+    "fix_schema",
+    "raw_gaze_schema",
+)
+
+
+def _snippet_compare_tables(
+    options: dict | None, dataset: str, *, a_has_raw_gaze: bool
+) -> tuple[str, dict]:
+    """``(dataset, fields)``: B's dataset name and `CompareTarget`'s table fields
+    from ``figure_code``'s ``compare_source_options``.
+
+    Tables given with no ``dataset`` are a second dataset all the same, named as
+    ``render --compare-words`` names it. A table left out keeps its placeholder,
+    so a mapping alone still maps it, and a raw-gaze mapping alone loads B's
+    samples from theirs. ``a_has_raw_gaze`` says whether A has samples of its own
+    to load beside B's."""
+    options = dict(options or {})
+    if not options:
+        return dataset, {}
+    unknown = sorted(set(options) - set(_COMPARE_SOURCE_KEYS))
+    if unknown:
+        raise ValueError(
+            f"compare_source_options takes {', '.join(_COMPARE_SOURCE_KEYS)}; got "
+            f"{', '.join(map(repr, unknown))}."
+        )
+
+    def paths(name: str) -> tuple[str, ...]:
+        value = options.get(name) or ()
+        return (
+            (str(value),) if isinstance(value, (str, Path)) else tuple(map(str, value))
+        )
+
+    fields: dict = {
+        "words": paths("words"),
+        "fixations": paths("fixations"),
+        "schemas": {
+            option: dict(options[option])
+            for option in ("word_schema", "fix_schema", "raw_gaze_schema")
+            if options.get(option)
+        },
+    }
+    if options.get("raw_gaze") or options.get("raw_gaze_schema"):
+        fields["raw_gaze"] = paths("raw_gaze")  # () keeps B's placeholder
+        fields["primary_raw_gaze"] = a_has_raw_gaze
+    from .code_snippet import DEFAULT_DATASET_B
+
+    return dataset or DEFAULT_DATASET_B, fields
+
+
 def figure_code(
     *,
     kind: str = "static",
@@ -4412,6 +4483,7 @@ def figure_code(
     compare_dataset: str = "",
     compare_canvas: tuple[int, int] | None = None,
     compare_labels: tuple[str, str] | None = None,
+    compare_source_options: dict | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
@@ -4462,14 +4534,21 @@ def figure_code(
         compare_stimulus: Whose stimulus an overlay draws, as
             [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
         compare_dataset: The dataset B was loaded from, when it is a second one. Both
-            forms then load B's own tables, from the placeholder paths ``B_WORDS`` /
-            ``B_FIXATIONS`` that you point at its files (``words_b=`` / ``fixations_b=``
-            / ``dataset_b=``, and ``--compare-words`` / ``--compare-fixations``).
+            forms then load B's own tables (``words_b=`` / ``fixations_b=`` /
+            ``dataset_b=``, and ``--compare-words`` / ``--compare-fixations``), from
+            ``compare_source_options``, else from the placeholder paths ``B_WORDS`` /
+            ``B_FIXATIONS`` that you point at its files.
         compare_canvas: B's screen, ``(width, height)``, with ``compare_dataset``:
             written as ``setup_b=`` and ``--compare-canvas``, which a co-animation
             across datasets needs.
         compare_labels: The two trace labels, when they are not the composed defaults:
             ``labels=`` and ``--label-a`` / ``--label-b``.
+        compare_source_options: How B's tables load when B is a second dataset, as
+            ``source_options`` says it for A's files: ``"words"`` / ``"fixations"``
+            / ``"raw_gaze"`` paths in place of the placeholders, and
+            ``"word_schema"`` / ``"fix_schema"`` / ``"raw_gaze_schema"`` mappings
+            (``--compare-word-schema`` and its siblings). Without
+            ``compare_dataset``, B is named ``"Dataset B"``, as ``render`` names it.
         canvas_size: The monitor size. Defaults to the screen ``render`` assumes for the
             source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the
             same figure.
@@ -4505,7 +4584,8 @@ def figure_code(
             ``render --print-code`` writes to stderr say it.
 
     Raises:
-        ValueError: An unknown ``flavor``.
+        ValueError: An unknown ``flavor``, or a key ``compare_source_options`` does
+            not take.
         TypeError: An option the builder does not take.
 
     Examples:
@@ -4528,6 +4608,11 @@ def figure_code(
         figure_overrides,
         set(figure_options(kind)) | {"palette"},
         "figure_code",
+    )
+    compare_dataset, compare_tables = _snippet_compare_tables(
+        compare_source_options,
+        compare_dataset,
+        a_has_raw_gaze=source == "demo" or bool((source_options or {}).get("raw_gaze")),
     )
     if canvas_size is None:
         # `render` snaps these sources to their recorded screen while
@@ -4575,6 +4660,7 @@ def figure_code(
                     if compare_labels
                     else None
                 ),
+                **compare_tables,
             )
             if compare is not None
             else None

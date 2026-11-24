@@ -634,3 +634,48 @@ def test_a_dataset_name_is_free_and_fits(requested, taken, max_chars):
         t.casefold() for t in taken
     }:
         assert name == requested.strip()[:max_chars].rstrip()
+
+
+_COLUMN = st.text(max_size=12)
+
+
+@given(
+    schema=st.dictionaries(
+        st.text(min_size=1, max_size=12),
+        st.one_of(st.none(), _COLUMN, st.lists(_COLUMN, min_size=1, max_size=3)),
+        min_size=1,
+        max_size=5,
+    )
+)
+def test_a_mapping_written_into_a_command_reads_back(schema):
+    """Share → Code writes each table's mapping as a flag (A's `--word-schema`,
+    B's `--compare-word-schema` / `--compare-fix-schema`); `render` reads the
+    same mapping back, whatever the field and column names hold."""
+    import shlex
+
+    from scanpath_studio import api, cli
+    from scanpath_studio import code_snippet as cs
+
+    state = cs.FigureState(
+        kind="comparison",
+        settings=api.figure_options("comparison"),
+        participant="p1",
+        trial="t1",
+        compare=cs.CompareTarget(
+            participant="p2",
+            trial="t2",
+            dataset="Pilot",
+            schemas={"word_schema": schema, "fix_schema": schema},
+        ),
+    )
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES,
+        label="files",
+        options={"words": ["w.csv"], "fixations": ["f.csv"], "word_schema": schema},
+    )
+    command = cs.reproduction_code(source, state).cli
+    args = cli._render_parser().parse_args(
+        shlex.split(command.replace(" \\\n", " "))[2:]
+    )
+    for attr in ("word_schema", "compare_word_schema", "compare_fix_schema"):
+        assert cli._parse_schema_arg(getattr(args, attr), attr) == schema

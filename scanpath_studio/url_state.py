@@ -48,6 +48,7 @@ from .code_snippet import (
     SnippetSource,
     cite_comment,
     reproduction_code,
+    upload_caveats,
     upload_source,
 )
 from .column_names import (
@@ -4616,6 +4617,36 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         label=shown,
         note=UNKNOWN_SOURCE_NOTE,
     )
+
+
+def second_dataset_load(data_choice: str) -> tuple[dict[str, dict], tuple[str, ...]]:
+    """How Share → Code loads scanpath B when B comes from ``data_choice``.
+
+    Returns ``(schemas, caveats)``. For an uploaded dataset, ``schemas`` holds
+    its column mappings exactly as A's would be written (``word_schema`` /
+    ``fix_schema`` / ``raw_gaze_schema``), and ``caveats`` holds what adding it
+    did that loading its files does not repeat (`upload_caveats`). Both are
+    empty for a built-in dataset. A session set gets one caveat: B's recipe
+    loads two tables, and a session set is not two tables."""
+    stored = (st.session_state.get("_datasets") or {}).get(data_choice)
+    if not isinstance(stored, dict):
+        return {}, ()
+    from scanpath_studio.column_names import stored_source_recipe
+
+    if is_multipleye_entry(stored):
+        return {}, (
+            "This dataset was added as a MultiplEYE session set, which "
+            "`load_scanpath_data` does not read. Load its Words and fixation "
+            "tables yourself and pass them as `words_b` / `fixations_b`.",
+        )
+    recipe = stored_source_recipe(stored)
+    source = upload_source(data_choice, recipe, words=True, fixations=True)
+    schemas = {
+        option: source.options[option]
+        for option in ("word_schema", "fix_schema", "raw_gaze_schema")
+        if source.options.get(option)
+    }
+    return schemas, tuple(upload_caveats(recipe))
 
 
 def _has_rows(frame) -> bool:

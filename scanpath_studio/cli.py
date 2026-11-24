@@ -19,6 +19,7 @@ import os
 import re
 import shlex
 import sys
+from collections.abc import Mapping
 from dataclasses import replace
 from importlib import resources
 from pathlib import Path
@@ -205,6 +206,12 @@ _SCHEMA_FLAGS = {
     "fix_schema": "--fix-schema",
     "raw_gaze_schema": "--raw-gaze-schema",
 }
+#: The same, for the second comparison dataset's tables (B's).
+_COMPARE_SCHEMA_FLAGS = {
+    "word_schema": "--compare-word-schema",
+    "fix_schema": "--compare-fix-schema",
+    "raw_gaze_schema": "--compare-raw-gaze-schema",
+}
 
 
 def _add_schema_flags(group) -> None:
@@ -295,40 +302,40 @@ def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
     return mapping
 
 
-def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
+def _load_error_message(
+    exc: Exception, *, schema_flags: Mapping[str, str] = _SCHEMA_FLAGS
+) -> str:
     """A load failure as the command line should say it.
 
     A :class:`api.SchemaError` ends with the API's "pass ``word_schema={…}``"
     hint, which a shell user has no way to act on; this swaps it for the
-    ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
-    second comparison dataset, which has no mapping flag of its own."""
+    ``--word-schema`` / ``--fix-schema`` form. ``schema_flags`` names the flags
+    of the tables that failed: :data:`_COMPARE_SCHEMA_FLAGS` for the second
+    comparison dataset's."""
     from .api import SchemaError
     from .data import StimulusJoinError, UnplacedFixationsError
 
     if isinstance(exc, UnplacedFixationsError):
         # The fix is the fixations' mapping — X and Y, on this command line.
         message = str(exc).replace("`", "'")
-        if not schema_flags:
-            return message
         return (
-            f"{message}\nOn the command line, map them with --fix-schema: the "
-            "fixations' full mapping as JSON (or a path to a .json file), with "
-            '"x" and "y" naming its columns.'
+            f"{message}\nOn the command line, map them with "
+            f"{schema_flags['fix_schema']}: the fixations' full mapping as JSON (or "
+            'a path to a .json file), with "x" and "y" naming its columns.'
         )
     if isinstance(exc, StimulusJoinError):
         # The fix is a mapping, and here a mapping is a flag.
         message = str(exc).replace("`", "'")
-        if not schema_flags:
-            return message
         return (
-            f"{message}\nOn the command line, map it with --word-schema and "
-            "--fix-schema: each takes that table's full mapping as JSON (or a "
-            'path to a .json file), with "text_id" naming its text column.'
+            f"{message}\nOn the command line, map it with "
+            f"{schema_flags['word_schema']} and {schema_flags['fix_schema']}: each "
+            "takes that table's full mapping as JSON (or a path to a .json file), "
+            'with "text_id" naming its text column.'
         )
     if not isinstance(exc, SchemaError):
         return str(exc)
-    flag = _SCHEMA_FLAGS.get(exc.param)
-    if flag is None or not schema_flags:
+    flag = schema_flags.get(exc.param)
+    if flag is None:
         return (
             f"{exc.detail}\nThis table's columns have to be auto-detected here — "
             "rename them, or build the figure in Python, where "
@@ -1895,6 +1902,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "scanpath. Same formats as --raw-gaze. With no second dataset, "
         "--raw-gaze already covers both scanpaths.",
     )
+    for flag, table, mirrors in (
+        ("--compare-word-schema", "--compare-words", "--word-schema"),
+        ("--compare-fix-schema", "--compare-fixations", "--fix-schema"),
+        ("--compare-raw-gaze-schema", "--compare-raw-gaze", "--raw-gaze-schema"),
+    ):
+        cmp_group.add_argument(
+            flag,
+            metavar="JSON",
+            help=f"Column mapping for the {table} table, replacing auto-detection. "
+            f"Same form as {mirrors}.",
+        )
     cmp_group.add_argument(
         "--compare-dataset-name",
         metavar="NAME",
@@ -2100,6 +2118,24 @@ def _comparison_ids(args: argparse.Namespace) -> tuple[str, str] | None:
     return args.compare_participant, args.compare_trial
 
 
+def _compare_schemas(args) -> dict[str, dict]:
+    """The second dataset's column mappings, keyed as the loaders take them
+    (``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``); only those given.
+
+    Parsed once, when ``render`` checks its flags before loading anything, and
+    kept on ``args``: a mapping can be a file, read once."""
+    cached = getattr(args, "_compare_schema_maps", None)
+    if cached is not None:
+        return cached
+    schemas = {}
+    for option, flag in _COMPARE_SCHEMA_FLAGS.items():
+        mapping = _parse_schema_arg(getattr(args, f"compare_{option}", None), flag)
+        if mapping is not None:
+            schemas[option] = mapping
+    args._compare_schema_maps = schemas
+    return schemas
+
+
 def _compare_second_dataset(api, args, words, fixations):
     """``(words_b, fixations_b)`` for the comparison — A's frames unless given.
 
@@ -2107,11 +2143,14 @@ def _compare_second_dataset(api, args, words, fixations):
     """
     if not (args.compare_words or args.compare_fixations):
         return words, fixations, False
+    schemas = _compare_schemas(args)
     try:
         return (
             *api.load_scanpath_data(
                 args.compare_words,
                 args.compare_fixations,
+                word_schema=schemas.get("word_schema"),
+                fix_schema=schemas.get("fix_schema"),
                 keep_columns=args.keep_columns,
                 names="canonical",
             ),
@@ -2120,7 +2159,7 @@ def _compare_second_dataset(api, args, words, fixations):
     except (ValueError, FileNotFoundError, OSError) as exc:
         raise SystemExit(
             "--compare-words/--compare-fixations: "
-            + _load_error_message(exc, schema_flags=False)
+            + _load_error_message(exc, schema_flags=_COMPARE_SCHEMA_FLAGS)
         )
 
 
@@ -2673,6 +2712,8 @@ def _print_reproduction_code(
                 else None
             ),
             primary_raw_gaze=raw_gaze,
+            # The mappings this run read B's tables with.
+            schemas=_compare_schemas(args) if second else {},
         )
     state = cs.FigureState(
         kind=kind,
@@ -2957,10 +2998,38 @@ def render(argv: list[str]) -> None:
             "--compare-raw-gaze is scanpath B's raw gaze; pass --compare-with "
             "PARTICIPANT:TRIAL too."
         )
+    second_dataset_flags = [
+        flag
+        for flag, given in (
+            ("--compare-words", args.compare_words),
+            ("--compare-fixations", args.compare_fixations),
+            *(
+                (flag, getattr(args, f"compare_{option}") is not None)
+                for option, flag in _COMPARE_SCHEMA_FLAGS.items()
+            ),
+        )
+        if given
+    ]
+    if second_dataset_flags and args.compare_with is None:
+        raise SystemExit(
+            f"{', '.join(second_dataset_flags)} load scanpath B's dataset; pass "
+            "--compare-with PARTICIPANT:TRIAL too."
+        )
     if args.raw_gaze_schema is not None and not args.raw_gaze:
         raise SystemExit(
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
         )
+    for option, table, table_flag in (
+        ("word_schema", args.compare_words, "--compare-words"),
+        ("fix_schema", args.compare_fixations, "--compare-fixations"),
+        ("raw_gaze_schema", args.compare_raw_gaze, "--compare-raw-gaze"),
+    ):
+        if getattr(args, f"compare_{option}") is not None and not table:
+            raise SystemExit(
+                f"{_COMPARE_SCHEMA_FLAGS[option]} maps the {table_flag} table; "
+                f"pass {table_flag} too."
+            )
+    _compare_schemas(args)  # a malformed mapping is said before anything loads
     raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
     # These describe the second scanpath of a comparison, so on their
     # own there is nothing for them to style — refused, like a lone --label-a.
@@ -3672,12 +3741,14 @@ def render(argv: list[str]) -> None:
                     )
                 try:
                     raw_gaze_b = api.load_raw_gaze(
-                        args.compare_raw_gaze, names="canonical"
+                        args.compare_raw_gaze,
+                        raw_gaze_schema=_compare_schemas(args).get("raw_gaze_schema"),
+                        names="canonical",
                     )
                 except (ValueError, FileNotFoundError, OSError) as exc:
                     raise SystemExit(
                         "--compare-raw-gaze: "
-                        + _load_error_message(exc, schema_flags=False)
+                        + _load_error_message(exc, schema_flags=_COMPARE_SCHEMA_FLAGS)
                     )
             # None keeps `compare_scanpaths` on its same-dataset path, which is
             # what skips the namespacing.

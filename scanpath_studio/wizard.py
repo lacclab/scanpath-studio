@@ -142,6 +142,7 @@ from .metadata_editor import (
     render_trial_metadata_section,
 )
 from .persistence import is_loopback_url, persistence_enabled
+from .reruns import rerun
 from .styles import mapping_menu_css
 from .tour import (
     WIZARD_HELP_KEY,
@@ -608,14 +609,14 @@ def _leave_prompt_dialog(destination: str) -> None:
         type="primary",
     ):
         app.stay_in_wizard()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if leave_col.button(
         f"{ICONS['delete']} Discard and leave",
         key="wizard_leave_discard",
         width="stretch",
     ):
         app.discard_and_leave_wizard()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _enter_add_data_wizard() -> None:
@@ -1373,7 +1374,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         # visibly does nothing. `st.rerun()` restarts the script now, so
         # the new line appears immediately, same run.
         st.session_state[_FILENAME_DERIVE_LINE_COUNT_KEY] = line_count + 1
-        st.rerun()
+        rerun()
     apply_clicked = apply_col.button(
         "Apply",
         key="wizard_filename_apply",
@@ -2265,7 +2266,7 @@ def _wizard_restore_config(host) -> None:
         )
         return
     _apply_setup_config(config, source=uploaded.name, kind="file")
-    st.rerun()
+    rerun()
 
 
 def _render_start_from(host) -> None:
@@ -3550,7 +3551,7 @@ def _multipleye_folder_field(host, active: bool) -> str:
     ):
         if chosen := app._pick_directory_dialog():
             st.session_state[f"{MULTIPLEYE_DIR_KEY}_picked"] = chosen
-            st.rerun()
+            rerun()
         host.caption("Enter or paste the folder path.")
     resolved = app._resolve_data_dir(str(typed or ""))
     if resolved and resolved != str(typed).strip():
@@ -4305,7 +4306,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             help="Re-open the setup wizard.",
         ):
             st.session_state["setup_complete"] = False
-            st.rerun()
+            rerun()
 
     # The linear parts. `part()` while the wizard is active — a one-line
     # numbered headline, no expander — and `step_panel`'s bold heading in the

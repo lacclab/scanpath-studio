@@ -148,6 +148,7 @@ from .fields import (
     tooltip,
 )
 from .plot_navigation import detail_section, render_setting_finder
+from .reruns import rerun
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
     COMPARE_IDENTITY_STATE_KEY,
@@ -1701,7 +1702,7 @@ def design_state() -> dict:
     return {key: deepcopy(ss[key]) for key in list(ss) if _is_design_key(key)}
 
 
-def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
+def hold_script_writes(before: dict) -> None:
     """Hold the plot settings the script changed since ``before`` (a
     `design_state`) against a closed popover's echo (see `write_through`).
 
@@ -1709,10 +1710,9 @@ def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
     file's. By then `reassert_pending_writes` has put back any held value, so
     the browser shows what an earlier hold recorded, not what ``before`` has;
     a key the script left as it was keeps its hold. The browser answers on the
-    next run, unless the script reruns itself first (``rerun_follows``), and
-    then every hold waits one run more (`keep_holds_through_rerun`). Keys no
-    widget draws, and keys drawn outside every popover, are written plainly,
-    as in `_hold_view_writes`.
+    next run; a rerun the script starts first goes through `reruns.rerun`,
+    which keeps the holds for it. Keys no widget draws, and keys drawn outside
+    every popover, are written plainly, as in `_hold_view_writes`.
     """
     ss = st.session_state
     pending = ss.get(_PENDING_WRITES_KEY) or {}
@@ -1724,20 +1724,24 @@ def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
         earlier = pending.get(key)
         shown = earlier.stale_echo if earlier is not None else old
         write_through(key, ss[key], shown=shown, in_callback=False)
-    if rerun_follows:
-        keep_holds_through_rerun()
 
 
 def keep_holds_through_rerun() -> None:
-    """Keep every held write through a rerun the script starts itself.
+    """Keep the held writes through a rerun the script starts itself.
 
     `reassert_pending_writes` reads a held key that still has its written value
     as the browser having taken it, and ends the hold. A rerun the script
-    starts (`st.rerun()`) brings no values from the browser, so every hold
-    would read that way and end before the browser's echo arrives. Marked
-    fresh, each waits for the run after, which is the browser's."""
-    for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
-        write.fresh = True
+    starts (`st.rerun()`) brings no values from the browser, so a held key
+    that has its written value now would read that way and end before the
+    browser's echo arrives; marked fresh, it waits for the run after, which is
+    the browser's. A key holding something else is left as it is: in a dialog
+    or fragment run the holds were not re-applied, so a key there can hold the
+    browser's echo, which the next run's `reassert_pending_writes` must still
+    see to put the write back."""
+    ss = st.session_state
+    for key, write in (ss.get(_PENDING_WRITES_KEY) or {}).items():
+        if _write_match_key(ss.get(key)) == _write_match_key(write.value):
+            write.fresh = True
 
 
 #: Design keys no widget draws, which `_hold_view_writes` and
@@ -2053,10 +2057,10 @@ def _design_delete_dialog(name: str) -> None:
     ):
         delete_design_preset(name)
         _close_design_delete_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if no.button("Cancel", key="design_delete_cancel", width="stretch"):
         _close_design_delete_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 #: The 💾 dialog's name field and its *replace* pick — the draft that closing
@@ -2160,13 +2164,13 @@ def _design_save_dialog() -> None:
         )
     if cancel:
         _close_design_save_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if save:
         if not save_design_preset(name or ""):
             st.error("Give the view a name first.")
         else:
             _close_design_save_dialog()
-            st.rerun(scope="app")
+            rerun(scope="app")
 
 
 def _render_design_rename(row, name: str) -> None:
@@ -7317,10 +7321,10 @@ def _reset_viz_confirmation_dialog() -> None:
     ):
         reset_viz_settings()
         _close_reset_viz_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if no.button("Cancel", key="reset_viz_cancel", width="stretch"):
         _close_reset_viz_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 _PLOT_HISTORY = "_plot_edit_history"

@@ -13,6 +13,7 @@ import streamlit as st
 from . import dataset_credit, loading, publication, ui_mode
 from .crash_report import guarded
 from .html_embed import plotlyjs_src
+from .reruns import rerun
 
 _BRIDGE = """
 export default function({data,parentElement,setTriggerValue}){
@@ -119,7 +120,7 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
             st.error(str(exc))
     if action and action.get("type") == "batch":
         st.session_state["_publication_batch"] = action["value"]
-        st.rerun()
+        rerun()
 
 
 def chart_key(figure) -> str:

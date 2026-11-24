@@ -410,6 +410,7 @@ from scanpath_studio.utils import (
 )
 
 from .dataset_identity import dataset_share_id, unique_name
+from .reruns import rerun
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -1496,7 +1497,7 @@ def _delete_download_dialog(choice: str) -> None:
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_delete_cancel", width="stretch"):
-        st.rerun()
+        rerun()
     confirm.button(
         "Delete",
         icon=ICONS["delete"],
@@ -1507,7 +1508,7 @@ def _delete_download_dialog(choice: str) -> None:
         args=(choice,),
     )
     if st.session_state.get(DOWNLOAD_DELETED_KEY):
-        st.rerun()  # the whole page, which closes this dialog
+        rerun()  # the whole page, which closes this dialog
 
 
 def _show_dataset_library() -> None:
@@ -1741,7 +1742,7 @@ def _clear_saved_dialog(app_url: str) -> None:
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
-        st.rerun()
+        rerun()
     # A callback, so the delete happens before anything else in the rerun
     # (the nav may rerun the script before this dialog is reached again).
     confirm.button(
@@ -1753,7 +1754,7 @@ def _clear_saved_dialog(app_url: str) -> None:
         on_click=_clear_and_start_over,
     )
     if st.session_state.get(STARTED_OVER_KEY):
-        st.rerun()  # the whole page, which closes this dialog
+        rerun()  # the whole page, which closes this dialog
 
 
 def _arm_about() -> None:
@@ -1869,7 +1870,7 @@ def _about_dialog() -> None:
                 key="about_open_feedback",
             ):
                 _arm_feedback()
-                st.rerun()
+                rerun()
             if st.button(
                 "Debug",
                 icon=ICONS["debug"],
@@ -1878,7 +1879,7 @@ def _about_dialog() -> None:
                 help="Open the debug log and a snapshot of what's loaded.",
             ):
                 _arm_debug()
-                st.rerun()
+                rerun()
 
 
 def _update_check_offered() -> bool:
@@ -2398,7 +2399,7 @@ def _dataset_dir_input(
         chosen = _pick_directory_dialog()
         if chosen:
             st.session_state[f"{dir_key}_picked"] = chosen
-            st.rerun()
+            rerun()
         else:
             cfg.caption("Enter or paste the folder path.")
     resolved = _resolve_data_dir(raw)
@@ -2579,7 +2580,7 @@ def _switch_missing_corpus_to_demo() -> None:
         return
     st.session_state[_UNAVAILABLE_CARRIED_KEY] = note
     st.session_state["_pending_source_choice"] = DEMO_CHOICE
-    st.rerun()
+    rerun()
 
 
 def _dismiss_carried_unavailable_note() -> None:
@@ -2686,7 +2687,7 @@ def _render_dataset_unavailable() -> None:
                     "another computer and copy them into the folder named above."
                 )
                 return
-            st.rerun()
+            rerun()
 
 
 def _dataset_access_status(
@@ -2758,7 +2759,7 @@ def _dataset_access_status(
         except (OSError, ValueError) as exc:
             cfg.error(f"Download failed: {exc}. Check your connection and retry.")
             return False
-        st.rerun()
+        rerun()
     return False
 
 
@@ -5778,7 +5779,7 @@ def _delete_confirmation_dialog(
             st.session_state[HIDDEN_DATASETS_KEY] = sorted(hidden)
             if st.session_state.get("data_source_choice") == pending:
                 st.session_state["_pending_source_choice"] = remaining[0]
-        st.rerun(scope="app")
+        rerun(scope="app")
     if not remaining:
         st.caption("At least one dataset must remain available.")
     if no.button(
@@ -5787,7 +5788,7 @@ def _delete_confirmation_dialog(
         width="stretch",
     ):
         st.session_state.pop(PENDING_DELETE_KEY, None)
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
@@ -6472,7 +6473,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         help=f"Open {ICONS['edit']} Edit dataset at the Trial ID mapping.",
     ):
         _open_mapping_editor()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if keep_col.button(
         "Keep it as is",
         key="trial_identity_alert_keep",
@@ -6480,7 +6481,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         help=f"Dismiss. Nothing changes. The check's result stays under "
         f"{ICONS['view_data']} Data Management → Edit dataset → Trial identity.",
     ):
-        st.rerun(scope="app")
+        rerun(scope="app")
     if asked_by == "add":
         st.caption(
             "Checked automatically because the dataset was just added. The "
@@ -6510,7 +6511,7 @@ def _dataset_added_dialog(message: str) -> None:
         help="Show the new dataset's first trial in the Scanpath View.",
     ):
         _go_scanpath()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if again_col.button(
         f"{ICONS['add']} Add another",
         key="dataset_added_again",
@@ -6520,7 +6521,7 @@ def _dataset_added_dialog(message: str) -> None:
         from scanpath_studio.wizard import _enter_add_data_wizard
 
         _enter_add_data_wizard()
-        st.rerun(scope="app")
+        rerun(scope="app")
     st.caption(
         f"Close this to stay on {ICONS['view_data']} Data Management. "
         "Choose **Open in Scanpath View** to open it later."
@@ -6862,10 +6863,10 @@ def _leave_dataset_editor_dialog() -> None:
         width="stretch",
     ):
         _leave_dataset_editor()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _render_dataset_editor_bar(host, data_choice: str) -> None:
@@ -7114,7 +7115,7 @@ def _unreachable_dataset_dialog(token: str) -> None:
     )
     if st.button("OK", key="dataset_unreachable_ok", type="primary"):
         _dismiss_unreachable_dataset()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _open_dataset_row(token: str) -> None:
@@ -7510,7 +7511,7 @@ def render_dataset_table(
     # whole-app one. Opening a dataset asks for the app rerun here, because a
     # callback may not.
     if st.session_state.pop(_TABLE_NEEDS_APP_RERUN, False):
-        st.rerun(scope="app")
+        rerun(scope="app")
     rows = _dataset_table_rows(
         active=active, words=words, fixations=fixations, raw_gaze=raw_gaze
     )
@@ -8836,7 +8837,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.session_state["_authored_events_frame"] = cleared
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
             st.session_state[_AUTHOR_STALE_TARGETS_KEY].pop(source, None)
-            st.rerun()
+            rerun()
 
     fixations = authored_fixations(words, effective_events)
     _, canvas_height = canvas_size(words, layout)
@@ -8870,7 +8871,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             # client-side base (the same invariant as the table's stable
             # `seed` above, in the other direction).
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
-            st.rerun()
+            rerun()
 
     name_key = f"author_dataset_name_{source}"
     st.text_input(

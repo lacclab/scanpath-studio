@@ -146,3 +146,51 @@ def test_a_dataset_added_again_under_the_same_name_opens_unfiltered():
     assert at.session_state["data_source_choice"] == TOKEN
     assert not at.session_state["_trial_filters_raw"].get("filter_participants")
 
+
+class _FakeSt:
+    """The slice of `streamlit` that saving a drawing touches."""
+
+    def __init__(self, session: dict) -> None:
+        self.session_state = session
+
+
+def test_saving_a_drawing_takes_its_annotations_and_metadata_along(monkeypatch):
+    """A draft's notes and attached tables were made on the scanpath being
+    saved, so the saved dataset owns them, and the next draft starts without."""
+    import scanpath_studio.annotations as annotations_mod
+    from scanpath_studio import metadata, wizard
+    from scanpath_studio.authoring import authoring_json, layout_text, sample_draft
+    from scanpath_studio.constants import AUTHOR_CHOICE
+
+    session: dict = {"data_source_choice": AUTHOR_CHOICE, "draft_name": "Pilot"}
+    fake = _FakeSt(session)
+    monkeypatch.setattr(app, "st", fake)
+    monkeypatch.setattr(wizard, "st", fake)
+    annotations_mod.activate_dataset(session, AUTHOR_CHOICE)
+    session["trial_annotations"] = {
+        ("p1", "t1"): {"star": True, "tags": [], "note": ""}
+    }
+    metadata.activate_dataset(session, AUTHOR_CHOICE)
+    session[metadata.SESSION_KEY] = metadata.build_participant_metadata(
+        pd.DataFrame({"participant_id": ["p1"], "age": [31]}),
+        "participant_id",
+        source_name="readers.csv",
+    )
+    text, layout, events = sample_draft()
+    session["_author_save_payload"] = {
+        "words": layout_text(text, **layout),
+        "fixations": pd.DataFrame({"duration_ms": [200]}),
+        "authoring": authoring_json(text, events, layout=layout),
+        "setup": {"canvas_width": 800, "canvas_height": 400},
+    }
+
+    app._save_authored_dataset("draft_name")
+    saved = session["_pending_source_choice"]
+    assert saved != AUTHOR_CHOICE
+
+    annotations_mod.activate_dataset(session, saved)
+    assert session["trial_annotations"][("p1", "t1")]["star"] is True
+    metadata.activate_dataset(session, saved)
+    assert session[metadata.SESSION_KEY].source_name == "readers.csv"
+    metadata.activate_dataset(session, AUTHOR_CHOICE)
+    assert metadata.SESSION_KEY not in session, "the next draft inherits the table"

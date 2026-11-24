@@ -2028,7 +2028,8 @@ def forget_dataset(session, dataset: str) -> None:
 
 
 def rename_dataset(session, old: str, new: str) -> None:
-    """A renamed dataset keeps its tables."""
+    """Move ``old``'s tables to ``new``: a drawn scanpath's draft tables go to
+    the dataset it is saved as (``app._save_authored_dataset``)."""
     old, new = str(old), str(new)
     store = _store(session)
     if old in store:

@@ -5274,12 +5274,15 @@ def _save_authored_dataset(name_key: str, *, as_copy: bool = False) -> None:
         for key in ("_author_text_for_events", "_authored_events_frame", "author_text"):
             st.session_state.pop(key, None)
     st.session_state.pop(_AUTHOR_EDITING_KEY, None)
-    # The draft's annotations were made on the scanpath being saved,
-    # so they become the saved dataset's. The name is safe, so it holds none.
+    # The draft's annotations and attached tables were made on the scanpath
+    # being saved, so they become the saved dataset's, and the next draft
+    # starts without them. The name is safe, so it holds none of its own.
     if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
         import scanpath_studio.annotations as _annotations
+        from scanpath_studio import metadata as _metadata
 
         _annotations.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
+        _metadata.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
     st.session_state["_pending_source_choice"] = name
     st.session_state["main_nav"] = _VIEW_SCANPATH
     st.session_state["setup_complete"] = True

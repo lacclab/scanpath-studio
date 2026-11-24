@@ -2640,6 +2640,7 @@
 <li>Comparison links that use the Print / grayscale palette and were made before v0.48.0 draw the two readers in dark and light grey since v0.48.0, scanpath B with hollow markers and dashed saccades, instead of blue and red; set each scanpath's colors again under Scanpath A and Scanpath B in the Fixations and Saccades settings to bring blue and red back.</li>
 <li>The fixation size legend is also off by default in <code>plot_scanpath</code> and <code>render</code> output since v0.48.0; turn it on with <code>duration_size_legend=True</code>, <code>render --duration-size-legend</code>, or Fixation sizes under Figure → Legends in the app.</li>
 <li>animate_scanpath refuses the raw-gaze style and heatmap colour-bar options by name, which the replay never draws, instead of accepting and ignoring them.</li>
+<li>Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.</li>
 </ul>
 <h3 id="exec-13--removed">Removed<a class="headerlink" href="#exec-13--removed" title="Permanent link">&para;</a></h3>
 <ul>

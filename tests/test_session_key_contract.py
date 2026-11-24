@@ -327,6 +327,7 @@ def test_deep_link_seeds_frozen_state_keys():
     # The rest of the closed vocabularies: each control's own option.
     validated.update(
         {
+            "bg_choice": "White",
             "critical_span_style": "Underline",
             "fixation_symbol": "square",
             "heatmap_metric": "duration_ms",

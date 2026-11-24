@@ -155,6 +155,7 @@ from .session_keys import (
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
     COMPARE_STYLE_PARAMS,
+    DATA_SOURCE_CHOICE,
     EXPORT_PARAMS,
     FIX_RANGE_ALL_TRIALS_PARAM,
     FIX_RANGE_PARAM,
@@ -2497,6 +2498,110 @@ def _match_selection(
     return match.iloc[0], ""
 
 
+#: The screen a saved bundled-demo selection means when it names none. Share
+#: names the screen of every multi-screen trial, so a demo link or settings file
+#: without one was saved on a single-screen demo trial, whose screen is this.
+DEMO_UNNAMED_SCREEN = "Paragraph"
+
+
+def _demo_fixations_before_paragraph(selection: dict) -> int:
+    """How many fixations the demo reading ``selection`` names has on the
+    screens before its paragraph — the shift from a window counted on the
+    paragraph alone to one counted over the whole trial."""
+    from .data import load_sample_data
+
+    _words, fixations = load_sample_data()
+    needed = {"participant_id", "unique_trial_id", "part", "screen_index"}
+    if fixations.empty or not needed <= set(fixations.columns):
+        return 0
+    reading = fixations["unique_trial_id"].astype(str).eq(str(selection["trial_id"]))
+    if selection.get("participant_id") not in (None, ""):
+        reading &= (
+            fixations["participant_id"].astype(str).eq(str(selection["participant_id"]))
+        )
+    screens = fixations.loc[reading, ["part", "screen_index"]]
+    paragraph = screens.loc[screens["part"].eq(DEMO_UNNAMED_SCREEN), "screen_index"]
+    if paragraph.empty:
+        return 0
+    return int(screens["screen_index"].lt(paragraph.iloc[0]).sum())
+
+
+def _with_demo_screen(selection: dict, *, demo: bool | None = None) -> tuple[dict, int]:
+    """``selection``, opening the paragraph when it is a bundled-demo selection
+    that names no screen, and the shift its fixation window takes there.
+
+    Such a selection counts its window on the paragraph alone, and a
+    multi-screen trial counts every screen's fixations in one sequence, so the
+    window moves by the fixations on the screens before the paragraph. ``demo``
+    says whether the selection is in the bundled demo; left out, it is when the
+    open dataset is. Any other selection is returned unchanged with no shift."""
+    if demo is None:
+        demo = st.session_state.get(DATA_SOURCE_CHOICE) == DEMO_CHOICE
+    if (
+        not demo
+        or selection.get("screen_id") not in (None, "")
+        or selection.get("trial_id") in (None, "")
+    ):
+        return selection, 0
+    shift = _demo_fixations_before_paragraph(selection)
+    moved = {**selection, "screen_id": DEMO_UNNAMED_SCREEN}
+    window = selection.get("fixation_window")
+    if (
+        isinstance(window, list)
+        and len(window) == 2
+        and all(type(bound) is int for bound in window)
+    ):
+        moved["fixation_window"] = [window[0] + shift, window[1] + shift]
+    return moved, shift
+
+
+def _seed_demo_compare_screen() -> None:
+    """Open a linked scanpath B in the bundled demo on its paragraph when the
+    link names no screen for it, shifting B's window as `_with_demo_screen`
+    shifts A's.
+
+    Runs once per link, with A's trial, after the open dataset is known: B is
+    in the demo when the link names the demo as B's source, or names none and
+    the open dataset is the demo. A B the link places in a public corpus or a
+    local dataset is never the demo."""
+    qp = st.query_params
+    compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
+    if (
+        compare_ids is None
+        or qp.get(COMPARE_SCREEN_PARAM) not in (None, "")
+        or _linked_compare_source_kind(qp) is not None
+    ):
+        return
+    source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
+    open_is_demo = st.session_state.get(DATA_SOURCE_CHOICE) == DEMO_CHOICE
+    demo = source_b == DEMO_CHOICE or (not source_b and open_is_demo)
+    participant_b, trial_b = compare_ids
+    selection, shift = _with_demo_screen(
+        {"participant_id": participant_b, "trial_id": trial_b}, demo=demo
+    )
+    if selection.get("screen_id") in (None, ""):
+        return
+    st.session_state.setdefault(SINGLE_COMPARE_SCREEN_ID, selection["screen_id"])
+    window = st.session_state.get(SINGLE_COMPARE_FIX_RANGE)
+    if shift and COMPARE_FIX_RANGE_PARAM in qp and window is not None:
+        st.session_state[SINGLE_COMPARE_FIX_RANGE] = (
+            window[0] + shift,
+            window[1] + shift,
+        )
+
+
+def _demo_compare_selection(compare: dict) -> dict:
+    """A saved scanpath B, opening its paragraph when it is a bundled-demo B
+    that names no screen (see `_with_demo_screen`). ``compare["source"]`` names
+    B's dataset; none means A's."""
+    from .compare_source import THIS_DATASET
+
+    source = compare.get("source")
+    open_is_demo = st.session_state.get(DATA_SOURCE_CHOICE) == DEMO_CHOICE
+    demo = source == DEMO_CHOICE or (source in (None, THIS_DATASET) and open_is_demo)
+    return _with_demo_screen(compare, demo=demo)[0]
+
+
 def _restore_selection(
     selection: dict, combos: pd.DataFrame, key_prefix: str = "single"
 ) -> bool:
@@ -2562,14 +2667,20 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> str | None:
     if combos is None or combos.empty:
         return None
     st.session_state["_url_trial_applied"] = True
-    selection = {
-        "participant_id": st.query_params.get("participant"),
-        "trial_id": trial_id,
-        "screen_id": st.query_params.get("screen"),
-    }
+    selection, shift = _with_demo_screen(
+        {
+            "participant_id": st.query_params.get("participant"),
+            "trial_id": trial_id,
+            "screen_id": st.query_params.get("screen"),
+        }
+    )
     _row, reason = _match_selection(selection, combos)
     if reason:
         return f"The link's trial couldn't be opened: {reason}."
+    window = st.session_state.get(SINGLE_FIX_RANGE)
+    if shift and FIX_RANGE_PARAM in st.query_params and window is not None:
+        st.session_state[SINGLE_FIX_RANGE] = (window[0] + shift, window[1] + shift)
+    _seed_demo_compare_screen()
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
@@ -3701,6 +3812,7 @@ def _restore_plot_config(
 
     selection = section("selection")
     if selection:
+        selection, _shift = _with_demo_screen(selection)
         if _restore_selection(selection, combos):
             restore.applied += 1
             _restore_window(selection, SINGLE_FIX_RANGE, "_fix_range_trial", restore)
@@ -3710,6 +3822,11 @@ def _restore_plot_config(
             _row, reason = _match_selection(selection, combos)
             skipped.append(f"trial selection ({reason})")
 
+    if isinstance(selection, dict) and isinstance(selection.get("compare"), dict):
+        selection = {
+            **selection,
+            "compare": _demo_compare_selection(selection["compare"]),
+        }
     _restore_figure_mode(config, selection, combos, put, skipped)
     compare = selection.get("compare")
     if (

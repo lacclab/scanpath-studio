@@ -28,7 +28,7 @@ print(gallery_figure("text-lines"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_273 -t l37_273_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
       --color-by-line \
       --highlight-column '' \
       -o text-lines.html

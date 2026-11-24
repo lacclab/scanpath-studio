@@ -10,7 +10,6 @@ def test_manuscript_replay_preserves_all_fixations_and_panel_edges(
 ):
     monkeypatch.setenv("PAPER_FIGURES_DIR", str(tmp_path))
     from paper import paper_figs
-    from scanpath_studio import load_sample_data
 
     def save_panel(fig, path):
         left, right = fig.layout.xaxis.range
@@ -24,7 +23,7 @@ def test_manuscript_replay_preserves_all_fixations_and_panel_edges(
 
     monkeypatch.setattr(paper_figs, "FIGS", tmp_path)
     monkeypatch.setattr(paper_figs, "save_figure", save_panel)
-    words, fixations = load_sample_data(names="canonical")
+    words, fixations = paper_figs.paragraph_demo()
     paper_figs.scanpath_fig(words, fixations)
     paper_figs.replay_fig(words, fixations)
     with Image.open(tmp_path / "fig_replay.png") as montage:

@@ -229,7 +229,12 @@ class TestColumnMappingOverrideFlow:
         _inspect_tables(at)
         stimuli = _frames_with(at, "Text ID", "# Words", "Text")
         assert stimuli, "stimuli table not rendered"
-        passage = str(stimuli[0]["Text"].iloc[0]).split()
+        # A multi-screen text heads each screen's words with a `[Screen]` marker.
+        passage = [
+            token
+            for token in str(stimuli[0]["Text"].iloc[0]).split()
+            if not (token.startswith("[") and token.endswith("]"))
+        ]
         assert passage, "empty reconstructed passage"
         assert set(passage) <= _POS_TAGS, passage[:10]
 
@@ -530,9 +535,11 @@ class TestBulkExportFlow:
         pool = _trial_ids(at)
         assert len(pool) == DEMO_TRIALS_IN_PICKER // 2
 
-        # Figures off (PDF is the default and needs Kaleido/Chrome); one table.
+        # Figures off (PDF is the default and needs Kaleido/Chrome); one table;
+        # one screen of each trial, so each trial is one unit of the build.
         at.pills(key="bulk_export_figfmts").set_value([])
         at.pills(key="bulk_export_tabular").set_value(["Fixations"])
+        at.multiselect(key="bulk_export_screens").set_value(["Paragraph"])
         # Word boxes on, so the figure settings threaded into the export are
         # demonstrably the live ones rather than a default snapshot. (Their own
         # rail section's switch, not 📄 Stimulus.)
@@ -557,6 +564,17 @@ class TestBulkExportFlow:
         assert options.export_unfiltered is False
 
         # The demo's column-name map travels with its tables.
+        # A screen's files sit in a folder named by its position in the trial
+        # and its id. The Paragraph follows the title on an article's first
+        # paragraph, and the question preview on every paragraph.
+        raw_fix = load_sample_data()[1]
+        paragraphs = raw_fix[raw_fix["part"] == "Paragraph"]
+        position = paragraphs.groupby("unique_trial_id")["screen_index"].first()
+
+        def folder(trial: str) -> str:
+            screen = f"screen-{int(position[trial]):03d}-Paragraph"
+            return f"per_trial/l7_183__{trial}/screens/{screen}"
+
         expected = {
             "README.md",
             "CITATION.bib",
@@ -565,30 +583,30 @@ class TestBulkExportFlow:
             "read_csv.R",
         }
         for trial in pool:
-            expected.add(f"per_trial/l7_183__{trial}/fixations.csv")
-            expected.add(f"per_trial/l7_183__{trial}/plot_config.json")
+            expected.add(f"{folder(trial)}/fixations.csv")
+            expected.add(f"{folder(trial)}/plot_config.json")
         assert self._zip_names(zip_bytes) == expected
 
         # The per-trial config identifies its own trial, and records the live
         # word-box toggle in the file itself (not just in the call kwargs).
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            cfg = json.loads(zf.read(f"per_trial/l7_183__{pool[0]}/plot_config.json"))
+            cfg = json.loads(zf.read(f"{folder(pool[0])}/plot_config.json"))
             fix_csv = pd.read_csv(
-                io.BytesIO(zf.read(f"per_trial/l7_183__{pool[0]}/fixations.csv"))
+                io.BytesIO(zf.read(f"{folder(pool[0])}/fixations.csv"))
             )
         assert cfg["selection"]["participant_id"] == "l7_183"
         assert cfg["selection"]["trial_id"] == pool[0]
         assert cfg["layers"]["words"] is True
 
-        # Each per-trial table holds that trial's fixations and nothing else.
-        # Expectation comes from the bundled CSV, not from the app's own frames.
-        raw_fix = load_sample_data()[1]
-        expected_rows = int(
-            (
-                (raw_fix["participant_id"] == "l7_183")
-                & (raw_fix["unique_trial_id"] == pool[0])
-            ).sum()
+        # Each per-trial table holds that trial's fixations on that screen and
+        # nothing else. Expectation comes from the bundled CSV, not from the
+        # app's own frames.
+        on_screen = (
+            (raw_fix["participant_id"] == "l7_183")
+            & (raw_fix["unique_trial_id"] == pool[0])
+            & (raw_fix["part"] == "Paragraph")
         )
+        expected_rows = int(on_screen.sum())
         assert expected_rows > 0
         assert len(fix_csv) == expected_rows
         assert set(fix_csv["participant_id"].unique()) == {"l7_183"}
@@ -596,11 +614,7 @@ class TestBulkExportFlow:
         # `unique_trial_id` and the duration `CURRENT_FIX_DURATION`.
         assert set(fix_csv["unique_trial_id"].unique()) == {pool[0]}
         assert sorted(fix_csv["CURRENT_FIX_DURATION"]) == sorted(
-            raw_fix.loc[
-                (raw_fix["participant_id"] == "l7_183")
-                & (raw_fix["unique_trial_id"] == pool[0]),
-                "CURRENT_FIX_DURATION",
-            ]
+            raw_fix.loc[on_screen, "CURRENT_FIX_DURATION"]
         )
 
         # The rendered download button is the real delivery path — and it is
@@ -695,6 +709,7 @@ class TestBulkExportFlow:
         at = _boot(subtab=SUBTAB_EXPORT)
         at.radio(key="bulk_export_scope").set_value("This trial")
         at.pills(key="bulk_export_figfmts").set_value(["HTML", "SVG"])
+        at.multiselect(key="bulk_export_screens").set_value(["Paragraph"])
         at.run(timeout=60)
         _clean(at, "after picking HTML + SVG:")
         captions = " ".join(str(c.value) for c in at.caption)
@@ -812,6 +827,7 @@ class TestBulkExportFlow:
         at = _boot(subtab=SUBTAB_EXPORT)
         at.radio(key="bulk_export_scope").set_value("This trial")
         at.pills(key="bulk_export_figfmts").set_value(["PNG", "HTML"])
+        at.multiselect(key="bulk_export_screens").set_value(["Paragraph"])
         at.run(timeout=60)
         _clean(at, "after picking PNG + HTML:")
         warnings = " ".join(str(w.value) for w in at.warning)

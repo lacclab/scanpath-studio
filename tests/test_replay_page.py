@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 from plotly.io.json import to_json_plotly
 
-from scanpath_studio import api, tabs
+from scanpath_studio import api, data, tabs
 from scanpath_studio.plots import (
     _CONTROLS_MARGIN_PX,
     _CONTROLS_SAFETY_PX,
@@ -40,7 +40,20 @@ LONGEST = ("l7_183", "l7_183_2_1_5_Adv")
 
 @functools.cache
 def _demo():
-    return api.load_sample_data(names="canonical")
+    """The demo's paragraph screens as single-screen tables, on the demo's
+    recorded screen: each replay plays a whole paragraph, its fixations
+    numbered from the paragraph's first, as `fix_index_range` below counts."""
+    recorded = api.load_sample_data(names="canonical")[0].attrs
+    words, fixations = api.load_scanpath_data(
+        *(
+            table[table["part"] == "Paragraph"].drop(columns=["part", "screen_index"])
+            for table in data.read_sample_tables()
+        ),
+        names="canonical",
+    )
+    for frame in (words, fixations):
+        frame.attrs.update(recorded)
+    return words, fixations
 
 
 @functools.cache

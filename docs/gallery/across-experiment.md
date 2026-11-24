@@ -8,8 +8,8 @@ hide:
 
 # Across the experiment
 
-Mean total fixation duration per word across one participant’s trials in the
-bundled demo. Each point is one trial. The bundled demo holds only part of the
+Mean total fixation duration per paragraph word across one participant’s
+trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the
 session.
 
 ```python exec="true" html="true"

@@ -29,6 +29,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Fixations | Full → Layers → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
 | Saccades | Full → Layers → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |
 | Stimulus image | Full → Layers → **Stimulus** | `global_show_stimulus` | Page image behind the words at its offset / scale / opacity |
+| Demo screens | Bundled demo → **Screen** picker, any trial | `?source=demo&trial_id=…&screen=Answers&show_stimulus_image=1` | Each of a demo trial's screens (Title on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers, Feedback) draws the experiment's own image with every word's text inside its box; a demo link naming no screen opens the Paragraph |
 | Word underlines | Full → Layers → Stimulus → Word highlights → Style → Underline | `global_critical_span_style` | Each flagged word has its own underline in the text color. |
 | Word boxes | Full → Layers → **Word boxes** | `global_show_words` | Boxes exactly as the data gave them (`x .. x + width`) |
 | Heatmap | Full → Layers → **Heatmap** | `global_show_heatmap` | Word-level shading on its own colour bar |

@@ -1342,7 +1342,9 @@ def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """Load the bundled demo, normalized and ready to plot.
 
     The bundled demo is a subset of OneStop: two participants, twelve trials each, every
-    one with fixations. The frames carry the
+    one with fixations. Each trial has the screens its reader saw (``screen_id``: Title
+    on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers,
+    Feedback), each with the experiment's stimulus image. The frames carry the
     demo's recorded screen (OneStop's 2560×1440), so ``plot_scanpath`` draws them on it
     without a ``canvas_size``, as ``scanpath-studio render --sample`` does.
 
@@ -1448,7 +1450,8 @@ def load_raw_gaze(
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     """Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-    The table includes each sample during paragraph reading, with screen x/y in
+    The table includes each sample while each screen of a reading was shown,
+    with the screen it belongs to (``part`` / ``screen_index``), screen x/y in
     pixels, the tracked eye and pupil area in the tracker's units. Timestamps
     are milliseconds from trial recording start on the fixation report's clock.
     Samples with missing positions keep their timestamps; their pupil value is

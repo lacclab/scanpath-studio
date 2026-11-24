@@ -29,7 +29,7 @@ If you mistype a command, the CLI suggests the closest match.
 Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```bash
-scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio render --sample --screen Paragraph --width-mm 85 -o reading.publication.json
 scanpath-studio publication reading.publication.json -o reading.html
 scanpath-studio publication figure-2.json -o figure-2.pdf
 ```
@@ -77,8 +77,8 @@ has a flag.
 # List the trials to pick from
 scanpath-studio render --sample --list-trials
 
-# The bundled demo
-scanpath-studio render --sample -o scanpath.html
+# The bundled demo: each reading has several screens, so name the one to draw
+scanpath-studio render --sample --screen Paragraph -o scanpath.html
 
 # Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
@@ -133,22 +133,22 @@ at the last colon.
 
 ```bash
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -234,7 +234,7 @@ dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples
 for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```bash
-scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 

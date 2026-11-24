@@ -507,8 +507,17 @@ class TestCoAnimationDrawsOneSecondReading:
         from scanpath_studio.utils import extract_trial
 
         words, fixations = api.load_sample_data(names="canonical")
-        expected = len(extract_trial(fixations, *self._B))
-        fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
+        reading_b = extract_trial(fixations, *self._B)
+        # Each demo reading spans several screens; both sides draw the paragraph.
+        expected = int((reading_b["screen_id"] == "Paragraph").sum())
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            *self._A,
+            screen="Paragraph",
+            trial_b=self._B,
+            screen_b="Paragraph",
+        )
         assert len(self._trace_b(fig).x) == expected
 
     def test_trial_b_is_looked_up_in_bs_own_frames(self):

@@ -689,7 +689,9 @@ def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
         *sps.load_sample_data(names="canonical"), names="canonical"
     )
     gaze = api.load_sample_raw_gaze(names="canonical")
-    extra = gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
+    # One reading's samples, screens and all, under a trial id of their own.
+    first = gaze["trial_id"].eq(gaze["trial_id"].iloc[0])
+    extra = gaze[first].assign(trial_id="samples_only", unique_trial_id="samples_only")
     at = _open_gaze_dataset(words, fixations, pd.concat([gaze, extra]))
     picker = at.selectbox(key="single_trial_id")
     picker.set_value(next(o for o in picker.options if "samples_only" in str(o)))

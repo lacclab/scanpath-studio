@@ -2244,7 +2244,7 @@ def test_check_counts_every_demo_sample_and_reports_recorded_position_gaps(capsy
     cli.main(["check", "--sample"])
     report = capsys.readouterr().out
     assert "[note] Raw-gaze samples" in report
-    assert "14,628 of 401,200 rows in 18 trials" in report
+    assert "19,043 of 640,441 rows in 18 trials" in report
 
 
 def test_check_needs_an_input():

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import scanpath_studio as sps
 from scanpath_studio import constants, plots
+from scanpath_studio import data as _data
 from scanpath_studio.api import save_figure
 
 
@@ -137,8 +138,22 @@ def replay_fig(words, fixations):
     print(f"fig_replay: 3 frames of {pid} / {tid}")
 
 
+def paragraph_demo():
+    """The bundled demo's paragraph screens, canonical, as the manuscript shows them.
+
+    The demo keeps every screen of a reading, and a multi-screen reading numbers
+    its fixations across all of them. The manuscript's figures and numbers are on
+    the paragraphs alone, each counted from its own first fixation, so the other
+    screens are left out before the tables are read."""
+    tables = (
+        frame.loc[frame["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+        for frame in _data.read_sample_tables()
+    )
+    return sps.load_scanpath_data(*tables, names="canonical")
+
+
 def main():
-    words, fixations = sps.load_sample_data(names="canonical")
+    words, fixations = paragraph_demo()
     scanpath_fig(words, fixations)
     comparison_fig(words, fixations)
     replay_fig(words, fixations)

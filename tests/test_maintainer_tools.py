@@ -85,13 +85,25 @@ def test_paper_validation_uses_geometry_even_with_mapped_fixation_ids(
     reader, trial = next(
         iter(api.list_trials(words, fix).itertuples(index=False, name=None))
     )
-    words = words[(words["participant_id"] == reader) & (words["trial_id"] == trial)]
-    fix = fix[(fix["participant_id"] == reader) & (fix["trial_id"] == trial)]
+    # `paper_stats` keys words by reader, trial and word ID, which name one word
+    # only within a screen, so this validates the reading's Paragraph screen.
+    words, fix = (
+        frame[
+            (frame["participant_id"] == reader)
+            & (frame["trial_id"] == trial)
+            & (frame["screen_id"] == "Paragraph")
+        ]
+        for frame in (words, fix)
+    )
     reference = api.compute_word_metrics(words, fix)
     from scanpath_studio import data
 
     raw = data.read_table(Path(data.__file__).parent / "sample_data/ia.csv")
-    raw = raw[(raw["participant_id"] == reader) & (raw["unique_trial_id"] == trial)]
+    raw = raw[
+        (raw["participant_id"] == reader)
+        & (raw["unique_trial_id"] == trial)
+        & (raw["part"] == "Paragraph")
+    ]
     paper_stats.validate(words, fix.assign(word_id=0), reference, raw, "geometry")
     out = capsys.readouterr().out
     assert "n=0 words" not in out and "r=nan" not in out

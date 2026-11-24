@@ -52,7 +52,10 @@ COLOURED = {
 
 @pytest.fixture(scope="module")
 def demo():
-    return sps.load_sample_data(names="canonical")
+    """The demo's paragraph screens, so a trial's frames are the one screen its
+    figure draws, as in the rail below."""
+    words, fixations = sps.load_sample_data(names="canonical")
+    return tuple(f[f["screen_id"] == "Paragraph"] for f in (words, fixations))
 
 
 def _trial_frames(words, fixations, trial):
@@ -84,7 +87,8 @@ def two_trials(demo):
 
 
 def _rail_app():
-    """Apply any deep link, render the real rail for one trial, and publish."""
+    """Apply any deep link, render the real rail for one trial's paragraph
+    screen, and publish."""
     from urllib.parse import parse_qs
 
     import streamlit as st
@@ -97,7 +101,10 @@ def _rail_app():
     if design:
         controls._apply_view_preset(design)  # a button on_click: runs first
     _apply_url_preset()  # app.main's order: the link, then the widgets
-    words, fixations = api.load_sample_data(names="canonical")
+    words, fixations = (
+        frame[frame["screen_id"] == "Paragraph"]
+        for frame in api.load_sample_data(names="canonical")
+    )
     pid, tid = st.session_state["_trial"]
     trial_fix = fixations[
         (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)

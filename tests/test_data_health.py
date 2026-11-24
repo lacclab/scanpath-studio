@@ -135,10 +135,13 @@ class TestChecks:
         assert all("stay in" in f.consequence for f in findings)
 
     def test_the_bundled_demo_reports_its_recorded_gaze_gaps(self):
-        words, fixations = api.load_sample_data()
+        """Besides its gaze gaps, the demo holds one fixation the report cuts to
+        0 ms: it starts as the interest period of its Answers screen ends."""
+        words, fixations = api.load_sample_data(names="canonical")
         findings = check_data_health(words, fixations, api.load_sample_raw_gaze())
         assert [(f.check, f.severity, f.rows) for f in findings] == [
-            ("raw_gaze_position", "note", 14_628),
+            ("fixation_duration", "warning", 1),
+            ("raw_gaze_position", "note", 19_043),
         ]
 
     def test_a_table_without_the_columns_is_not_checked(self):
@@ -159,7 +162,10 @@ class TestApi:
 
     def test_clean_data_gives_an_empty_table_with_its_columns(self):
         words, fixations = api.load_sample_data()
-        table = api.check_data_health(words, fixations)
+        paragraph = [
+            frame[frame["part"] == "Paragraph"] for frame in (words, fixations)
+        ]
+        table = api.check_data_health(*paragraph)
         assert table.empty
         assert {"table", "check", "rows", "what_happens"} <= set(table.columns)
 

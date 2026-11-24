@@ -39,9 +39,10 @@ Bundled demo corpus (scanpath_studio/sample_data/)
     and the interest-area measures in ia.*) are released under the
     Creative Commons Attribution 4.0 International License,
     https://creativecommons.org/licenses/by/4.0/.
-  - The textual materials — the passage words, titles and questions in ia.*,
-    the passage text in images/manifest.csv, and the rendered passage images
-    in images/*.png — come from OneStopQA and are provided under the Creative
+  - The textual materials — the passage words, titles, questions and answers
+    in ia.*, and the experiment's screen images in images/*.png (whose
+    provenance images/manifest.csv records) — come from OneStopQA and are
+    provided under the Creative
     Commons Attribution-ShareAlike 4.0 International License,
     https://github.com/berzak/onestop-qa/blob/master/LICENSE.md.
 

@@ -826,9 +826,12 @@ def test_list_trials_lists_each_trial_any_table_has_once(raw_gaze):
 
 @pytest.fixture(scope="module")
 def two_screen_raw_gaze(raw_gaze) -> pd.DataFrame:
+    """The extract split over two screens. The demo's samples carry their own
+    screen, so both the screen and its position are rewritten together."""
     half = len(raw_gaze) // 2
     screens = ["s1"] * half + ["s2"] * (len(raw_gaze) - half)
-    return raw_gaze.assign(screen_id=screens)
+    positions = [1] * half + [2] * (len(raw_gaze) - half)
+    return raw_gaze.assign(screen_id=screens, screen_index=positions)
 
 
 def test_multipart_samples_draw_one_screen_at_a_time(two_screen_raw_gaze):

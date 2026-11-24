@@ -1316,9 +1316,7 @@ class TestDatasetTable:
         assert any(
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
-        assert any(
-            "EyeLink recordings for all 24 paragraph readings" in c for c in captions
-        )
+        assert any("EyeLink recordings for every screen" in c for c in captions)
         assert all("Fixation positions are reconstructed" not in c for c in captions)
         assert any("belong to the bundled demo" in msg.value for msg in at.info)
         # What an *About this dataset* popover would write (its own label is
@@ -2543,10 +2541,29 @@ class TestSampleReading:
         assert at.session_state["_tutorial_context"]["n_trials"] > 0
         assert not at.session_state["single_animate"]
 
-    def test_a_words_only_demo_reading_cannot_start_or_continue_the_replay(self):
+    def test_a_words_only_demo_reading_cannot_start_or_continue_the_replay(
+        self, monkeypatch
+    ):
+        """Mapping the fixations' Participant ID to another column leaves every
+        demo reading with words and no fixations. A multi-screen dataset refuses
+        a screen that one table lacks, so the demo here is its Paragraph screens
+        read as single-screen data, without raw gaze."""
+        import pandas as pd
+
+        from scanpath_studio import app, data
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
         from scanpath_studio.utils import reading_key
         from tests.conftest import edit_builtin_mapping
+
+        screen_columns = ["part", "screen_index"]
+        paragraphs = tuple(
+            frame[frame["part"].eq("Paragraph")].drop(columns=screen_columns)
+            for frame in data.load_sample_data()
+        )
+        monkeypatch.setattr(app, "load_sample_data", lambda: paragraphs)
+        monkeypatch.setattr(
+            app, "normalized_sample_raw_gaze", lambda: (pd.DataFrame(), None, ())
+        )
 
         at = _make_apptest().run(timeout=45)
         selection = at.session_state["_share_selection"]
@@ -3356,10 +3373,9 @@ class TestCorpusAnalysisTab:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         keys = {s.key for s in at.selectbox}
         assert view_key in keys, f"{view_key} view selector not found"
-        # The Screen picker is offered only by a multipart corpus. The demo
-        # has no `screen_id`, so it must not appear — every single-screen
-        # dataset is left as it is.
-        assert "ptext_screen" not in keys
+        # The Screen picker is offered only by a multipart corpus, and only
+        # in Per text. The demo keeps every screen of each reading.
+        assert ("ptext_screen" in keys) == (subtab == "Per text")
 
     def test_per_text_opens_on_the_scanpath_trials_text(self):
         """Per text opens on the text of the trial the user has open in

@@ -132,14 +132,19 @@ def test_presets_reset_and_edits_round_trip_on_the_current_trial():
 
 
 def test_navigating_trials_drops_only_the_local_fixation_window_edit():
-    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
+    # The Paragraph screen has room for an eight-fixation window. Its
+    # fixations are numbered after the earlier screens' in the reading.
+    at.query_params["screen"] = "Paragraph"
+    at.run()
     at.checkbox(key="global_show_order").check().run()
     window = next(s for s in at.slider if s.label == "Fixation index range")
-    window.set_range(5, 12).run()
+    picked = (window.min + 4, window.min + 11)
+    window.set_range(*picked).run()
     _click(at, "viz_undo")
     assert not at.session_state["single_fix_range_user_set"]
     _click(at, "viz_redo")
-    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    assert tuple(at.session_state["single_fix_range"]) == picked
     _click(at, "single_next_trial")
     _click(at, "viz_undo")
     assert not at.checkbox(key="global_show_order").value
@@ -163,8 +168,10 @@ def test_compare_and_animate_accept_an_edit_immediately_after_undo():
 
 def test_linked_axes_and_window_survive_undo_and_a_reset_round_trip():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    # The window lies within the eight fixations of the first reading's
+    # first screen, its title.
     at.query_params.update(
-        x_field="order_in_trial", y_field="@elapsed_seconds", fix_range="2,12"
+        x_field="order_in_trial", y_field="@elapsed_seconds", fix_range="2,6"
     )
     at.run()
     link = dict(at.query_params)
@@ -176,7 +183,7 @@ def test_linked_axes_and_window_survive_undo_and_a_reset_round_trip():
     assert "x_field" not in at.query_params
     _click(at, "viz_undo")
     assert dict(at.query_params) == link
-    assert tuple(at.session_state["single_fix_range"]) == (2, 12)
+    assert tuple(at.session_state["single_fix_range"]) == (2, 6)
     _click(at, "viz_redo")
     assert "x_field" not in at.query_params
     assert _axis_pair(at) == ("x", "y")

@@ -2874,6 +2874,7 @@ def _resolve_compare_source(
         return None, ""
     if not ready_by_name.get(chosen, False):
         _abandon_compare_task()
+        _forget_compare_narrowing()
         return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
     if loading_slot is None:
         source = load_secondary_dataset(chosen)
@@ -8370,6 +8371,9 @@ def render_single_trial_tab(
                         viz_settings.get("color_by"), fixations_all
                     ),
                 )
+        else:
+            # Closed, the subtab keeps no copy of its matches.
+            forget_frame_cache("comparison_matches")
 
     # Absent entirely while drift correction is gated off.
     with tab_align if tab_align is not None else contextlib.nullcontext():

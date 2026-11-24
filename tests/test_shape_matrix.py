@@ -20,6 +20,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -372,7 +373,10 @@ def _expected_overview(shape: Shape) -> dict[str, tuple]:
     columns name, however many screens it spans."""
     words = shape.words
     dwell = pd.to_numeric(words[shape.dwell], errors="coerce")
+    dwell = dwell.where(np.isfinite(dwell))
     per_reading = dwell.groupby([words[c] for c in shape.reading_columns]).mean()
+    # A reading with no finite dwell has no mean, and the overview counts it out.
+    per_reading = per_reading.dropna()
     return {
         str(participant): (len(means), means.mean(), means.min(), means.max())
         for participant, means in per_reading.groupby(level=0)

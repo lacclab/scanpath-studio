@@ -30,11 +30,15 @@ cheaper than a reviewer and never forgets.
    **Check:** `PLOT_CONFIG_SCHEMA` bumped, a migration registered, and the
    migration leaves an annotations-only file without plot sections.
    **Why:** BUG-73 (an annotations backup reset the figure); v6→v7, v7→v8.
-3. **Trigger:** code writes a widget key it computes at run time (a loop
-   over keys, a key built from data) that may live inside a popover.
-   **Check:** it goes through `controls.write_through`. A key the source names
-   (a literal, a constant, an f-string) is checked by
-   `tests/test_popover_writes.py`.
+3. **Trigger:** code writes a widget key that lives inside a popover, or a
+   popover widget gains an `on_change` while its key is also written
+   elsewhere.
+   **Check:** the write goes through `controls.write_through`, and the
+   callback cannot act on a closed popover's stale echo
+   (`controls.shadow_widget_key`). `tests/test_popover_writes.py` catches
+   plain assignments whose key the source names. Writes through a helper
+   (`url_state._RestoreContext.put`), loops over keys, and callbacks are
+   still this item's.
    **Why:** #485 / #522 (a layer switch flipped back after a design preset).
 4. **Trigger:** a new `st.*` element drawn *conditionally* above `sps_view`
    (a warning, markdown, an iframe).

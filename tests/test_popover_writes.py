@@ -5,13 +5,17 @@ popover is open. Once it has been open, the browser sends back the value it
 last showed on every rerun, so a one-off write made while the popover is closed
 holds for one run and then snaps back (`controls.write_through`). A plain
 write is safe only when the script repeats it on every run before the widget
-draws, or when the widget is mounted as the write lands.
+draws, or when the widget is mounted as the write lands — and, for a widget
+with an ``on_change``, only when that callback cannot act on the echo: the
+browser's old value differs from the one the server wrote, so Streamlit runs
+the callback before the script re-derives anything.
 
-Which keys live in a popover is read from the running app, in the states that
-draw the rail's popovers. Every write to session state whose key the source
-names — a literal, a module constant, or an f-string pattern — is checked
-against them. A write with a key computed at run time names none, and stays a
-reviewer's check (REVIEW.md).
+Which keys live in a popover is read from the running app, in every view,
+subtab and mode that draws a popover. Every plain assignment to session state
+whose key the source names — a literal, a module constant, or an f-string
+pattern — is checked against them. A write through a helper's argument
+(`url_state._RestoreContext.put`), a loop over keys, or a key computed at run
+time names none here, and stays a reviewer's check (REVIEW.md).
 """
 
 from __future__ import annotations
@@ -27,17 +31,54 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import scanpath_studio
-from scanpath_studio.constants import _VIEW_SCANPATH
+from scanpath_studio.constants import (
+    _VIEW_CORPUS,
+    _VIEW_DATA,
+    _VIEW_SCANPATH,
+    DATA_INSPECTION_KEY,
+)
+from scanpath_studio.session_keys import CORPUS_SUBTAB
 from tests.conftest import APP_SCRIPT, pin_view
 
-#: The app states whose popovers are read: the static plot in both modes, the
-#: replay, and Compare, which adds each reading's own controls.
-_STATES = {
-    "static": ({}, "full"),
-    "essentials": ({}, "essentials"),
-    "replay": ({"single_animate": True}, "full"),
-    "compare": ({"single_compare_toggle": True}, "full"),
-}
+_ANIMATE = {"single_animate": True}
+_COMPARE = {"single_compare_toggle": True}
+
+
+def _states() -> list[tuple[str, dict, str]]:
+    """``(view, state, ui)`` for every view, subtab and mode that draws a
+    popover: the plot alone, replayed and compared, in both modes; each
+    Scanpath subtab; each Corpus Analysis subtab; each Data page panel."""
+    from scanpath_studio.tabs import subtab_labels_for
+
+    states = [
+        (_VIEW_SCANPATH, state, ui)
+        for ui in ("full", "essentials")
+        for state in ({}, _ANIMATE, _COMPARE)
+    ]
+    states += [
+        (_VIEW_SCANPATH, _COMPARE | _ANIMATE, "full"),
+        (_VIEW_SCANPATH, _COMPARE | {"global_show_raw_gaze": True}, "full"),
+    ]
+    states += [
+        (_VIEW_SCANPATH, {"single_subtab": label}, "full")
+        for label in subtab_labels_for(False, line_assignment=True)
+    ]
+    states += [
+        (_VIEW_CORPUS, {CORPUS_SUBTAB: name}, "full")
+        for name in (
+            "Overview",
+            "Per text",
+            "Per participant",
+            "Groups",
+            "Per sentence",
+        )
+    ]
+    states += [
+        (_VIEW_DATA, {DATA_INSPECTION_KEY: name}, "full")
+        for name in ("Overview", "Tables", "Data checks", "Annotations")
+    ]
+    return states
+
 
 #: Plain writes to a popover key: ``module.function`` → the keys it writes,
 #: and why the browser's echo cannot undo them.
@@ -63,13 +104,19 @@ ALLOWED = {
         "browser has no value of its own to send back",
     ),
     "controls.render_plot_controls": (
-        {
-            "global_saccade_style",
-            "global_highlight_span_on",
-            "global_highlight_span_mode",
-        },
-        "heals an invalid saccade style, and derives the span switch and mode "
-        "from the canonical span style, on every run before those widgets draw",
+        {"global_saccade_style"},
+        "heals an invalid saccade style on every run before its control draws; "
+        "an echo can only send a valid one, and the control has no callback",
+    ),
+    "controls._render_view_controls": (
+        {"global_palette"},
+        "derives the palette from the colours on every run, on the Scanpath "
+        "view, where the palette is a row of tiles and no widget holds this key",
+    ),
+    "controls._on_palette_change": (
+        {"global_palette"},
+        "a palette tile's callback, on the Scanpath view, where no widget holds "
+        "this key; the colours it applies go through `write_through`",
     ),
     "plot_navigation._open_setting": (
         {"plot_filter_readings"},
@@ -79,19 +126,54 @@ ALLOWED = {
     "tabs._render_compare_selector": (
         {"single_compare_order"},
         "heals a sort order the options no longer offer, on every run before "
-        "the sort popover draws",
-    ),
-    "tabs.render_single_trial_tab": (
-        {"global_anim_quality"},
-        "re-infers the replay quality from the frame grid on every run before "
-        "its control draws",
+        "the sort popover draws; the sort control has no callback",
     ),
     "tabs._apply_anim_quality": (
         {"plot_detail_frame_timing"},
-        "the quality control's own callback opens the frame-timing section in "
-        "the popover the user is using, which is open",
+        "opens the frame-timing section beside the quality control; whether the "
+        "user or an echo fires the callback, an open section is harmless",
+    ),
+    "tabs._clear_pool_filters": (
+        {"corpus_pool_popover"},
+        "the popover's own open state, closed by the Clear button inside it, "
+        "which is open as the click lands",
     ),
 }
+
+#: Plain writes the echo can undo, or whose widget's ``on_change`` can act on
+#: the echo before the write: bugs found in review, each with how it shows. They
+#: are listed so this check still stops new ones; fixing one leaves its entry
+#: stale, which fails below until the entry is dropped.
+ECHO_HAZARDS = {
+    "tabs.render_single_trial_tab": (
+        {"global_anim_quality"},
+        "re-inferred from the frame grid every run, but the Smoothness control's "
+        "on_change runs first on a closed popover's echo and writes the echoed "
+        "preset's grid back: Fine, then Undo to Standard, comes back as Fine "
+        "(reproduced in AppTest)",
+    ),
+    "controls.render_plot_controls": (
+        {"global_highlight_span_on", "global_highlight_span_mode"},
+        "derived from the canonical span style every run, but their callbacks "
+        "run first on an echo and write the echoed style back; a settings-file "
+        "restore, which holds nothing, then reverts",
+    ),
+    "controls.corpus_style_controls": (
+        {"global_palette"},
+        "derived every run before Corpus Analysis's palette menu, whose "
+        "on_change can act on an echo the same way (not reproduced)",
+    ),
+    "tabs._stimulus_fields": (
+        {"stimulus_span_fields", "stimulus_qa_fields"},
+        "re-seeded once when the dataset's columns change; a browser that had "
+        "the Fields menu open sends the previous dataset's columns back, which "
+        "the new dataset lacks, and the panel shows none (not browser-checked)",
+    ),
+}
+
+
+def _listed(where: str) -> set[str]:
+    return ALLOWED.get(where, (set(), ""))[0] | ECHO_HAZARDS.get(where, (set(), ""))[0]
 
 
 def _keys_in(node) -> set[str]:
@@ -109,12 +191,12 @@ def _keys_in(node) -> set[str]:
 @cache
 def _popover_keys() -> frozenset[str]:
     keys: set[str] = set()
-    for state, ui in _STATES.values():
+    for view, state, ui in _states():
         at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
         at.query_params["ui"] = ui
         for key, value in state.items():
             at.session_state[key] = value
-        pin_view(at, _VIEW_SCANPATH)
+        pin_view(at, view)
         at.run()
         at.run()
         assert not at.exception, at.exception
@@ -198,14 +280,21 @@ def _direct_writes(popover: frozenset[str]) -> dict[str, set[str]]:
     return writes
 
 
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(600)
 def test_a_write_to_a_popover_widget_holds_against_its_echo():
-    """Every plain write to a popover widget's key is listed with why the
-    browser's echo cannot undo it; any other goes through `write_through`."""
+    """Every plain write to a popover widget's key is listed: with why the
+    browser's echo cannot undo it, or as a known hazard. Any other goes
+    through `write_through`."""
+    popover = _popover_keys()
+    # A broken walk would find no keys and pass everything below.
+    assert {"global_saccade_style", "global_anim_quality"} <= popover
+    assert any(key.startswith("cmp0_") for key in popover)
+
+    writes = _direct_writes(popover)
     unlisted = {
-        where: sorted(keys - ALLOWED.get(where, (set(), ""))[0])
-        for where, keys in _direct_writes(_popover_keys()).items()
-        if keys - ALLOWED.get(where, (set(), ""))[0]
+        where: sorted(keys - _listed(where))
+        for where, keys in writes.items()
+        if keys - _listed(where)
     }
     assert not unlisted, (
         "these write a popover widget's key directly. Once its popover has "
@@ -213,22 +302,10 @@ def test_a_write_to_a_popover_widget_holds_against_its_echo():
         "the write snaps back: use `controls.write_through`, or list the key in "
         f"ALLOWED with why it holds: {unlisted}"
     )
-
-
-@pytest.mark.timeout(300)
-def test_every_listed_write_still_happens():
-    writes = _direct_writes(_popover_keys())
     stale = sorted(
         f"{where} {sorted(keys - writes.get(where, set()))}"
-        for where, (keys, _why) in ALLOWED.items()
+        for listing in (ALLOWED, ECHO_HAZARDS)
+        for where, (keys, _why) in listing.items()
         if keys - writes.get(where, set())
     )
-    assert not stale, f"no longer written directly; drop from ALLOWED: {stale}"
-
-
-@pytest.mark.timeout(300)
-def test_the_rail_popovers_are_read():
-    """A broken walk would find no keys and pass everything above."""
-    keys = _popover_keys()
-    assert {"global_saccade_style", "global_anim_quality"} <= keys
-    assert any(key.startswith("cmp0_") for key in keys)
+    assert not stale, f"no longer written directly; drop the entry: {stale}"

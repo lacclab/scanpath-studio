@@ -554,5 +554,8 @@ def test_drawing_the_kept_matches_leaves_them_as_they_were():
     at.run()
     at.run()
     assert not at.exception, at.exception
+    # The same matches were handed out again: a miss would build new ones and
+    # leave these untouched however they were drawn.
+    assert at.session_state[data._FRAME_CACHE_KEY]["comparison_matches"][1] is matches
     for reading, frame in before.items():
         pd.testing.assert_frame_equal(matches[reading], frame)

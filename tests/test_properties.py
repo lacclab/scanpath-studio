@@ -21,7 +21,7 @@ import pytest
 from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
 
-from scanpath_studio import data, measures, plots, url_state
+from scanpath_studio import controls, data, measures, plots, url_state
 from scanpath_studio.column_names import encode_field_list
 from scanpath_studio.constants import (
     LEGEND_ARRANGEMENTS,
@@ -894,3 +894,15 @@ def test_datasets_added_from_a_script_restore_under_their_names(names):
             for token, entry in session["_datasets"].items()
         }
         assert shown == {name.strip(): index for index, name in enumerate(names)}
+
+
+@given(
+    st.sets(st.sampled_from(controls.RAIL_SECTIONS)),
+    st.text(alphabet="abcdefghijklmnopqrstuvwxyz._", max_size=30),
+)
+def test_folded_rail_sections_round_trip_through_their_cookie(folded, junk):
+    value = controls.format_folded_sections(folded)
+    assert controls.parse_folded_sections(value) == folded
+    # Stray parts in a cookie never drop a section, nor name an unknown one.
+    assert controls.parse_folded_sections(f"{junk}.{value}") >= folded
+    assert controls.parse_folded_sections(junk) <= set(controls.RAIL_SECTIONS)

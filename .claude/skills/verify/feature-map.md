@@ -44,7 +44,8 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Comparison charts and span borders | Full → Figure & canvas → Axis preset, Stimulus → Highlight words | `global_x_field`, `global_show_fix`, `single_fix_range`, `single_compare_stimulus` | Hiding markers keeps an index–position sequence visible within its window. Panels share their ranges. A co-replay with stimulus B outlines B’s selected words. |
 | Compare readings | Below the palette tiles | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
-| Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
+| Undo and Redo | Full → foot of Plot controls, beside Reset | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
+| Fold Presets / Palette / Modes / Customize | Chevron beside each rail label | `rail_view_fold`, `rail_palette_fold`, `rail_modes_fold`, `rail_customize_fold` (`_rail_folded_sections`, kept in the `sps_rail_folded` cookie) | Fold, reload the page: still folded; tiles hidden, the label names the current pick (a saved design by name); unfold restores them |
 
 ### Subtabs under the plot
 

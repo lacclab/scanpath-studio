@@ -248,8 +248,8 @@ def _shot_mode_menu(page: Page, name: str, toggle_key: str, popover_key: str) ->
     ui.toggle(page, toggle_key)
 
 
-#: The two designs saved for the picture of My views.
-EXAMPLE_DESIGNS = ("My view 1", "My view 2")
+#: The two presets saved for the picture of My presets.
+EXAMPLE_DESIGNS = ("My preset 1", "My preset 2")
 
 
 def _save_design(page: Page, name: str) -> None:
@@ -262,7 +262,7 @@ def _save_design(page: Page, name: str) -> None:
 
 
 def _shot_designs(page: Page) -> None:
-    """View tiles, palette, and My views with two saved designs."""
+    """Preset tiles, palette, and My presets with two saved presets."""
     for name in EXAMPLE_DESIGNS:
         _save_design(page, name)
     shell = page.locator(".st-key-design_shell").first
@@ -307,7 +307,7 @@ def _shot_chips_menu(page: Page) -> None:
 
 
 def _shot_reset(page: Page) -> None:
-    """The Undo, Redo and Reset visualization row at the foot of the rail."""
+    """The Undo, Redo and Reset row at the foot of the rail."""
     _shot_controls(page, "reset", page.locator(".st-key-plot_reset_footer").first)
 
 

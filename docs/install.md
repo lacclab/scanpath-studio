@@ -96,7 +96,7 @@ Choose a reading in the demo to explore and save as an interactive figure.
 
     Choose :material/local_fire_department: **Heatmap** to see where fixation time concentrates,
     or :material/timeline: **Scanpath** to follow the order of fixations.
-    Both tiles sit under **View** in Essentials and Full.
+    Both tiles sit under **Presets** in Essentials and Full.
 
 - **3 · Save your figure**
 

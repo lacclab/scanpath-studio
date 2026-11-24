@@ -78,7 +78,7 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "rail": (
-        ("🎬 Animation settings", "Speed and frame rate."),
+        ("🎬 Playback settings", "Speed and frame rate."),
         ("👥 Compare readings", "Two readings, overlaid or side by side."),
         (
             "🎨 Layers",
@@ -93,7 +93,7 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
             "Plot screen position, fixation order, elapsed time or another field.",
         ),
         ("🖼 Figure", "Framing, titles, hover fields and legends."),
-        ("💾 My views", "Keep your own figure designs and reuse them."),
+        ("💾 My presets", "Keep your own figure presets and reuse them."),
     ),
     "subtabs": (
         (

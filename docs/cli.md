@@ -290,7 +290,9 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 
 A mapping replaces auto-detection for that table, so it has to name every
 required field, not only the one that failed. It is the same dict
-`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python. A second
+dataset's tables in a comparison take theirs as `--compare-word-schema`,
+`--compare-fix-schema` and `--compare-raw-gaze-schema`.
 
 ## render flags
 

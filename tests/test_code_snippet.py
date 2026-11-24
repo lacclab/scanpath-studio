@@ -1878,7 +1878,11 @@ def test_the_app_publishes_an_uploaded_bs_mapping():
             "raw_gaze": pd.DataFrame(),
             "filter_fields": [],
             "composite_trial_columns": [],
-            "source_recipe": {"schemas": schemas},
+            "source_recipe": {
+                "schemas": schemas,
+                "steps": ["aggregate_char_boxes"],
+                "derived": ["session"],
+            },
         }
     }
     at.session_state["single_compare_toggle"] = True
@@ -1891,10 +1895,141 @@ def test_the_app_publishes_an_uploaded_bs_mapping():
         "word_schema": schemas["words"],
         "fix_schema": schemas["fixations"],
     }
-    cli_line = _one_line(cs.reproduction_code(DEMO, state).cli)
+    code = cs.reproduction_code(DEMO, state)
+    cli_line = _one_line(code.cli)
     assert """--compare-word-schema '{"participant":"Reader","trial":"Item"}'""" in (
         cli_line
     )
+    # What B's add did that its mapping can't repeat is said, as it is for A.
+    note = next(n for n in code.caveats if "second dataset" in n)
+    assert "About `Pilot`:" in note
+    assert cs.UPLOAD_STEP_NOTES["aggregate_char_boxes"] in note
+    assert "`session`, made from the file names" in note
+
+
+def test_a_session_set_b_says_how_to_load_it(monkeypatch):
+    """B's recipe loads two tables, which a session set is not."""
+    import streamlit as st
+
+    monkeypatch.setattr(
+        st,
+        "session_state",
+        {"_datasets": {"Set": {"source_recipe": {"multipleye": {"root": None}}}}},
+    )
+    schemas, caveats = url_state.second_dataset_load("Set")
+    assert schemas == {}
+    assert "MultiplEYE session set" in caveats[0]
+    assert url_state.second_dataset_load("PoTeC") == ({}, ())
+
+
+def test_bs_tables_need_a_comparison(demo_trial, tmp_path):
+    """Without `--compare-with` there is no B to load them as."""
+    _words, _fixations, participant, trial = demo_trial
+    with pytest.raises(SystemExit, match="--compare-words load scanpath B's"):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                participant,
+                "-t",
+                trial,
+                "--compare-words",
+                "b.csv",
+                "-o",
+                str(tmp_path / "a.png"),
+            ]
+        )
+
+
+def test_render_reads_bs_raw_gaze_under_its_mapping(
+    demo_trial, hand_mapped_second_dataset, tmp_path, monkeypatch
+):
+    """B's samples, their columns renamed past auto-detection, load with
+    ``--compare-raw-gaze-schema`` and draw under B's scanpath."""
+    import pandas as pd
+
+    from scanpath_studio import data
+
+    _words, _fixations, participant, trial = demo_trial
+    b_words, b_fixations, schemas = hand_mapped_second_dataset
+    gaze = pd.read_parquet(
+        cs.__file__.rsplit("/", 1)[0] + "/sample_data/raw_gaze.parquet"
+    )
+    gaze = gaze[gaze["unique_trial_id"] == trial]
+    mapped = {f: c for f, c in data.infer_raw_gaze_schema(gaze).items() if c}
+    opaque = {column: f"g{i}" for i, column in enumerate(mapped.values())}
+    gaze.rename(columns=opaque).to_parquet(tmp_path / "b_gaze.parquet")
+    gaze_schema = {field: opaque[column] for field, column in mapped.items()}
+    figures: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **_: figures.append(fig))
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            participant,
+            "-t",
+            trial,
+            "--compare-with",
+            f"{participant}:{trial}",
+            "--compare-words",
+            b_words,
+            "--compare-word-schema",
+            json.dumps(schemas["word_schema"]),
+            "--compare-fixations",
+            b_fixations,
+            "--compare-fix-schema",
+            json.dumps(schemas["fix_schema"]),
+            "--compare-raw-gaze",
+            str(tmp_path / "b_gaze.parquet"),
+            "--compare-raw-gaze-schema",
+            json.dumps(gaze_schema),
+            "--compare-layout",
+            "side-by-side",
+            "-o",
+            str(tmp_path / "cmp.html"),
+        ]
+    )
+    (fig,) = figures
+    samples = [t for t in fig.data if t.name and t.name.endswith("raw gaze")]
+    assert [len(t.x) for t in samples] == [len(gaze)]
+
+
+def test_figure_code_reads_bs_options_strictly():
+    with pytest.raises(ValueError, match="compare_source_options takes"):
+        api.figure_code(
+            kind="comparison",
+            compare=("p2", "t2"),
+            compare_source_options={"fixation_schema": {"x": "X"}},
+        )
+    # Tables alone make B a second dataset, named as render names it.
+    out = _one_line(
+        api.figure_code(
+            kind="comparison",
+            compare=("p2", "t2"),
+            compare_source_options={"words": "b.csv", "fixations": "f.csv"},
+            flavor="both",
+        )
+    )
+    assert "dataset_b='Dataset B'" in out and "--compare-words b.csv" in out
+
+
+def test_figure_code_loads_no_placeholder_for_as_samples_when_only_b_has_them():
+    out = api.figure_code(
+        kind="comparison",
+        source="files",
+        source_options={"words": "a.csv", "fixations": "f.csv"},
+        compare=("p2", "t2"),
+        compare_dataset="Pilot",
+        compare_source_options={"raw_gaze": "b_gaze.csv"},
+        show_raw_gaze=True,
+        flavor="both",
+    )
+    assert "raw_gaze_b = sps.load_raw_gaze('b_gaze.csv')" in out
+    assert "raw_gaze = sps.load_raw_gaze" not in out
+    assert "--raw-gaze raw_gaze.csv" not in _one_line(out)
+    assert "--compare-raw-gaze b_gaze.csv" in _one_line(out)
 
 
 def test_figure_code_takes_bs_screen():

@@ -4406,12 +4406,38 @@ def save_figure_layers(
     return written
 
 
-def _snippet_compare_tables(options: dict | None, dataset: str) -> dict:
-    """`CompareTarget`'s table fields from ``figure_code``'s
-    ``compare_source_options``: B's paths and mappings, beside a second dataset."""
+#: What ``figure_code``'s ``compare_source_options`` takes: B's table paths and
+#: their mappings, as ``source_options`` takes A's.
+_COMPARE_SOURCE_KEYS = (
+    "words",
+    "fixations",
+    "raw_gaze",
+    "word_schema",
+    "fix_schema",
+    "raw_gaze_schema",
+)
+
+
+def _snippet_compare_tables(
+    options: dict | None, dataset: str, *, a_has_raw_gaze: bool
+) -> tuple[str, dict]:
+    """``(dataset, fields)``: B's dataset name and `CompareTarget`'s table fields
+    from ``figure_code``'s ``compare_source_options``.
+
+    Tables given with no ``dataset`` are a second dataset all the same, named as
+    ``render --compare-words`` names it. A table left out keeps its placeholder,
+    so a mapping alone still maps it, and a raw-gaze mapping alone loads B's
+    samples from theirs. ``a_has_raw_gaze`` says whether A has samples of its own
+    to load beside B's."""
     options = dict(options or {})
-    if not (dataset and options):
-        return {}
+    if not options:
+        return dataset, {}
+    unknown = sorted(set(options) - set(_COMPARE_SOURCE_KEYS))
+    if unknown:
+        raise ValueError(
+            f"compare_source_options takes {', '.join(_COMPARE_SOURCE_KEYS)}; got "
+            f"{', '.join(map(repr, unknown))}."
+        )
 
     def paths(name: str) -> tuple[str, ...]:
         value = options.get(name) or ()
@@ -4419,17 +4445,21 @@ def _snippet_compare_tables(options: dict | None, dataset: str) -> dict:
             (str(value),) if isinstance(value, (str, Path)) else tuple(map(str, value))
         )
 
-    raw_gaze = paths("raw_gaze")
-    return {
+    fields: dict = {
         "words": paths("words"),
         "fixations": paths("fixations"),
-        **({"raw_gaze": raw_gaze} if raw_gaze else {}),
         "schemas": {
             option: dict(options[option])
             for option in ("word_schema", "fix_schema", "raw_gaze_schema")
             if options.get(option)
         },
     }
+    if options.get("raw_gaze") or options.get("raw_gaze_schema"):
+        fields["raw_gaze"] = paths("raw_gaze")  # () keeps B's placeholder
+        fields["primary_raw_gaze"] = a_has_raw_gaze
+    from .code_snippet import DEFAULT_DATASET_B
+
+    return dataset or DEFAULT_DATASET_B, fields
 
 
 def figure_code(
@@ -4507,11 +4537,12 @@ def figure_code(
             across datasets needs.
         compare_labels: The two trace labels, when they are not the composed defaults:
             ``labels=`` and ``--label-a`` / ``--label-b``.
-        compare_source_options: With ``compare_dataset``, how B's tables load, as
+        compare_source_options: How B's tables load when B is a second dataset, as
             ``source_options`` says it for A's files: ``"words"`` / ``"fixations"``
             / ``"raw_gaze"`` paths in place of the placeholders, and
             ``"word_schema"`` / ``"fix_schema"`` / ``"raw_gaze_schema"`` mappings
-            (``--compare-word-schema`` and its siblings).
+            (``--compare-word-schema`` and its siblings). Without
+            ``compare_dataset``, B is named ``"Dataset B"``, as ``render`` names it.
         canvas_size: The monitor size. Defaults to the screen ``render`` assumes for the
             source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the
             same figure.
@@ -4547,7 +4578,8 @@ def figure_code(
             ``render --print-code`` writes to stderr say it.
 
     Raises:
-        ValueError: An unknown ``flavor``.
+        ValueError: An unknown ``flavor``, or a key ``compare_source_options`` does
+            not take.
         TypeError: An option the builder does not take.
 
     Examples:
@@ -4570,6 +4602,11 @@ def figure_code(
         figure_overrides,
         set(figure_options(kind)) | {"palette"},
         "figure_code",
+    )
+    compare_dataset, compare_tables = _snippet_compare_tables(
+        compare_source_options,
+        compare_dataset,
+        a_has_raw_gaze=source == "demo" or bool((source_options or {}).get("raw_gaze")),
     )
     if canvas_size is None:
         # `render` snaps these sources to their recorded screen while
@@ -4617,7 +4654,7 @@ def figure_code(
                     if compare_labels
                     else None
                 ),
-                **_snippet_compare_tables(compare_source_options, compare_dataset),
+                **compare_tables,
             )
             if compare is not None
             else None

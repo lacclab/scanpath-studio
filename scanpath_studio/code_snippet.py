@@ -434,7 +434,6 @@ def upload_source(
     if isinstance(multipleye := recipe.get("multipleye"), dict):
         return multipleye_source(label, multipleye, edited=bool(recipe.get("schemas")))
     schemas = recipe.get("schemas") if isinstance(recipe.get("schemas"), dict) else {}
-    steps = [str(s) for s in recipe.get("steps") or ()]
     notes = [
         "This dataset was added in the app, so the snippet can't name its files. "
         "Replace "
@@ -449,7 +448,35 @@ def upload_source(
         + " with your files (or a list of files, if you added several). "
         "The snippet includes the dataset's column mapping."
     ]
-    notes += [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
+    notes += upload_caveats(recipe)
+    options: dict = {
+        "words": UPLOAD_WORDS_PLACEHOLDER if words else None,
+        "fixations": UPLOAD_FIXATIONS_PLACEHOLDER if fixations else None,
+    }
+    for table, option in (
+        ("words", "word_schema"),
+        ("fixations", "fix_schema"),
+        ("raw_gaze", "raw_gaze_schema"),
+    ):
+        schema = schemas.get(table)
+        if isinstance(schema, dict) and schema:
+            options[option] = _compact_schema(schema)
+    return SnippetSource(
+        kind=SOURCE_UPLOAD,
+        label=label,
+        options=options,
+        note=" ".join(n.strip() for n in notes if n.strip()),
+    )
+
+
+def upload_caveats(recipe: dict | None) -> list[str]:
+    """What adding a dataset did that loading its files with its mapping does
+    not repeat: the add's own ``steps``, columns ``derived`` from the file
+    names, and fields an edit left ``unresolved``. Said of "this dataset", for
+    A's snippet and, prefixed, for a second dataset's B."""
+    recipe = recipe if isinstance(recipe, dict) else {}
+    steps = [str(s) for s in recipe.get("steps") or ()]
+    notes = [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
     if derived := [str(c) for c in recipe.get("derived") or ()]:
         notes.append(
             "It maps "
@@ -473,24 +500,7 @@ def upload_source(
             + ("those fields" if len(unresolved) > 1 else "that field")
             + " before running it."
         )
-    options: dict = {
-        "words": UPLOAD_WORDS_PLACEHOLDER if words else None,
-        "fixations": UPLOAD_FIXATIONS_PLACEHOLDER if fixations else None,
-    }
-    for table, option in (
-        ("words", "word_schema"),
-        ("fixations", "fix_schema"),
-        ("raw_gaze", "raw_gaze_schema"),
-    ):
-        schema = schemas.get(table)
-        if isinstance(schema, dict) and schema:
-            options[option] = _compact_schema(schema)
-    return SnippetSource(
-        kind=SOURCE_UPLOAD,
-        label=label,
-        options=options,
-        note=" ".join(n.strip() for n in notes if n.strip()),
-    )
+    return notes
 
 
 def multipleye_source(
@@ -678,6 +688,10 @@ class CompareTarget:
     #: (in its own files' column names), so the recipe reads B's files as the app
     #: did. Empty when B's columns were auto-detected.
     schemas: Mapping[str, dict] = field(default_factory=dict)
+    #: Only beside a ``dataset``: what adding B's dataset did that loading its
+    #: files with ``schemas`` does not repeat (`upload_caveats`), said of "this
+    #: dataset"; the snippet's notes name it as B's.
+    caveats: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1859,7 +1873,7 @@ B_WORDS_PLACEHOLDER = "B_WORDS"
 B_FIXATIONS_PLACEHOLDER = "B_FIXATIONS"
 #: `render`'s own default for `--compare-dataset-name` (and `compare_scanpaths`'
 #: for `dataset_b=`), so the CLI half writes the flag only when it differs.
-_DEFAULT_DATASET_B = "Dataset B"
+DEFAULT_DATASET_B = "Dataset B"
 
 
 def second_dataset(state: FigureState) -> CompareTarget | None:
@@ -1934,7 +1948,7 @@ def _second_dataset_cli(compare: CompareTarget, *, explicit: bool) -> list[str]:
         argv += [flag, *paths]
         if schema := compare.schemas.get(option):
             argv += [schema_flag, json.dumps(schema, separators=(",", ":"))]
-    if explicit or compare.dataset != _DEFAULT_DATASET_B:
+    if explicit or compare.dataset != DEFAULT_DATASET_B:
         argv += ["--compare-dataset-name", str(compare.dataset)]
     if compare.canvas:
         width, height = (int(v) for v in compare.canvas)
@@ -2383,6 +2397,8 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
                 "give B's screen, as `setup_b=` (`--compare-canvas` on the CLI). "
                 "Without it, B's screen is read from its data and may not match."
             )
+        if other.caveats:
+            note += f" About `{other.dataset}`: " + " ".join(other.caveats)
         notes.append(note)
     return notes
 

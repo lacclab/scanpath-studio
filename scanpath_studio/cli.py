@@ -2120,12 +2120,19 @@ def _comparison_ids(args: argparse.Namespace) -> tuple[str, str] | None:
 
 def _compare_schemas(args) -> dict[str, dict]:
     """The second dataset's column mappings, keyed as the loaders take them
-    (``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``); only those given."""
+    (``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``); only those given.
+
+    Parsed once, when ``render`` checks its flags before loading anything, and
+    kept on ``args``: a mapping can be a file, read once."""
+    cached = getattr(args, "_compare_schema_maps", None)
+    if cached is not None:
+        return cached
     schemas = {}
     for option, flag in _COMPARE_SCHEMA_FLAGS.items():
-        mapping = _parse_schema_arg(getattr(args, f"compare_{option}"), flag)
+        mapping = _parse_schema_arg(getattr(args, f"compare_{option}", None), flag)
         if mapping is not None:
             schemas[option] = mapping
+    args._compare_schema_maps = schemas
     return schemas
 
 
@@ -2991,6 +2998,23 @@ def render(argv: list[str]) -> None:
             "--compare-raw-gaze is scanpath B's raw gaze; pass --compare-with "
             "PARTICIPANT:TRIAL too."
         )
+    second_dataset_flags = [
+        flag
+        for flag, given in (
+            ("--compare-words", args.compare_words),
+            ("--compare-fixations", args.compare_fixations),
+            *(
+                (flag, getattr(args, f"compare_{option}") is not None)
+                for option, flag in _COMPARE_SCHEMA_FLAGS.items()
+            ),
+        )
+        if given
+    ]
+    if second_dataset_flags and args.compare_with is None:
+        raise SystemExit(
+            f"{', '.join(second_dataset_flags)} load scanpath B's dataset; pass "
+            "--compare-with PARTICIPANT:TRIAL too."
+        )
     if args.raw_gaze_schema is not None and not args.raw_gaze:
         raise SystemExit(
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
@@ -3005,6 +3029,7 @@ def render(argv: list[str]) -> None:
                 f"{_COMPARE_SCHEMA_FLAGS[option]} maps the {table_flag} table; "
                 f"pass {table_flag} too."
             )
+    _compare_schemas(args)  # a malformed mapping is said before anything loads
     raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
     # These describe the second scanpath of a comparison, so on their
     # own there is nothing for them to style — refused, like a lone --label-a.

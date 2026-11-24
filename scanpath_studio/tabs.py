@@ -2734,10 +2734,12 @@ def _claim_compare_task(task_key: tuple) -> None:
     st.session_state[COMPARE_TASK_KEY] = task_key
 
 
-def _second_dataset_schemas(token: str) -> dict[str, dict]:
-    from scanpath_studio.url_state import second_dataset_schemas
+def _second_dataset_load(token: str) -> dict:
+    """`CompareTarget`'s ``schemas`` and ``caveats`` for B's dataset ``token``."""
+    from scanpath_studio.url_state import second_dataset_load
 
-    return second_dataset_schemas(token)
+    schemas, caveats = second_dataset_load(token)
+    return {"schemas": schemas, "caveats": caveats}
 
 
 def _dataset_label(token: str) -> str:
@@ -7797,9 +7799,10 @@ def render_single_trial_tab(
                 ),
                 primary_raw_gaze=has_raw_gaze,
                 # An uploaded B's column mapping, so the recipe reads B's
-                # files as the app did.
-                schemas=(
-                    _second_dataset_schemas(compare_meta["dataset"])
+                # files as the app did, and what its add did that the
+                # recipe cannot repeat.
+                **(
+                    _second_dataset_load(compare_meta["dataset"])
                     if compare_meta.get("dataset")
                     else {}
                 ),

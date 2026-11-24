@@ -111,7 +111,11 @@ from .data import (
     word_ids_set_aside,
     words_with_several_boxes,
 )
-from .dataset_identity import dataset_share_id, forget_dataset_identity
+from .dataset_identity import (
+    dataset_share_id,
+    forget_dataset_identity,
+    unique_name,
+)
 from .experimental_setup import (
     FONT_CHOICES,
     FONT_PT_RANGE,
@@ -291,17 +295,15 @@ def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
     aliases = st.session_state.get(app.DATASET_ALIASES_KEY) or {}
-    existing = {
-        str(aliases.get(key) or key).casefold()
-        for key in _occupied_dataset_tokens()
-        if key != exclude and key is not None
-    }
-    base, n = name, 2
-    while name.casefold() in existing:
-        suffix = f" ({n})"
-        name = base[: DATASET_NAME_MAX_CHARS - len(suffix)].rstrip() + suffix
-        n += 1
-    return name
+    return unique_name(
+        name,
+        (
+            str(aliases.get(key) or key)
+            for key in _occupied_dataset_tokens()
+            if key != exclude and key is not None
+        ),
+        max_chars=DATASET_NAME_MAX_CHARS,
+    )
 
 
 def _new_dataset_token(label: str) -> str:

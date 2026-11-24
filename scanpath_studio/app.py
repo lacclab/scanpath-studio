@@ -406,7 +406,7 @@ from scanpath_studio.utils import (
     trial_id_layout,
 )
 
-from .dataset_identity import dataset_share_id
+from .dataset_identity import dataset_share_id, unique_name
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -5815,15 +5815,11 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     """A non-empty display name that does not duplicate another table row."""
     base = requested.strip()[:DATASET_NAME_MAX_CHARS].rstrip()
     base = base or _dataset_display_name(token)
-    used = {
-        _dataset_display_name(other).casefold() for other in tokens if other != token
-    }
-    candidate = base
-    suffix = 2
-    while candidate.casefold() in used:
-        candidate = f"{base} ({suffix})"
-        suffix += 1
-    return candidate
+    return unique_name(
+        base,
+        (_dataset_display_name(other) for other in tokens if other != token),
+        max_chars=DATASET_NAME_MAX_CHARS,
+    )
 
 
 def _overview_sentence(text: str) -> tuple[str, str]:

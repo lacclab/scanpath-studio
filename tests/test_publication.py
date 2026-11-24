@@ -188,6 +188,39 @@ def test_chromium_print_error_keeps_previous_pdf(tmp_path, monkeypatch):
     assert target.read_bytes() == b"existing PDF"
 
 
+@pytest.mark.timeout(30)
+def test_a_browser_that_stops_answering_fails_the_render(monkeypatch):
+    """A command the browser never answers ends the render with an error that
+    names it, rather than holding the export open for good."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    import choreographer
+
+    async def reply(method, params):
+        if method == "Runtime.evaluate":
+            await asyncio.Event().wait()
+        if method == "Page.getFrameTree":
+            return {"result": {"frameTree": {"frame": {"id": "main"}}}}
+        return {"result": {}}
+
+    tab = MagicMock()
+    tab.send_command = reply
+    browser = MagicMock()
+    browser.__aenter__.return_value.create_tab = AsyncMock(return_value=tab)
+    monkeypatch.setattr(choreographer, "Browser", lambda **kwargs: browser)
+    monkeypatch.setattr(
+        "scanpath_studio.animation_export.chromium_browser_path", lambda: "test-browser"
+    )
+    monkeypatch.setattr(publication, "editor_html", lambda doc: "")
+    monkeypatch.setattr(publication, "COMMAND_TIMEOUT_S", 0.05)
+    doc = sps.publication_figure(go.Figure(go.Bar(y=[1])))
+    with pytest.raises(
+        RuntimeError, match=r"stopped answering.*window\.publicationReady got no reply"
+    ):
+        publication.render(doc, "png")
+    browser.__aexit__.assert_called_once()
+
+
 def test_cli_print_width_and_source_without_words(tmp_path):
     path = tmp_path / "detail.publication.json"
     cli.main(

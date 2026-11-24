@@ -223,9 +223,11 @@ from scanpath_studio.controls import (
     has_active_trial_filters,
     leave_animation,
     metadata_readings,
+    modes_summary,
     on_animation_change,
     pin_word_heatmap_range,
     plot_popover_on_change,
+    rail_section,
     read_trial_filters,
     render_compare_filters,
     render_narrow_by,
@@ -6618,9 +6620,9 @@ def render_single_trial_tab(
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
     # built for the everything-beside-the-plot workflow. The selection menus +
-    # chips + plot + per-trial subtabs live in the left column. The narrow rail
-    # stays in page flow, so it can extend below a short plot without pushing
-    # the subtabs away from the figure.
+    # chips + plot + per-trial subtabs live in the left column. The narrow rail's
+    # column sticks and scrolls on its own (styles.py), as tall as the window,
+    # so a long rail never pushes the subtabs away from the figure.
     with st.container(key="scanpath_workspace"):
         plot_col, rail_col = st.columns([4, 1], gap="large")
     # Rail containers filled after the rail itself (B's filters).
@@ -6955,7 +6957,12 @@ def render_single_trial_tab(
         # Reserve the first block before resolving the detailed controls. Its
         # tiles need the defaults seeded by render_plot_controls further below.
         view_host = rail.container(key="rail_view_controls")
-        modes = rail.container(key="tour_grp_view_modes")
+        modes = rail_section(
+            rail.container(key="tour_grp_view_modes"),
+            "modes",
+            "Modes",
+            modes_summary(),
+        )
         with modes:
             compare_host = modes.container(key="rail_compare")
             anim_disabled = not animate
@@ -6964,7 +6971,7 @@ def render_single_trial_tab(
                 if animate
                 else f"{ICONS['warning']} This trial has no fixations to animate."
                 if animate_requested
-                else f"{ICONS['warning']} Turn on **Animation** to change playback."
+                else f"{ICONS['warning']} Turn on **Playback** to change these settings."
             )
             animation_row = ui_mode.advanced_only(modes, "rail_animation").container(
                 horizontal=True,
@@ -6974,7 +6981,7 @@ def render_single_trial_tab(
                 key="split_mode_animation",
             )
             animation_row.toggle(
-                f"{ICONS['animate']} Animation",
+                f"{ICONS['animate']} Playback",
                 key=SINGLE_ANIMATE,
                 persist_state="session",
                 wrap=True,
@@ -6982,11 +6989,11 @@ def render_single_trial_tab(
                 help="Switch between the replay and the current static view.",
             )
             animation_settings = animation_row.popover(
-                "Animation settings",
+                "Playback settings",
                 width="content",
                 key="plot_menu_animation",
                 on_change=plot_popover_on_change(),
-                help="Animation settings. Adjust playback speed, autoplay and frame timing.",
+                help="Playback settings. Adjust speed, autoplay and frame timing.",
             )
             with animation_settings, _popover_rows("animation"):
                 st.session_state.setdefault(

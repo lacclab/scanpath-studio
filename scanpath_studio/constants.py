@@ -1261,6 +1261,7 @@ ICONS: dict[str, str] = {
     # The chevron Streamlit draws on every popover button, for prose that names
     # an icon-only button by its appearance.
     "menu_arrow": ":material/expand_more:",
+    "menu_arrow_up": ":material/expand_less:",
     "views": ":material/dashboard:",
     "nav": ":material/explore:",
     "preview": ":material/visibility:",

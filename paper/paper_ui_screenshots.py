@@ -209,13 +209,13 @@ def deep_link(page: Page, params: dict) -> None:
 
 
 def reset_viz(page: Page) -> None:
-    """Press ♻️ Reset visualization, so a run never inherits the last one's view.
+    """Press ♻️ Reset at the foot of the rail, so a run never inherits the last one's view.
 
     The fixation-index window in particular is not named in this script's
     links, so a window left behind by an earlier run would silently subset
     every figure.
     """
-    btns = visible(page.locator('button:has-text("Reset visualization")'))
+    btns = visible(page.locator(".st-key-reset_viz_settings_btn button"))
     if not btns:
         print("  ! no reset button", flush=True)
         return

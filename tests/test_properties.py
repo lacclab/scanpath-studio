@@ -679,3 +679,131 @@ def test_a_mapping_written_into_a_command_reads_back(schema):
     )
     for attr in ("word_schema", "compare_word_schema", "compare_fix_schema"):
         assert cli._parse_schema_arg(getattr(args, attr), attr) == schema
+
+
+# --- ✏️ Edit dataset gives what ➕ Add dataset gives -----------------------------
+
+#: A reader's two fixations tables' worth of columns, and the Words table of a
+#: three-word text: each field has more than one column it could map to.
+_EDIT_FIXATIONS = pd.DataFrame(
+    {
+        "subj": ["p1", "p1", "p1", "p2"],
+        "tr": ["t1", "t1", "t2", "t1"],
+        "fx": [10.0, 20.0, 30.0, 40.0],
+        "fy": [11.0, 21.0, 31.0, 41.0],
+        "dur": [100, 150, 200, 250],
+        "dwell": [111, 222, 333, 444],
+        "block": ["b1", "b1", "b2", "b2"],
+    }
+)
+_EDIT_WORDS = pd.DataFrame(
+    {
+        "subj": ["p1"] * 3 + ["p2"] * 3,
+        "tr": ["t1"] * 6,
+        "item": ["i1"] * 6,
+        "ia": [1, 2, 3] * 2,
+        "word": ["The", "cat", "sat"] * 2,
+        "label": ["THE", "CAT", "SAT"] * 2,
+        "x": [0.0, 60.0, 120.0] * 2,
+        "y": [0.0] * 6,
+        "w": [50.0] * 6,
+        "h": [20.0] * 6,
+    }
+)
+#: Each source column's name in the frame the first mapping stored: a mapped
+#: field's canonical name, a kept column its own.
+_STORED_NAME = {
+    "subj": "participant_id",
+    "tr": "trial_id",
+    "fx": "x",
+    "fy": "y",
+    "dur": "duration_ms",
+    "ia": "word_id",
+    "word": "text",
+    "w": "width",
+    "h": "height",
+}
+
+
+def _edited_and_added(raw, first, second, kept, kind):
+    """``(added, edited)``: the table added with ``second``, and the table added
+    with ``first`` then edited to ``second``, as the editor stores it."""
+    normalize = data.normalize_words if kind == "words" else data.normalize_fixations
+
+    def stored_name(column):
+        if isinstance(column, list):
+            return [_STORED_NAME.get(c, c) for c in column]
+        return _STORED_NAME.get(column, column)
+
+    added = normalize(
+        raw, second, keep_columns=data.compute_keep_columns(second, keep_columns=kept)
+    )
+    stored = normalize(
+        raw, first, keep_columns=data.compute_keep_columns(first, keep_columns=kept)
+    )
+    edited = data.remap_normalized_frame(
+        stored, {f: stored_name(c) for f, c in second.items()}, kind=kind
+    )
+    return added.reset_index(drop=True), edited.reset_index(drop=True)
+
+
+def _same_dataset(added: pd.DataFrame, edited: pd.DataFrame, trial) -> None:
+    """Every column both have holds the same values. The edit may add the
+    `unique_*` ids (equal to `trial_id` / `text_id`), and an add keeps a
+    composite id's parts under their files' names, which the edit holds under
+    their stored ones; no other column may be in one and not the other."""
+    parts = set(trial) if isinstance(trial, list) else set()
+    assert set(edited.columns) - set(added.columns) <= {
+        "unique_trial_id",
+        "unique_text_id",
+    }
+    assert set(added.columns) - set(edited.columns) <= parts
+    shared = sorted(set(added.columns) & set(edited.columns))
+    pd.testing.assert_frame_equal(added[shared], edited[shared], check_dtype=False)
+
+
+@given(
+    trial=st.sampled_from(["tr", "block", ["subj", "block"], ["tr", "block"]]),
+    duration=st.sampled_from(["dur", "dwell"]),
+)
+def test_an_edited_fixations_mapping_gives_what_adding_with_it_gives(trial, duration):
+    """Changing a dataset's mapping in ✏️ Edit dataset re-derives its stored
+    frame; adding the same files with the new mapping normalizes them afresh.
+    Both are the same readings, with the same values."""
+    first = {
+        "participant": "subj",
+        "trial": "tr",
+        "x": "fx",
+        "y": "fy",
+        "duration": "dur",
+    }
+    second = first | {"trial": trial, "duration": duration}
+    added, edited = _edited_and_added(
+        _EDIT_FIXATIONS, first, second, {"dwell", "block"}, "fixations"
+    )
+    _same_dataset(added, edited, trial)
+
+
+@given(
+    trial=st.sampled_from(["tr", "item", ["subj", "item"]]),
+    text=st.sampled_from(["word", "label"]),
+    text_id=st.sampled_from([None, "item"]),
+)
+def test_an_edited_words_mapping_gives_what_adding_with_it_gives(trial, text, text_id):
+    first = {
+        "participant": "subj",
+        "trial": "tr",
+        "word_id": "ia",
+        "text": "word",
+        "x": "x",
+        "y": "y",
+        "width": "w",
+        "height": "h",
+    }
+    second = first | {"trial": trial, "text": text}
+    if text_id:
+        second["text_id"] = text_id
+    added, edited = _edited_and_added(
+        _EDIT_WORDS, first, second, {"item", "label"}, "words"
+    )
+    _same_dataset(added, edited, trial)

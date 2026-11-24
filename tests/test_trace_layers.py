@@ -74,11 +74,7 @@ def _drawn(fig) -> Counter:
     return traces + shapes
 
 
-@pytest.mark.parametrize("variant", VARIANTS)
-@pytest.mark.parametrize("switch", SWITCHES)
-def test_a_layer_switch_takes_away_only_its_own_layer(demo, switch, variant):
-    every = _drawn(_figure(demo, VARIANTS[variant]))
-    without = _drawn(_figure(demo, VARIANTS[variant], **{switch: False}))
+def _only_its_layer(every: Counter, without: Counter, switch: str) -> None:
     gone = every - without
     assert gone, f"{switch}=False took nothing away"
     filed = {layer for (*_, layer) in gone}
@@ -87,3 +83,31 @@ def test_a_layer_switch_takes_away_only_its_own_layer(demo, switch, variant):
         "new trace its layer in plots._trace_layer (or tag a shape with "
         "plots._shape_layer_tag)"
     )
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+@pytest.mark.parametrize("switch", SWITCHES)
+def test_a_layer_switch_takes_away_only_its_own_layer(demo, switch, variant):
+    every = _drawn(_figure(demo, VARIANTS[variant]))
+    without = _drawn(_figure(demo, VARIANTS[variant], **{switch: False}))
+    _only_its_layer(every, without, switch)
+
+
+def _comparison(demo, layout: str, **off):
+    """Two readings of one reader compared, every layer on: its traces are
+    named by each scanpath's label, so they say their layer otherwise."""
+    words, fixations, raw_gaze, _participant, _trial = demo
+    trials = api.list_trials(words, fixations)
+    a, b = (tuple(map(str, trials.iloc[i, :2])) for i in (0, 1))
+    options = {**dict.fromkeys(SWITCHES, True), **off}
+    return api.compare_scanpaths(
+        words, fixations, a, b, raw_gaze=raw_gaze, layout=layout, **options
+    )
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+@pytest.mark.parametrize("switch", SWITCHES)
+def test_a_comparisons_layer_switch_takes_away_only_its_own_layer(demo, switch, layout):
+    every = _drawn(_comparison(demo, layout))
+    without = _drawn(_comparison(demo, layout, **{switch: False}))
+    _only_its_layer(every, without, switch)

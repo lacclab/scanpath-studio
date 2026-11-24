@@ -1,0 +1,1 @@
+Splitting a comparison into one file per layer (`render --separable-layers`, `save_figure_layers`) now files its saccades, raw gaze and heatmap colour bar under their own layers; before, all three landed in the fixations file.

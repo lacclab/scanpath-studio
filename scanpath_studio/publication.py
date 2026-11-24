@@ -281,6 +281,11 @@ def editor_html(
     )
 
 
+#: How long one browser command may go unanswered before a render gives up.
+#: The slowest, a high-DPI raster or one frame of a clip, takes seconds.
+COMMAND_TIMEOUT_S = 120.0
+
+
 async def _draw(doc: dict, fmt: str):
     """Draw in an isolated local Chromium tab at the same dimensions as the proof."""
     from choreographer import Browser
@@ -296,8 +301,20 @@ async def _draw(doc: dict, fmt: str):
         tab = await browser.create_tab()
         progress.report(detail="Drawing the figure")
 
-        async def command(method, params=None):
-            reply = await tab.send_command(method, params)
+        async def command(method, params=None, *, what=None):
+            # A command the browser never answers would hold the export open
+            # for good: past the deadline the render fails, naming what got
+            # no reply, and leaving the block closes the browser.
+            try:
+                reply = await asyncio.wait_for(
+                    tab.send_command(method, params), COMMAND_TIMEOUT_S
+                )
+            except TimeoutError:
+                raise RuntimeError(
+                    "Chromium stopped answering while drawing the figure "
+                    f"({what or method} got no reply in {COMMAND_TIMEOUT_S:g} s). "
+                    "Try again."
+                ) from None
             if "error" in reply:
                 message = reply["error"].get("message", method)
                 raise RuntimeError(f"Chromium could not render the figure: {message}")
@@ -319,6 +336,7 @@ async def _draw(doc: dict, fmt: str):
             result = await command(
                 "Runtime.evaluate",
                 {"expression": expr, "awaitPromise": True, "returnByValue": True},
+                what=expr,
             )
             if "exceptionDetails" in result:
                 raise ValueError(

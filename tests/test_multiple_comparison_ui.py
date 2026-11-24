@@ -538,3 +538,21 @@ def test_no_chip_fields_no_table():
     at.run(timeout=60)
     assert not at.exception, at.exception
     assert not _chip_tables(at)
+
+
+def test_drawing_the_kept_matches_leaves_them_as_they_were():
+    """The matches are kept between reruns and handed out as they are, so
+    nothing that draws, labels or scores them may write into them."""
+    from scanpath_studio import data
+    from tests.test_rerun_work import VIEWS, _drawn
+
+    at = _drawn(*VIEWS["scanpath · Comparisons"])
+    _key, matches = at.session_state[data._FRAME_CACHE_KEY]["comparison_matches"]
+    assert matches, "the demo's first reading has matches"
+    before = {reading: frame.copy() for reading, frame in matches.items()}
+    at.session_state["global_saccade_width"] = 3.5
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+    for reading, frame in before.items():
+        pd.testing.assert_frame_equal(matches[reading], frame)

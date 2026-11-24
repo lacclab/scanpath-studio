@@ -13320,6 +13320,13 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
     return sorted(cols, key=_rank)
 
 
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_generation_column_options(_fixations: pd.DataFrame, fixations_key) -> list:
+    """`_generation_column_options`, once per pool: it groups the whole pool
+    by reading for every field, so a rerun must not repeat it."""
+    return _generation_column_options(_fixations)
+
+
 #: The two Match choices that come before the dataset's fields.
 _MATCH_SAME_TEXT = "@same_text"
 _MATCH_SAME_PARTICIPANT = "@same_participant"
@@ -13355,7 +13362,7 @@ def _match_options(fixations: pd.DataFrame, names: ColumnNames) -> list[str]:
         options += [_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT]
     seen: set[str] = set()
     text_col = _match_text_column(fixations)
-    for column in _generation_column_options(fixations):
+    for column in _c_generation_column_options(fixations, frame_fingerprint(fixations)):
         if column in _MATCH_NOT_A_CONDITION or column == text_col:
             continue
         label = names.field_label(column)
@@ -13727,13 +13734,26 @@ def render_multiple_comparison_tab(
     )
     gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
-    candidates = _collect_generations(
-        fixations_filtered,
-        trial_fixations,
-        gen_col,
-        selected_participant,
-        selected_trial,
-        differ_col,
+    # Masks and groups the whole pool, so the matches are kept until the pool,
+    # the selected reading or the Match choice changes.
+    candidates = frame_cache(
+        "comparison_matches",
+        (
+            frame_fingerprint(fixations_filtered),
+            frame_fingerprint(trial_fixations),
+            gen_col,
+            str(selected_participant),
+            str(selected_trial),
+            differ_col,
+        ),
+        lambda: _collect_generations(
+            fixations_filtered,
+            trial_fixations,
+            gen_col,
+            selected_participant,
+            selected_trial,
+            differ_col,
+        ),
     )
     if not candidates:
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")

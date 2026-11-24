@@ -31,7 +31,7 @@ from streamlit.runtime.caching import cache_utils
 from streamlit.testing.v1 import AppTest
 
 import scanpath_studio.app  # noqa: F401 — every importer exists before the patch
-from scanpath_studio import aggregation, api, data, measures, plots, progress
+from scanpath_studio import aggregation, api, data, measures, plots, progress, tabs
 from scanpath_studio import metadata as md
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
@@ -57,6 +57,9 @@ DATA_WORK = [
     (measures, "enrich_fixations"),
     (measures, "assign_fixations_to_words"),
     (aggregation, "corpus_overview"),
+    # The Comparisons subtab's options and matches, each a pass over the pool.
+    (tabs, "_generation_column_options"),
+    (tabs, "_collect_generations"),
 ]
 #: The figure builders: a plot setting may redraw, nothing else may.
 FIGURE_WORK = [
@@ -297,8 +300,6 @@ REDRAWN = [
 @pytest.mark.timeout(300)
 @pytest.mark.parametrize("view", REDRAWN)
 def test_a_plot_setting_only_redraws_the_figure(view, work):
-    from scanpath_studio import tabs
-
     # The figure caches outlive a test, so one drawn earlier in this process
     # could answer this redraw from memory and measure nothing.
     for name in FIGURE_CACHES:

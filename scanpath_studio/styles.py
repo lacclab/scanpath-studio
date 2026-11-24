@@ -2291,6 +2291,8 @@ def get_app_css() -> str:
         opacity: 0.72;
     }
     :is(.st-key-rail_view_fold, .st-key-rail_palette_fold, .st-key-rail_modes_fold, .st-key-rail_customize_fold) button:hover { opacity: 1; }
+    /* The titles below the tiles start a new part of the column. */
+    :is(.st-key-rail_modes_section, .st-key-rail_customize_section) { margin-top: 0.35rem; }
     /* The script that keeps the folds in a cookie takes no room. */
     .st-key-rail_fold_cookie { position: absolute; width: 0; height: 0; overflow: hidden; }
     .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) {

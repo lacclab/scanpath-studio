@@ -99,8 +99,13 @@ class TestRemapNormalizedFrame:
         }
         out = remap_normalized_frame(norm, schema, kind="fixations")
         assert list(out["trial_id"]) == ["b1", "b1", "b2", "b2"]
-        # unique_trial_id is restored and consistent with trial_id.
-        assert list(out["unique_trial_id"]) == ["b1", "b1", "b2", "b2"]
+        # The stored frame held no unique_trial_id, as adding these files
+        # gives none, so the edit adds none either.
+        assert "unique_trial_id" not in out.columns
+        stored = norm.assign(unique_trial_id=norm["trial_id"])
+        restored = remap_normalized_frame(stored, schema, kind="fixations")
+        # One the stored frame held follows the new Trial ID, never the stale one.
+        assert list(restored["unique_trial_id"]) == ["b1", "b1", "b2", "b2"]
 
     def test_remap_trial_to_composite(self):
         """A multi-column Trial mapping builds a composite trial_id on the fly."""

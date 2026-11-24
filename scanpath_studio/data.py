@@ -7906,10 +7906,11 @@ def remap_normalized_frame(
     ``trial_id_series`` raise ``KeyError``. Every surviving column is kept
     (``keep_columns`` = all current columns) so the remap only reassigns roles
     and never drops data that already survived the first normalization. After
-    normalization ``unique_trial_id`` / ``unique_text_id`` are restored
-    (= ``trial_id`` / ``text_id``) when the single-column path didn't set them,
-    so the frame's identity columns stay consistent with the composite path and
-    downstream readers of ``unique_text_id`` keep working.
+    normalization a ``unique_trial_id`` / ``unique_text_id`` the stored frame
+    held is restored (= ``trial_id`` / ``text_id``) when the single-column
+    path didn't set it, and one it did not hold is never added: the stored
+    frame is what adding the files gave, so an edited dataset holds the
+    ``unique_*`` ids an added one does.
 
     A **words** frame remapped with no Participant is a stimulus-level
     Words table, exactly as it was at import — ``normalize_words`` re-flags it for
@@ -8009,10 +8010,14 @@ def remap_normalized_frame(
         )
     else:
         raise ValueError(f"unknown frame kind: {kind!r}")
-    if "unique_trial_id" not in result.columns and "trial_id" in result.columns:
-        result["unique_trial_id"] = result["trial_id"]
-    if "unique_text_id" not in result.columns and "text_id" in result.columns:
-        result["unique_text_id"] = result["text_id"]
+    # The ids the add gave this frame, restored from the new mapping's
+    # `trial_id` / `text_id` when the single-column path did not set them.
+    for unique, plain in (
+        ("unique_trial_id", "trial_id"),
+        ("unique_text_id", "text_id"),
+    ):
+        if unique in frame.columns and unique not in result.columns and plain in result:
+            result[unique] = result[plain]
     return result
 
 

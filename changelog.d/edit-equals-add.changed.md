@@ -1,0 +1,1 @@
+Changing a dataset's mapping in Edit dataset no longer adds unique_trial_id / unique_text_id columns that adding the same files with that mapping would not, so an edited dataset exports the columns a freshly added one does.

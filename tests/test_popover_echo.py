@@ -177,9 +177,11 @@ def test_a_script_write_over_a_held_value_holds_against_the_older_echo(
     controls.reassert_pending_writes()
     before = controls.design_state()
     state["global_saccade_style"] = "Dotted"
-    controls.hold_script_writes(before, rerun_follows=rerun)
+    controls.hold_script_writes(before)
     if rerun:
-        controls.reassert_pending_writes()  # the script's own rerun
+        # The script's own rerun, as `reruns.rerun` starts it.
+        controls.keep_holds_through_rerun()
+        controls.reassert_pending_writes()
     # The run after: the menus echo what they showed before the tile.
     state["global_saccade_style"] = "Solid"
     state["global_order_label_position"] = "top"

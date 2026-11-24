@@ -47,7 +47,7 @@ def test_the_dialog_offers_both_next_steps_by_return_value():
     assert "on_click=" not in source
     assert "_go_scanpath()" in source
     assert "_enter_add_data_wizard()" in source
-    assert 'st.rerun(scope="app")' in source
+    assert 'rerun(scope="app")' in source
 
 
 def test_main_raises_the_dialog_and_keeps_the_toast_as_the_fallback():

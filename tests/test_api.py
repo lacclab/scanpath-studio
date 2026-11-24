@@ -532,6 +532,33 @@ def test_animate_scanpath_rejects_static_only_options(sample):
         sps.animate_scanpath(words, fixations, pid, tid, show_heatmap=True)
 
 
+#: The replay draws neither raw gaze nor a heatmap, so it styles neither.
+_REPLAY_DRAWS_NOT = {
+    "raw_gaze_color": "#ff0000",
+    "raw_gaze_marker_size": 6.0,
+    "raw_gaze_opacity": 0.5,
+    "show_heatmap_colorbar": False,
+    "heatmap_colorbar_length": 0.5,
+    "heatmap_colorbar_orientation": "Horizontal",
+    "heatmap_colorbar_thickness": 10,
+    "heatmap_colorbar_tickangle": 45,
+    "heatmap_colorbar_tickfont_size": 9,
+}
+
+
+@pytest.mark.parametrize("option", sorted(_REPLAY_DRAWS_NOT))
+def test_animate_scanpath_rejects_the_style_of_layers_it_does_not_draw(sample, option):
+    """An option that would change nothing in the replay is refused by name,
+    and is not listed among the replay's options."""
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    assert option not in sps.figure_options("animation")
+    with pytest.raises(ValueError, match=f"does not support: {option}"):
+        sps.animate_scanpath(
+            words, fixations, pid, tid, **{option: _REPLAY_DRAWS_NOT[option]}
+        )
+
+
 def test_resolve_trial_default_first(sample):
     words, fixations = sample
     combos = sps.list_trials(words, fixations)

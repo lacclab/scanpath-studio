@@ -502,12 +502,12 @@ def test_questions_workbook_without_join_keys_is_skipped(tmp_path, monkeypatch):
 
 
 def test_questions_skipped_when_the_excel_reader_is_missing(full_tree, monkeypatch):
-    """Reading the workbook needs openpyxl; without it the load still succeeds."""
+    """Reading the workbook needs its engine; without it the load still succeeds."""
 
-    def _no_openpyxl(*args, **kwargs):
-        raise ImportError("Missing optional dependency 'openpyxl'")
+    def _no_engine(*args, **kwargs):
+        raise ImportError("Missing optional dependency 'python-calamine'")
 
-    monkeypatch.setattr(pd, "read_excel", _no_openpyxl)
+    monkeypatch.setattr(pd, "read_excel", _no_engine)
     words, fixations = datasets.load_multipleye(full_tree, names="canonical")
 
     assert "comprehension_questions" not in words.columns

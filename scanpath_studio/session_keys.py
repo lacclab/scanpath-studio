@@ -57,7 +57,7 @@ GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
 GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
-#: The note naming the highlighted words (Figure & canvas → Legends).
+#: The note naming the highlighted words (Figure → Legends).
 GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
 # Snap to line and where on the line. The older "Snap above words" key,
 # `global_fixation_snap_to_word`, is still read — see `LEGACY_SESSION_KEYS`.
@@ -143,7 +143,7 @@ GLOBAL_MARKER_SIZE_RANGE = "global_marker_size_range"
 GLOBAL_MARKER_SIZE_SCALE = "global_marker_size_scale"
 GLOBAL_MARKER_DURATION_RANGE = "global_marker_duration_range"
 GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
-# 📐 Figure & canvas → Legends: where each legend sits. One key per legend and
+# Figure → Legends: where each legend sits. One key per legend and
 # part, ``global_legend_<kind>_{position,arrangement,size}``, for the kinds in
 # `constants.LEGEND_KINDS` (spelled out here, as everything in this file is).
 LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key", "highlight")
@@ -424,6 +424,7 @@ PARAM_TAB = "tab"
 # The Essentials / Full interface mode (`ui_mode.resolve_mode`). A viewer's own
 # preference, so it is read from a link but never written by Share.
 PARAM_UI = "ui"
+PARAM_PREPARE = "prepare"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
@@ -459,15 +460,16 @@ PARAM_CORPUS = "corpus"
 # rather than apply the view to whatever else is open. Read in `app.main`, like
 # `corpus`; emitted only for an added dataset.
 PARAM_DATASET = "dataset"
+PARAM_DATASET_DIGEST = "dataset_digest"
+PARAM_DATASET_ID = "dataset_id"
 
-# Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
-# and its value is the option's label verbatim — so neither the key nor the
-# labels (`tabs.CORPUS_SUBTABS`) can be renamed without changing what a
-# bookmarked view opens.
-# Streamlit reads and writes these itself; `_apply_url_preset` and
-# `_build_share_query` never see them.
+# Corpus bookmarks store the section, summary unit and displayed measure label.
+# `corpus_navigation` reads and writes them together when the visible
+# destination or its nested profile changes. The session measure holds its key.
 CORPUS_SUBTAB = "corpus_subtab"
-URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
+CORPUS_GROUP_BY = "corpus_group_by"
+CORPUS_MEASURE = "corpus_measure"
+URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE})
 
 # Where `?source=` lands. Written by `app.main`'s source dispatch — every
 # `?source=` token resolves to `data_source_choice` there, and
@@ -496,12 +498,16 @@ SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 # (as `?tab=animation` is Animate's), and it names B's trial: a `cmp_source`
 # that named B's corpus without naming B's trial would restore nothing.
 #
-# `cmp_source` is the corpus B came from, using the same vocabulary as `source`
-# — emitted only when that corpus is in `url_state._SHAREABLE_SOURCES`, since an
-# uploaded dataset lives in session state and cannot travel. Absent means "B is
-# in the same dataset as A".
+# A built-in B uses `cmp_source` in the same vocabulary as `source`;
+# `cmp_source=corpus` names the catalogue entry by its unique `cmp_corpus` slug. An
+# uploaded B carries its displayed name and local ID. With neither source
+# reference B belongs to A's dataset.
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
+COMPARE_CORPUS_PARAM = "cmp_corpus"
+COMPARE_DATASET_PARAM = "cmp_dataset"
+COMPARE_DATASET_ID_PARAM = "cmp_dataset_id"
+COMPARE_DATASET_DIGEST_PARAM = "cmp_dataset_digest"
 #: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
 #: `compare=`, and seeded into B's own navigator (`single_compare_screen_id`).
 COMPARE_SCREEN_PARAM = "cmp_screen"
@@ -512,6 +518,8 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+# Upload names are nonempty. The empty option always selects A’s source.
+SAME_DATASET = ""
 #: Scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
 #: own key holds a label rebuilt relative to A, so this is B's stable name. Kept
 #: in the recovery cache with ``cmp_dataset``, so a refresh keeps B's trial.
@@ -521,6 +529,17 @@ COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
 #: a link may legitimately not carry it.
 FIX_RANGE_PARAM = "fix_range"
+#: *Keep this range across trials*: the fixation window applies to every
+#: trial, clamped to each one's length.
+SINGLE_FIX_RANGE_ALL_TRIALS = "single_fix_range_all_trials"
+#: …on the wire, as "1" and only while it is on (off is the default).
+FIX_RANGE_ALL_TRIALS_PARAM = "fix_range_all_trials"
+#: Whether a linked replay draws fixations. Share writes ``replay_fixations=0``
+#: beside ``show_fixations=0`` when the link opens a replay with the fixations
+#: hidden. A link that opens a replay with ``show_fixations=0`` and no
+#: ``replay_fixations`` was shared while a replay always drew fixations, so it
+#: opens with them shown; ``show_fixations`` then sets the static figure's.
+REPLAY_FIXATIONS_PARAM = "replay_fixations"
 #: Where an arriving `compare=` selection waits until the candidate list exists.
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
@@ -579,6 +598,9 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         **_compare_style_params("hollow"),
         # The trial chips above the plot.
         "show_chips": SINGLE_SHOW_CHIPS,
+        # The fixation window's scope. Optional on the wire (see
+        # `URL_OPTIONAL_PARAMS`): only a window kept across trials says so.
+        FIX_RANGE_ALL_TRIALS_PARAM: SINGLE_FIX_RANGE_ALL_TRIALS,
     }
 )
 
@@ -781,6 +803,8 @@ SHARE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         **SHARE_TOGGLE_PARAMS,
         **SHARE_VALUE_PARAMS,
+        "word_hover_fields_json": GLOBAL_WORD_HOVER_FIELDS,
+        "fixation_hover_fields_json": GLOBAL_FIXATION_HOVER_FIELDS,
         **SHARE_INT_PARAMS,
         **SHARE_FLOAT_PARAMS,
         **SHARE_INT_RANGE_PARAMS,
@@ -802,8 +826,14 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_PARTS,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_DIGEST,
+        PARAM_DATASET_ID,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_CORPUS_PARAM,
+        COMPARE_DATASET_PARAM,
+        COMPARE_DATASET_ID_PARAM,
+        COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
     }
 )
@@ -893,15 +923,26 @@ LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
 
 URL_OPTIONAL_PARAMS = frozenset(
     {
+        PARAM_PREPARE,
+        "word_hover_fields_json",
+        "fixation_hover_fields_json",
         *LEGEND_PARAMS,
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_CORPUS_PARAM,
+        COMPARE_DATASET_PARAM,
+        COMPARE_DATASET_ID_PARAM,
+        COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_DIGEST,
+        PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
+        FIX_RANGE_ALL_TRIALS_PARAM,
         COMPARE_FIX_RANGE_PARAM,
+        REPLAY_FIXATIONS_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
         *EXPORT_PARAMS,
@@ -1029,7 +1070,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 8
+PLOT_CONFIG_SCHEMA_VERSION = 10
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -1061,7 +1102,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         *DESIGN_COLOR_PARAMS.values(),
         *DESIGN_INT_PARAMS.values(),
         *DESIGN_FLOAT_PARAMS.values(),
-        # Figure & canvas → Legends.
+        # Figure → Legends.
         *LEGEND_STATE_KEYS,
         # layers
         GLOBAL_SHOW_WORDS,
@@ -1211,6 +1252,11 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
 PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
+        SINGLE_FIX_RANGE,
+        SINGLE_COMPARE_FIX_RANGE,
+        "single_fix_range_user_set",
+        "single_compare_fix_range_user_set",
+        "single_fix_range_all_trials",
         SINGLE_TRIAL_ID,
         SINGLE_TRIAL_CHOSEN,
         # The compare view's own two settings, restored from the

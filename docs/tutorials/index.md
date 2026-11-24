@@ -35,6 +35,7 @@ The [feature guides](../guides/index.md) explain the controls in more detail.
 
 </div>
 
-In the app, open :material/help: **Help** → :material/explore: **Tutorials**
-for guided tours of the controls. Starting a tutorial switches the app to Full
-for the current visit.
+In the app, :material/help: **Help** → :material/explore: **Task guides** has
+short steps you can read offline. Open a task to follow it with your current
+data. If it needs controls in Full, choose **Open in Full**. Leaving the guide
+returns you to your previous view and mode.

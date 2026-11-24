@@ -320,21 +320,6 @@ def settle(page: Page, quiet: float = 1.5, timeout: float = 120) -> None:
     print("  ! the app never went idle", flush=True)
 
 
-def close_tour(page: Page) -> None:
-    """Dismiss the welcome tour's spotlight card."""
-    for _ in range(3):
-        btns = [
-            b
-            for b in page.locator(".st-key-tour_sp_close button").all()
-            + page.locator('.st-key-tour_card button:has-text("Skip")').all()
-            if b.is_visible()
-        ]
-        if not btns:
-            return
-        btns[0].click()
-        settle(page)
-
-
 def switch(page: Page, key: str) -> Locator:
     """The toggle rendered under Streamlit key ``key``."""
     return page.locator(f".st-key-{key} label")
@@ -384,6 +369,7 @@ class Session:
         # Streamlit keeps hidden copies of some controls (a popover's, a rerun's).
         target = target.filter(visible=True).first
         target.wait_for(state="visible", timeout=90_000)
+        target.scroll_into_view_if_needed()
         box = target.bounding_box()
         if box is None:
             raise RuntimeError(f"{target} is not on screen")
@@ -414,10 +400,10 @@ class Session:
         self.park()
         self.idle()
 
-    def pick(self, key: str, option: str, nth: int = 0) -> None:
-        """In the rail popover ``key``, pick ``option`` in its ``nth`` selectbox."""
+    def pick(self, key: str, field: str, option: str) -> None:
+        """In the rail popover ``key``, pick ``option`` in the named selectbox."""
         body = self.popover(key)
-        self.glide(body.locator("[role=combobox]").nth(nth))
+        self.glide(body.get_by_role("combobox", name=field, exact=True))
         self.wait(400)
         self.glide(self.page.locator("[role=option]", has_text=option))
         self.idle()
@@ -453,14 +439,14 @@ def story(s: Session) -> None:
     s.wait(400)
 
     s.caption("Replay the reading, fixation by fixation")
-    s.toggle("single_animate", True)
+    s.glide(page.locator(".st-key-single_animate label"))
     s.park()
     s.idle()
     s.wait(5200)
-    s.toggle("single_animate", False)
+    s.glide(page.get_by_role("button", name="Scanpath", exact=True))
 
     s.caption("See where participants dwell")
-    s.glide(page.locator(".st-key-viz_view_heatmap button"))
+    s.glide(page.get_by_role("button", name="Heatmap", exact=True))
     s.park()
     s.idle()
     s.wait(1800)
@@ -468,12 +454,14 @@ def story(s: Session) -> None:
     s.caption("Build your figure layer by layer")
     # A popover setting comes first: the first layer switch flipped right
     # after a preset is put back, while one after any other change holds.
-    s.pick("split_mode_rail_heatmap_popover", "Oranges", nth=2)
+    s.pick("plot_menu_heatmap", "Colors", "Oranges")
     s.wait(600)
     s.toggle("global_show_fix", True)
-    s.pick("split_mode_rail_fix_popover", "Duration (ms)")
+    s.pick("plot_menu_fix", "Color fixations by", "Duration (ms)")
     s.toggle("global_show_saccades", True)
-    arrows = s.popover("split_mode_rail_sac_popover").locator("label", has_text="Show")
+    arrows = s.popover("plot_menu_sac").locator(
+        ".st-key-global_show_saccade_arrows label"
+    )
     s.glide(arrows)
     s.idle()
     s.wait(900)
@@ -486,7 +474,7 @@ def story(s: Session) -> None:
     s.wait(1200)
 
     s.caption("Filter saccades by type")
-    body = s.popover("split_mode_rail_filter_popover")
+    body = s.popover("plot_menu_filter")
     s.glide(body.locator('button[aria-label="Remove Forward"]'))
     s.idle()
     s.close_popover()
@@ -494,7 +482,7 @@ def story(s: Session) -> None:
 
     s.caption("Redact the text in one click")
     for hold in (1900, 0):
-        body = s.popover("split_mode_rail_stim_popover")
+        body = s.popover("plot_menu_stim")
         s.glide(body.locator("label", has_text="Redact"))
         s.idle()
         s.close_popover()
@@ -644,7 +632,9 @@ def record(url: str, frames: Path) -> Path:
         page.goto(f"{url}/?playback_speed=3&ui=full", wait_until="domcontentloaded")
         settle(page, quiet=3.0)
         page.add_style_tag(content=HIDE_CSS + OVERLAY_CSS)
-        close_tour(page)
+        invitation = page.locator(".st-key-sample_invitation_dismiss button")
+        if invitation.is_visible():
+            invitation.click()
         settle(page, quiet=2.0)
         session.card(INTRO)
         page.wait_for_timeout(800)

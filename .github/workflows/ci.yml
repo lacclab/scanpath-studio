@@ -44,11 +44,39 @@ jobs:
       - name: Install package + test deps
         run: uv pip install --system -e ".[test]"
 
+      - name: Render the bundled sample from the installed wheel
+        if: matrix.python-version == '3.12'
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
+          uv venv --python 3.12 "$RUNNER_TEMP/wheel-env"
+          uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" "$RUNNER_TEMP"/wheel/*.whl
+          cd "$RUNNER_TEMP"
+          wheel-env/bin/scanpath-studio render --sample -o sample.html
+          test -s sample.html
+
       - name: Run pytest
         # -n auto fans the suite across the runner's cores; the Streamlit
         # AppTest integration tests are CPU-bound app boots and dominate the
         # runtime, so this is a ~3x wall-clock win.
         run: pytest -q -n auto
+
+  windows-export:
+    name: Check lab exports and recovery on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - run: uv pip install --system -e ".[test]"
+      - run: >-
+          python -m pytest -q
+          tests/test_export_naming.py::test_extract_portable_bundle_preserves_original_ids
+          tests/test_persistence.py::test_two_processes_cannot_replace_the_same_annotation_snapshot
 
   coverage:
     name: Coverage
@@ -114,11 +142,16 @@ jobs:
       - name: Install package + test deps + Playwright
         run: uv pip install --system -e ".[test]" playwright==1.63.0
 
-      - name: Install Chromium
-        run: playwright install --with-deps chromium
+      - name: Install Chromium and WebKit
+        run: playwright install --with-deps chromium webkit
 
       - name: Run the browser smoke test
         run: pytest -q tests/test_browser_smoke.py
+
+      - name: Check keyboard navigation, narrow imports, and offline downloads in WebKit
+        env:
+          SCANPATH_WEBKIT: "1"
+        run: pytest -q tests/test_webkit_download.py
 
   lint:
     name: Lint

@@ -59,14 +59,13 @@ def test_the_data_page_box_follows_the_folder_until_edited(tmp_path):
     the user typed into keeps what they typed."""
     from streamlit.testing.v1 import AppTest
 
-    from scanpath_studio.constants import _VIEW_DATA
-    from tests.conftest import APP_SCRIPT, pin_view
+    from tests.conftest import APP_SCRIPT, pin_data_view
 
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
     at.session_state["public_dataset_choice"] = "PoTeC — Potsdam Textbook Corpus"
     at.session_state[DOWNLOAD_DIR_KEY] = str(tmp_path / "first")
-    pin_view(at, _VIEW_DATA)
+    pin_data_view(at, section="Saved work")
     at.run()
     assert not at.exception, at.exception
     assert at.text_input(key="potec_dir").value == str(tmp_path / "first" / "PoTeC")
@@ -76,15 +75,15 @@ def test_the_data_page_box_follows_the_folder_until_edited(tmp_path):
         f"saves it to `{tmp_path / 'first' / 'PoTeC'}`" in str(i.value) for i in at.info
     )
 
-    pin_view(at, _VIEW_DATA)  # AppTest forgets the page between runs
+    pin_data_view(at, section="Saved work")  # AppTest forgets the page between runs
     folder.set_value(str(tmp_path / "second")).run()
     assert not at.exception, at.exception
     assert at.text_input(key="potec_dir").value == str(tmp_path / "second" / "PoTeC")
 
     mine = str(tmp_path / "mine")
-    pin_view(at, _VIEW_DATA)
+    pin_data_view(at, section="Saved work")
     at.text_input(key="potec_dir").set_value(mine).run()
-    pin_view(at, _VIEW_DATA)
+    pin_data_view(at, section="Saved work")
     at.text_input(key=DOWNLOAD_DIR_KEY).set_value(str(tmp_path / "third")).run()
     assert not at.exception, at.exception
     assert at.text_input(key="potec_dir").value == mine

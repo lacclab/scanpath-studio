@@ -375,7 +375,8 @@ class TestTheSavedConfig:
         at = self._restore({"coloring": {"heatmap_range": [120.0, 280.0]}})
         assert at.session_state[HEAT_KEY] == (120.0, 280.0)
 
-    def test_a_config_saved_on_auto_restores_auto(self):
+    @pytest.mark.parametrize("metric", ["duration_ms", "counts"])
+    def test_a_config_saved_on_auto_restores_auto(self, metric):
         """`null` is what the writer records for an auto range, so restoring it
         must not keep whatever range this session happened to hold."""
         at = self._restore(
@@ -383,7 +384,7 @@ class TestTheSavedConfig:
                 "layers": {"heatmap": True, "fixations": True},
                 "coloring": {
                     "color_by": "duration_ms",
-                    "heatmap_metric": "duration_ms",
+                    "heatmap_metric": metric,
                     "fixation_range": None,
                     "heatmap_range": None,
                 },

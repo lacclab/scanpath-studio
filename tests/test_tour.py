@@ -1,9 +1,4 @@
-"""Tests for the welcome tour + the dataset-setup guide spotlight card.
-
-The setup guide is a bottom-right floating card (``tour_mode == "wizard"``)
-rather than a modal, so the user can follow along while filling in the wizard.
-These exercise the arming + rendering + dismissal without booting the whole app.
-"""
+"""The first-visit invitation, task guides and optional dataset setup guide."""
 
 from __future__ import annotations
 
@@ -14,471 +9,202 @@ AppTest = streamlit_testing.AppTest
 
 
 def _wizard_guide_app():
-    from scanpath_studio.tour import (
-        maybe_show_wizard_guide,
-        render_spotlight_wizard_guide,
-    )
-
-    maybe_show_wizard_guide()
-    render_spotlight_wizard_guide()
-
-
-def _wizard_guide_replay_app():
     import streamlit as st
 
     from scanpath_studio.tour import _arm_wizard_guide, render_spotlight_wizard_guide
 
-    # Simulate a session that already saw the guide, then a replay-button arm.
-    st.session_state["wizard_guide_seen"] = True
-    if not st.session_state.get("_armed_once"):
-        st.session_state["_armed_once"] = True
-        _arm_wizard_guide()
-    render_spotlight_wizard_guide()
-
-
-class TestWizardGuideSpotlight:
-    def test_auto_arms_and_renders_card(self):
-        at = AppTest.from_function(_wizard_guide_app)
-        at.run()
-        assert not at.exception, at.exception
-        assert at.session_state["tour_mode"] == "wizard"
-        assert at.session_state["wizard_guide_seen"] is True
-        keys = {b.key for b in at.button if b.key}
-        assert "wizard_sp_next" in keys
-        assert "wizard_sp_back" in keys
-
-    def test_skip_dismisses(self):
-        at = AppTest.from_function(_wizard_guide_app)
-        at.run()
-        at.button(key="wizard_sp_exit").click()
-        at.run()
-        assert at.session_state["tour_mode"] is None
-        assert not any(b.key == "wizard_sp_next" for b in at.button)
-
-    def test_last_step_shows_done(self):
-        from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
-
-        at = AppTest.from_function(_wizard_guide_app)
-        at.run()
-        at.session_state["wizard_guide_step"] = len(_WIZARD_GUIDE_STEPS) - 1
-        at.run()
-        keys = {b.key for b in at.button if b.key}
-        assert "wizard_sp_done" in keys
-
-    def test_replay_button_re_arms_after_seen(self):
-        at = AppTest.from_function(_wizard_guide_replay_app)
-        at.run()
-        assert at.session_state["tour_mode"] == "wizard"
-        keys = {b.key for b in at.button if b.key}
-        assert "wizard_sp_next" in keys
-
-
-class TestWizardGuideOptOut:
-    """The setup guide has the same persistent "don't show again" as the
-    welcome tour and the per-tutorial cards — with only ``wizard_guide_seen``
-    (plain session state) gating the auto-open, it would greet every new
-    session regardless of a prior dismissal."""
-
-    def test_checkbox_on_first_step_defaults_off(self):
-        at = AppTest.from_function(_wizard_guide_app)
-        at.run()
-        assert not at.exception, at.exception
-        box = at.checkbox(key="wizard_guide_dont_show")
-        assert box.value is False
-
-    def test_ticking_suppresses_a_later_session(self):
-        at = AppTest.from_function(_wizard_guide_app)
-        at.run()
-        at.checkbox(key="wizard_guide_dont_show").check().run()
-        assert not at.exception, at.exception
-        from scanpath_studio import tour
-
-        assert at.session_state["wizard_guide_dont_show"] is True
-        assert tour._wizard_guide_optout_script(True).count("max-age=0") == 0
-        assert "sps_wizard_guide_optout=1" in tour._wizard_guide_optout_script(True)
-        assert "max-age=0" in tour._wizard_guide_optout_script(False)
-
-    def test_opted_out_session_never_auto_arms(self):
-        """A returning browser (cookie can't be simulated headlessly, so this
-        goes through the same session-state fast path `tour_opted_out` uses)
-        never sees `maybe_show_wizard_guide` flip `tour_mode` to "wizard"."""
-        at = AppTest.from_function(_wizard_guide_optout_returning_app)
-        at.run()
-        assert not at.exception, at.exception
-        assert "tour_mode" not in at.session_state
-        assert not any(b.key == "wizard_sp_next" for b in at.button)
-
-    def test_replay_ignores_the_opt_out(self):
-        """The explicit "❓ Show setup guide" button still works even after
-        opting out of the automatic greeting — the same rule as the welcome
-        tour's replay."""
-        at = AppTest.from_function(_wizard_guide_optout_replay_app)
-        at.run()
-        assert at.session_state["tour_mode"] == "wizard"
-        assert any(b.key == "wizard_sp_next" for b in at.button)
-
-    def test_opted_out_is_false_without_a_request_context(self):
-        from scanpath_studio.tour import wizard_guide_opted_out
-
-        assert wizard_guide_opted_out() is False
-
-
-def _wizard_guide_optout_returning_app():
-    import streamlit as st
-
-    from scanpath_studio.tour import (
-        maybe_show_wizard_guide,
-        render_spotlight_wizard_guide,
-    )
-
-    st.session_state["_wizard_guide_dismissed"] = True
-    maybe_show_wizard_guide()
-    render_spotlight_wizard_guide()
-
-
-def _wizard_guide_optout_replay_app():
-    import streamlit as st
-
-    from scanpath_studio.tour import _arm_wizard_guide, render_spotlight_wizard_guide
-
-    st.session_state["_wizard_guide_dismissed"] = True
-    st.session_state["wizard_guide_seen"] = True
-    if not st.session_state.get("_armed_once"):
-        st.session_state["_armed_once"] = True
+    if not st.session_state.get("started"):
+        st.session_state["started"] = True
         _arm_wizard_guide()
     render_spotlight_wizard_guide()
 
 
 def _welcome_tour_app():
-    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
-
-    maybe_show_welcome_tour()
-    render_spotlight_tour()
-
-
-def _welcome_tour_replay_app():
-    import streamlit as st
-
-    from scanpath_studio.tour import _arm_tour, render_spotlight_tour
-
-    st.session_state["tour_seen"] = True
-    if not st.session_state.get("_armed_once"):
-        st.session_state["_armed_once"] = True
-        _arm_tour()
-    render_spotlight_tour()
-
-
-def _welcome_after_restore_app():
-    import streamlit as st
-
-    from scanpath_studio import persistence
-    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
-
-    st.session_state[persistence._RESTORED_PAYLOAD_KEY] = {"datasets": 0}
-    maybe_show_welcome_tour()
-    render_spotlight_tour()
-
-
-def _welcome_names_dataset_app():
-    import streamlit as st
-
-    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
-
-    st.session_state["data_source_choice"] = "Dataset 1"
-    maybe_show_welcome_tour()
-    render_spotlight_tour()
-
-
-class TestWelcomeNamesWhatIsOpen:
-    """No "A demo dataset is loaded" over a returning user's data."""
-
-    def test_a_restored_session_does_not_open_the_tour(self):
-        at = AppTest.from_function(_welcome_after_restore_app).run()
-        assert not at.exception, at.exception
-        assert at.session_state["tour_seen"] is True
-        assert not any(b.key == "tour_sp_next" for b in at.button)
-
-    def test_the_welcome_names_the_open_dataset(self):
-        at = AppTest.from_function(_welcome_names_dataset_app).run()
-        assert not at.exception, at.exception
-        text = " ".join(m.value for m in at.markdown)
-        assert "**Dataset 1** is open; **Next**" in text
-        assert "demo dataset is loaded" not in text
-
-
-class TestTourOptOut:
-    """The "Don't show this again" choice, persisted in the ``sps_tour_optout`` cookie."""
-
-    def test_checkbox_on_welcome_step_defaults_off(self):
-        at = AppTest.from_function(_welcome_tour_app)
-        at.run()
-        assert not at.exception, at.exception
-        box = at.checkbox(key="tour_dont_show")
-        assert box.value is False
-
-    def test_ticking_suppresses_a_later_session(self):
-        at = AppTest.from_function(_welcome_tour_app)
-        at.run()
-        at.checkbox(key="tour_dont_show").check().run()
-        # Within the session the checkbox state is authoritative, so the gates
-        # that decide whether to auto-open the tour both close.
-        from scanpath_studio import tour
-
-        assert at.session_state["tour_dont_show"] is True
-        # A fresh session whose browser sends the cookie back never opens it.
-        assert tour._tour_optout_script(True).count("max-age=0") == 0
-        assert "sps_tour_optout=1" in tour._tour_optout_script(True)
-        assert "max-age=0" in tour._tour_optout_script(False)
-
-    def test_replay_ignores_the_opt_out(self):
-        """ "Don't show again" stops the greeting, it doesn't remove the tutorial."""
-        at = AppTest.from_function(_welcome_tour_replay_app)
-        at.run()
-        assert at.session_state["tour_mode"] == "spotlight"
-        assert any(b.key == "tour_sp_next" for b in at.button)
-
-    def test_opted_out_is_false_without_a_request_context(self):
-        """Bare-mode / headless imports have no cookies — must not raise."""
-        from scanpath_studio.tour import tour_opted_out
-
-        assert tour_opted_out() is False
-
-
-def _tour_optout_dual_app():
-    """Stand-ins for the welcome tour's own checkbox and the 🧭 Tutorials
-    picker's Welcome tour card checkbox — the two real surfaces sharing this
-    preference."""
     import streamlit as st
 
     from scanpath_studio.tour import (
         _arm_tour,
-        _render_tour_optout,
         render_spotlight_tour,
+        restore_sample_on_rerun,
     )
 
-    st.session_state["tour_seen"] = True
-    if not st.session_state.get("_armed_once"):
-        st.session_state["_armed_once"] = True
+    restore_sample_on_rerun()
+    if not st.session_state.get("started"):
+        st.session_state["started"] = True
+        st.session_state["_tutorial_context"] = {
+            "n_trials": 1,
+            "selected_has_fixations": True,
+        }
         _arm_tour()
     render_spotlight_tour()
-    _render_tour_optout(st, key_suffix="_picker")
 
 
-class TestWelcomeTourOptOutSync:
-    """The welcome tour's own checkbox and the picker card's copy of it are two
-    widgets sharing the ``tour_dont_show`` truth — ticking either must show as
-    ticked in the other, the same guarantee the per-tutorial checkboxes have."""
-
-    def test_both_default_off(self):
-        at = AppTest.from_function(_tour_optout_dual_app)
-        at.run()
-        assert not at.exception, at.exception
-        assert at.checkbox(key="tour_dont_show").value is False
-        assert at.checkbox(key="tour_dont_show_picker").value is False
-
-    def test_checking_the_tour_shows_checked_on_the_picker_card(self):
-        at = AppTest.from_function(_tour_optout_dual_app)
-        at.run()
-        at.checkbox(key="tour_dont_show").check().run()
-        assert not at.exception, at.exception
-        assert at.checkbox(key="tour_dont_show_picker").value is True
-
-    def test_checking_the_picker_card_is_seen_by_tour_opted_out(self):
-        at = AppTest.from_function(_tour_optout_dual_app)
-        at.run()
-        at.checkbox(key="tour_dont_show_picker").check().run()
-        assert not at.exception, at.exception
-        # `tour_opted_out()` (what the auto-open gate calls) checks
-        # `_tour_dismissed` first — a plain flag, not either checkbox's own
-        # widget key, since Streamlit forbids writing into a key whose widget
-        # already rendered this run and both checkboxes can be on screen at
-        # once.
-        assert at.session_state["_tour_dismissed"] is True
-
-
-def _tour_off_scanpath_app():
-    """The welcome tour on a view other than Scanpath, with the nav's switch
-    recorded rather than performed (``menu.switch_to_view`` needs the router)."""
-    from unittest import mock
-
+def _fresh_demo():
     import streamlit as st
 
-    from scanpath_studio import tour
-    from scanpath_studio.constants import _VIEW_DATA
+    from scanpath_studio.tour import (
+        maybe_show_welcome_tour,
+        render_spotlight_tour,
+        restore_sample_on_rerun,
+    )
 
-    st.session_state.setdefault("main_nav", _VIEW_DATA)
-    st.session_state["tour_seen"] = True
-
-    def _switch(view):
-        st.session_state.setdefault("switched_to", []).append(view)
-        st.session_state["main_nav"] = view
-
-    with mock.patch.object(tour, "switch_to_view", _switch):
-        tour.maybe_show_welcome_tour(st.session_state["main_nav"])
-    tour.render_spotlight_tour()
+    restore_sample_on_rerun()
+    st.session_state.setdefault(
+        "_tutorial_context", {"n_trials": 1, "selected_has_fixations": True}
+    )
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
 
 
-class TestTourLivesOnScanpath:
-    """Every welcome-tour step points at the Scanpath view, so the card is
-    never left open on another view."""
-
-    def test_opening_its_tab_elsewhere_goes_back_to_scanpath(self):
-        from scanpath_studio.constants import _VIEW_SCANPATH
-
-        at = AppTest.from_function(_tour_off_scanpath_app)
-        at.session_state["tour_mode"] = "spotlight"
-        at.session_state["tour_step"] = 3
-        at.session_state["_guide_folded_tour"] = True
-        at.run()
+class TestSampleInvitation:
+    def test_inline_offer_is_dismissible(self):
+        at = AppTest.from_function(_fresh_demo).run()
         assert not at.exception, at.exception
-        assert "switched_to" not in at.session_state
-        at.button(key="guide_unfold_tour").click().run()
-        assert not at.exception, at.exception
-        assert at.session_state["switched_to"] == [_VIEW_SCANPATH]
-        assert at.session_state["tour_step"] == 3
-        assert any(b.key == "tour_sp_next" for b in at.button)
-
-    def test_left_open_on_another_view_it_folds(self):
-        at = AppTest.from_function(_tour_off_scanpath_app)
-        at.session_state["tour_mode"] = "spotlight"
-        at.session_state["tour_step"] = 2
-        at.run()
-        assert not at.exception, at.exception
-        assert "switched_to" not in at.session_state
-        assert {b.key for b in at.button if b.key} == {
-            "guide_unfold_tour",
-            "guide_close_tour",
+        assert any(m.value == "A sample reading is open." for m in at.markdown)
+        assert not at.progress
+        assert {b.label for b in at.button} == {
+            "Import my data",
+            "Replay this reading",
+            "Dismiss",
         }
+        at.button(key="sample_invitation_dismiss").click().run()
+        assert at.session_state["_tour_dismissed"]
+        assert any(
+            "sps_tour_optout=1" in iframe.proto.srcdoc for iframe in at.get("iframe")
+        )
+        at.run()
+        assert not at.button
 
-    def test_left_on_its_last_step_it_ends(self):
-        """The last step points at the nav, so following it ends the tour
-        (as Done does) rather than leaving a tab that reads as still running."""
-        from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-        at = AppTest.from_function(_tour_off_scanpath_app)
-        at.session_state["tour_mode"] = "spotlight"
-        at.session_state["tour_step"] = len(_SPOTLIGHT_STEPS) - 1
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"source": "demo"},
+            {"participant": "p"},
+            {"tab": "animation"},
+            {"palette": "Set2"},
+            {"debug": "1"},
+        ],
+    )
+    def test_a_deep_link_skips_the_invitation(self, params):
+        at = AppTest.from_function(_fresh_demo)
+        at.query_params.update(params)
         at.run()
         assert not at.exception, at.exception
-        assert at.session_state["tour_mode"] is None
-        assert "switched_to" not in at.session_state
-        assert not [b for b in at.button if b.key]
+        assert not at.button
 
-    def test_the_tab_closes_the_tour(self):
-        at = AppTest.from_function(_tour_off_scanpath_app)
-        at.session_state["tour_mode"] = "spotlight"
-        at.session_state["tour_step"] = 3
-        at.run()
-        at.button(key="guide_close_tour").click().run()
+    @pytest.mark.parametrize("already_seen", [True, False])
+    def test_a_returning_browser_or_an_embed_is_not_greeted(self, already_seen):
+        from unittest.mock import PropertyMock, patch
+
+        import streamlit as st
+
+        from scanpath_studio.tour import TOUR_OPTOUT_COOKIE
+
+        with (
+            patch.object(
+                type(st.context),
+                "cookies",
+                new_callable=PropertyMock,
+                return_value={TOUR_OPTOUT_COOKIE: "1"} if already_seen else {},
+            ),
+            patch.object(
+                type(st.context),
+                "is_embedded",
+                new_callable=PropertyMock,
+                return_value=not already_seen,
+            ),
+        ):
+            at = AppTest.from_function(_fresh_demo).run()
         assert not at.exception, at.exception
-        assert at.session_state["tour_mode"] is None
-        assert "switched_to" not in at.session_state
-        assert not [b for b in at.button if b.key]
+        assert not at.button
 
-    def test_started_on_scanpath_it_asks_for_no_switch(self):
-        from scanpath_studio.constants import _VIEW_SCANPATH
+    def test_no_offer_in_a_restored_session(self):
+        from scanpath_studio.persistence import _RESTORED_PAYLOAD_KEY
 
-        at = AppTest.from_function(_tour_off_scanpath_app)
-        at.session_state["main_nav"] = _VIEW_SCANPATH
+        at = AppTest.from_function(_fresh_demo)
+        at.session_state[_RESTORED_PAYLOAD_KEY] = {}
+        at.run()
+        assert not at.button
+
+    def test_a_finished_import_does_not_carry_its_guide_into_the_next_one(self):
+        at = AppTest.from_function(_fresh_demo)
+        at.session_state["tour_mode"] = "wizard"
         at.session_state["tour_seen"] = True
         at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_mode"] is None
+
+    @pytest.mark.parametrize("mode", ["essentials", "full"])
+    def test_guide_replays_and_returns_to_the_previous_figure_in_either_mode(
+        self, mode
+    ):
+        from scanpath_studio.constants import _VIEW_SCANPATH, GUIDE_RETURN_KEY
+        from scanpath_studio.session_keys import SINGLE_ANIMATE, SINGLE_COMPARE_TOGGLE
+
+        at = AppTest.from_function(_fresh_demo)
+        at.session_state["ui_mode"] = mode
+        at.session_state[SINGLE_ANIMATE] = False
+        at.session_state[SINGLE_COMPARE_TOGGLE] = True
+        at.session_state["global_anim_autoplay"] = False
+        at.run()
+        at.button(key="sample_invitation_replay").click().run()
+        assert not at.exception, at.exception
+        assert at.session_state["ui_mode"] == mode
+        assert (
+            at.session_state[SINGLE_ANIMATE]
+            and not at.session_state[SINGLE_COMPARE_TOGGLE]
+        )
+        assert at.session_state["global_anim_autoplay"]
+        assert at.session_state[GUIDE_RETURN_KEY] == {
+            "main_nav": _VIEW_SCANPATH,
+            SINGLE_ANIMATE: False,
+            SINGLE_COMPARE_TOGGLE: True,
+            "global_anim_autoplay": False,
+        }
+        assert any("milliseconds" in m.value for m in at.markdown)
+        at.button(key="tour_sp_next").click().run()
+        assert at.progress[0].text == "Step 2 of 2"
+        at.button(key="tour_sp_done").click().run()
+        assert not at.exception, at.exception
+        assert (
+            not at.session_state[SINGLE_ANIMATE]
+            and at.session_state[SINGLE_COMPARE_TOGGLE]
+        )
+        assert not at.session_state["global_anim_autoplay"]
+        assert GUIDE_RETURN_KEY not in at.session_state
+        assert not at.button
+
+    def test_a_guide_cannot_replace_the_open_dataset_or_escape_an_upload(self):
         from unittest.mock import patch
 
         from scanpath_studio import tour
 
-        with patch.object(tour.st, "session_state", at.session_state):
-            tour._arm_tour()
-        at.run()
+        for state in (
+            {"data_source_choice": "My study"},
+            {"_pending_source_choice": "My study"},
+            {"_show_upload_wizard": True},
+            {"_tutorial_context": {"n_trials": 0}},
+        ):
+            before = dict(state)
+            with patch.object(tour.st, "session_state", state):
+                assert not tour.sample_reading_available()
+                tour._arm_tour()
+            assert state == before
+
+
+class TestWizardGuideSpotlight:
+    def test_closing_and_finishing_each_end_the_guide(self):
+        from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
+
+        at = AppTest.from_function(_wizard_guide_app).run()
         assert not at.exception, at.exception
-        assert "switched_to" not in at.session_state
-        assert "_tour_to_scanpath" not in at.session_state
-        assert any(b.key == "tour_sp_next" for b in at.button)
-
-
-class TestTourCardPlacement:
-    """The card moves out of the way of what a step shows (Full's steps)."""
-
-    def test_the_filter_summary_and_rail_steps_dock_left(self):
-        from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-        docks = [step.get("dock") for step in _SPOTLIGHT_STEPS]
-        assert docks[4:8] == ["left"] * 4
-        assert docks[1] == docks[8] == "top"
-        assert {docks[0], *docks[2:4], *docks[9:]} == {None}
-
-    def test_every_dock_has_its_css(self):
-        from scanpath_studio.tour import _CARD_DOCKS, _SPOTLIGHT_STEPS
-
-        assert {s["dock"] for s in _SPOTLIGHT_STEPS if "dock" in s} <= set(_CARD_DOCKS)
-
-    def test_a_docked_step_draws_its_dock(self):
-        from scanpath_studio.tour import _CARD_DOCKS
-
-        at = AppTest.from_function(_welcome_tour_app)
-        at.session_state["ui_mode"] = "full"
+        at.button(key="wizard_sp_exit").click().run()
+        assert not at.progress
+        at = AppTest.from_function(_wizard_guide_app).run()
+        at.session_state["wizard_guide_step"] = len(_WIZARD_GUIDE_STEPS) - 1
         at.run()
-        for step, dock in ((4, "left"), (8, "top")):
-            at.session_state["tour_step"] = step
-            at.run()
-            assert any(_CARD_DOCKS[dock] in m.value for m in at.markdown)
-        at.session_state["tour_step"] = 2
-        at.run()
-        styles = " ".join(m.value for m in at.markdown)
-        assert not any(css in styles for css in _CARD_DOCKS.values())
-
-
-def test_tour_names_controls_as_the_screen_draws_them():
-    """An icon-only button is named by its icon and chevron plus "button",
-    never by an icon standing in for a word or a label it does not show."""
-    from scanpath_studio.constants import ICONS
-    from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-    bodies = {step["selector"]: step["body"] for step in _SPOTLIGHT_STEPS}
-    chevron = ICONS["menu_arrow"]
-    for icon, selector in (
-        ("add", ".st-key-tour_grp_data_source"),
-        ("trial_filter", ".st-key-tour_grp_narrow_by"),
-        ("edit", ".st-key-tour_grp_chips"),
-    ):
-        assert f"**{ICONS[icon]} {chevron}** button" in bodies[selector]
-    assert f"**{chevron}** beside each toggle" in bodies[".st-key-tour_grp_view_modes"]
-    for body in bodies.values():
-        assert not body.startswith(":material/")
-        assert "▾" not in body
-        assert "+ Add dataset" not in body
-
-
-def test_tour_text_is_plain_and_literal():
-    """Plain words for readers whose first language is not English: no idioms,
-    and the trial's field row is called what the app calls it."""
-    from scanpath_studio.tour import _SPOTLIGHT_STEPS
-
-    text = " ".join(step["title"] + " " + step["body"] for step in _SPOTLIGHT_STEPS)
-    for phrase in ("chip", "scrub", "pools", "at a glance", "opens over"):
-        assert phrase not in text.lower(), phrase
-    assert any(s["title"].endswith("Trial summary") for s in _SPOTLIGHT_STEPS)
-
-
-def test_welcome_tour_text_is_concise():
-    """Every welcome/spotlight/wizard step body stays short (UI/UX: no walls of
-    text). Guards against the steps growing into multi-paragraph blurbs."""
-    from scanpath_studio.tour import (
-        _SPOTLIGHT_STEPS,
-        _STEPS,
-        _WIZARD_GUIDE_STEPS,
-    )
-
-    for _title, body in _STEPS:
-        assert len(body) <= 240, f"welcome dialog step too long: {body!r}"
-    for step in _SPOTLIGHT_STEPS:
-        assert len(step["body"]) <= 240, f"spotlight step too long: {step['body']!r}"
-    for step in _WIZARD_GUIDE_STEPS:
-        assert len(step["body"]) <= 280, f"wizard guide step too long: {step['body']!r}"
-
-
-# -----------------------------------------------------------------------------
-# Task-oriented tutorials
-# -----------------------------------------------------------------------------
+        at.button(key="wizard_sp_done").click().run()
+        assert not at.progress
 
 
 def _surface_open_probe_app():
@@ -496,6 +222,7 @@ def _surface_open_probe_app():
     data_step = next(
         s for tutorial in TUTORIALS for s in tutorial.steps if s.view == _VIEW_DATA
     )
+    st.session_state["data_workspace"] = data_step.data_section
     verdicts = []
     for view in (_VIEW_DATA, _VIEW_CORPUS, _VIEW_SCANPATH):
         st.session_state["main_nav"] = view
@@ -517,10 +244,6 @@ def _use_case_tutorial_app():
         "_tutorial_context",
         {
             "n_trials": 3,
-            "has_words": True,
-            "has_fixations": True,
-            "has_comparable_readings": True,
-            "has_corpus_variation": True,
         },
     )
     st.session_state.setdefault("main_nav", _VIEW_CORPUS)
@@ -550,85 +273,75 @@ def _choose_help_entry(at, entry: str) -> None:
     at.run()
 
 
-def _tutorial_library_optout_app():
-    """Mirrors app.main's ordering: serve the chooser early, stash its context late.
-
-    The chooser is a dialog off the ❓ Help nav entry (a ``🧭 Tutorials`` popover
-    there would be a popover-inside-a-popover), armed the same way as the FAQ — see ``tour.maybe_show_tutorial_library``.
-    """
+def _tutorial_library_app():
+    """Open the chooser from the same capability snapshot as the app."""
     import streamlit as st
 
-    from scanpath_studio.tour import (
-        maybe_show_tutorial_library,
-        stash_tutorial_context,
-    )
+    from scanpath_studio.tour import maybe_show_tutorial_library, stash_tutorial_context
 
-    st.session_state["tour_dont_show"] = True
-    maybe_show_tutorial_library()
+    st.session_state["tour_seen"] = True
     stash_tutorial_context(
         {
             "n_trials": 2,
-            "has_words": True,
             "has_fixations": True,
-            "has_comparable_readings": True,
-            "has_corpus_variation": True,
+            "selected_has_fixations": True,
+            "has_word_measures": True,
         }
     )
+    maybe_show_tutorial_library()
 
 
 class TestUseCaseTutorials:
     def test_registry_is_unique_concise_and_outcome_oriented(self):
         from scanpath_studio.tour import TUTORIALS
 
-        assert len(TUTORIALS) == 5
         assert len({tutorial.id for tutorial in TUTORIALS}) == len(TUTORIALS)
         for tutorial in TUTORIALS:
-            assert tutorial.outcome.strip()
-            assert tutorial.estimated_time.endswith("min")
-            assert tutorial.completion_test
             assert tutorial.docs_url.startswith("https://")
             assert tutorial.steps
             assert all(len(step.body) <= 300 for step in tutorial.steps)
 
-    def test_availability_is_derived_from_loaded_data(self):
+    def test_availability_follows_the_frames_each_workspace_uses(self):
         import pandas as pd
 
         from scanpath_studio.tour import (
-            TUTORIALS,
+            _TUTORIAL_BY_ID,
             build_tutorial_context,
             tutorial_availability,
         )
 
-        empty = build_tutorial_context(pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
-        availability = {
-            tutorial.id: tutorial_availability(tutorial, empty)[0]
-            for tutorial in TUTORIALS
-        }
-        assert availability == {
-            "load_inspect": True,
-            "filter_annotate": False,
-            "publication_figure": False,
-            "compare_readings": False,
-            "explore_corpus": False,
-        }
-
         combos = pd.DataFrame(
-            {
-                "participant_id": ["p1", "p2"],
-                "trial_id": ["t1", "t2"],
-                "text_id": ["same", "same"],
-            }
+            {"participant_id": ["p1", "p1"], "trial_id": ["t1", "t2"]}
         )
-        ready = build_tutorial_context(
-            pd.DataFrame({"word_id": [1]}),
-            pd.DataFrame({"fixation_id": [1]}),
-            combos,
+        empty = pd.DataFrame()
+        raw_only = build_tutorial_context(empty, empty, combos)
+        fix_only = build_tutorial_context(empty, combos, combos)
+        words_only = build_tutorial_context(
+            combos.assign(first_fixation_ms=[80, 150]), empty, combos
         )
-        assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
+        for context, corpus, compare in (
+            (raw_only, False, False),
+            (fix_only, False, True),
+            (words_only, True, False),
+        ):
+            assert tutorial_availability(
+                _TUTORIAL_BY_ID["publication_figure"], context
+            )[0]
+            assert (
+                tutorial_availability(_TUTORIAL_BY_ID["explore_corpus"], context)[0]
+                is corpus
+            )
+            assert (
+                tutorial_availability(_TUTORIAL_BY_ID["compare_readings"], context)[0]
+                is compare
+            )
+        no_trials = build_tutorial_context(empty, empty, empty)
+        assert not tutorial_availability(
+            _TUTORIAL_BY_ID["publication_figure"], no_trials
+        )[0]
+        assert tutorial_availability(_TUTORIAL_BY_ID["load_inspect"], no_trials)[0]
 
-    def test_the_filter_is_named_when_it_is_why_a_tutorial_cannot_start(self):
-        """When the dataset has two readings with the same text id and a filter
-        hides them, the reason names the filter, not a missing pair."""
+    def test_the_filter_is_named_when_it_hides_all_fixation_readings(self):
         import pandas as pd
 
         from scanpath_studio.tour import (
@@ -637,24 +350,42 @@ class TestUseCaseTutorials:
             filtered_reason,
         )
 
+        one = pd.DataFrame({"participant_id": ["p1"], "trial_id": ["t1"]})
+        empty = one.iloc[:0]
         compare = _TUTORIAL_BY_ID["compare_readings"]
-        both = pd.DataFrame(
-            {
-                "participant_id": ["p1", "p2"],
-                "trial_id": ["t1", "t2"],
-                "text_id": ["same", "same"],
-            }
-        )
-        words, fixations = pd.DataFrame({"w": [1]}), pd.DataFrame({"f": [1]})
-        narrowed = build_tutorial_context(words, fixations, both.iloc[:1])
-        assert filtered_reason(compare, narrowed) is None  # no snapshot: not filtered
-        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both)
-        assert filtered_reason(compare, narrowed) == (
-            "no two trials left share a text."
-        )
-        # The dataset itself lacks the pair: the filter is not the cause.
-        narrowed["unfiltered"] = build_tutorial_context(words, fixations, both.iloc[:1])
+        narrowed = build_tutorial_context(None, empty, one)
         assert filtered_reason(compare, narrowed) is None
+        narrowed["unfiltered"] = build_tutorial_context(None, one, one)
+        assert "include a reading with fixations" in filtered_reason(compare, narrowed)
+        narrowed["unfiltered"] = build_tutorial_context(None, empty, one)
+        assert filtered_reason(compare, narrowed) is None
+
+    def test_one_primary_reading_can_follow_the_comparison_with_dataset_b(self):
+        from pathlib import Path
+
+        from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
+        from scanpath_studio.session_keys import (
+            COMPARE_SOURCE_STATE_KEY,
+            SINGLE_COMPARE_TOGGLE,
+        )
+
+        script = Path(__file__).resolve().parents[1] / "streamlit_app.py"
+        at = AppTest.from_file(str(script), default_timeout=60)
+        at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
+        at.session_state[SINGLE_COMPARE_TOGGLE] = True
+        at.session_state[COMPARE_SOURCE_STATE_KEY] = DEMO_CHOICE
+        at.session_state["_tutorial_library_requested"] = True
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["_tutorial_context"]["n_trials"] == 1
+        assert at.session_state["_share_selection"]["compare"]["source"] == DEMO_CHOICE
+        at.button(key="tutorial_start_compare_readings").click().run()
+        at.button(key="tutorial_next").click().run()
+        assert not at.exception, at.exception
+        assert any(
+            "another dataset under **Dataset B**" in item.value for item in at.markdown
+        )
+        assert at.session_state["_share_selection"]["compare"]["source"] == DEMO_CHOICE
 
     def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
         """Starting a tutorial navigates to its first step's view right
@@ -692,7 +423,7 @@ class TestUseCaseTutorials:
         tutorial = next(t for t in TUTORIALS if t.id == "filter_annotate")
         at = AppTest.from_function(_use_case_tutorial_app).run()
         assert not at.exception, at.exception
-        assert [b.proto.url for b in at.link_button] == [tutorial.docs_url]
+        assert any(tutorial.docs_url in item.value for item in at.markdown)
 
     def test_a_data_page_step_counts_as_open_on_the_data_page(self):
         """The surface check knows all three top-level views.
@@ -706,159 +437,172 @@ class TestUseCaseTutorials:
         assert not at.exception, at.exception
         assert at.markdown[0].value == "True,False,False,False"
 
-    def test_library_remains_available_after_welcome_opt_out(self):
-        at = AppTest.from_function(_tutorial_library_optout_app).run()
+    def test_six_readable_topics_are_offered_in_the_chooser(self):
+        at = AppTest.from_function(_tutorial_library_app).run()
         assert not at.exception, at.exception
-        # Opening the chooser is picking ❓ Help → Tutorials in the nav, which
+        # Picking Help → Task guides in the nav
         # arms the dialog the next run serves.
         _choose_help_entry(at, "help_tutorials")
         assert not at.exception, at.exception
         keys = {button.key for button in at.button if button.key}
         assert "tutorial_start_load_inspect" in keys
         assert "tutorial_start_explore_corpus" in keys
-
-
-# -----------------------------------------------------------------------------
-# FAQ
-# -----------------------------------------------------------------------------
-
-
-def _faq_app():
-    """Mirrors app.main: the dialog is served early, once the nav has armed it.
-
-    The ❓ Help → FAQ entry only arms the dialog, so the modal doesn't wait on
-    the heavy data/plot work after it — see ``tour.maybe_show_faq``.
-    """
-    from scanpath_studio.tour import maybe_show_faq
-
-    maybe_show_faq()
-
-
-class TestFaq:
-    """The in-app FAQ dialog and its links out to the docs site."""
-
-    def test_help_entry_opens_a_dialog_with_every_item(self):
-        # The set is conditional — a gated feature's entry is only
-        # offered when that feature is. `faq_items()` is the resolved list.
-        from scanpath_studio.tour import faq_items
-
-        at = AppTest.from_function(_faq_app)
-        at.run()
-        assert not at.error
-        assert not at.expander, "the dialog opened before anything armed it"
-
-        _choose_help_entry(at, "help_faq")
-        assert not at.error
-        assert len(at.expander) == len(faq_items())
-
-    def test_the_dialog_links_out_to_the_faq_and_tutorials_pages(self):
-        from scanpath_studio.tour import DOCS_FAQ_URL, DOCS_TUTORIALS_URL
-
-        at = AppTest.from_function(_faq_app)
-        at.run()
-        _choose_help_entry(at, "help_faq")
-        assert [b.proto.url for b in at.link_button] == [
-            DOCS_FAQ_URL,
-            DOCS_TUTORIALS_URL,
+        assert [topic.label for topic in at.expander] == [
+            "Replay a sample reading",
+            "Import and check a recording",
+            "Filter and mark trials",
+            "Compare readings",
+            "Analyze a corpus",
+            "Export or reproduce a figure",
         ]
+        assert at.button(key="tutorial_start_filter_annotate").label == "Open in Full"
+        assert (
+            at.button(key="tutorial_start_explore_corpus").label == "Show me in the app"
+        )
 
-    def test_docs_links_point_at_the_published_pages(self):
-        """The FAQ is the app's help-context route into the docs — if these
-        drift from the mkdocs nav the buttons 404."""
-        from scanpath_studio.constants import CITATION
-        from scanpath_studio.tour import DOCS_FAQ_URL, DOCS_TUTORIALS_URL
+    def test_cold_start_uses_this_dataset_and_returns_to_the_original_corpus_view(self):
+        from pathlib import Path
 
-        assert DOCS_FAQ_URL == f"{CITATION['docs_url']}faq/"
-        assert DOCS_TUTORIALS_URL == f"{CITATION['docs_url']}tutorials/"
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
 
-    def test_answers_stay_short(self):
-        """Same rule as the tour steps: the long version lives in docs/faq.md."""
-        from scanpath_studio.tour import faq_items
+        script = Path(__file__).resolve().parents[1] / "streamlit_app.py"
+        at = AppTest.from_file(str(script), default_timeout=60)
+        at.query_params["ui"] = "essentials"
+        at.query_params["embed"] = "true"
+        at.session_state["_tutorial_library_requested"] = True
+        at.session_state["main_nav"] = _VIEW_CORPUS
+        at.session_state["corpus_subtab"] = "Groups"
+        at.run()
+        assert not at.exception
+        assert at.query_params["corpus_subtab"] == "Groups"
+        assert at.button(key="tutorial_start_explore_corpus")
+        at.button(key="tutorial_start_filter_annotate").click().run()
+        assert not at.exception
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        assert at.session_state["ui_mode"] == "full"
+        assert "corpus_subtab" not in at.query_params
+        assert at.query_params["embed"] == "true"
+        at.button(key="tutorial_next").click().run()
+        at.button(key="tutorial_exit").click().run()
+        assert not at.exception
+        assert at.session_state["main_nav"] == _VIEW_CORPUS
+        assert at.session_state["corpus_subtab"] == "Groups"
+        assert at.session_state["ui_mode"] == "essentials"
+        assert at.query_params["corpus_subtab"] == "Groups"
+        assert at.query_params["embed"] == "true"
 
-        assert faq_items(), "the FAQ must not be empty"
-        for question, answer in faq_items():
-            assert question.endswith(("?", ".")), f"not a question: {question!r}"
-            assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
+    def test_import_visits_the_library_editor_and_overview_then_returns_to_saved_work(
+        self, experimental_off
+    ):
+        from scanpath_studio.constants import (
+            DATA_CURRENT,
+            DATA_INSPECTION_KEY,
+            DATA_LIBRARY,
+            DATA_STORAGE,
+            DATA_WORKSPACE_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        )
+        from tests.conftest import APP_SCRIPT, pin_data_view
 
-    def test_where_data_goes_says_only_what_applies_here(self, monkeypatch):
-        """The hosted demo's FAQ must not claim uploads stay local."""
-        from scanpath_studio import persistence, tour
-
-        def answer() -> str:
-            (text,) = [a for q, a in tour.faq_items() if q == tour._WHERE_DATA_GOES]
-            return text
-
-        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
-        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: False)
-        hosted = answer()
-        assert "processed on the server running this app" in hosted
-        assert "Nowhere" not in hosted and "not kept" in hosted
-
-        monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: True)
-        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
-        local = answer()
-        assert "processed on your computer" in local
-        assert "local copy" in local and "server" not in local
-
-    def test_about_says_where_data_goes_for_this_run(self):
-        """About's privacy line is the short form of this answer, decided by
-        the same tests, and points to it."""
-        from scanpath_studio.app import _about_privacy_line
-
-        local = _about_privacy_line(local=True, saving=True)
-        assert "It stays on this computer." in local and "saved here" in local
-        assert "server" not in local
-        assert "saved" not in _about_privacy_line(local=True, saving=False)
-
-        hosted = _about_privacy_line(local=False, saving=False)
-        assert "stays on this computer" not in hosted
-        assert "Streamlit Community Cloud" in hosted and "not kept" in hosted
-        opted_in = _about_privacy_line(local=False, saving=True)
-        assert "recovery copy is kept there" in opted_in
-        assert "not kept" not in opted_in and "Community Cloud" not in opted_in
-
-        for line in (local, hosted, opted_in):
-            assert "*Where does my data go?*" in line
-            assert len(line) <= 300, "one or two lines in About"
-
-    def test_about_shows_the_line_for_a_hosted_run(self, monkeypatch):
-        from streamlit.testing.v1 import AppTest
-
-        from scanpath_studio import app, persistence
-
-        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
-        monkeypatch.setattr(app, "server_bound_to_loopback", lambda: False)
-
-        def about():
-            from scanpath_studio import app
-
-            app._about_dialog()
-
-        at = AppTest.from_function(about).run()
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        at.query_params["ui"] = "essentials"
+        pin_data_view(at, section=DATA_STORAGE)
+        at.session_state["_tutorial_library_requested"] = True
+        at.run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_STORAGE
+        at.button(key="tutorial_start_load_inspect").click().run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_LIBRARY
+        at.button(key="tutorial_next").click().run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_CURRENT
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY]
+        at.button(key="tutorial_back").click().run()
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_LIBRARY
+        assert at.button(key="add_data_btn")
+        at.button(key="tutorial_next").click().run()
+        at.button(key="tutorial_next").click().run()
+        assert at.session_state[DATA_INSPECTION_KEY] == "Overview"
+        assert DATASET_EDITOR_OPEN_KEY not in at.session_state
+        at.button(key="tutorial_done").click().run()
         assert not at.exception, at.exception
-        body = " ".join(str(md.value) for md in at.markdown)
-        assert "Your data." in body and "not kept" in body
-        assert "stays on this computer" not in body
+        assert at.session_state[DATA_WORKSPACE_KEY] == DATA_STORAGE
+        assert at.session_state["ui_mode"] == "essentials"
 
-    def test_no_entry_is_for_someone_editing_the_code(self):
-        """The FAQ has no "I edited the code and nothing changed?": it is
-        contributor material, which CONTRIBUTING.md keeps, and this dialog
-        follows docs/faq.md."""
-        from scanpath_studio.tour import faq_items
+    @pytest.mark.parametrize(
+        ("section", "panel", "editing", "guide"),
+        [
+            ("Dataset library", "Overview", False, "filter_annotate"),
+            ("Current dataset", "Tables", False, "welcome"),
+            ("Current dataset", "Data checks", False, "load_inspect"),
+            ("Current dataset", "Tables", True, "filter_annotate"),
+        ],
+    )
+    def test_exit_restores_the_data_workspace_panel_and_editor(
+        self, section, panel, editing, guide
+    ):
+        from scanpath_studio.constants import (
+            _VIEW_DATA,
+            DATA_INSPECTION_KEY,
+            DATA_WORKSPACE_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        )
+        from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
+        from tests.conftest import APP_SCRIPT, pin_data_view
 
-        text = " ".join(f"{question} {answer}" for question, answer in faq_items())
-        assert "edited the code" not in text.lower()
-        assert "Restart the server" not in text
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        at.query_params["ui"] = "essentials"
+        pin_data_view(at, section=section)
+        at.session_state[DATA_INSPECTION_KEY] = panel
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = editing
+        if editing:
+            at.session_state[EDITOR_NAME_FIELD_KEY] = "Unfinished edit"
+        at.session_state["_tutorial_library_requested"] = True
+        at.run()
+        assert not at.exception, at.exception
+        if editing:
+            assert not any(b.key == "tutorial_start_load_inspect" for b in at.button)
+            assert any(
+                "save or cancel your open edit" in item.value for item in at.caption
+            )
+        at.button(key=f"tutorial_start_{guide}").click().run()
+        at.button(
+            key="tour_sp_close" if guide == "welcome" else "tutorial_exit"
+        ).click().run()
+        assert not at.exception, at.exception
+        assert at.session_state["main_nav"] == _VIEW_DATA
+        assert at.session_state[DATA_WORKSPACE_KEY] == section
+        assert at.session_state[DATA_INSPECTION_KEY] == panel
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is editing
+        if editing:
+            assert at.text_input(key=EDITOR_NAME_FIELD_KEY).value == "Unfinished edit"
+        assert at.session_state["ui_mode"] == "essentials"
 
-    def test_the_export_answer_works_in_the_desktop_app_too(self):
-        """The desktop bundle has no `plotly_get_chrome`, and no Python to
-        run it from; what it can use is an installed Chrome, Chromium or Edge."""
-        from scanpath_studio.tour import faq_items
+    def test_paused_guide_can_exit_and_restore_mode(self):
+        from scanpath_studio.constants import _VIEW_CORPUS
 
-        (answer,) = [answer for question, answer in faq_items() if "HTML" in question]
-        for browser in ("Chrome", "Chromium", "Edge"):
-            assert browser in answer
-        assert "pip install" in answer
+        at = AppTest.from_function(_use_case_tutorial_app).run()
+        at.session_state["_tutorial_context"] = {"n_trials": 0}
+        at.run()
+        assert "is paused" in at.info[0].value
+        at.button(key="tutorial_exit").click().run()
+        assert at.session_state["main_nav"] == _VIEW_CORPUS
+        assert at.session_state["ui_mode"] == "essentials"
+
+    def test_starting_again_after_done_returns_to_first_step(self):
+        from unittest.mock import patch
+
+        from scanpath_studio import tour
+
+        state = {
+            "_tutorial_context": {"n_trials": 2},
+            "tutorial_progress": {"publication_figure": 2},
+            "tutorial_completed": {"publication_figure": True},
+            "ui_mode": "essentials",
+        }
+        with patch.object(tour.st, "session_state", state):
+            tour._start_use_case("publication_figure")
+        assert state["tutorial_progress"]["publication_figure"] == 0
+        assert not state["tutorial_completed"]
+        assert state["ui_mode"] == "essentials"
 
 
 def _keys_built_inside_a_popover() -> set[str]:
@@ -914,11 +658,6 @@ class TestSpotlightSelectorsResolve:
     it just points at nothing, which no other test would notice.
     """
 
-    #: Selectors that point at Streamlit's own chrome rather than a container we
-    #: key ourselves — the native top nav has no `.st-key-*` of ours to target.
-    #: Allowlisted rather than skipped, so a typo in one still fails here.
-    PLATFORM_SELECTORS = {'[data-testid="stTopNavLinkContainer"]'}
-
     def _keyed_containers(self) -> set[str]:
         import re
         from pathlib import Path
@@ -935,20 +674,8 @@ class TestSpotlightSelectorsResolve:
         return [
             selector
             for selector in selectors
-            if selector
-            and selector not in self.PLATFORM_SELECTORS
-            and selector.removeprefix(".st-key-") not in keys
+            if selector and selector.removeprefix(".st-key-") not in keys
         ]
-
-    def test_platform_selectors_are_current(self):
-        """The allowlist must name the selector `menu` actually uses.
-
-        Otherwise a renamed Streamlit test id would sail through the two tests
-        below on the strength of a stale allowlist entry.
-        """
-        from scanpath_studio.menu import NAV_SELECTOR
-
-        assert NAV_SELECTOR in self.PLATFORM_SELECTORS
 
     def test_every_selector_has_a_container(self):
         from scanpath_studio.tour import _SPOTLIGHT_STEPS
@@ -992,28 +719,22 @@ class TestSpotlightSelectorsResolve:
             tabs.CORPUS_SUBTABS
         )
 
-    def test_the_data_page_draws_the_datasets_table_the_tutorial_points_at(self):
-        """The "Load and verify a dataset" tutorial outlines what the Data page
-        draws, not the data-source picker — which only Scanpath and Corpus
-        Analysis draw."""
-        from pathlib import Path
+    def test_the_first_import_step_highlights_the_control_that_imports_files(self):
+        from scanpath_studio.constants import DATA_LIBRARY
+        from scanpath_studio.tour import _TUTORIAL_BY_ID
+        from tests.conftest import APP_SCRIPT, pin_data_view
 
-        from streamlit.testing.v1 import AppTest
-
-        from scanpath_studio.constants import _VIEW_DATA
-
-        app_script = Path(__file__).resolve().parent.parent / "streamlit_app.py"
-        at = AppTest.from_file(str(app_script), default_timeout=60)
-        at.session_state["main_nav"] = _VIEW_DATA
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+        pin_data_view(at, section=DATA_LIBRARY)
         at.run()
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        def keys(node):
-            yield getattr(node, "key", None)
-            for child in getattr(node, "children", {}).values():
-                yield from keys(child)
-
-        assert "tutorial_available_datasets" in set(keys(at.main))
+        assert not at.exception, at.exception
+        step = _TUTORIAL_BY_ID["load_inspect"].steps[0]
+        label = (
+            at.container(key=step.selector.removeprefix(".st-key-"))
+            .button(key="add_data_btn")
+            .label
+        )
+        assert label == "Import files"
 
     def test_no_two_steps_spotlight_the_same_area(self):
         """Two steps sharing a selector would light up both areas at once.
@@ -1081,7 +802,7 @@ class TestSpotlightSelectorsResolve:
             for step in tutorial.steps
             if step.selector == ".st-key-tour_grp_narrow_by"
         ]
-        assert declared == [FUNNEL_TRIGGER, FUNNEL_TRIGGER]
+        assert declared == [FUNNEL_TRIGGER]
 
     def test_the_open_script_only_clicks_a_closed_trigger(self):
         """Opening is idempotent: a funnel the user already opened is left as
@@ -1104,13 +825,11 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio.tour import _CARD_OVER_POPOVER_CSS
 
         assert "z-index: 1000070" in _CARD_OVER_POPOVER_CSS
-        for source in ("render_spotlight_tour", "render_use_case_tutorial"):
-            import inspect
+        import inspect
 
-            from scanpath_studio import tour
+        from scanpath_studio.tour import render_use_case_tutorial
 
-            body = inspect.getsource(getattr(tour, source))
-            assert "_CARD_OVER_POPOVER_CSS" in body, source
+        assert "_CARD_OVER_POPOVER_CSS" in inspect.getsource(render_use_case_tutorial)
 
     def test_a_step_without_a_popover_closes_the_one_before_it(self):
         """The panel the previous step opened must not sit over this step's
@@ -1232,38 +951,11 @@ class TestSpotlightSelectorsResolve:
         )
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
-        assert "sps-control-label" in control_source
-        # The 2×2 grid of built-in designs — 🛠️ Custom is the unnamed "your
-        # last hand-tuning" slot — and the user's own named designs are the
-        # library beneath it.
-        assert 'key="viz_view_custom"' in control_source
-        assert '_render_saved_designs(advanced_only(viz, "rail_designs"))' in (
-            control_source
+        assert "_render_view_controls(" in control_source
+        assert (
+            '_render_saved_designs(advanced_only(host, "rail_designs"))'
+            in inspect.getsource(controls._render_view_controls)
         )
-        # A section is a `[toggle | ▾]` row, not an expander.
-        assert "_rail_section(" in control_source
-        assert 'viz.expander("↗️ Saccades"' not in control_source
-
-    def test_plot_rail_merges_figure_and_canvas_without_nested_expander(self):
-        """Figure and canvas share one group, without nesting expanders.
-
-        📐 Figure & canvas is a `[name | ▾]` row whose popover holds the screen
-        half, the axes and the labels; the *text* half is in 📄 Stimulus → Text.
-        """
-        import inspect
-
-        from scanpath_studio import app, controls
-
-        control_source = inspect.getsource(controls.render_plot_controls)
-        canvas_source = inspect.getsource(app.render_canvas_controls)
-
-        assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
-        # The typography draws always, greyed while Text is off.
-        assert "text_disabled=not show_labels" in control_source
-        # Drawn inside a popover, so it must never open an expander of its own.
-        assert ".expander(" not in canvas_source
-        assert 'viz.expander("🖥️ Canvas & text"' not in control_source
-        assert 'viz.expander("📐 Figure & axes"' not in control_source
 
     def test_corpus_canvas_controls_stay_inside_the_style_expander(self):
         """The collapsed Corpus style row must own every canvas/font field."""
@@ -1275,24 +967,6 @@ class TestSpotlightSelectorsResolve:
         assert "as style_panel" in source
         assert "canvas_renderer(style_panel)" in source
         assert "canvas_renderer(target)" not in source
-
-    def test_plot_rail_uses_contextual_style_filter_labels(self):
-        """Repeated per-layer labels stay terse.
-
-        🧹 Filter is one section for the whole figure, and every section is a
-        `[toggle | ▾]` row — so a layer's style controls *are* its section's
-        popover body and need no label of their own. What is pinned is that the labels are the
-        section names, terse, and that Reset is not one of them.
-        """
-        import inspect
-
-        from scanpath_studio import controls
-
-        control_source = inspect.getsource(controls.render_plot_controls)
-
-        assert "f\"{ICONS['fixations']} **Fixations**\"" in control_source
-        assert "f\"{ICONS['plot_filter']} **Filters & highlights**{" in control_source
-        assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
         """Reset is the last thing in the rail, at full width.
@@ -1319,12 +993,12 @@ class TestSpotlightSelectorsResolve:
         assert (
             "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
         )
-        assert 'st.container(key="plot_reset_footer"),' in tab_source
-        assert "render_viz_reset(st)" in tab_source
+        assert 'st.container(key="plot_reset_footer")' in tab_source
+        assert "render_viz_reset(plot_footer)" in tab_source
         # No second column in the heading row, and no reset above the controls.
         assert "rail_heading, rail_reset = st.columns(" not in tab_source
         assert tab_source.index("render_plot_controls(") < tab_source.index(
-            "render_viz_reset(st)"
+            "render_viz_reset(plot_footer)"
         )
 
         # Full width, one label, no compact pill.
@@ -1349,7 +1023,7 @@ def test_spotlight_helpers_are_plain_functions_that_return_their_css():
     Inserting `_highlight_css` / `_scroll_into_view_script` directly above the
     decorated function leaves the decorator attached to the *helper* — which
     makes it return `None` (a fragment has no return value), silently dropping
-    the highlight outline from both the welcome tour and the setup guide, and
+    the highlight outline from both the sample replay and the setup guide, and
     costs the tour its fragment so every Back/Next waits on a full app rerun.
     """
     import inspect
@@ -1386,25 +1060,6 @@ def test_wizard_guide_steps_are_anchored_to_real_wizard_steps():
         # The parts are linear labels, not keyed expanders, so the
         # selector comes from their own container key.
         assert step["selector"] == f".st-key-{wizard_shell.part_key(step['step_id'])}"
-
-
-def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
-    """The nav selector matches one container per link: outlining each would
-    draw a row of separate brackets. It outlines one ring around all of them, which
-    the ring script places and removes once the step's CSS no longer styles it
-    or the tour card is gone, so it cannot outlive the tour."""
-    from scanpath_studio import tour
-    from scanpath_studio.menu import NAV_SELECTOR
-
-    css = tour._highlight_css(NAV_SELECTOR, "#1f77b4")
-    assert NAV_SELECTOR not in css
-    assert f"#{tour._GROUP_RING_ID}" in css and "outline: 3px solid" in css
-
-    script = tour._group_ring_script(NAV_SELECTOR)
-    assert tour._GROUP_RING_ID in script
-    assert ".st-key-tour_card" in script  # removes itself once the card is gone
-    # The instant hide on Done / ✕ hides the ring with the card.
-    assert tour._GROUP_RING_ID in tour._dismiss_listener_script(NAV_SELECTOR)
 
 
 def test_the_setup_guide_counts_the_parts_it_names(monkeypatch):
@@ -1462,7 +1117,7 @@ def test_the_setup_guide_progress_names_the_save_step():
 
 
 class TestEveryGuideCardFolds:
-    """The welcome tour, a tutorial and the setup guide each fold
+    """The sample replay, a task walkthrough and the setup guide each fold
     (—) to a tab naming where they are, open again where they were, and are
     dragged by their title (`tour._GUIDE_DRAG_SCRIPT`)."""
 
@@ -1474,9 +1129,7 @@ class TestEveryGuideCardFolds:
         assert not at.exception, at.exception
         at.button(key=f"guide_fold_{kind}").click().run()
         assert not at.exception, at.exception
-        # Only the welcome tour's tab has a ✕ of its own.
-        closer = {"guide_close_tour"} if kind == "tour" else set()
-        assert self._keys(at) == {f"guide_unfold_{kind}"} | closer
+        assert self._keys(at) == {f"guide_unfold_{kind}", f"guide_close_{kind}"}
         assert any(tab in m.value for m in at.markdown)
         assert not at.progress
         at.button(key=f"guide_unfold_{kind}").click().run()
@@ -1488,13 +1141,15 @@ class TestEveryGuideCardFolds:
 
     def test_the_welcome_tour(self):
         at = AppTest.from_function(_welcome_tour_app).run()
-        self._folds_and_opens(at, "tour", "tour_sp_next", "Welcome tour")
+        self._folds_and_opens(at, "tour", "tour_sp_next", "Replay a sample reading")
 
-    def test_the_welcome_tour_folds_without_its_backdrop(self):
+    def test_closing_a_folded_sample_guide_returns_to_the_previous_plot(self):
         at = AppTest.from_function(_welcome_tour_app).run()
-        assert any("tour-backdrop" in m.value for m in at.markdown)
         at.button(key="guide_fold_tour").click().run()
-        assert not any("tour-backdrop" in m.value for m in at.markdown)
+        at.button(key="guide_close_tour").click().run()
+        assert not at.exception, at.exception
+        assert not at.session_state["single_animate"]
+        assert not self._keys(at)
 
     def test_a_tutorial(self):
         at = AppTest.from_function(_use_case_tutorial_app).run()
@@ -1520,179 +1175,6 @@ class TestEveryGuideCardFolds:
             assert f'"sps_guide_pos_{kind}"' in script
             assert f".st-key-guide_pill_{kind}" in script
             assert "__KIND__" not in script
-
-
-# -----------------------------------------------------------------------------
-# Essentials mode's welcome tour
-# -----------------------------------------------------------------------------
-
-#: The containers Essentials draws that the welcome tour may spotlight.
-_SIMPLE_TOUR_SELECTORS = {
-    None,
-    ".st-key-tour_grp_trial_picker",
-    ".st-key-tour_grp_plot",
-    ".st-key-tour_grp_simple_views",
-    ".st-key-tour_grp_subtabs",
-    ".st-key-tour_grp_ui_mode",
-}
-
-
-class TestSimpleWelcomeTour:
-    def test_simple_steps_target_only_simple_elements(self):
-        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
-
-        assert {
-            s["selector"] for s in _SIMPLE_SPOTLIGHT_STEPS
-        } <= _SIMPLE_TOUR_SELECTORS
-        assert not any(s.get("popover") for s in _SIMPLE_SPOTLIGHT_STEPS)
-        assert 5 <= len(_SIMPLE_SPOTLIGHT_STEPS) <= 6
-        assert _SIMPLE_SPOTLIGHT_STEPS[0]["selector"] is None
-        assert _SIMPLE_SPOTLIGHT_STEPS[-1]["selector"] == ".st-key-tour_grp_ui_mode"
-
-    def test_simple_selectors_name_real_containers(self):
-        """Every selector is a key the code draws (the switch's lives in
-        ``ui_mode``, which the Full resolver test does not read)."""
-        from scanpath_studio import ui_mode
-        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
-
-        keys = TestSpotlightSelectorsResolve()._keyed_containers()
-        keys.add(ui_mode.SWITCH_BOX_KEY)
-        missing = [
-            s["selector"]
-            for s in _SIMPLE_SPOTLIGHT_STEPS
-            if s["selector"] and s["selector"].removeprefix(".st-key-") not in keys
-        ]
-        assert not missing
-
-    def test_simple_steps_are_short_unique_and_dock_validly(self):
-        from scanpath_studio.tour import _CARD_DOCKS, _SIMPLE_SPOTLIGHT_STEPS
-
-        selectors = [s["selector"] for s in _SIMPLE_SPOTLIGHT_STEPS if s["selector"]]
-        assert len(selectors) == len(set(selectors))
-        for step in _SIMPLE_SPOTLIGHT_STEPS:
-            assert len(step["body"]) <= 240, step["body"]
-            assert step.get("dock", "left") in _CARD_DOCKS
-        text = " ".join(s["title"] + " " + s["body"] for s in _SIMPLE_SPOTLIGHT_STEPS)
-        for phrase in ("chip", "scrub", "pools", "at a glance", "opens over"):
-            assert phrase not in text.lower(), phrase
-
-    def test_the_subtab_step_names_what_more_adds(self):
-        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
-
-        body = next(
-            s["body"]
-            for s in _SIMPLE_SPOTLIGHT_STEPS
-            if s["selector"] == ".st-key-tour_grp_subtabs"
-        )
-        for word in ("More", "Full", "questions", "annotations"):
-            assert word.lower() in body.lower(), word
-
-    def test_spotlight_steps_follow_the_mode(self):
-        from unittest.mock import patch
-
-        from scanpath_studio import tour
-
-        for mode, steps in (
-            ("essentials", tour._SIMPLE_SPOTLIGHT_STEPS),
-            ("full", tour._SPOTLIGHT_STEPS),
-        ):
-            with patch.object(tour.st, "session_state", {"ui_mode": mode}):
-                assert tour._spotlight_steps() is steps
-
-    def test_ui_param_does_not_suppress_the_tour(self):
-        from scanpath_studio.tour import tour_suppressed
-
-        assert tour_suppressed({"ui": "essentials"}) is False
-        assert tour_suppressed({"ui": "full"}) is False
-
-    def test_a_ui_link_alone_still_starts_the_tour_in_simple(self):
-        from pathlib import Path
-
-        app_script = Path(__file__).resolve().parent.parent / "streamlit_app.py"
-        at = AppTest.from_file(str(app_script), default_timeout=120)
-        at.query_params["ui"] = "essentials"
-        at.run()
-        assert not at.exception, at.exception
-        assert at.session_state["tour_mode"] == "spotlight"
-        assert any(b.key == "tour_sp_next" for b in at.button)
-
-    def test_the_card_counts_the_simple_steps(self):
-        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
-
-        at = AppTest.from_function(_welcome_tour_app)
-        at.session_state["ui_mode"] = "essentials"
-        at.run()
-        assert not at.exception, at.exception
-        n = len(_SIMPLE_SPOTLIGHT_STEPS)
-        assert any(f"Step 1 of {n}" in str(p.proto.text) for p in at.get("progress"))
-        for _ in range(n - 1):
-            at.button(key="tour_sp_next").click().run()
-        assert not at.exception, at.exception
-        assert any(f"Step {n} of {n}" in str(p.proto.text) for p in at.get("progress"))
-        assert any(b.key == "tour_sp_done" for b in at.button)
-
-    def test_the_welcome_card_replays_the_tour_for_the_mode(self):
-        """The Tutorials dialog's *Welcome tour* card arms the tour
-        (``_arm_tour``), which then walks the current mode's steps."""
-        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS, _SPOTLIGHT_STEPS
-
-        for mode, steps in (
-            ("essentials", _SIMPLE_SPOTLIGHT_STEPS),
-            ("full", _SPOTLIGHT_STEPS),
-        ):
-            at = AppTest.from_function(_welcome_tour_replay_app)
-            at.session_state["ui_mode"] = mode
-            at.run()
-            assert not at.exception, at.exception
-            assert at.session_state["tour_mode"] == "spotlight"
-            assert at.session_state["tour_step"] == 0
-            assert at.session_state["ui_mode"] == mode
-            assert any(
-                f"Step 1 of {len(steps)}" in str(p.proto.text)
-                for p in at.get("progress")
-            )
-
-
-class TestWelcomeTourAcrossTheSwitch:
-    """Each mode walks its own welcome tour, so changing mode mid-tour ends it
-    rather than landing on the same step number of the other tour."""
-
-    def test_switching_mode_ends_the_welcome_tour(self):
-        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
-
-        for start, other in (("essentials", "full"), ("full", "essentials")):
-            at = AppTest.from_function(_welcome_tour_with_switch_app)
-            at.session_state["ui_mode"] = start
-            at.run()
-            assert at.session_state["tour_mode"] == "spotlight"
-            at.session_state["tour_step"] = len(_SIMPLE_SPOTLIGHT_STEPS) - 1
-            at.segmented_control(key="ui_mode_switch").set_value(other).run()
-            assert not at.exception, at.exception
-            assert at.session_state["ui_mode"] == other
-            assert at.session_state["tour_mode"] is None
-            assert at.session_state["tour_seen"] is True
-            assert not at.get("progress")
-
-    def test_a_deselect_keeps_the_welcome_tour(self):
-        at = AppTest.from_function(_welcome_tour_with_switch_app)
-        at.session_state["ui_mode"] = "essentials"
-        at.run()
-        at.segmented_control(key="ui_mode_switch").set_value(None).run()
-        assert not at.exception, at.exception
-        assert at.session_state["ui_mode"] == "essentials"
-        assert at.session_state["tour_mode"] == "spotlight"
-
-
-def _welcome_tour_with_switch_app():
-    """The welcome tour beside the mode switch, as the header draws it."""
-    import streamlit as st
-
-    from scanpath_studio import ui_mode
-    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
-
-    ui_mode.render_switch(st)
-    maybe_show_welcome_tour()
-    render_spotlight_tour()
 
 
 class TestTutorialsFromSimple:
@@ -1736,19 +1218,17 @@ class TestTutorialsFromSimple:
         from unittest.mock import patch
 
         from scanpath_studio import tour
-        from scanpath_studio.constants import SUBTAB_EXPORT
+        from scanpath_studio.constants import GUIDE_RETURN_KEY, SUBTAB_EXPORT
 
         state = {
             "ui_mode": "essentials",
             "_tutorial_context": {
                 "n_trials": 2,
-                "has_words": True,
-                "has_fixations": True,
             },
         }
         with patch.object(tour.st, "session_state", state):
             tour._start_use_case("filter_annotate")
-        assert state["tutorial_return"]["single_subtab"] == SUBTAB_EXPORT
+        assert state[GUIDE_RETURN_KEY]["single_subtab"] == SUBTAB_EXPORT
         assert state["ui_mode"] == "full"
 
     def test_switching_to_simple_ends_the_running_tutorial(self):
@@ -1802,10 +1282,6 @@ def _tutorial_with_switch_app():
         st.session_state["_tutorial_armed_once"] = True
         st.session_state["_tutorial_context"] = {
             "n_trials": 3,
-            "has_words": True,
-            "has_fixations": True,
-            "has_comparable_readings": True,
-            "has_corpus_variation": True,
         }
         from scanpath_studio.tour import _start_use_case
 
@@ -1826,10 +1302,6 @@ def _cookie_after_tutorial_app():
     ui_mode._choose_mode(ui_mode.SIMPLE)
     st.session_state["_tutorial_context"] = {
         "n_trials": 2,
-        "has_words": True,
-        "has_fixations": True,
-        "has_comparable_readings": True,
-        "has_corpus_variation": True,
     }
     tour._start_use_case("filter_annotate")
     st.session_state["cookie_mode"] = ui_mode.cookie_mode()

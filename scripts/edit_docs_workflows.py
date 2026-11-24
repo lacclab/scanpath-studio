@@ -29,10 +29,11 @@ from record_workflow_demos import (
     HUD_MAX_WIDTH,
     HUD_RIGHT,
     LOCAL_PATHS_CSS,
-    OPT_OUT_COOKIES,
     OVERLAY_JS,
     VIEWPORT,
 )
+
+from scanpath_studio.tour import TOUR_OPTOUT_COOKIE
 
 ROOT = Path(__file__).resolve().parents[1]
 VIDEOS = ROOT / "docs/assets/workflows"
@@ -94,9 +95,7 @@ def capture_stills(browser) -> None:
             color_scheme="light",
             accept_downloads=True,
         )
-        context.add_cookies(
-            [{"name": n, "value": "1", "url": url} for n in OPT_OUT_COOKIES]
-        )
+        context.add_cookies([{"name": TOUR_OPTOUT_COOKIE, "value": "1", "url": url}])
         page = context.new_page()
         page.goto(f"{url}/?ui=full", wait_until="domcontentloaded")
         settle(page, quiet=3.0)

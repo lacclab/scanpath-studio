@@ -674,6 +674,23 @@ def test_render_multipart_manifest_lists_and_renders_all_screens(tmp_path, capsy
     assert (tmp_path / "parent__screen-001-intro.html").is_file()
     assert (tmp_path / "parent__screen-002-question.html").is_file()
 
+    cli.main(
+        [
+            *common,
+            "--all-screens",
+            "--dpi",
+            "600",
+            "-o",
+            str(tmp_path / "Fig.2.PUBLICATION.JSON"),
+        ]
+    )
+    for screen in ("001-intro", "002-question"):
+        name = f"Fig.2__screen-{screen}"
+        doc = json.loads((tmp_path / f"{name}.PUBLICATION.JSON").read_bytes())
+        assert doc["name"] == name
+        assert doc["dpi"] == 600
+        assert doc["schema"] == "scanpath-studio/publication/1"
+
     # --screens: only the screens named, each keeping its place in the trial.
     chosen = tmp_path / "chosen.html"
     cli.main([*common, "--screens", "question", "-o", str(chosen)])
@@ -995,9 +1012,9 @@ def test_python_dash_m_reaches_the_cli(tmp_path):
 # These pin the headless spelling of compare mode. `_SAMPLE_TRIAL_*` are two real trials of the bundled demo — a
 # renamed sample would break these loudly rather than silently comparing a
 # trial against itself.
-_SAMPLE_PARTICIPANT = "l37_1129"
-_SAMPLE_TRIAL_A = "l37_1129_2_1_1_Ele"
-_SAMPLE_TRIAL_B = "l37_1129_2_1_3_Adv"
+_SAMPLE_PARTICIPANT = "l37_273"
+_SAMPLE_TRIAL_A = "l37_273_2_1_1_Ele"
+_SAMPLE_TRIAL_B = "l37_273_2_1_3_Adv"
 
 
 def test_render_compare_with_writes_a_figure(tmp_path):
@@ -2204,9 +2221,30 @@ def test_check_json_is_the_api_table(tmp_path, capsys):
     assert records[0]["rows"] == 2
 
 
-def test_check_passes_the_sample(capsys):
+def test_check_json_preserves_missing_and_infinite_coordinates(tmp_path, capsys):
+    import json
+
+    raw = tmp_path / "gaze.csv"
+    raw.write_text(
+        "participant_id,trial_id,x,y,timestamp_ms\n"
+        "p1,t1,,5,0\np1,t1,inf,5,1\np1,t1,-inf,5,2\n",
+        encoding="utf-8",
+    )
+    cli.main(["check", "--raw-gaze", str(raw), "--json"])
+    records = json.loads(capsys.readouterr().out, parse_constant=pytest.fail)
+    assert [row["x"] for row in records[0]["examples"]] == [
+        None,
+        "Infinity",
+        "-Infinity",
+    ]
+    assert records[0]["rows"] == 3
+
+
+def test_check_counts_every_demo_sample_and_reports_recorded_position_gaps(capsys):
     cli.main(["check", "--sample"])
-    assert "every check passed" in capsys.readouterr().out
+    report = capsys.readouterr().out
+    assert "[note] Raw-gaze samples" in report
+    assert "14,628 of 401,200 rows in 18 trials" in report
 
 
 def test_check_needs_an_input():
@@ -2232,9 +2270,10 @@ def test_version_command_names_the_build_and_install(capsys):
     cli.main(["version"])
     out = capsys.readouterr().out.splitlines()
     assert out[0] == f"scanpath-studio {__version__}"
-    assert out[1] == f"Build:      {build_info().describe()}"
-    assert out[2] == f"Installed:  {INSTALL_KINDS[install_kind()]}"
-    assert len(out) == 3  # no --check, no network
+    assert out[1] == f"Channel:    {build_info().channel.title()}"
+    assert out[2] == f"Build:      {build_info().describe()}"
+    assert out[3] == f"Installed:  {INSTALL_KINDS[install_kind()]}"
+    assert len(out) == 4  # no --check, no network
 
 
 def test_version_check_prints_the_answer(capsys, monkeypatch):
@@ -2290,3 +2329,37 @@ def test_a_failed_version_check_exits_1(capsys, monkeypatch):
 def test_version_is_a_listed_command(capsys):
     cli.main(["--help"])
     assert "scanpath-studio version [--check]" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("rows", "read", "eligible", "message"),
+    [
+        ("", 0, 0, "header and no data rows"),
+        ("p1,,100,200,120\n", 1, 0, "missing ID in trial_id"),
+        ("p1,t1,100,200,120\n", 1, 1, "every check passed"),
+    ],
+)
+def test_check_distinguishes_empty_unkeyed_and_clean_rows(
+    tmp_path, capsys, rows, read, eligible, message
+):
+    import json
+
+    source = tmp_path / "fixations.csv"
+    source.write_text("participant_id,trial_id,x,y,duration_ms\n" + rows)
+    args = ["check", "--fixations", str(source)]
+    cli.main(args)
+    report = capsys.readouterr().out
+    assert message in report
+    if not eligible:
+        assert "no rows were checked" in report and "every check passed" not in report
+    cli.main([*args, "--json-report"])
+    report = json.loads(capsys.readouterr().out)
+    counts = report["tables"]["fixations"]
+    assert (counts["read"], counts["eligible"], counts["checked"]) == (
+        read,
+        eligible,
+        eligible,
+    )
+    assert counts["missing_id_columns"] == (["trial_id"] if read > eligible else [])
+    cli.main([*args, "--json"])
+    assert json.loads(capsys.readouterr().out) == report["findings"] == []

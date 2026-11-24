@@ -59,7 +59,7 @@ def main() -> None:
     print(f"median of {REPEATS} runs")
     for fmt, (wp, fp) in paths.items():
         t_load, (words, fixations) = timed(
-            lambda: sps.load_scanpath_data(str(wp), str(fp))
+            lambda: sps.load_scanpath_data(str(wp), str(fp), names="canonical")
         )
         combos = sps.list_trials(words, fixations)
         pid, tid = combos.iloc[0]["participant_id"], combos.iloc[0]["trial_id"]
@@ -87,7 +87,9 @@ def main() -> None:
 
     if POTEC_ROOT.exists():
         t_potec_load, (pw, pf) = timed(
-            lambda: sps.load_potec(POTEC_ROOT, readers=[0], texts=["b0"])
+            lambda: sps.load_potec(
+                POTEC_ROOT, readers=[0], texts=["b0"], names="canonical"
+            )
         )
         combos = sps.list_trials(pw, pf)
         pid, tid = combos.iloc[0]["participant_id"], combos.iloc[0]["trial_id"]

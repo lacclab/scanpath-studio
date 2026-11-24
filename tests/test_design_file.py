@@ -1,4 +1,4 @@
-"""The saved-design library's own file — My designs → Export / Import.
+"""The saved-design library's own file — My views → Export / Import.
 
 It is the portable copy of the library.
 """
@@ -76,12 +76,12 @@ def test_compare_settings_come_in_with_the_design():
     }
 
 
-def test_a_built_in_name_is_not_shadowed():
-    name = next(iter(controls._VIEW_PRESETS))
-    text = json.dumps(
-        {"kind": controls.DESIGNS_FILE_KIND, "designs": {name: {"global_x": 1}}}
-    )
-    assert list(controls.designs_from_json(text)) == [f"{name} (mine)"]
+def test_designs_keep_their_names_when_a_new_tile_shares_one():
+    designs = {
+        "gaze_over_time": {"global_show_order": True},
+        "gaze_over_time (mine)": {"global_show_order": False},
+    }
+    assert controls.designs_from_json(controls.designs_to_json(designs)) == designs
 
 
 @pytest.mark.parametrize(
@@ -132,7 +132,7 @@ def test_import_merges_and_replaces_by_name():
         "Replaced": {"global_show_fix": False},
         "New": {"global_show_heatmap": True},
     }
-    assert at.session_state[controls._DESIGN_IMPORT_NOTE_KEY] == "Imported 2 designs."
+    assert at.session_state[controls._DESIGN_IMPORT_NOTE_KEY] == "Imported 2 views."
 
 
 def test_a_bad_file_says_so_and_changes_nothing():

@@ -1206,8 +1206,17 @@ def test_onestop_composed_ids_match_the_bundled_demo(onestop_offline, tmp_path):
     assert set(words["unique_trial_id"]) == set(demo["unique_trial_id"])
 
 
-@pytest.mark.parametrize("table", ["fixations", "ia", "raw_gaze"])
-@pytest.mark.parametrize("suffix", ["csv", "parquet"])
+@pytest.mark.parametrize(
+    ("table", "suffix"),
+    [
+        ("fixations", "csv"),
+        ("fixations", "parquet"),
+        ("ia", "csv"),
+        ("ia", "parquet"),
+        # Raw gaze ships as Parquet only.
+        ("raw_gaze", "parquet"),
+    ],
+)
 def test_bundled_demo_trial_ids_are_reader_and_paragraph(table, suffix):
     """The demo holds first readings only, so each trial id is the reader and
     the paragraph, with no reading suffix, in every bundled table and format."""

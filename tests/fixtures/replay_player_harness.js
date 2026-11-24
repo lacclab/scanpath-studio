@@ -9,6 +9,9 @@
 // its frame count, and `steps` a list of [op, arg] run in order. A page's
 // layout (`plots.replay_page`) also passes `updatemenus` and `sliders`, and
 // `slot: true` gives the page a `gd-transport` element for the toolbar.
+// `parent` is the page around the replay's frame: absent for a page of its own,
+// `{scheme}` for an app whose `.stApp` has that computed `color-scheme`, or
+// `"cross-origin"` for a parent document the frame may not read.
 //   ["run_until", ms]   advance the clock, firing display ticks and timers
 //   ["click", name]     press the play / pause / restart button
 //   ["slider", k]       drag the time slider to frame k
@@ -16,6 +19,7 @@
 //   ["detach"]          the plot leaves the page (the docs' instant navigation)
 //   ["toolbar", name]   press the player's own toolbar button
 //   ["seek", k]         grab the toolbar's time slider and drag it to frame k
+//   ["key", props]      send a keydown event to the focused replay slider
 // Prints {shown, relayouts, native, listeners, toolbar} as JSON: every frame
 // put on screen with the time it happened, every Plotly.relayout, every button
 // whose own Plotly command ran, how many visibilitychange listeners remain, and
@@ -56,8 +60,10 @@ class FakeElement {
   addEventListener(event, fn) {
     (this.listeners[event] = this.listeners[event] || []).push(fn);
   }
-  dispatch(event) {
-    (this.listeners[event] || []).forEach((fn) => fn({ type: event }));
+  dispatch(event, props = {}) {
+    (this.listeners[event] || []).forEach((fn) => fn({
+      type: event, preventDefault() { this.defaultPrevented = true; }, ...props,
+    }));
   }
 }
 const slot = config.slot ? new FakeElement("div") : null;
@@ -94,6 +100,26 @@ function emit(event, data) {
   (listeners[event] || []).forEach((fn) => fn(data));
 }
 
+global.window = {};
+if (config.parent === "cross-origin") {
+  Object.defineProperty(global.window, "parent", {
+    get() {
+      return {
+        get document() {
+          throw new Error("SecurityError: cross-origin frame");
+        },
+      };
+    },
+  });
+} else if (config.parent) {
+  const app = { className: "stApp" };
+  global.window.parent = {
+    document: { querySelector: (sel) => (sel === ".stApp" ? app : null) },
+    getComputedStyle: (el) => ({ colorScheme: el === app ? config.parent.scheme : "" }),
+  };
+} else {
+  global.window.parent = global.window;
+}
 global.performance = { now: () => now };
 global.requestAnimationFrame = (cb) => {
   rafs.set(++rafSeq, cb);
@@ -211,6 +237,7 @@ function setHidden(hidden) {
     else if (op === "detach") gd.isConnected = false;
     else if (op === "toolbar") toolbarButton(arg);
     else if (op === "seek") seek(arg);
+    else if (op === "key") toolbarEl().children.find((c) => c.type === "range").dispatch("keydown", arg);
     else throw new Error(`unknown step ${op}`);
     await flush();
   }
@@ -228,7 +255,8 @@ function setHidden(hidden) {
         range: (({ min, max, value, attributes }) => ({ min, max, value, attributes }))(
           bar.children.find((c) => c.type === "range"),
         ),
-        readout: bar.children[bar.children.length - 1].textContent,
+        readout: bar.children.find((c) => c.attributes["aria-hidden"] === "true").textContent,
+        readout_style: bar.children.find((c) => c.attributes["aria-hidden"] === "true").style,
       }
     : null;
   process.stdout.write(JSON.stringify(log));

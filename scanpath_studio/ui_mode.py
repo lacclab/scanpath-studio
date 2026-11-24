@@ -78,18 +78,22 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "rail": (
-        ("🎬 Replay settings", "Speed and frame rate."),
-        ("👥 Compare", "Two readings, overlaid or side by side."),
+        ("🎬 Animation settings", "Speed and frame rate."),
+        ("👥 Compare readings", "Two readings, overlaid or side by side."),
         (
-            "🎨 Layer style",
+            "🎨 Layers",
             "Colour fixations by a measure; sizes, word boxes and raw gaze.",
         ),
         (
             "🎯 Filters & highlights",
             "A fixation window, short or long fixations, saccade types.",
         ),
-        ("🖼 Figure & canvas", "The screen, axes, titles and legends."),
-        ("💾 Saved designs", "Keep your own figure designs and reuse them."),
+        (
+            "📈 Axes",
+            "Plot screen position, fixation order, elapsed time or another field.",
+        ),
+        ("🖼 Figure", "Framing, titles, hover fields and legends."),
+        ("💾 My views", "Keep your own figure designs and reuse them."),
     ),
     "subtabs": (
         (
@@ -217,7 +221,10 @@ def mode_css(mode: str) -> str:
     else:
         cell = '[class*="st-key-railbtn_"] > div'
         sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
+        # The comparison switch stays in reach while a comparison is active.
         rules = hide + (
+            ' [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_view_modes)'
+            ":not(:has(.st-key-single_compare_toggle input:checked)) { display: none !important; }"
             # The trial summary table's wrapper would still take the page's
             # margin under each block.
             ' [data-testid="stLayoutWrapper"]'
@@ -251,29 +258,16 @@ def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
 def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
-    Marks it chosen, which is what lets the cookie script remember it. Choosing
-    Essentials ends a running tutorial, and a change of mode ends a running welcome
-    tour. Anything that is not a mode (a deselected switch) changes nothing.
+    Marks it chosen so the cookie remembers it. A deselected switch changes nothing.
     """
     import streamlit as st
 
     chosen = parse_mode(mode)
     if chosen is not None:
-        if chosen == SIMPLE and st.session_state.get("tutorial_active"):
-            # The tutorials spotlight Full-only controls: leave the one
-            # running the way its Exit does.
+        if chosen != current_mode() and st.session_state.get("tutorial_active"):
             from scanpath_studio import tour
 
-            tour._restore_tutorial_return()
-        if (
-            chosen != current_mode()
-            and st.session_state.get("tour_mode") == "spotlight"
-        ):
-            # Each mode has its own welcome tour, and a step number means a
-            # different step in the other one: end it, as Done would.
-            from scanpath_studio import tour
-
-            tour._exit_spotlight()
+            tour.change_tutorial_mode(chosen)
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
         st.session_state[COOKIE_MODE_KEY] = chosen
@@ -291,14 +285,83 @@ def _switch_to_advanced() -> None:
     _choose_mode(ADVANCED)
 
 
-def render_more_list(host: DeltaGenerator, area: str) -> None:
+_PICKER_TARGETS = (
+    (".st-key-iconpop_filter_trials button", ".st-key-tour_grp_narrow_by input"),
+    (".st-key-iconpop_sort_trial_single button", ".st-key-single_trial_sort input"),
+    (
+        ".st-key-single_trial_pos [role='slider'], .st-key-single_trial_pos input[type='range']",
+        "",
+    ),
+    (".st-key-iconpop_chip_fields button", ".st-key-single_show_chips input"),
+)
+
+
+def _open_full_picker_tool(index: int) -> None:
+    import streamlit as st
+
+    _switch_to_advanced()
+    st.session_state["_full_picker_focus"] = index
+
+
+def _picker_focus_script(index: int) -> str:
+    import json
+
+    target, inside = _PICKER_TARGETS[index]
+    return """<script>
+    (() => {
+        const doc = window.parent.document;
+        const [target, inside] = TARGET;
+        const observer = new MutationObserver(focus);
+        const visible = selector => Array.from(doc.querySelectorAll(selector)).find(
+            el => el.getClientRects().length && el.checkVisibility()
+        );
+        let activated = false;
+        function focus() {
+            const button = visible(target);
+            if (!button) return;
+            if (!activated) {
+                activated = true;
+                const previous = doc.querySelector(".st-key-iconpop_more_picker button[aria-expanded='true']");
+                if (previous) previous.click();
+                button.focus();
+                if (inside && button.getAttribute("aria-expanded") !== "true") button.click();
+            }
+            const control = inside ? visible(inside) : button;
+            if (control && control.getClientRects().length) {
+                control.focus();
+                observer.disconnect();
+            }
+        }
+        observer.observe(doc.body, {subtree: true, childList: true, attributes: true});
+        focus();
+        window.setTimeout(() => observer.disconnect(), 4000);
+    })();
+    </script>""".replace("TARGET", json.dumps([target, inside]))
+
+
+def render_more_list(
+    host: DeltaGenerator, area: str, *, multiple_trials: bool = True
+) -> None:
     """Draw ``area``'s list of Full-only features, ending in a switch button.
 
-    The list names features only and holds no control, so opening it never
-    changes anything.
+    The picker tools open their control in Full. Opening More alone preserves
+    the current mode.
     """
-    for title, line in MORE_IN_ADVANCED[area]:
-        host.markdown(f"**{title}**  \n{line}")
+    for index, (title, line) in enumerate(MORE_IN_ADVANCED[area]):
+        if area == "picker":
+            needs_readings = index in (1, 2) and not multiple_trials
+            host.button(
+                title.split(" ", 1)[1],
+                key=f"more_picker_tool_{index}",
+                help="Available with two or more readings in the trial list."
+                if needs_readings
+                else line,
+                disabled=needs_readings,
+                on_click=_open_full_picker_tool,
+                args=(index,),
+            )
+        else:
+            host.markdown(f"**{title}**  \n{line}")
     host.button(
         "Switch to Full",
         key=f"more_to_advanced_{area}",
@@ -306,7 +369,13 @@ def render_more_list(host: DeltaGenerator, area: str) -> None:
     )
 
 
-def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") -> None:
+def render_more_popover(
+    host: DeltaGenerator,
+    area: str,
+    label: str = "More",
+    *,
+    multiple_trials: bool = True,
+) -> None:
     """Draw ``area``'s ＋ More popover, the list of what Full adds there."""
     popover = host.popover(
         label,
@@ -315,7 +384,7 @@ def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") ->
         help="What Full adds here",
         key=f"iconpop_more_{area}",
     )
-    render_more_list(popover, area)
+    render_more_list(popover, area, multiple_trials=multiple_trials)
 
 
 #: What each hidden setting in play is called in the note, in the order it is
@@ -329,21 +398,39 @@ _HIDDEN_PHRASES = (
 
 
 def hidden_settings_reasons(
-    *, narrowed: bool, sorted_: bool, comparing: bool, custom_view: bool
+    *,
+    narrowed: bool,
+    sorted_: bool,
+    comparing: bool,
+    custom_view: bool,
+    axes: tuple[str, str] = ("x", "y"),
 ) -> list[str]:
     """The Full-only settings shaping what Essentials shows, as short phrases.
 
     ``narrowed``: a trial filter shortens the pool. ``sorted_``: the trial list
     is not in its default order. ``comparing``: Compare is on. ``custom_view``:
-    the plot settings match none of Essentials' View tiles.
+    the design includes settings that can be edited in Full.
     """
     flags = {
         "narrowed": narrowed,
         "sorted_": sorted_,
         "comparing": comparing,
-        "custom_view": custom_view,
+        "custom_view": custom_view and axes == ("x", "y"),
     }
-    return [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
+    reasons = [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
+    from .chart_axes import ELAPSED, ELAPSED_LABEL, GAZE_OVER_TIME
+
+    if axes != ("x", "y") and (custom_view or axes != GAZE_OVER_TIME):
+        import streamlit as st
+
+        from .column_names import active as active_column_names
+
+        labels = active_column_names(st.session_state, "fixations").option_labels(
+            list(dict.fromkeys(axes)), roles=True
+        )
+        labels[ELAPSED] = ELAPSED_LABEL
+        reasons.append(f"X: {labels[axes[0]]} · Y: {labels[axes[1]]}")
+    return reasons
 
 
 def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> None:
@@ -365,7 +452,7 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
         f"{', '.join(reasons)}."
     )
     row.button(
-        "Switch to Full",
+        "Edit in Full",
         key="hidden_note_to_advanced",
         type="tertiary",
         on_click=_switch_to_advanced,
@@ -393,12 +480,6 @@ _STATUS_WIDGET_CSS = (
     " box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }"
 )
 
-#: The title row that holds the switch's container, whichever column it is in.
-_SWITCH_ROW = (
-    '[data-testid="stLayoutWrapper"]'
-    f':has(> [data-testid="stHorizontalBlock"] .st-key-{SWITCH_BOX_KEY})'
-)
-
 
 def switch_css(visible: bool) -> str:
     """A ``<style>`` that places the Essentials | Full switch.
@@ -409,8 +490,7 @@ def switch_css(visible: bool) -> str:
     room. The switch never moves: Streamlit's "Running…" status widget, which
     the bar would draw under it, is shown just below the bar instead. Below
     ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of the page.
-    Without it (the views that have no use for the mode) the switch is
-    hidden. Either way the title row it sits in takes no space of its own.
+    The switch is hidden on views that do not use the mode.
     """
     box = f".st-key-{SWITCH_BOX_KEY}"
     # The cookie script's frame, which is there only once the switch has been
@@ -422,20 +502,12 @@ def switch_css(visible: bool) -> str:
     )
     wide = f"@media (min-width: {_SWITCH_FALLBACK_PX + 1}px)"
     narrow = f"@media (max-width: {_SWITCH_FALLBACK_PX}px)"
-    collapse = (
-        # Out of the flow, so the page's rows sit where they would without it;
-        # a fixed box inside it still positions against the viewport.
-        f"{wide} {{ {_SWITCH_ROW} {{ position: absolute; width: 0; height: 0;"
-        " margin: 0 !important; overflow: visible; } }"
-    )
     if not visible:
-        return (
-            f"<style>{box} {{ display: none !important; }} {collapse} {cookie}</style>"
-        )
+        return f"<style>{box} {{ display: none !important; }} {cookie}</style>"
     button = f'{box} [data-testid="stButtonGroup"] button[data-variant]'
     return (
         "<style>"
-        f"{collapse} {cookie}"
+        f"{cookie}"
         f"{wide} {{"
         f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
         f" z-index: {SWITCH_Z_INDEX}; width: max-content; }}"
@@ -459,10 +531,7 @@ def switch_css(visible: bool) -> str:
         f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
         f" {button} p {{ font-size: 1rem; }}"
         f"{narrow} {{"
-        # In the page: right-aligned, with the empty title column out of the way.
         f" {box} {{ align-items: flex-end; }}"
-        f' [data-testid="stColumn"]:has(.st-key-about_header)'
-        " { display: none; }"
         " }"
         "</style>"
     )
@@ -520,3 +589,6 @@ def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
     if st.session_state.get(CHOSEN_KEY):
         with cookie:
             embed_html_iframe(cookie_script(cookie_mode()), height=0)
+            target = st.session_state.pop("_full_picker_focus", None)
+            if target is not None:
+                embed_html_iframe(_picker_focus_script(target), height=0)

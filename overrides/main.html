@@ -7,7 +7,21 @@
   {%- if config.extra.google_site_verification %}
   <meta name="google-site-verification" content="{{ config.extra.google_site_verification }}">
   {%- endif %}
-  {%- if page and page.is_homepage and config.extra.structured_data %}
+  {%- if config.extra.docs_channel == "dev" %}
+  <meta name="robots" content="noindex, follow">
+  {%- elif page and page.is_homepage and config.extra.structured_data %}
   <script type="application/ld+json">{{ config.extra.structured_data | tojson }}</script>
   {%- endif %}
+{% endblock %}
+
+{% block announce %}
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    {% if config.extra.docs_channel == "dev" %}
+      <strong>Dev documentation</strong>
+      <a href="{{ config.extra.other_docs }}">Stable docs home &rarr;</a>
+    {% else %}
+      <strong>Stable documentation &middot; v{{ config.extra.release }}</strong>
+      <a href="{{ config.extra.other_docs }}">Dev docs home &rarr;</a>
+    {% endif %}
+  </nav>
 {% endblock %}

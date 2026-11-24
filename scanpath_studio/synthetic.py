@@ -106,8 +106,8 @@ def make_synthetic_fixations() -> pd.DataFrame:
 
 
 def load_synthetic_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(words, fixations) for the "Synthetic test trial" data source."""
-    return make_synthetic_words(), make_synthetic_fixations()
+    """Source tables for the synthetic trial, whose word assignments use geometry."""
+    return make_synthetic_words(), make_synthetic_fixations().drop(columns="word_id")
 
 
 # Hand-traced expected values. Keyed by word_id (0..5) unless noted.

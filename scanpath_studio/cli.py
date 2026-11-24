@@ -28,7 +28,6 @@ import pandas as pd
 from . import __version__
 from . import column_names as _cn
 from .code_snippet import (
-    SOURCE_AUTHOR,
     SOURCE_DEMO,
     SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
@@ -44,8 +43,13 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FIXATION_FLAG_CATEGORIES,
+    FIXATION_FLAG_MARKERS,
+    FIXATION_FLAG_MODES,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
+    OPACITY_OPTIONS,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
@@ -56,6 +60,7 @@ from .constants import (
     drift_correction_enabled,
     multipleye_format_enabled,
     palette_settings,
+    parse_opacity,
 )
 
 
@@ -164,6 +169,22 @@ def _colorscale_name(value: str) -> str:
     return str(value)
 
 
+def _opacity(value: str) -> float:
+    try:
+        return parse_opacity(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _json_hover_fields(value: str) -> list[str]:
+    try:
+        return _cn.json_field_list(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"Expected a JSON array of column names ({exc})."
+        ) from None
+
+
 def _fill_color(value: str) -> str:
     """Validate ``--word-box-fill-color`` — an argparse ``type=`` like
     :func:`_colorscale_name`. The fill is drawn at its own opacity, so it needs
@@ -213,6 +234,17 @@ def _add_schema_flags(group) -> None:
     )
 
 
+def _trial_parts_manifest(path: str | None) -> dict | None:
+    if path is None:
+        return None
+    try:
+        return json.loads(Path(path).read_bytes())
+    except (OSError, ValueError) as exc:
+        raise SystemExit(
+            f"Could not read trial-parts manifest {path!r}: {exc}"
+        ) from None
+
+
 def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
     """``--word-schema`` / ``--fix-schema`` → the mapping dict.
 
@@ -221,19 +253,27 @@ def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
     if value is None:
         return None
     text = str(value).strip()
+    source: str | bytes = text
+    location = flag
     if not text.startswith("{"):
+        location = f"{flag} ({text})"
         try:
-            text = Path(text).expanduser().read_text(encoding="utf-8")
+            source = Path(text).expanduser().read_bytes()
         except OSError as exc:
             raise SystemExit(
                 f"{flag}: {value!r} is neither a JSON object nor a readable file "
                 f"({exc.strerror or exc})."
             )
     try:
-        mapping = json.loads(text)
+        mapping = json.loads(source)
+    except UnicodeDecodeError:
+        raise SystemExit(
+            f"{location}: the file has an invalid text encoding. Save the mapping "
+            "as UTF-8, UTF-16 or UTF-32 JSON."
+        ) from None
     except json.JSONDecodeError as exc:
         raise SystemExit(
-            f"{flag}: not valid JSON ({exc.msg}, line {exc.lineno} column "
+            f"{location}: not valid JSON ({exc.msg}, line {exc.lineno} column "
             f'{exc.colno}). Expected an object such as \'{{"trial": "TRIAL_INDEX"}}\'.'
         )
 
@@ -479,8 +519,6 @@ def launch_app(extra_args: list[str]) -> None:
 
 
 def _render_parser() -> argparse.ArgumentParser:
-    from .alignment import ALGORITHMS
-
     parser = _ShortErrorParser(
         prog="scanpath-studio render",
         description=(
@@ -705,7 +743,7 @@ def _render_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--animate",
         action="store_true",
-        help="Render the animated replay instead of the static figure (HTML only).",
+        help="Create a replay as interactive HTML or an editable publication project.",
     )
 
     viz = parser.add_argument_group(
@@ -759,18 +797,23 @@ def _render_parser() -> argparse.ArgumentParser:
         default=None,
         help="Hide the fixation numbers (the default).",
     )
-    viz.add_argument(
-        "--word-hover-fields",
-        metavar="FIELDS",
-        help="Comma-separated Words table columns shown on hover (e.g. "
-        "text,word_id,gpt2_surprisal).",
-    )
-    viz.add_argument(
-        "--fixation-hover-fields",
-        metavar="FIELDS",
-        help="Comma-separated Fixations table columns shown on hover (e.g. "
-        "order_in_trial,duration_ms,eye).",
-    )
+    for table in ("word", "fixation"):
+        hover = viz.add_mutually_exclusive_group()
+        flag = f"--{table}-hover-fields"
+        hover.add_argument(
+            flag,
+            metavar="FIELDS",
+            type=_cn.split_field_list,
+            help=f"Comma-separated {table} columns to show on hover, in order.",
+        )
+        hover.add_argument(
+            f"{flag}-json",
+            dest=f"{table}_hover_fields",
+            metavar="JSON",
+            type=_json_hover_fields,
+            help=f"Ordered JSON array of {table} column names. Use this for names "
+            "containing commas, or pass '[]' to leave the tooltip empty.",
+        )
     viz.add_argument(
         "--no-saccades",
         dest="show_saccades",
@@ -817,13 +860,6 @@ def _render_parser() -> argparse.ArgumentParser:
         help=f"Saccade line width in px, "
         f"{SACCADE_WIDTH_BOUNDS[0]:g}–{SACCADE_WIDTH_BOUNDS[1]:g} "
         f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
-    )
-    viz.add_argument(
-        "--saccade-opacity",
-        type=float,
-        metavar="O",
-        help="Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). "
-        "In a comparison, both scanpaths share it.",
     )
     viz.add_argument(
         "--saccade-arrow-size",
@@ -898,9 +934,9 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--critical-span-style",
         dest="critical_span_style",
-        choices=("mark-text", "mark-border", "none"),
+        choices=("mark-text", "mark-border", "underline", "none"),
         help="How the --highlight-column words are marked: mark-text recolors "
-        "them, mark-border outlines their boxes, none draws neither "
+        "them, mark-border outlines their boxes, underline underlines each word, none hides the marks "
         "(default: mark-text).",
     )
     viz.add_argument(
@@ -996,6 +1032,8 @@ def _render_parser() -> argparse.ArgumentParser:
     # carries the attributes below via `set_defaults`, so no downstream branch
     # needs to know whether the flag exists.
     if drift_correction_enabled():
+        from .alignment import ALGORITHMS
+
         viz.add_argument(
             "--drift-correction",
             metavar="ALGORITHM",
@@ -1120,11 +1158,10 @@ def _render_parser() -> argparse.ArgumentParser:
         "Not used by --marker-size-scale relative.",
     )
     viz.add_argument(
-        "--no-duration-size-legend",
-        dest="duration_size_legend",
-        action="store_false",
-        help="Hide the Fixation sizes legend, reference circles labeled in ms. "
-        "It is drawn when --marker-size-scale is sqrt, linear or log.",
+        "--duration-size-legend",
+        action=argparse.BooleanOptionalAction,
+        help="Show reference circles labeled in milliseconds for the sqrt, linear "
+        "or log fixation size scale (off by default).",
     )
     viz.add_argument(
         "--canvas",
@@ -1204,13 +1241,14 @@ def _render_parser() -> argparse.ArgumentParser:
     # what it left out. Each is spelled after its
     # figure option and takes that option's own value; `_DIRECT_OPTION_FLAGS` /
     # `_SWITCH_OPTION_FLAGS` below hand them to the builder.
-    viz.add_argument(
-        "--fixation-opacity",
-        type=float,
-        metavar="O",
-        help="Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping "
-        "fixations show through).",
-    )
+    for option in OPACITY_OPTIONS.values():
+        lo, hi = option.bounds
+        viz.add_argument(
+            option.flag,
+            type=_opacity,
+            metavar=option.metavar,
+            help=f"{option.description}, {lo:g}–{hi:g} (default: {option.default:g}).",
+        )
     viz.add_argument(
         "--fixation-outline-width",
         type=float,
@@ -1250,22 +1288,14 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar=("LO", "HI"),
         help="Fix the heatmap's color scale to LO..HI instead of the trial's range.",
     )
-    viz.add_argument(
-        "--order-font-size",
-        type=int,
-        metavar="PX",
-        help="Size of the fixation index numbers (default: 10).",
-    )
-    viz.add_argument(
-        "--order-font-color",
-        metavar="COLOR",
-        help="Color of the fixation index numbers (default: #111111).",
-    )
-    viz.add_argument(
-        "--order-label-position",
-        choices=("above", "inside", "below"),
-        help="Where each fixation index number sits on its fixation (default: above).",
-    )
+    for option in FIXATION_LABEL_OPTIONS.values():
+        viz.add_argument(
+            option.flag,
+            type=int if option.kind == "int" else str,
+            metavar=option.metavar,
+            choices=option.choices or None,
+            help=f"{option.description} (default: {option.default}).",
+        )
     viz.add_argument(
         "--text-color",
         metavar="COLOR",
@@ -1342,13 +1372,14 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--x-field",
         metavar="FIELD",
-        help="Fixations table column on the x axis (default: x). A non-spatial "
-        "one draws a chart of the fixations instead of the scanpath.",
+        help="Horizontal axis of the static chart (default: x). Choose a numeric fixation "
+        "field, @elapsed_seconds from the first recorded fixation, or a raw sample field "
+        "such as timestamp_ms, sample_index, pupil_area or pupil_diameter.",
     )
     viz.add_argument(
         "--y-field",
         metavar="FIELD",
-        help="Fixations table column on the y axis (default: y).",
+        help="Vertical axis of the static chart (default: y). Takes the same fields as --x-field.",
     )
     viz.add_argument(
         "--crop-to-data",
@@ -1486,8 +1517,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--sample-raw-gaze",
         action="store_true",
-        help="With --sample: draw the bundled demo's raw gaze. It is "
-        "synthesized, and covers one trial only.",
+        help="With --sample, draw the recorded EyeLink gaze samples for the selected reading.",
     )
     viz.add_argument(
         "--raw-gaze-schema",
@@ -1566,19 +1596,32 @@ def _render_parser() -> argparse.ArgumentParser:
         "--width-mm",
         type=float,
         metavar="MM",
-        help="Print width of a PNG in mm, drawn at --dpi (replaces --scale).",
+        help="Width in mm for a PNG or a publication project.",
     )
     print_width.add_argument(
         "--width-in",
         type=float,
         metavar="IN",
-        help="Print width of a PNG in inches, drawn at --dpi.",
+        help="Width in inches for a PNG or a publication project.",
+    )
+    print_width.add_argument(
+        "--proof-width-mm",
+        type=float,
+        metavar="MM",
+        help="Total manuscript width of a side-by-side or stacked comparison SVG in mm.",
     )
     viz.add_argument(
         "--dpi",
         type=int,
         metavar="N",
         help="Resolution of --width-mm / --width-in (default: 300).",
+    )
+    # The app's Export bundle → Smaller PNG files.
+    viz.add_argument(
+        "--compact-png",
+        action="store_true",
+        help="Compress a .png output, and its --separable-layers, losslessly: the "
+        "same pixels and metadata in a smaller file, for a little more time.",
     )
     viz.add_argument(
         "--font-size",
@@ -1701,9 +1744,21 @@ def _render_parser() -> argparse.ArgumentParser:
     cmp_group.add_argument(
         "--compare-with",
         metavar="PARTICIPANT:TRIAL",
-        help="The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the "
+        help="The second scanpath, B, as PARTICIPANT:TRIAL. The last colon "
+        "separates the IDs. Use --compare-participant and --compare-trial "
+        "when the trial ID contains a colon. B comes from the "
         "loaded dataset unless --compare-words / --compare-fixations load a "
         "second one.",
+    )
+    cmp_group.add_argument(
+        "--compare-participant",
+        metavar="ID",
+        help="B's participant ID, paired with --compare-trial.",
+    )
+    cmp_group.add_argument(
+        "--compare-trial",
+        metavar="ID",
+        help="B's trial ID, paired with --compare-participant.",
     )
     cmp_group.add_argument(
         "--compare-screen",
@@ -1726,7 +1781,8 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["both", "a", "b"],
         default="both",
         help="On an overlay, whose word boxes and text to draw (default: both). "
-        "Two datasets' word boxes line up only when the text is the same.",
+        "Two datasets' word boxes line up only when the text is the same. "
+        "A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.",
     )
     # Named `-a` / `-b` after the `style_a` / `style_b` pair rather
     # than `--label`, which would read as a sibling of `--no-labels` (the word
@@ -1735,8 +1791,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--label-a",
         metavar="TEXT",
         help=(
-            "Name of scanpath A in the legend and tooltips. Applies to comparisons "
-            "and --animate. Requires --label-b."
+            "Name of scanpath A in the legend and tooltips. Requires --compare-with "
+            "and --label-b."
         ),
     )
     cmp_group.add_argument(
@@ -1766,12 +1822,11 @@ def _render_parser() -> argparse.ArgumentParser:
             "--word-box-fill-color), raw_gaze_color (default fix_color). Also "
             "heatmap_colorscale (default --heatmap-colorscale, on the shared "
             f"range), saccade_style ({'|'.join(SACCADE_DASH_OPTIONS.values())}), "
-            "saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), "
+            "saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), "
             "box_line_opacity / box_fill_opacity (0–1; default "
             "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
-            "--animate uses them too, except box_color, box_fill_color, the box "
-            "opacities and raw_gaze_color.",
+            "A two-scanpath replay uses the fixation and saccade styles.",
         )
     # Scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
@@ -1864,12 +1919,10 @@ def _render_parser() -> argparse.ArgumentParser:
 #: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
 #: builder unchanged whenever given.
 _DIRECT_OPTION_FLAGS = (
+    "duration_size_legend",
     "marker_size_scale",
-    "fixation_opacity",
-    "saccade_opacity",
-    "order_font_size",
-    "order_font_color",
-    "order_label_position",
+    *OPACITY_OPTIONS,
+    *FIXATION_LABEL_OPTIONS,
     "text_color",
     "highlight_text_color",
     "span_border_color",
@@ -1925,7 +1978,6 @@ _SWITCH_OPTION_FLAGS = {
     "show_heatmap_colorbar": False,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
-    "duration_size_legend": False,
     "show_stimulus_image": True,
     "show_plot_frame": False,
     "show_credit": True,
@@ -1993,12 +2045,9 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                     if raw.lower() not in ("1", "0", "true", "false", "yes", "no"):
                         raise ValueError
                     style[name] = raw.lower() in ("1", "true", "yes")
-                elif name in ("box_line_opacity", "box_fill_opacity"):
-                    value = float(raw)
-                    if not 0.0 <= value <= 1.0:
-                        raise ValueError
-                    style[name] = value
-                else:  # saccade_width, opacity
+                elif name in ("opacity", "box_line_opacity", "box_fill_opacity"):
+                    style[name] = parse_opacity(raw)
+                else:  # saccade_width
                     style[name] = float(raw)
             except ValueError:
                 raise SystemExit(
@@ -2022,14 +2071,8 @@ def _compare_labels(args) -> tuple[str, str] | None:
     return (str(args.label_a), str(args.label_b))
 
 
-def _parse_compare_with(value: str) -> tuple:
-    """``"p01:t03"`` → ``("p01", "t03")``, or a clear SystemExit.
-
-    Split on the LAST colon: a participant id may legitimately contain one
-    (MultiplEYE's ``001_ZH_CH_1_ET1`` style ids do not, but composite trial ids
-    joined with ``_`` sit next to corpora that use colons), while a trial id
-    naming a screen never trails one.
-    """
+def _parse_compare_with(value: str) -> tuple[str, str]:
+    """Read the legacy PARTICIPANT:TRIAL form using its last colon."""
     text = str(value or "")
     participant, sep, trial = text.rpartition(":")
     if not sep or not participant.strip() or not trial.strip():
@@ -2038,6 +2081,23 @@ def _parse_compare_with(value: str) -> tuple:
             "Use --list-trials to see the available pairs."
         )
     return participant.strip(), trial.strip()
+
+
+def _comparison_ids(args: argparse.Namespace) -> tuple[str, str] | None:
+    """Resolve B once for rendering, diagnostics, and printed reproductions."""
+    if args.compare_participant is None and args.compare_trial is None:
+        return (
+            None
+            if args.compare_with is None
+            else _parse_compare_with(args.compare_with)
+        )
+    if args.compare_with is not None:
+        raise SystemExit(
+            "Choose --compare-with or the separate --compare-participant and --compare-trial options."
+        )
+    if not args.compare_participant or not args.compare_trial:
+        raise SystemExit("--compare-participant and --compare-trial require both IDs.")
+    return args.compare_participant, args.compare_trial
 
 
 def _compare_second_dataset(api, args, words, fixations):
@@ -2050,7 +2110,10 @@ def _compare_second_dataset(api, args, words, fixations):
     try:
         return (
             *api.load_scanpath_data(
-                args.compare_words, args.compare_fixations, names="canonical"
+                args.compare_words,
+                args.compare_fixations,
+                keep_columns=args.keep_columns,
+                names="canonical",
             ),
             True,
         )
@@ -2061,18 +2124,96 @@ def _compare_second_dataset(api, args, words, fixations):
         )
 
 
-def _trial_text_ids(*frames) -> pd.DataFrame | None:
-    """``[participant_id, trial_id, text_id]``, one row per trial, from the
-    first of ``frames`` that has it — ``None`` when none carries a text id."""
-    columns = ["participant_id", "trial_id", "text_id"]
-    parts = [
-        f[columns].drop_duplicates(columns[:2])
-        for f in frames
-        if f is not None and not f.empty and set(columns) <= set(f.columns)
-    ]
-    if not parts:
-        return None
-    return pd.concat(parts, ignore_index=True).drop_duplicates(columns[:2])
+def _report_render_metadata(args, words, fixations, raw_gaze, column_names) -> None:
+    """Check metadata against all loaded readings and print the requested trial list."""
+    from . import api
+    from . import metadata as _metadata
+
+    readings = _metadata.recording_keys(fixations, words, raw_gaze)
+    if args.participant_metadata:
+        try:
+            attached = api.load_participant_metadata(
+                args.participant_metadata, participants=readings
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached.report
+        print(
+            f"Participant metadata: {_count(len(attached.fields), 'field')} "
+            f"({', '.join(attached.names)}) for "
+            f"{_count(len(report.matched), 'participant')}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report)
+
+    attached_trials = None
+    if args.trial_metadata:
+        try:
+            attached_trials = api.load_trial_metadata(
+                args.trial_metadata,
+                participant_column=args.trial_metadata_reader_column,
+                trials=readings,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_trials.report
+        keyed = (
+            "participant + trial"
+            if attached_trials.keyed_by_participant
+            else "trial id"
+        )
+        print(
+            f"Trial metadata: {_count(len(attached_trials.fields), 'field')} "
+            f"({', '.join(attached_trials.names)}) for "
+            f"{_count(len(report.matched), 'trial')}, keyed by {keyed}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report, limit=20)
+    elif args.trial_metadata_reader_column:
+        raise SystemExit(
+            "--trial-metadata-participant-column needs --trial-metadata: it names a "
+            "column in that table."
+        )
+
+    attached_texts = None
+    if args.text_metadata:
+        try:
+            attached_texts = api.load_text_metadata(
+                args.text_metadata,
+                texts=readings,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_texts.report
+        print(
+            f"Text metadata: {_count(len(attached_texts.fields), 'field')} "
+            f"({', '.join(attached_texts.names)}) for "
+            f"{_count(len(report.matched), 'text')}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report)
+
+    if not args.list_trials:
+        return
+
+    identity = ["participant_id", "trial_id"]
+    combos = _metadata.unambiguous_readings(readings).sort_values(identity)
+    if args.participant_metadata:
+        combos = _metadata.project(attached, combos)
+    if attached_trials is not None:
+        combos = _metadata.project_trials(attached_trials, combos)
+    # Keep the listing's column order: reader/trial fields, then text ID and fields.
+    combos["text_id"] = combos.pop("text_id")
+    if attached_texts is not None:
+        combos = _metadata.project_texts(attached_texts, combos)
+    if sys.stderr.isatty():
+        print(
+            f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
+            "participant as -p and the trial as -t.",
+            file=sys.stderr,
+        )
+    # The ids under the dataset's own names.
+    print(_listed(combos, column_names).to_string(index=False))
 
 
 def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
@@ -2096,7 +2237,7 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     from .data import respell_reading, trial_keys
     from .utils import extract_trial
 
-    participant_b, trial_b = _parse_compare_with(args.compare_with)
+    participant_b, trial_b = args.compare_with
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
         api, args, words, fixations
     )
@@ -2173,8 +2314,18 @@ def _compare_setup_snapshot(canvas: tuple | None):
     )
 
 
-def _print_combined_rows(report) -> None:
-    """Say how many duplicate rows a metadata table folded together."""
+def _print_join_details(report, *, limit: int | None = None) -> None:
+    """Print unmatched IDs, conflicts and compatible duplicates for any metadata table."""
+    for label, keys in (
+        ("in the data, not the table", report.only_in_data),
+        ("in the table, not the data", report.only_in_table),
+        ("rows that disagree (left empty)", report.conflicting),
+    ):
+        if keys:
+            shown = ", ".join(_format_trial_key(key) for key in keys[:limit])
+            remaining = len(keys) - len(keys[:limit])
+            suffix = f", ... (+{remaining})" if remaining else ""
+            print(f"  {len(keys)} {label}: {shown}{suffix}", file=sys.stderr)
     combined = int(getattr(report, "combined_rows", 0) or 0)
     if combined:
         print(
@@ -2291,12 +2442,9 @@ def _parse_fix_index_range(value: str | None) -> tuple | None:
 _CRITICAL_SPAN_STYLES = {
     "mark-text": "Mark text",
     "mark-border": "Mark border",
+    "underline": "Underline",
     "none": "None",
 }
-
-#: Fixation-flag category → whether it takes a `threshold_ms`. `oob` and `blink` are
-#: classified from geometry / the recording, not from a duration.
-_FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
 
 
 def _parse_legend_layout(specs: list[str]) -> dict:
@@ -2327,32 +2475,33 @@ def _parse_fixation_flags(specs: list[str]) -> dict:
     so the CLI's job is only to spell one category per flag. Unspecified
     categories are left out entirely, which the builder reads as *Off*.
     """
-    from .controls import _FIXCLASS_MODES, _OUT_OF_TEXT_MARKERS
-
-    modes = {mode.lower(): mode for mode in _FIXCLASS_MODES}
+    modes = {mode.lower(): mode for mode in FIXATION_FLAG_MODES}
     flags: dict = {}
     for spec in specs:
         head, _, rest = spec.partition(",")
         category, _, mode = head.partition("=")
         category, mode = category.strip().lower(), mode.strip().lower()
-        if category not in _FIXCLASS_CATEGORIES or mode not in modes:
+        if category not in FIXATION_FLAG_CATEGORIES or mode not in modes:
             raise SystemExit(
                 f"--fixation-flag expects CATEGORY=MODE with CATEGORY one of "
-                f"{', '.join(_FIXCLASS_CATEGORIES)} and MODE one of "
+                f"{', '.join(FIXATION_FLAG_CATEGORIES)} and MODE one of "
                 f"{', '.join(modes)}; got {spec!r}."
             )
         entry: dict = {"mode": modes[mode]}
         for option in (part.strip() for part in rest.split(",") if part.strip()):
             name, _, raw = option.partition("=")
             name, raw = name.strip(), raw.strip()
-            if name == "threshold_ms" and _FIXCLASS_CATEGORIES[category]:
+            if (
+                name == "threshold_ms"
+                and FIXATION_FLAG_CATEGORIES[category].has_threshold
+            ):
                 try:
                     entry["threshold_ms"] = float(raw)
                 except ValueError:
                     raise SystemExit(
                         f"--fixation-flag threshold_ms expects a number, got {raw!r}."
                     )
-            elif name == "symbol" and raw in _OUT_OF_TEXT_MARKERS:
+            elif name == "symbol" and raw in FIXATION_FLAG_MARKERS:
                 entry["symbol"] = raw
             elif name == "color" and re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
                 entry["color"] = raw
@@ -2360,8 +2509,12 @@ def _parse_fixation_flags(specs: list[str]) -> dict:
                 raise SystemExit(
                     f"--fixation-flag: unknown or invalid option {option!r} for "
                     f"category {category!r}. Valid: "
-                    + ("threshold_ms=N, " if _FIXCLASS_CATEGORIES[category] else "")
-                    + f"symbol=<{'|'.join(_OUT_OF_TEXT_MARKERS)}>, color=#RRGGBB."
+                    + (
+                        "threshold_ms=N, "
+                        if FIXATION_FLAG_CATEGORIES[category].has_threshold
+                        else ""
+                    )
+                    + f"symbol=<{'|'.join(FIXATION_FLAG_MARKERS)}>, color=#RRGGBB."
                 )
         flags[category] = entry
     return flags
@@ -2462,7 +2615,10 @@ def _print_reproduction_code(
         if args.compare_with is not None
         else "static"
     )
-    settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
+    settings = {
+        **api.figure_options(kind),
+        **api._expand_palette(overrides, comparing=args.compare_with is not None),
+    }
     # `plot_scanpath` turns the raw-gaze layer on for the frame it is handed, so
     # the flag never reaches `overrides`; the snippet reads it here. So does
     # `compare_scanpaths` — whose samples may all be B's.
@@ -2490,7 +2646,7 @@ def _print_reproduction_code(
                 settings["label_a"], settings["label_b"] = labels
     compare = None
     if args.compare_with is not None:
-        compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+        compare_participant, compare_trial = args.compare_with
         second = bool(args.compare_words or args.compare_fixations)
         compare = cs.CompareTarget(
             participant=compare_participant,
@@ -2536,6 +2692,10 @@ def _print_reproduction_code(
         # pair above — so it has to be named here or the printed recipe would
         # silently widen the window back to the whole trial.
         fix_index_range=_parse_fix_index_range(args.fix_index_range),
+        # B's own window, which both builders that draw a B take.
+        fix_index_range_b=_parse_fix_index_range(args.compare_fix_index_range)
+        if compare is not None
+        else None,
         playback_speed=args.playback_speed,
         autoplay=args.autoplay,
         compare=compare,
@@ -2661,6 +2821,8 @@ def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
 def _save_kwargs(args) -> dict:
     """`api.save_figure`'s size keywords from the render flags; the print
     width only when one was given."""
+    if args.proof_width_mm is not None:
+        return {"proof_width_mm": args.proof_width_mm}
     kwargs = {"scale": args.scale, "width": args.width, "height": args.height}
     if args.width_mm is not None:
         kwargs["width_mm"] = args.width_mm
@@ -2668,6 +2830,8 @@ def _save_kwargs(args) -> dict:
         kwargs["width_in"] = args.width_in
     if args.dpi is not None:
         kwargs["dpi"] = args.dpi
+    if args.compact_png:
+        kwargs["compact_png"] = True
     return kwargs
 
 
@@ -2684,18 +2848,54 @@ def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
 def render(argv: list[str]) -> None:
     parser = _render_parser()
     args = parser.parse_args(argv)
+    args.compare_with = _comparison_ids(args)
+    if args.proof_width_mm is not None:
+        if not 1 <= args.proof_width_mm <= 2000:
+            parser.error("--proof-width-mm must be between 1 and 2000 mm.")
+        if not args.compare_with or args.compare_layout == "overlay" or args.animate:
+            parser.error(
+                "--proof-width-mm requires a static side-by-side or stacked comparison."
+            )
+        if not str(args.output).lower().endswith(".svg"):
+            parser.error(
+                "--proof-width-mm writes a comparison SVG. Choose an .svg output."
+            )
+        if (
+            args.separable_layers
+            or args.width
+            or args.height
+            or args.dpi
+            or args.scale != 2
+        ):
+            parser.error(
+                "--proof-width-mm sets both panel dimensions. Omit other image sizing and layer options."
+            )
     _apply_shared_colorbar_flags(args)
-    # A print width sizes a PNG; say so before the data loads.
+    # Reject unsupported output sizes before loading the dataset.
     printed = args.width_mm is not None or args.width_in is not None
-    if args.dpi is not None and not printed:
+    publication_output = (
+        str(args.output).lower().endswith((".publication.json", ".publication.html"))
+    )
+    if args.dpi is not None and not (printed or publication_output):
         parser.error(
             "Use --dpi with --width-mm or --width-in to set the PNG print resolution."
         )
-    if printed and args.output and not str(args.output).lower().endswith(".png"):
+    if (
+        printed
+        and args.output
+        and not publication_output
+        and not str(args.output).lower().endswith(".png")
+    ):
         parser.error(
-            "Print width applies to PNG files. Use an output filename ending in .png "
+            "Print width applies to PNG files and publication projects. Use .png, .publication.json or .publication.html "
             "with --width-mm or --width-in."
         )
+    if (
+        args.compact_png
+        and args.output
+        and not str(args.output).lower().endswith(".png")
+    ):
+        parser.error("--compact-png compresses a PNG. Choose a .png output.")
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [
@@ -2835,11 +3035,22 @@ def render(argv: list[str]) -> None:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
     if args.crop_margin is not None and args.crop_margin < 0:
         raise SystemExit("--crop-margin must be zero or more pixels.")
-    if args.animate and args.output and not args.output.lower().endswith(".html"):
+    if (
+        args.animate
+        and args.output
+        and not args.output.lower().endswith((".html", ".publication.json"))
+    ):
         raise SystemExit(
-            "--animate writes interactive HTML — use a .html output. For GIF or "
+            "--animate writes interactive .html files or a .publication.json recipe. For GIF or "
             "MP4, use the app's Export, or "
             "scanpath_studio.animation_export.export_animation in Python."
+        )
+    if args.animate and args.show_fixations is False and args.show_saccades is False:
+        raise SystemExit(
+            "--animate with --no-fixations and --no-saccades leaves nothing to "
+            "replay: the replay draws the fixations and the saccades between "
+            "them, and no heatmap or raw gaze. Drop one of the two, or drop "
+            "--animate for a static figure."
         )
     # The connectors draw *between* the original and corrected y, so on
     # their own there is nothing to connect. Warn rather than fail — the render
@@ -2861,7 +3072,10 @@ def render(argv: list[str]) -> None:
     # Each fixed-screen source's monitor is `code_snippet.source_canvas`, the
     # table `api.figure_code` reads too, so both flavours of a recipe agree.
     if args.sample:
-        data = api.load_sample_data(names="canonical")
+        try:
+            data = api.load_sample_data(names="canonical")
+        except FileNotFoundError as exc:
+            raise SystemExit(str(exc)) from None
         words, fixations = data
         column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_DEMO)
@@ -2872,7 +3086,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(f"--authoring: file not found: {args.authoring}") from None
         except (ValueError, OSError) as exc:
             raise SystemExit(str(exc)) from exc
-        canvas = canvas or source_canvas(SOURCE_AUTHOR)
+        canvas = canvas or api._recorded_screen(words, fixations)
     elif args.potec:
         from .data import split_composite_id
         from .datasets import load_potec
@@ -2926,14 +3140,7 @@ def render(argv: list[str]) -> None:
         # the screen is read off the data.
         canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
     else:
-        manifest = None
-        if args.trial_parts_manifest:
-            try:
-                manifest = json.loads(
-                    Path(args.trial_parts_manifest).read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError) as exc:
-                raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+        manifest = _trial_parts_manifest(args.trial_parts_manifest)
         # Guarded like every other input branch: otherwise a missing file or an
         # unrecognised column ends the run in a traceback whose hint names a
         # `word_schema=` argument the command line cannot pass.
@@ -2989,154 +3196,31 @@ def render(argv: list[str]) -> None:
             column_names[found[0]] = found[1]
         raw_gaze = _cn.to_canonical_frame(raw_gaze)
 
-    # What the metadata tables are joined against — the samples, when
-    # they are the only table, or every join would report "0 matched".
-    join_frame = (
-        raw_gaze
-        if raw_gaze is not None and fixations.empty and words.empty
-        else fixations
-    )
-
-    # Attaching a participant table headlessly is worth doing for the
-    # join report alone — a mistyped id column or a cohort file from the wrong
-    # study is exactly what you want to hear about before rendering 300 figures.
-    if args.participant_metadata:
-        try:
-            attached = api.load_participant_metadata(
-                args.participant_metadata, participants=join_frame
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached.report
-        print(
-            f"Participant metadata: {_count(len(attached.fields), 'field')} "
-            f"({', '.join(attached.names)}) for "
-            f"{_count(len(report.matched), 'participant')}.",
-            file=sys.stderr,
-        )
-        for label, ids in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if ids:
-                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
-        _print_combined_rows(report)
-
-    # The same, one grain down. A trial table's report is worth more
-    # than the participant one, not less: getting the *key* wrong is silent
-    # (a table keyed by trial alone still joins, it just means something else),
-    # and "0 matched" here is the one thing that says so out loud.
-    attached_trials = None
-    if args.trial_metadata:
-        try:
-            attached_trials = api.load_trial_metadata(
-                args.trial_metadata,
-                participant_column=args.trial_metadata_reader_column,
-                trials=join_frame,
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached_trials.report
-        keyed = (
-            "participant + trial"
-            if attached_trials.keyed_by_participant
-            else "trial id"
-        )
-        print(
-            f"Trial metadata: {_count(len(attached_trials.fields), 'field')} "
-            f"({', '.join(attached_trials.names)}) for "
-            f"{_count(len(report.matched), 'trial')}, keyed by {keyed}.",
-            file=sys.stderr,
-        )
-        for label, keys in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if keys:
-                shown = ", ".join(_format_trial_key(key) for key in keys[:20])
-                # Plain "..." rather than an ellipsis character: this line
-                # goes to stderr, and a Windows console in its default
-                # code page prints the single glyph as a replacement mark.
-                more = "" if len(keys) <= 20 else f", ... (+{len(keys) - 20})"
-                print(f"  {len(keys)} {label}: {shown}{more}", file=sys.stderr)
-        _print_combined_rows(report)
-    elif args.trial_metadata_reader_column:
-        raise SystemExit(
-            "--trial-metadata-participant-column needs --trial-metadata: it names a "
-            "column in that table."
-        )
-
-    # The third grain, flat like the participant table — a text is a
-    # stimulus, so it always joins on text id alone.
-    attached_texts = None
-    if args.text_metadata:
-        try:
-            attached_texts = api.load_text_metadata(
-                args.text_metadata, texts=words if not words.empty else join_frame
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached_texts.report
-        print(
-            f"Text metadata: {_count(len(attached_texts.fields), 'field')} "
-            f"({', '.join(attached_texts.names)}) for "
-            f"{_count(len(report.matched), 'text')}.",
-            file=sys.stderr,
-        )
-        for label, ids in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if ids:
-                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
-        _print_combined_rows(report)
-
+    if (
+        args.list_trials
+        or args.participant_metadata
+        or args.trial_metadata
+        or args.text_metadata
+        or args.trial_metadata_reader_column
+    ):
+        _report_render_metadata(args, words, fixations, raw_gaze, column_names)
     if args.list_trials:
-        combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
-        if (
-            args.participant_metadata
-            or attached_trials is not None
-            or attached_texts is not None
-        ):
-            from scanpath_studio import metadata as _metadata
-
-            if args.participant_metadata:
-                combos = _metadata.project(attached, combos)
-            if attached_trials is not None:
-                combos = _metadata.project_trials(attached_trials, combos)
-            if attached_texts is not None:
-                # `list_trials`'s combos is deliberately just
-                # (participant_id, trial_id) — text_id isn't part of its
-                # public contract — so bring it in here, from whichever
-                # table has the trial, before projecting the text table.
-                texts = _trial_text_ids(fixations, words, join_frame)
-                if texts is not None:
-                    combos = combos.merge(
-                        texts, on=["participant_id", "trial_id"], how="left"
-                    )
-                    combos = _metadata.project_texts(attached_texts, combos)
-        # The text id too — the id the app shows a trial by — from whichever
-        # table has the trial, since every table's trials are listed.
-        texts = _trial_text_ids(fixations, words, raw_gaze)
-        if "text_id" not in combos.columns and texts is not None:
-            combos = combos.merge(texts, on=["participant_id", "trial_id"], how="left")
-        print(
-            f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
-            "participant as -p and the trial as -t; the app shows a trial by "
-            "its participant and text.",
-            file=sys.stderr,
-        )
-        # The ids under the dataset's own names.
-        print(_listed(combos, column_names).to_string(index=False))
         return
     if args.list_parts:
         parts = api.list_parts(
             words, fixations, args.participant, args.trial, raw_gaze=raw_gaze
         )
         if parts.empty:
+            if args.participant is not None or args.trial is not None:
+                combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
+                try:
+                    api._matching_trials(
+                        _cn.to_canonical_frame(combos), args.participant, args.trial
+                    )
+                except ValueError as exc:
+                    raise SystemExit(
+                        f"{exc} Use --list-trials to see the available readings."
+                    ) from None
             print("No multipart screens (the selected data is single-screen).")
         else:
             print(_listed(parts, column_names).to_string(index=False))
@@ -3178,7 +3262,11 @@ def render(argv: list[str]) -> None:
                     "raw gaze samples, which Scanpath Studio does not turn into "
                     f"fixations. Drop {flag} to draw the samples."
                 )
-    against = f", compared with {args.compare_with}" if args.compare_with else ""
+    against = (
+        f", compared with participant={args.compare_with[0]!r} trial={args.compare_with[1]!r}"
+        if args.compare_with
+        else ""
+    )
     print(
         f"Rendering participant={participant} trial={trial}{against}",
         file=sys.stderr,
@@ -3205,18 +3293,9 @@ def render(argv: list[str]) -> None:
     if args.coordinate_grid or args.coordinate_grid_spacing is not None:
         overrides["show_coordinate_grid"] = True
         overrides["coordinate_grid_spacing"] = args.coordinate_grid_spacing
-    if args.word_hover_fields is not None:
-        overrides["word_hover_fields"] = [
-            field.strip()
-            for field in args.word_hover_fields.split(",")
-            if field.strip()
-        ]
-    if args.fixation_hover_fields is not None:
-        overrides["fixation_hover_fields"] = [
-            field.strip()
-            for field in args.fixation_hover_fields.split(",")
-            if field.strip()
-        ]
+    for key in ("word_hover_fields", "fixation_hover_fields"):
+        if (fields := getattr(args, key)) is not None:
+            overrides[key] = fields
     # The palette rides along as an override; api._expand_palette turns
     # it into colour kwargs and lets any explicit --*-color below win.
     if args.palette:
@@ -3579,7 +3658,7 @@ def render(argv: list[str]) -> None:
             # nor the static path's per-layer extras.
             from .experimental_setup import IncomparableScreensError
 
-            compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+            compare_participant, compare_trial = args.compare_with
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
             )
@@ -3617,6 +3696,7 @@ def render(argv: list[str]) -> None:
                     fixations_b=fixations_b,
                     dataset_b=args.compare_dataset_name,
                     layout=args.compare_layout,
+                    illustration_label=args.illustration_label,
                     compare_stimulus=args.compare_stimulus,
                     labels=_compare_labels(args),
                     setup=_compare_setup_snapshot(canvas),
@@ -3682,6 +3762,10 @@ def render(argv: list[str]) -> None:
                 )
         if args.all_screens:
             target = Path(args.output)
+            stem, suffix = target.stem, target.suffix
+            if publication_output:
+                stem, marker = stem.rsplit(".", 1)
+                suffix = f".{marker}{suffix}"
             written = []
             for position, (screen_id, screen_figure) in enumerate(
                 figures.items(), start=1
@@ -3695,7 +3779,7 @@ def render(argv: list[str]) -> None:
                     for char in str(screen_id)
                 )
                 screen_path = target.with_name(
-                    f"{target.stem}__screen-{position:03d}-{safe_screen}{target.suffix}"
+                    f"{stem}__screen-{position:03d}-{safe_screen}{suffix}"
                 )
                 written.append(
                     api.save_figure(screen_figure, screen_path, **_save_kwargs(args))
@@ -3723,9 +3807,7 @@ def render(argv: list[str]) -> None:
                     fig,
                     layer_dir,
                     fmt=suffix,
-                    scale=int(args.scale),
-                    width=args.width,
-                    height=args.height,
+                    **_save_kwargs(args),
                 )
     except (ValueError, RuntimeError, OSError) as exc:
         raise SystemExit(str(exc))
@@ -3810,14 +3892,7 @@ def analyze(argv: list[str]) -> None:
 
     from . import api
 
-    manifest = None
-    if args.trial_parts_manifest:
-        try:
-            manifest = json.loads(
-                Path(args.trial_parts_manifest).read_text(encoding="utf-8")
-            )
-        except (OSError, json.JSONDecodeError) as exc:
-            raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+    manifest = _trial_parts_manifest(args.trial_parts_manifest)
     try:
         words, fixations = api.load_scanpath_data(
             args.words,
@@ -3865,13 +3940,15 @@ def analyze(argv: list[str]) -> None:
     written: dict[str, list] = {}
     for name, table in tables.items():
         found = _cn.frame_names(table)
-        if found is not None and name in ("fixations", "word_measures"):
-            written[name] = _cn.written_columns(
-                shareable_frame(_cn.to_canonical_frame(table)), found[1]
-            )
-        # The paths a stimulus image was found at are this machine's, not data.
-        table = strip_local_paths(shareable_frame(table))
-        table.to_csv(destination / f"{name}.csv", index=False)
+        names = found[1] if found is not None else None
+        # Mask unmeasured onsets and local image paths under the canonical names
+        # where they are recognized, then restore this lab's output headers.
+        public = strip_local_paths(
+            shareable_frame(_cn.to_canonical_frame(table), table=name)
+        )
+        if names is not None and name in ("fixations", "word_measures"):
+            written[name] = _cn.written_columns(public, names)
+        _cn.as_written(public, names).to_csv(destination / f"{name}.csv", index=False)
     if any(written.values()):
         (destination / "columns.json").write_text(
             json.dumps(_cn.columns_manifest(written), indent=2), encoding="utf-8"
@@ -3902,6 +3979,93 @@ def analyze(argv: list[str]) -> None:
         )
 
 
+def _recipe_parser() -> argparse.ArgumentParser:
+    """Options for reproducing a downloaded Corpus Analysis table."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio recipe",
+        description="Rerun a corpus overview, cohort profile or two-group difference profile on its source tables.",
+    )
+    parser.add_argument(
+        "recipe",
+        metavar="RECIPE.json",
+        help="Analysis recipe downloaded from Corpus Analysis.",
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--sample", action="store_true", help="Use the bundled demo.")
+    source.add_argument("--words", nargs="+", help="Original Words table(s).")
+    parser.add_argument("--fixations", nargs="+", help="Original Fixations table(s).")
+    parser.add_argument(
+        "--raw-gaze",
+        nargs="+",
+        help="Original raw gaze table(s) when a text metadata filter uses their IDs.",
+    )
+    parser.add_argument(
+        "--trial-parts-manifest", help="Multipart trial manifest used at import."
+    )
+    _add_schema_flags(parser)
+    for grain in ("participant", "trial", "text"):
+        parser.add_argument(
+            f"--{grain}-metadata",
+            help=f"The {grain} metadata table used by the recipe's filters.",
+        )
+    parser.add_argument(
+        "--annotations", help="Annotations JSON used for favorites or tag filters."
+    )
+    parser.add_argument(
+        "-o", "--output", required=True, help="Where to write the reproduced CSV."
+    )
+    return parser
+
+
+def recipe(argv: list[str]) -> None:
+    """Rerun a cohort profile using the same inputs as its author."""
+    args = _recipe_parser().parse_args(argv)
+    if args.sample and any(
+        (
+            args.fixations,
+            args.raw_gaze,
+            args.word_schema,
+            args.fix_schema,
+            args.trial_parts_manifest,
+            args.keep_columns,
+        )
+    ):
+        raise SystemExit(
+            "--sample uses the bundled tables and their mappings. Pass --words to use your own."
+        )
+    from . import api, data
+    from .analysis_recipe import load_recipe_sources
+
+    try:
+        saved = json.loads(Path(args.recipe).read_bytes())
+        words, fixations = (
+            data.read_sample_tables() if args.sample else (args.words, args.fixations)
+        )
+        manifest = _trial_parts_manifest(args.trial_parts_manifest)
+        tables, raw_gaze = load_recipe_sources(
+            saved,
+            words,
+            fixations,
+            data.read_sample_raw_gaze() if args.sample else args.raw_gaze,
+            word_schema=_parse_schema_arg(args.word_schema, "--word-schema"),
+            fix_schema=_parse_schema_arg(args.fix_schema, "--fix-schema"),
+            keep_columns=args.keep_columns,
+            trial_parts_manifest=manifest,
+        )
+        result = api.run_analysis_recipe(
+            saved,
+            *tables,
+            raw_gaze=raw_gaze,
+            participant_metadata=args.participant_metadata,
+            trial_metadata=args.trial_metadata,
+            text_metadata=args.text_metadata,
+            annotations=args.annotations,
+        )
+        result.to_csv(args.output, index=False, lineterminator="\n")
+    except (ValueError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def _corpus_parser() -> argparse.ArgumentParser:
     """The `corpus` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -3915,13 +4079,14 @@ def _corpus_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="The CSV. profile reads word_id and the value column, plus "
         "optional lo and hi; distribution reads the value column; difference "
-        "reads word_id and diff.",
+        "reads word_id and diff. Overview reads the group column (--series-col), "
+        "the mean (--value-col), lo and hi.",
     )
     parser.add_argument(
         "--kind",
-        choices=["profile", "distribution", "difference"],
+        choices=["overview", "profile", "distribution", "difference"],
         required=True,
-        help="A per-word profile, a distribution, or a difference profile.",
+        help="A corpus overview, per-word profile, distribution or difference profile.",
     )
     parser.add_argument(
         "-o",
@@ -3938,7 +4103,7 @@ def _corpus_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--series-col",
         default="series",
-        help="Column naming the overlaid series, when present (default: series).",
+        help="Group ID for an overview, or column naming the overlaid series (default: series).",
     )
     parser.add_argument(
         "--value-col",
@@ -3946,9 +4111,13 @@ def _corpus_parser() -> argparse.ArgumentParser:
         help="The value column (default: value).",
     )
     parser.add_argument(
+        "--percent",
+        action="store_true",
+        help="Show overview values and bounds stored as proportions (0–1) as percentages.",
+    )
+    parser.add_argument(
         "--primary-color",
-        default="#1f77b4",
-        help="First series color (default: #1f77b4).",
+        help=f"First series color (overview: {DEFAULT_FIXATION_COLOR}, other figures: #1f77b4).",
     )
     parser.add_argument(
         "--secondary-color",
@@ -3967,7 +4136,12 @@ def corpus(argv: list[str]) -> None:
     # unparseable --input, a table without the columns --kind reads, an output
     # extension save_figure doesn't write.
     try:
-        data = pd.read_csv(args.input)
+        if args.kind == "overview":
+            from .data import ReadPlan, read_table
+
+            data = read_table(args.input, plan=ReadPlan(identity=(args.series_col,)))
+        else:
+            data = pd.read_csv(args.input)
     except (OSError, ValueError) as exc:
         raise SystemExit(f"--input: could not read {args.input!r}: {exc}") from exc
     try:
@@ -3977,7 +4151,12 @@ def corpus(argv: list[str]) -> None:
             measure_label=args.measure_label,
             series_col=args.series_col,
             value_col=args.value_col,
-            colors=(args.primary_color, args.secondary_color),
+            as_percent=args.percent,
+            colors=(
+                args.primary_color
+                or (DEFAULT_FIXATION_COLOR if args.kind == "overview" else "#1f77b4"),
+                args.secondary_color,
+            ),
         )
         out = api.save_figure(fig, args.output)
     except (ValueError, RuntimeError, OSError) as exc:
@@ -4015,7 +4194,7 @@ def _count(n: int, noun: str) -> str:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache.
 
-    The terminal counterpart of the app's 🗂️ Data Management → *Saved on this computer*
+    The terminal counterpart of the app's 🗂️ Data Management → *Saved work*
     section, so the storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """
@@ -4121,7 +4300,7 @@ def _version_parser() -> argparse.ArgumentParser:
 def version(argv: list[str]) -> None:
     """Print which build this is, and with ``--check`` whether a newer release is out.
 
-    The terminal counterpart of Help → About and ``api.check_for_updates``.
+    The terminal counterpart of Help → About & citation and ``api.check_for_updates``.
     Exits 1 only when the check itself could not be made.
     """
     args = _version_parser().parse_args(argv)
@@ -4129,6 +4308,7 @@ def version(argv: list[str]) -> None:
 
     info = build_info()
     print(f"scanpath-studio {info.version}")
+    print(f"Channel:    {info.channel.title()}")
     print(f"Build:      {info.describe()}")
     print(f"Installed:  {INSTALL_KINDS[install_kind(info)]}")
     if not args.check:
@@ -4225,21 +4405,47 @@ def _check_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="JSON manifest assigning source rows to ordered screens.",
     )
-    parser.add_argument(
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
         "--json",
         action="store_true",
         help="Print the findings as JSON (the rows api.check_data_health returns).",
+    )
+    output.add_argument(
+        "--json-report",
+        action="store_true",
+        help="Include input, eligible and checked row counts beside the findings as JSON.",
     )
     _add_schema_flags(parser)
     return parser
 
 
-def _health_report(findings, counts: dict[str, int]) -> str:
+def _health_report(findings, counts: dict[str, dict]) -> str:
     """The data-check findings as plain text for a terminal."""
-    checked = ", ".join(f"{name} {n:,} rows" for name, n in counts.items())
-    if not findings:
-        return f"Data checks: every check passed ({checked})."
-    lines = [f"Data checks: {_count(len(findings), 'finding')} ({checked})."]
+    checked = ", ".join(
+        f"{name} {row['checked']:,} rows" for name, row in counts.items()
+    )
+    if findings:
+        lines = [f"Data checks: {_count(len(findings), 'finding')} ({checked})."]
+    elif not any(row["checked"] for row in counts.values()):
+        lines = ["Data checks: no rows were checked."]
+    else:
+        lines = [f"Data checks: every check passed ({checked})."]
+    for name, row in counts.items():
+        label = name.replace("_", " ").capitalize()
+        lines.append(
+            f"{label}: {row['read']:,} rows read, {row['eligible']:,} eligible, "
+            f"{row['checked']:,} checked."
+        )
+        if not row["read"]:
+            lines.append("  The table contained a header and no data rows.")
+        if row["blank"]:
+            lines.append(f"  Empty rows: {row['blank']:,}.")
+        if row["missing_identity"]:
+            columns = ", ".join(row["missing_id_columns"])
+            lines.append(
+                f"  Rows left out for a missing ID in {columns}: {row['missing_identity']:,}."
+            )
     for f in findings:
         trials = f" in {_count(f.trials, 'trial')}" if f.trials else ""
         label = "note" if f.severity == "note" else "warning"
@@ -4284,17 +4490,17 @@ def check(argv: list[str]) -> None:
     from . import api
 
     words = fixations = raw_gaze = None
+    # The findings-only JSON response keeps its established list shape.
+    counts = None if args.json else {}
     if args.sample:
-        words, fixations = api.load_sample_data()
+        from .data import read_sample_raw_gaze, read_sample_tables
+
+        words, fixations = api.load_scanpath_data(
+            *read_sample_tables(), _row_counts=counts
+        )
+        raw_gaze = api.load_raw_gaze(read_sample_raw_gaze(), _row_counts=counts)
     elif args.words or args.fixations:
-        manifest = None
-        if args.trial_parts_manifest:
-            try:
-                manifest = json.loads(
-                    Path(args.trial_parts_manifest).read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError) as exc:
-                raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+        manifest = _trial_parts_manifest(args.trial_parts_manifest)
         try:
             words, fixations = api.load_scanpath_data(
                 args.words,
@@ -4303,6 +4509,7 @@ def check(argv: list[str]) -> None:
                 fix_schema=fix_schema,
                 trial_parts_manifest=manifest,
                 keep_columns=args.keep_columns,
+                _row_counts=counts,
             )
         except (ValueError, OSError) as exc:
             raise SystemExit(_load_error_message(exc)) from exc
@@ -4314,26 +4521,28 @@ def check(argv: list[str]) -> None:
             fixations = None
     if args.raw_gaze:
         try:
-            raw_gaze = api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+            raw_gaze = api.load_raw_gaze(
+                args.raw_gaze, raw_gaze_schema=raw_gaze_schema, _row_counts=counts
+            )
         except (ValueError, OSError) as exc:
             raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
 
     findings = api._health_findings(words, fixations, raw_gaze)
-    if args.json:
-        from .data_health import findings_frame
-
-        records = findings_frame(findings).to_dict("records")
-        print(json.dumps(records, indent=2, default=str))
-        return
-    counts = {
-        name: len(frame)
+    if counts is not None:
         for name, frame in (
             ("words", words),
             ("fixations", fixations),
             ("raw_gaze", raw_gaze),
+        ):
+            if frame is not None:
+                counts[name]["checked"] = len(frame)
+    if args.json or args.json_report:
+        records = [finding.to_json_record() for finding in findings]
+        report = (
+            {"tables": counts, "findings": records} if args.json_report else records
         )
-        if frame is not None
-    }
+        print(json.dumps(report, indent=2, allow_nan=False, default=str))
+        return
     print(_health_report(findings, counts))
 
 
@@ -4352,6 +4561,8 @@ usage:
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio corpus …         render a corpus figure from a tidy CSV
+  scanpath-studio recipe …         reproduce a cohort or difference profile CSV from its recipe
+  scanpath-studio publication …    render a publication figure recipe
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
@@ -4376,6 +4587,8 @@ _COMMANDS = (
     "render",
     "analyze",
     "corpus",
+    "recipe",
+    "publication",
     "check",
     "cache",
     "version",
@@ -4485,6 +4698,26 @@ def main(argv: list[str] | None = None) -> None:
                 f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
             )
         analyze(argv[1:])
+    elif argv[0] == "publication":
+        import json
+
+        from .api import save_publication
+
+        parser = argparse.ArgumentParser(
+            prog="scanpath-studio publication",
+            description="Render a figure project saved in Prepare figure.",
+        )
+        parser.add_argument("recipe", type=Path)
+        parser.add_argument("-o", "--output", required=True, type=Path)
+        args = parser.parse_args(argv[1:])
+        try:
+            save_publication(
+                json.loads(args.recipe.read_text(encoding="utf-8")), args.output
+            )
+        except (ValueError, RuntimeError, OSError) as exc:
+            parser.error(str(exc))
+    elif argv[0] == "recipe":
+        recipe(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
     elif argv[0] == "check":

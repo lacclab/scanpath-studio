@@ -24,11 +24,11 @@ from scanpath_studio import app
 from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
 from scanpath_studio.data import (
     load_sample_data,
-    load_sample_raw_gaze,
     normalize_fixations,
     normalize_words,
     propose_fix_schema,
     propose_word_schema,
+    read_sample_raw_gaze,
     text_ids,
 )
 from scanpath_studio.synthetic import load_synthetic_data
@@ -51,7 +51,7 @@ def _normalized_sample() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         normalize_fixations(
             fixations_raw, propose_fix_schema(fixations_raw), keep_columns=None
         ),
-        load_sample_raw_gaze(),
+        read_sample_raw_gaze(),
     )
 
 

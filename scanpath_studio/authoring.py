@@ -12,12 +12,15 @@ from typing import Any
 import pandas as pd
 
 AUTHORING_SCHEMA = 2
+AUTHORED_ATTR = "scanpath_studio.authored"
+SAMPLE_TEXT = "The cat sat\non the mat."
 DEFAULT_LAYOUT = {
     "canvas_width": 1200,
     "margin": 70,
     "character_width": 13,
     "word_height": 32,
     "line_height": 58,
+    "right_to_left": 0,
 }
 EVENT_COLUMNS = [
     "fixation_id",
@@ -47,6 +50,7 @@ def layout_text(
     character_width: int = 13,
     word_height: int = 32,
     line_height: int = 58,
+    right_to_left: bool = False,
 ) -> pd.DataFrame:
     """Lay text into deterministic boxes while preserving explicit line breaks.
 
@@ -74,7 +78,7 @@ def layout_text(
                     "text": token,
                     "line_idx": float(line),
                     # Canonical word geometry is box top-left + width/height.
-                    "x": float(x),
+                    "x": float(canvas_width - x - width if right_to_left else x),
                     "y": float(y),
                     "width": float(width),
                     "height": float(word_height),
@@ -99,6 +103,25 @@ def layout_text(
     )
 
 
+def canvas_size(words: pd.DataFrame, layout: Mapping[str, int]) -> tuple[int, int]:
+    height = 480
+    if not words.empty:
+        height = max(
+            height, int((words["y"] + words["height"]).max() + layout["margin"])
+        )
+    return int(layout["canvas_width"]), height
+
+
+def draft_filename(name: str) -> str:
+    """A portable filename shared by the download and its reproduction code."""
+    stem = re.sub(r"[^\w-]+", "-", name, flags=re.UNICODE).strip("-_")
+    return f"{stem or 'scanpath'}.json"
+
+
+def is_authored(*frames: pd.DataFrame | None) -> bool:
+    return any(frame is not None and frame.attrs.get(AUTHORED_ATTR) for frame in frames)
+
+
 def layout_problems(
     words: pd.DataFrame, *, canvas_width: int, margin: int
 ) -> list[str]:
@@ -118,7 +141,7 @@ def layout_problems(
 def default_events(words: pd.DataFrame) -> pd.DataFrame:
     """Return one stable, centered fixation per word as the authoring seed."""
     if words.empty:
-        return pd.DataFrame(columns=EVENT_COLUMNS)
+        return pd.DataFrame({key: pd.Series(dtype="float64") for key in EVENT_COLUMNS})
     ids = pd.Series(range(1, len(words) + 1), dtype="int64")
     return pd.DataFrame(
         {
@@ -131,6 +154,10 @@ def default_events(words: pd.DataFrame) -> pd.DataFrame:
         },
         columns=EVENT_COLUMNS,
     )
+
+
+def sample_draft() -> tuple[str, dict[str, int], pd.DataFrame]:
+    return SAMPLE_TEXT, dict(DEFAULT_LAYOUT), default_events(layout_text(SAMPLE_TEXT))
 
 
 def _number(value: Any) -> float | None:
@@ -160,6 +187,8 @@ def normalize_event_table(events: pd.DataFrame | None) -> pd.DataFrame:
         if column not in frame:
             frame[column] = None
     frame = frame[EVENT_COLUMNS].reset_index(drop=True)
+    if frame.empty:
+        return default_events(pd.DataFrame())
 
     used_ids = [
         value for value in (_positive_int(v) for v in frame["fixation_id"]) if value
@@ -293,7 +322,7 @@ def apply_authoring_event(
         frame.loc[len(frame)] = {
             "fixation_id": fixation_id,
             "order_in_trial": max(existing_orders, default=0) + 1,
-            "word_id": None,
+            "word_id": event_target_word(event),
             "x": x,
             "y": y,
             "duration_ms": 220,
@@ -320,6 +349,10 @@ def apply_authoring_event(
         )
         for field in allowed:
             if field in event:
+                if field in {"x", "y", "duration_ms"}:
+                    frame[field] = pd.to_numeric(frame[field], errors="coerce").astype(
+                        float
+                    )
                 frame.at[matches[0], field] = event[field]
         selected = fixation_id
     elif action == "delete":
@@ -395,35 +428,6 @@ def unresolved_targets(
         for fixation_id, (word_id, named) in stale.items()
         if targets.get(fixation_id) == word_id and current.get(word_id) != named
     }
-
-
-def destructive_change(before: pd.DataFrame | None, after: pd.DataFrame | None) -> bool:
-    """Whether going from ``before`` to ``after`` lost authored work: a fixation
-    removed, or one that is still there moved, retimed, reordered or retargeted.
-
-    Adding a fixation loses nothing, so it is not one. This is what decides when
-    the authoring screen keeps the previous draft for **Restore previous draft**.
-    """
-    old = normalize_event_table(before)
-    new = normalize_event_table(after)
-    if old.empty:
-        return False
-
-    def keyed(frame: pd.DataFrame) -> dict[int, tuple]:
-        rows = {}
-        for event in frame.to_dict("records"):
-            fixation_id = _positive_int(event.get("fixation_id"))
-            rows[fixation_id] = (
-                _number(event.get("x")),
-                _number(event.get("y")),
-                _number(event.get("duration_ms")),
-                _positive_int(event.get("order_in_trial")),
-                event_target_word(event),
-            )
-        return rows
-
-    old_rows, new_rows = keyed(old), keyed(new)
-    return any(new_rows.get(key) != value for key, value in old_rows.items())
 
 
 def unusable_event_rows(words: pd.DataFrame, events: pd.DataFrame) -> list[int]:
@@ -502,7 +506,9 @@ def authored_fixations(words: pd.DataFrame, events: pd.DataFrame) -> pd.DataFram
             }
         )
         timestamp += duration
-    return pd.DataFrame(rows, columns=columns)
+    fixations = pd.DataFrame(rows, columns=columns)
+    fixations.attrs[AUTHORED_ATTR] = True
+    return fixations
 
 
 def _json_records(events: pd.DataFrame) -> list[dict[str, Any]]:
@@ -527,6 +533,8 @@ def authoring_json(
 ) -> str:
     """Serialize a schema-2 source document for portable save/restore."""
     layout_value = {**DEFAULT_LAYOUT, **dict(layout or {})}
+    if not layout_value.get("right_to_left"):
+        layout_value.pop("right_to_left", None)
     return json.dumps(
         {
             "schema": AUTHORING_SCHEMA,
@@ -551,7 +559,7 @@ def parse_authoring_document(payload: str) -> AuthoringDocument:
     if not isinstance(value, dict):
         raise ValueError(_NOT_AUTHORING)
     schema = value.get("schema")
-    if schema not in {1, AUTHORING_SCHEMA} or not isinstance(value.get("text"), str):
+    if schema not in (1, AUTHORING_SCHEMA) or not isinstance(value.get("text"), str):
         raise ValueError(_NOT_AUTHORING)
     events = value.get("fixations", [])
     if not isinstance(events, list):

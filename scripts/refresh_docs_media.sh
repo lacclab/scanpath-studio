@@ -1,6 +1,6 @@
 #!/bin/sh
 # Re-capture every picture of the app the README and the docs site show: the
-# screenshots, the All controls pictures, the workflow GIFs and videos, the
+# screenshots, the All controls pictures, the workflow videos and posters, the
 # homepage montages with their PDF stills, and the README / docs-home demo.
 # Each script starts its own app from this checkout, at the bundled demo's
 # defaults, so run it from the commit whose UI the media should show.

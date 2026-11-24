@@ -4,7 +4,10 @@
 
 A free, open-source app for exploring eye movements in reading. Check data quality, compare participants, and make figures and replay videos. No coding required.
 
-**[Try it online](https://scanpath-studio.streamlit.app)** · **[Download the app](https://lacclab.github.io/scanpath-studio/install/)** · **[Browse the gallery](https://lacclab.github.io/scanpath-studio/gallery/)**
+**[Try Stable online](https://scanpath-studio.streamlit.app)** · [Try Dev online](https://scanpath-studio-dev.streamlit.app) · **[Download the app](https://lacclab.github.io/scanpath-studio/install/)** · **[Browse the gallery](https://lacclab.github.io/scanpath-studio/gallery/)**
+
+[Stable documentation](https://lacclab.github.io/scanpath-studio/) · [Dev documentation](https://lacclab.github.io/scanpath-studio/dev/) · [What’s new in Dev](https://lacclab.github.io/scanpath-studio/dev/whats-new/)
+
 
 ![Scanpath Studio on the Scanpath page: a replay, the Heatmap preset, a figure built layer by layer, saccade filters, redacted text, two participants side by side, Export and Share](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
@@ -52,6 +55,6 @@ Build a figure in the app, then copy its Python or CLI code from **Share** → *
 
 Using Scanpath Studio in your research? [Cite the software](https://lacclab.github.io/scanpath-studio/about/#cite-scanpath-studio) (Shubi et al., 2026). The bundled demo is a subset of [OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2).
 
-[Report a bug or request a feature](https://github.com/lacclab/scanpath-studio/issues) · [Contribute](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) · [Code of conduct](https://github.com/lacclab/scanpath-studio/blob/main/CODE_OF_CONDUCT.md)
+[Report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md) · [Suggest an improvement](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas) · [Contribute](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md) · [Code of conduct](https://github.com/lacclab/scanpath-studio/blob/main/CODE_OF_CONDUCT.md)
 
 <sub>Scanpath Studio was developed with AI assistance. As with any research software, cross-check its results before you rely on them in published work.</sub>

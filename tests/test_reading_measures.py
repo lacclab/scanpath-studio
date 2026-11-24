@@ -140,7 +140,7 @@ class TestThePages:
         pin_view(at, "Corpus Analysis")
         at.run(timeout=90)
         assert not at.exception, at.exception
-        picker = next(s for s in at.selectbox if s.key == "ptext_measure")
+        picker = at.selectbox(key="corpus_measure")
         # The demo's report has no single-fixation or landing measures, and
         # the page does not derive them.
         labels = " ".join(picker.options)
@@ -262,11 +262,16 @@ class TestSkippedWordsAreLeftOut:
         from scanpath_studio import api
 
         words = api.load_sample_data(names="canonical").words
+        raw_words, _ = data.read_sample_tables()
+        fixated = raw_words["IA_FIXATION_COUNT"].gt(0)
         ffd = words["first_fixation_ms"]
         assert not ffd.eq(0).any()
-        assert ffd.mean() == pytest.approx(207.6, abs=0.5)
+        assert ffd.count() == fixated.sum()
+        assert ffd.mean() == pytest.approx(
+            raw_words.loc[fixated, "IA_FIRST_FIXATION_DURATION"].astype(float).mean()
+        )
         # TFD keeps the skipped words at 0 ms.
-        assert words["total_fixation_duration_ms"].eq(0).sum() == 834
+        assert words["total_fixation_duration_ms"].eq(0).sum() == (~fixated).sum()
 
 
 def test_an_imported_blank_second_pass_is_zero_where_the_count_is_known():

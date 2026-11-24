@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-"""Record one short GIF per workflow in the running app, with the clicks counted.
+"""Record one short video per workflow in the running app, with the clicks counted.
 
 ``record_app_demo.py`` records the README's opening animation. This records
 the workflows one at a time — exporting a figure, adding your own data, styling
-the plot, filtering trials, comparing readers — each as its own clip, for the
-README's *See it in action* and the docs Gallery's *The app at work*. A bar in
+the plot, filtering trials, comparing readers — each as its own clip for the docs site. A bar in
 the app's header counts the clicks as they happen and names each step, a ripple
 marks every click, and the last frame says how many it took::
 
@@ -12,16 +11,13 @@ marks every click, and the last frame says how many it took::
     uv run --with playwright python scripts/record_workflow_demos.py compare   # one
     uv run --with playwright python scripts/record_workflow_demos.py --list
 
-Each workflow is written twice from one recording: a GIF to ``assets/workflows/``
-for the README, and an MP4 with its poster to ``docs/assets/workflows/`` for the
-Gallery, which plays video at a fraction of a GIF's size (``DEMO_OUT`` writes
-both to one folder instead). It starts
+Each recording produces an MP4 and a WebP poster in ``docs/assets/workflows/``
+(or ``DEMO_OUT`` when set). The script starts
 its own app on a free port, so every workflow starts from the bundled demo at
 its defaults; set ``DEMO_APP_URL`` to record an app that is already running
 instead. Each workflow gets a fresh browser context, so nothing one does
-carries into the next. The browser is a returning user's — it has opted out of
-the welcome tour and the setup guide, as the guides' own *Don't show this again*
-does — and the app saves, as a local install does, into a scratch folder emptied
+carries into the next. The browser has dismissed the sample invitation,
+and the app saves, as a local install does, into a scratch folder emptied
 before each workflow (without it, an upload brings up the hosted demo's
 "nothing is saved here" reminder).
 
@@ -51,17 +47,16 @@ from record_app_demo import (
     HIDE_CSS,
     Pointer,
     Screencast,
-    encode_gif,
     encode_mp4,
 )
 from record_app_demo import PARK as APP_DEMO_PARK
 from record_app_demo import VIEWPORT as APP_DEMO_VIEWPORT
 
+from scanpath_studio.tour import TOUR_OPTOUT_COOKIE
+
 ROOT = Path(__file__).resolve().parent.parent
 URL = os.environ.get("DEMO_APP_URL")
-#: The README's GIFs, and the Gallery's MP4s (beside the docs' other assets).
-OUT = Path(os.environ.get("DEMO_OUT", ROOT / "assets" / "workflows"))
-VIDEO_OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
+OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
 SAMPLE = ROOT / "scanpath_studio" / "sample_data"
 
 #: The app demo's: wide enough for the trial picker to stay on one line, and
@@ -80,9 +75,6 @@ ACCENT = "#d55e00"
 #: neither.
 HUD_RIGHT = 240
 HUD_MAX_WIDTH = 700
-#: What *Don't show this again* writes (``tour.TOUR_OPTOUT_COOKIE`` and
-#: ``tour.WIZARD_GUIDE_OPTOUT_COOKIE``): a returning user's browser.
-OPT_OUT_COOKIES = ("sps_tour_optout", "sps_wizard_guide_optout")
 #: What the app shows of the recording machine itself: the Data page's download
 #: folder and its *Saved on this computer* folder. A viewer learns nothing from
 #: the recorder's scratch paths, and they would publish its home folder.
@@ -573,6 +565,10 @@ def export_figure(d: Demo) -> None:
     d.pause(0.8)
     d.click(_tab(page, "Export"), "Export")
     d.scroll_to(page.locator(".st-key-tutorial_export"), top=150)
+    d.click(
+        page.locator("summary").filter(has_text="Print size and resolution"),
+        "Print size",
+    )
     d.type_into(
         page.locator(".st-key-export_figure_width input"), "180", "180 mm at 300 dpi"
     )
@@ -587,10 +583,9 @@ def export_bundle(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(_tab(page, "Export"), "Export")
-    d.scroll_to(
-        page.locator('h2:has-text("Export bundle"), h1:has-text("Export bundle")'),
-        top=90,
-    )
+    bundle = page.locator("summary").filter(has_text="Export bundle")
+    d.scroll_to(bundle, top=90)
+    d.click(bundle, "Export bundle")
     d.pause(0.6)
     d.click(
         page.locator(".st-key-bulk_export_figfmts button").filter(has_text="PNG"),
@@ -656,8 +651,8 @@ def plot_controls(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(
-        page.locator(".st-key-split_mode_rail_sac_popover button"),
-        "Saccades ▾",
+        page.locator(".st-key-plot_menu_sac button"),
+        "Saccades",
         wait=False,
         hold=0.5,
     )
@@ -668,15 +663,18 @@ def plot_controls(d: Demo) -> None:
     d.pause(0.8)
     d.click(_toggle(page, "global_show_words"), "word boxes", hold=1.0)
     d.click(
-        page.locator(".st-key-split_mode_rail_fix_popover button"),
-        "Fixations ▾",
+        page.locator(".st-key-plot_menu_fix button"),
+        "Fixations",
         wait=False,
         hold=0.5,
     )
     d.click(page.locator(".st-key-global_show_order label"), "fixation order", hold=0.4)
     d.close_popover()
     d.pause(1.4)
-    d.choose("global_palette", "High contrast", "high-contrast palette")
+    d.click(
+        page.locator(".st-key-viz_palette_high_contrast button"),
+        "high-contrast palette",
+    )
     d.pause(1.6)
     d.finish("Regressions, word boxes and reading order")
 
@@ -686,9 +684,15 @@ def essentials(d: Demo) -> None:
     page = d.page
     # A first visit opens on the replay, already playing.
     d.pause(2.6)
-    d.click(page.locator(".st-key-simple_view_scanpath button"), "Scanpath", hold=1.4)
-    d.choose("global_palette", "High contrast", "palette", hold=1.2)
-    d.click(page.locator(".st-key-simple_view_heatmap button"), "Heatmap", hold=1.4)
+    d.click(
+        page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.4
+    )
+    d.click(
+        page.locator(".st-key-viz_palette_high_contrast button"),
+        "palette",
+        hold=1.2,
+    )
+    d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.4)
     d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.6)
     d.click(
         page.locator(".st-key-iconpop_more_rail button"),
@@ -742,17 +746,28 @@ def corpus_analysis(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(_nav(page, "Corpus Analysis"), "Corpus Analysis", hold=1.4)
+    d.click(
+        page.locator(".st-key-corpus_overview_plot .scatterlayer .point").first,
+        "select a text",
+    )
+    d.click(_button(page, "Open word profile"), "word profile", hold=1.0)
+    d.open(_button(page, "Chart settings"))
     d.choose("ptext_view", "Measure on the stimulus", "on the stimulus", hold=0.8)
+    page.locator(".st-key-dl_ptext4_downloads").wait_for()
+    d.close_popover()
     d.scroll(330)
     d.pause(2.0)
     d.scroll(-330)
+    d.open(_button(page, "Chart settings"))
     d.choose("ptext_view", "Measure vs feature", "vs surprisal", hold=0.8)
+    page.locator(".st-key-ptext5_feat").wait_for()
+    d.close_popover()
     d.scroll(330)
     d.pause(2.0)
     d.scroll(-330)
-    d.click(_tab(page, "Groups"), "Groups", hold=0.6)
-    d.click(_toggle(page, "groups_compare"), "Adv vs Ele", hold=0.6)
-    d.scroll(520)
+    d.click(
+        page.get_by_role("radio", name="Groups", exact=True), "compare groups", hold=0.6
+    )
     d.pause(2.4)
     d.finish("Word profiles, maps, features and group contrasts")
 
@@ -774,7 +789,7 @@ def trial_filtering(d: Demo) -> None:
     d.open(page.locator(".st-key-filter_difficulty_level [role=group]"))
     d.click(_option(page, "Ele"), "Ele texts only", hold=0.6)
     d.open(page.locator(".st-key-filter_participants [role=group]"))
-    d.click(_option(page, "l7_1090"), "one participant", hold=0.6)
+    d.click(_option(page, "l7_183"), "one participant", hold=0.6)
     d.close_popover()
     d.close_popover()
     d.pause(0.8)
@@ -820,9 +835,9 @@ def favorites(d: Demo) -> None:
 def replay(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(_toggle(page, "single_animate"), "Animate", hold=2.4)
+    d.click(page.locator(".st-key-single_animate label"), "Animation", hold=2.4)
     d.click(
-        page.locator(".st-key-split_mode_animate_popover button"),
+        page.locator(".st-key-plot_menu_animation button"),
         "Animate ▾",
         wait=False,
         hold=0.4,
@@ -840,7 +855,7 @@ def replay(d: Demo) -> None:
 def replay_export(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(_toggle(page, "single_animate"), "Animate", hold=1.0)
+    d.click(page.locator(".st-key-viz_view_animation button"), "Animation", hold=1.0)
     d.click(_tab(page, "Export"), "Export")
     d.scroll_to(page.locator(".st-key-tutorial_export"), top=150)
     d.click(page.locator("label").filter(has_text="GIF"), "GIF", hold=0.6)
@@ -889,7 +904,7 @@ def compare(d: Demo) -> None:
 def share_link(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(page.locator(".st-key-viz_view_heatmap button"), "Heatmap", hold=1.0)
+    d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.0)
     d.click(_tab(page, "Share"), "Share")
     d.scroll_to(_tab(page, "Share").first, top=HEADER + 10)
     d.click(
@@ -931,9 +946,7 @@ def record_one(browser, url: str, flow: Workflow, frames: Path) -> Path:
         accept_downloads=True,
     )
     context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
-    context.add_cookies(
-        [{"name": n, "value": "1", "url": url} for n in OPT_OUT_COOKIES]
-    )
+    context.add_cookies([{"name": TOUR_OPTOUT_COOKIE, "value": "1", "url": url}])
     context.add_init_script(OVERLAY_JS)
     page = context.new_page()
     page.goto(f"{url}/?ui={flow.ui}", wait_until="domcontentloaded")
@@ -1017,9 +1030,8 @@ def main() -> None:
                         )
                         failed.append(flow.name)
                         continue
-                    encode_gif(listing, OUT / f"{flow.name}.gif")
-                    VIDEO_OUT.mkdir(parents=True, exist_ok=True)
-                    encode_mp4(listing, VIDEO_OUT / f"{flow.name}.mp4")
+                    OUT.mkdir(parents=True, exist_ok=True)
+                    encode_mp4(listing, OUT / f"{flow.name}.mp4")
             browser.close()
         if failed:
             raise SystemExit(f"not recorded: {', '.join(failed)}")

@@ -1634,6 +1634,7 @@ class TestSplitScanpathLayers:
                 heatmap_metric="duration_ms",
                 background_image=str(p),
                 background_image_size=(1310, 991),
+                duration_size_legend=True,
             ),
         )
 
@@ -1642,6 +1643,9 @@ class TestSplitScanpathLayers:
     ):
         fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
         layers = split_scanpath_layers(fig)
+        retry = split_scanpath_layers(fig, only={"word_boxes"})
+        assert tuple(retry) == ("word_boxes",)
+        assert retry["word_boxes"].to_json() == layers["word_boxes"].to_json()
         # Every trace and shape lands in exactly one layer (no drops, no dupes).
         assert sum(len(g.data) for g in layers.values()) == len(fig.data)
         assert sum(len(g.layout.shapes or ()) for g in layers.values()) == len(
@@ -2985,3 +2989,115 @@ def test_humanized_column_writes_id_in_capitals():
     assert _humanize_column("participant_id") == "Participant"
     assert _humanize_column("unique_text_id") == "Unique text ID"
     assert _humanize_column("idle_time_ms") == "Idle time (ms)"
+
+
+class TestCategoryColors:
+    """A categorical colour keeps one colour per label, and the labels of one
+    figure wear clearly different colours."""
+
+    # Penn Treebank tags and the demo's saccade types: real label sets.
+    _LABEL_SETS = [
+        ["RIGHT", "LEFT", ".", "UP", "DOWN"],
+        ["Left", "Right"],
+        ["NOUN", "VERB", "ADJ", "ADV", "ADP", "DET", "PRON", "PROPN", "AUX"],
+        ["NN", "NNS", "NNP", "JJ", "JJR", "JJS", "RB", "RBR", "VB", "VBD", "VBG"]
+        + ["VBN", "VBP", "VBZ", "IN", "DT", "PDT", "PRP", "CC", "TO"],
+        [f"Line {i}" for i in range(1, 21)],
+    ]
+
+    @staticmethod
+    def _closest(colors) -> float:
+        from itertools import combinations
+
+        from scanpath_studio.plots import _color_lab, _delta_e
+
+        labs = [_color_lab(c) for c in colors]
+        return min(_delta_e(a, b) for a, b in combinations(labs, 2))
+
+    def test_the_palette_is_well_separated_and_apart_from_the_missing_grey(self):
+        from scanpath_studio.plots import _CATEGORY_MISSING, _CATEGORY_PALETTE
+
+        assert len(set(_CATEGORY_PALETTE)) == len(_CATEGORY_PALETTE) == 20
+        assert self._closest(_CATEGORY_PALETTE) >= 23
+        for grey in _CATEGORY_MISSING:
+            assert self._closest([*_CATEGORY_PALETTE, grey]) >= 23
+
+    @pytest.mark.parametrize("labels", _LABEL_SETS)
+    def test_up_to_the_palettes_size_every_pair_is_at_least_23_delta_e(self, labels):
+        from scanpath_studio.plots import _category_color_map
+
+        assert len(labels) <= 20
+        mapping = _category_color_map([*labels, None])
+        assert self._closest([mapping[label] for label in labels]) >= 23
+        assert mapping[None] == "#777777"
+
+    def test_past_the_palette_labels_stay_apart(self):
+        from scanpath_studio.plots import (
+            _CATEGORY_FALLBACK_DELTA_E,
+            _category_color_map,
+        )
+
+        labels = [f"relation {i}" for i in range(40)]
+        mapping = _category_color_map(labels)
+        assert len(set(mapping.values())) == len(labels) + 1
+        colors = [mapping[label] for label in labels]
+        assert self._closest(colors) >= _CATEGORY_FALLBACK_DELTA_E
+
+    def test_a_label_keeps_its_colour_unless_another_prefers_its_slot(self):
+        from scanpath_studio.plots import (
+            _CATEGORY_PALETTE,
+            _category_color_map,
+            _label_digest,
+        )
+
+        def slot(label):
+            return int.from_bytes(_label_digest(label)[4:8], "big") % 20
+
+        alone = _category_color_map(["DOWN"])["DOWN"]
+        assert alone == _CATEGORY_PALETTE[slot("DOWN")]
+        others = [f"class {i}" for i in range(30)]
+        uncontested = [o for o in others if slot(o) != slot("DOWN")][:12]
+        assert _category_color_map(["DOWN", *uncontested])["DOWN"] == alone
+        # Row order never matters.
+        assert _category_color_map(others) == _category_color_map(others[::-1])
+
+    def test_a_scanpaths_own_colour_is_never_a_fill(self):
+        from scanpath_studio.plots import (
+            _CATEGORY_AVOID_DELTA_E,
+            _CATEGORY_PALETTE,
+            _category_color_map,
+            _color_lab,
+            _delta_e,
+        )
+
+        outlines = ["#1f77b4", "#e45756", _CATEGORY_PALETTE[0]]
+        labels = [f"class {i}" for i in range(17)]
+        mapping = _category_color_map([*labels, None], outlines)
+        for label in labels:
+            for outline in outlines:
+                gap = _delta_e(_color_lab(mapping[label]), _color_lab(outline))
+                assert gap >= _CATEGORY_AVOID_DELTA_E
+        assert _category_color_map([None], ["#777777"])[None] == "#aaaaaa"
+
+    def test_scanpaths_a_and_b_share_one_mapping(self):
+        from scanpath_studio.plots import _shared_category_colors
+
+        a = pd.Series(["RIGHT", "LEFT", "RIGHT", None])
+        b = pd.Series(["DOWN", "RIGHT", "UP"])
+        (colors_a, colors_b), legend = _shared_category_colors(
+            [a, b], avoid=["#1f77b4", "#e45756"]
+        )
+        assert colors_a[0] == colors_a[2] == colors_b[1]
+        key = dict(legend)
+        assert key["RIGHT"] == colors_a[0] and key["DOWN"] == colors_b[0]
+        assert len(set(key.values())) == len(key) == 5
+
+    def test_the_demos_saccade_types_wear_distinct_colours(self):
+        from scanpath_studio import api
+
+        words, fixations = api.load_sample_data(names="canonical")
+        pid, tid = fixations.iloc[0][["participant_id", "trial_id"]]
+        fig = api.plot_scanpath(words, fixations, pid, tid, color_by="saccade_type")
+        legend = [t.marker.color for t in fig.data if t.showlegend]
+        assert len(legend) >= 3
+        assert self._closest(legend) >= 23

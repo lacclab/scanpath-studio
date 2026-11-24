@@ -483,7 +483,7 @@ REGISTER: tuple[Computation, ...] = (
         id="measure.ffd",
         name="First fixation duration (FFD)",
         category=CATEGORY_MEASURE,
-        summary="Duration of the first fixation on a word.",
+        summary="Duration of the first fixation on a word, even if the reader first reaches it on a return visit.",
         formula=(
             "Duration of the word's first fixation, whenever it comes — as "
             "EyeLink's `IA_FIRST_FIXATION_DURATION`, so a computed and an "
@@ -589,7 +589,7 @@ REGISTER: tuple[Computation, ...] = (
         id="measure.skip",
         name="Skip flag / skip rate",
         category=CATEGORY_MEASURE,
-        summary="Whether a word received no first-pass fixation.",
+        summary="A word counts as skipped if the reader does not fixate it on the first pass, even if they look at it later.",
         formula="`skip_flag = no fixation in the word's first pass`.",
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="skip_flag",
@@ -982,6 +982,25 @@ REGISTER: tuple[Computation, ...] = (
     # Aggregation / statistics
     # ------------------------------------------------------------------
     Computation(
+        id="agg.corpus_overview",
+        name="Mean and observed range by text or participant",
+        category=CATEGORY_AGGREGATION,
+        summary="Compares a recorded word measure across the filtered corpus.",
+        formula=(
+            "Average the word values within each reading. For a participant, show the mean, "
+            "minimum and maximum of those reading means. For a text, first average each "
+            "participant’s readings of that text, then summarize the participant means."
+        ),
+        code="scanpath_studio/aggregation.py:corpus_overview",
+        unit="same as the measure",
+        grouping="Readings use participant and trial IDs across their screens. Text comparisons use a mapped Text ID.",
+        missing="Only finite, reading-specific values contribute. Shared stimulus copies are excluded. A group with no values keeps its counts and has a blank mean.",
+        tiers="A, C",
+        status=STATUS_VERIFIED,
+        consumers=(_CORPUS, _API, _CLI),
+        tests=("tests/test_corpus_overview.py",),
+    ),
+    Computation(
         id="agg.measure_values",
         name="Measure value extraction",
         category=CATEGORY_AGGREGATION,
@@ -1019,7 +1038,7 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "`SD` → ±1 sample std (ddof=1) · `SEM` → ±std/√n · `IQR` → the 25th "
             "and 75th percentiles · `Bootstrap CI` → `agg.bootstrap_ci`. With "
-            "`agg='sum'`, SD/SEM fall back to the bootstrap: the spread of "
+            "`agg='sum'`, SD/SEM/IQR fall back to the bootstrap: the spread of "
             "individual observations does not bracket a total."
         ),
         code="scanpath_studio/aggregation.py:spread_bounds",
@@ -1108,9 +1127,22 @@ REGISTER: tuple[Computation, ...] = (
         name="Per-word cohort profile",
         category=CATEGORY_AGGREGATION,
         summary="A measure per word position, aggregated across participants.",
-        formula="Group the word measures by word id and apply `agg.aggregate_value`.",
+        formula=(
+            "Two steps per word id, both with the chosen `agg.aggregate_value` "
+            "(mean, median or sum): first within each participant, over their "
+            "finite values from repeated readings of the text (z-scored within "
+            "the participant first when **Z-score per participant** is on); then "
+            "across those participant values, with the `agg.spread` band and "
+            "`n` = the contributing participants. One screen of a multipart "
+            "text at a time."
+        ),
         code="scanpath_studio/aggregation.py:cohort_word_profile",
-        missing="A minimum-participants threshold drops thinly-sampled words.",
+        missing=(
+            "A word with no finite value keeps its row with `n = 0` and no value. "
+            "A word with fewer participants than **Min participants per word** is "
+            "marked `enough = False`, and the view hides it when that minimum is "
+            "above 1."
+        ),
         tiers="C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS, _API),
@@ -1187,7 +1219,10 @@ REGISTER: tuple[Computation, ...] = (
         summary="Rescale a measure for cross-participant comparison.",
         formula=(
             "Per-participant z-score, `(value − participant mean) / participant SD`, "
-            "when **Z-score per participant** is on."
+            "when **Z-score per participant** is on. The mean and SD span the "
+            "participant's values in the view's selection; the two-group views "
+            "take them before splitting the readings into groups, so a "
+            "participant in both groups keeps the difference between them."
         ),
         code="scanpath_studio/aggregation.py:add_normalized_column",
         missing=(
@@ -1646,6 +1681,24 @@ def measure_entry(column: str) -> Computation | None:
         if column in (part.strip() for part in entry.output.split(",")):
             return entry
     return None
+
+
+def measure_description(column: str) -> str:
+    """The short definition shown beside a measure in Corpus Analysis."""
+    # The register describes both regression flags in one entry. A picker
+    # shows one at a time, so describe the selected direction.
+    if column == "regression_in_flag":
+        return "A word counts when the reader moves back to it from a later word."
+    if column == "regression_out_flag":
+        return "A word counts when the reader moves back from it to an earlier word during the first pass."
+    entry = measure_entry(column)
+    if entry is None:
+        return (
+            "Duration of one fixation."
+            if column == "duration_ms"
+            else "As recorded in the data."
+        )
+    return _public(entry.summary)
 
 
 def anchor(entry_id: str) -> str:

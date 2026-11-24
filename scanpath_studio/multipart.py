@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping, Sequence
+from graphlib import CycleError, TopologicalSorter
+from itertools import pairwise
 from typing import Any
 
 import numpy as np
@@ -88,26 +90,38 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
         # module-level import would cycle.
         from .data import stable_id
 
-        # A missing/blank cell is tolerated exactly as `trial_id_series` (via
-        # `stable_id`) tolerates one in a trial id — no proactive `isna()`
-        # check here either. Rejecting it outright would fail the whole
-        # mapping over one stray blank cell instead of reading that cell as
-        # "nan".
-        out[SCREEN_ID] = stable_id(out[SCREEN_ID])
+        ids = stable_id(out[SCREEN_ID])
+        out[SCREEN_ID] = ids.where(out[SCREEN_ID].notna() & ids.ne(""))
 
     if not has_index:
-        distinct = out[parents + [SCREEN_ID]].drop_duplicates()
+        distinct = (
+            out[parents + [SCREEN_ID]].dropna(subset=[SCREEN_ID]).drop_duplicates()
+        )
         distinct[SCREEN_INDEX] = distinct.groupby(parents, sort=False).cumcount() + 1
-        out = out.merge(distinct, on=parents + [SCREEN_ID], how="left", sort=False)
+        keys = parents + [SCREEN_ID]
+        out[SCREEN_INDEX] = (
+            out[keys]
+            .merge(distinct, on=keys, how="left", sort=False)[SCREEN_INDEX]
+            .to_numpy()
+        )
     else:
         numeric_index = pd.to_numeric(out[SCREEN_INDEX], errors="coerce")
-        if numeric_index.isna().any() or (numeric_index <= 0).any():
+        assigned = out[SCREEN_ID].notna()
+        if numeric_index[assigned].isna().any() or (numeric_index[assigned] <= 0).any():
             raise ValueError("`screen_index` (screen order) must count from 1.")
-        if (numeric_index % 1 != 0).any():
+        if (numeric_index[assigned] % 1 != 0).any():
             raise ValueError("`screen_index` (screen order) must be whole numbers.")
-        out[SCREEN_INDEX] = numeric_index.astype(int)
+        out[SCREEN_INDEX] = (
+            numeric_index.astype(int)
+            if assigned.all()
+            else numeric_index.where(assigned).astype("Int64")
+        )
 
-    pairs = out[parents + [SCREEN_ID, SCREEN_INDEX]].drop_duplicates()
+    pairs = (
+        out[parents + [SCREEN_ID, SCREEN_INDEX]]
+        .dropna(subset=[SCREEN_ID])
+        .drop_duplicates()
+    )
     if pairs.duplicated(parents + [SCREEN_ID], keep=False).any():
         raise ValueError("Within a trial, one Screen ID has two `screen_index` values.")
     if pairs.duplicated(parents + [SCREEN_INDEX], keep=False).any():
@@ -139,25 +153,111 @@ def _screens(parts: list) -> str:
     return ", ".join("/".join(str(v) for v in part) for part in parts[:3])
 
 
+def _merge_screen_order(
+    hints: pd.DataFrame, recorded: dict[str, int]
+) -> dict[str, int]:
+    """Fit partial screen sequences together while preserving recorded ordinals."""
+    graph = {s: set() for s in hints[SCREEN_ID].unique()}
+    sequences = [sorted(recorded, key=recorded.__getitem__)]
+    for _, rows in hints.groupby("_source", sort=False):
+        sequences.append(
+            rows.sort_values("_order_hint")[SCREEN_ID].drop_duplicates().tolist()
+        )
+    # A file can list the same pages in another order. Give recorded ordinals
+    # first choice, then the most complete table's order. Compatible partial
+    # sequences contribute their before/after relationships.
+    order = list(graph)
+    for sequence in sequences:
+        proposed = {s: set(before) for s, before in graph.items()}
+        for before, after in pairwise(sequence):
+            proposed[after].add(before)
+        try:
+            order = list(TopologicalSorter(proposed).static_order())
+        except CycleError:
+            continue
+        graph = proposed
+    # Reserve early slots for predecessors of a recorded page. Otherwise an
+    # unrelated page can take the only available slot before that page.
+    deadlines = {screen: recorded.get(screen, np.inf) for screen in order}
+    for screen in reversed(order):
+        for before in graph[screen]:
+            deadlines[before] = min(deadlines[before], deadlines[screen] - 1)
+    order.sort(key=deadlines.__getitem__)
+    numbers = recorded.copy()
+    occupied = set(recorded.values())
+    next_number = 1
+    for screen in order:
+        if screen in recorded:
+            next_number = max(next_number, recorded[screen] + 1)
+        else:
+            while next_number in occupied:
+                next_number += 1
+            numbers[screen] = next_number
+            next_number += 1
+    return numbers
+
+
 def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
     """One ordered row per screen across ``frames``.
 
-    Metadata conflicts between words and fixations are rejected rather than
-    resolved with a silent ``first()``. Single-screen data returns an empty
-    catalogue.
+    Recorded metadata must agree across tables. A derived screen order or
+    fallback text ID fills a gap when no table recorded that field.
     """
+    from .data import SCREEN_ORDER_DERIVED, TEXT_ID_MAPPED
+
     rows: list[pd.DataFrame] = []
     metadata = [SCREEN_INDEX, CANVAS_WIDTH, CANVAS_HEIGHT, "text_id"]
-    for frame in frames:
+    for source, frame in enumerate(frames):
         if frame is None or frame.empty or not has_screen_identity(frame):
             continue
-        normalized = normalize_screen_identity(frame)
-        columns = [*PART_KEY, *(c for c in metadata if c in normalized.columns)]
-        candidate = normalized[columns].drop_duplicates()
+        # Millions of samples can refer to a handful of screens. Validate
+        # just their distinct metadata, preserving first appearance.
+        columns = [
+            *PART_KEY,
+            *(
+                c
+                for c in (*metadata, SCREEN_ORDER_DERIVED, TEXT_ID_MAPPED)
+                if c in frame
+            ),
+        ]
+        candidate = normalize_screen_identity(frame[columns].drop_duplicates()).dropna(
+            subset=[SCREEN_ID]
+        )
+        if candidate.empty:
+            continue
+        derived = candidate.get(SCREEN_ORDER_DERIVED, SCREEN_INDEX not in frame)
+        candidate["_order_hint"] = candidate[SCREEN_INDEX]
+        candidate["_source"] = source
+        if isinstance(derived, pd.Series):
+            candidate.loc[derived.fillna(False), SCREEN_INDEX] = pd.NA
+        elif derived:
+            candidate[SCREEN_INDEX] = pd.NA
+        candidate["_coverage"] = candidate.groupby(list(PARENT_KEY))[
+            SCREEN_ID
+        ].transform("nunique")
+        if "text_id" in candidate:
+            mapped = candidate.get(
+                TEXT_ID_MAPPED, candidate["text_id"].ne(candidate["trial_id"])
+            )
+            candidate["_text_hint"] = candidate["text_id"]
+            candidate["text_id"] = candidate["text_id"].where(mapped)
+        else:
+            candidate["_text_hint"] = pd.NA
         for column in metadata:
             if column not in candidate.columns:
                 candidate[column] = pd.NA
-        rows.append(candidate[[*PART_KEY, *metadata]])
+        rows.append(
+            candidate[
+                [
+                    *PART_KEY,
+                    *metadata,
+                    "_order_hint",
+                    "_text_hint",
+                    "_coverage",
+                    "_source",
+                ]
+            ]
+        )
     if not rows:
         return pd.DataFrame(columns=[*PART_KEY, *metadata])
 
@@ -170,13 +270,40 @@ def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
             # tabs.py matches this text exactly (the screen_index case), so
             # keep its wording.
             raise ValueError(f"Multipart metadata {column!r} conflicts across tables.")
-    catalog = (
-        combined.groupby(list(PART_KEY), as_index=False, dropna=False)
-        .first()
-        .sort_values([*PARENT_KEY, SCREEN_INDEX, SCREEN_ID], kind="stable")
-        .reset_index(drop=True)
+    # The most complete table gives the best first-appearance order when a
+    # reading supplies no explicit ordinal for a screen.
+    combined = combined.sort_values("_coverage", ascending=False, kind="stable")
+    grouped = combined.groupby(list(PART_KEY), as_index=False, dropna=False, sort=False)
+    catalog = grouped.first()
+    catalog["text_id"] = catalog["text_id"].fillna(catalog["_text_hint"])
+    inferred = catalog[SCREEN_INDEX].isna()
+    catalog[SCREEN_INDEX] = (
+        catalog[SCREEN_INDEX].fillna(catalog["_order_hint"]).astype(int)
     )
-    return catalog
+    ordinal = [*PARENT_KEY, SCREEN_INDEX]
+    if catalog.loc[~inferred].duplicated(ordinal).any():
+        raise ValueError(
+            "Within a trial, two Screen IDs share one recorded `screen_index`."
+        )
+    different_hints = grouped["_order_hint"].nunique()["_order_hint"].gt(1)
+    ambiguous = catalog.duplicated(ordinal, keep=False) | different_hints
+    if ambiguous.any():
+        readings = combined.groupby(list(PARENT_KEY), sort=False)
+        parents = catalog.groupby(list(PARENT_KEY), sort=False)
+        for key in (
+            catalog.loc[ambiguous, list(PARENT_KEY)]
+            .drop_duplicates()
+            .itertuples(index=False, name=None)
+        ):
+            parent = parents.get_group(key)
+            known = parent.loc[~inferred.loc[parent.index]].set_index(SCREEN_ID)[
+                SCREEN_INDEX
+            ]
+            numbers = _merge_screen_order(readings.get_group(key), known.to_dict())
+            catalog.loc[parent.index, SCREEN_INDEX] = parent[SCREEN_ID].map(numbers)
+    return catalog[[*PART_KEY, *metadata]].sort_values(
+        [*PARENT_KEY, SCREEN_INDEX, SCREEN_ID], kind="stable", ignore_index=True
+    )
 
 
 class ScreensWithoutFixationsWarning(UserWarning):
@@ -270,6 +397,15 @@ def extract_part(
             raise ValueError("screen= was supplied for a single-screen dataset.")
         mask &= frame[SCREEN_ID].astype(str) == str(screen_id)
     return frame.loc[mask]
+
+
+def screen_rows(trial: pd.DataFrame, screen: str | None) -> pd.DataFrame:
+    """One screen of an already selected reading. Unassigned rows have no screen."""
+    if screen is None or trial.empty:
+        return trial
+    if SCREEN_ID not in trial:
+        return trial.iloc[:0]
+    return trial.loc[trial[SCREEN_ID].astype(str).eq(str(screen))]
 
 
 def _manifest_trials(manifest: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> list:

@@ -235,11 +235,12 @@ class SetupSnapshot:
     font_family: str = _DEFAULT_FONT_FAMILY
     line_spacing: float = _DEFAULT_LINE_SPACING
     scale_text_to_boxes: bool = True
-    # Provenance is three scalar fields rather than a dict so the dataclass stays
-    # hashable and cheap to compare (it rides inside cached values).
+    # Scalar fields keep the snapshot hashable. Older files recorded the width's
+    # provenance without saying how the viewing distance was established.
     screen_provenance: Provenance = Provenance.ASSUMED
     geometry_provenance: Provenance = Provenance.ASSUMED
     text_provenance: Provenance = Provenance.ASSUMED
+    viewing_distance_provenance: Provenance | None = Provenance.ASSUMED
 
     # -- derived ---------------------------------------------------------------
 
@@ -269,7 +270,10 @@ class SetupSnapshot:
     @property
     def px_per_degree(self) -> float | None:
         """Pixels per degree of visual angle, or ``None`` when skipped."""
-        if self.geometry_provenance is Provenance.SKIPPED:
+        if Provenance.SKIPPED in (
+            self.geometry_provenance,
+            self.viewing_distance_provenance,
+        ):
             return None
         try:
             return pixels_per_degree(
@@ -307,6 +311,7 @@ class SetupSnapshot:
             "canvas_height": int(self.canvas_height),
             "monitor_width_mm": float(self.monitor_width_mm),
             "viewing_distance_mm": float(self.viewing_distance_mm),
+            "viewing_distance_provenance": self.viewing_distance_provenance,
             "base_font_size": int(self.base_font_size),
             "font_family": str(self.font_family),
             "line_spacing": float(self.line_spacing),
@@ -341,8 +346,9 @@ class SetupSnapshot:
             if value is None or isinstance(value, bool):
                 return current
             try:
-                return cast(value)
-            except (TypeError, ValueError):
+                number = cast(value)
+                return number if math.isfinite(number) and number > 0 else current
+            except (TypeError, ValueError, OverflowError):
                 return current
 
         raw_prov = payload.get("provenance")
@@ -354,13 +360,25 @@ class SetupSnapshot:
                     prov[group] = parsed
 
         scale = payload.get("scale_text_to_boxes")
+        width = _num("monitor_width_mm", None, float)
+        distance = _num("viewing_distance_mm", None, float)
+        if (
+            width is None
+            and isinstance(raw_prov, Mapping)
+            and raw_prov.get("geometry") == Provenance.MEASURED
+        ):
+            prov["geometry"] = Provenance.ASSUMED
+        distance_source = _coerce_provenance(payload.get("viewing_distance_provenance"))
+        if distance is None:
+            distance_source = (
+                Provenance.ASSUMED if payload else base.viewing_distance_provenance
+            )
         return cls(
             canvas_width=_num("canvas_width", base.canvas_width, int),
             canvas_height=_num("canvas_height", base.canvas_height, int),
-            monitor_width_mm=_num("monitor_width_mm", base.monitor_width_mm, float),
-            viewing_distance_mm=_num(
-                "viewing_distance_mm", base.viewing_distance_mm, float
-            ),
+            monitor_width_mm=width or base.monitor_width_mm,
+            viewing_distance_mm=distance or base.viewing_distance_mm,
+            viewing_distance_provenance=distance_source,
             base_font_size=_num("base_font_size", base.base_font_size, int),
             font_family=str(payload.get("font_family") or base.font_family),
             line_spacing=_num("line_spacing", base.line_spacing, float),

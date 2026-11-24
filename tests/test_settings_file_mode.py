@@ -149,6 +149,7 @@ class TestSettingsFileMode:
                 "trial_id": TRIAL,
                 "source": None,
                 "screen_id": "question",
+                "fixation_window": None,
             }
         else:
             assert "compare" not in config["selection"]

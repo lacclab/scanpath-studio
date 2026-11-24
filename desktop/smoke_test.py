@@ -31,7 +31,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from launcher import _env_flag, _free_port
+from launcher import _env_flag, _free_port, _server_is_ready
 
 BOOT_TIMEOUT_S = 180.0
 SELFCHECK_TIMEOUT_S = 300.0
@@ -216,7 +216,7 @@ def _run_boot_test(binary: Path) -> None:
                     )
                 try:
                     with _get(health_url) as response:
-                        if response.status == 200 and b"ok" in response.read().lower():
+                        if _server_is_ready(response):
                             break
                 except OSError:
                     pass

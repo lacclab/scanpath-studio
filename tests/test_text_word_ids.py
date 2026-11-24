@@ -391,7 +391,7 @@ class TestConsumersLineUp:
     def test_heatmap_keys_join_the_word_boxes(self, pair):
         words, fixations = pair
         values, *_ = plots._comparison_word_heatmap_data(
-            [{"trial_fix": fixations}],
+            [{"trial_words": words, "trial_fix": fixations}],
             metric="count",
             heatmap_range=None,
             heatmap_norm="Linear",
@@ -600,7 +600,7 @@ class TestNumericIdsAreUnchanged:
             normalize_fixations(raw_fix, data_module.propose_fix_schema(raw_fix)),
         )
         assert WORD_KEY not in words.columns and WORD_KEY not in fixations.columns
-        assert rewrites == (("fixations", "word_id", " − 1"),)
+        assert rewrites == ()
 
     def test_the_numeric_map_has_no_key_entry(self):
         data = _quiet_load(_words((1, 2, 3)), _fixations([2]))

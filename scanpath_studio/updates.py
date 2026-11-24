@@ -1,6 +1,6 @@
 """Is there a newer Scanpath Studio than this build?
 
-Asked only when someone clicks *Check for updates* (Help → About), runs
+Asked only when someone clicks *Check for updates* (Help → About & citation), runs
 ``scanpath-studio version --check`` or calls ``api.check_for_updates`` — never
 on its own. One source serves every
 install: GitHub's latest release, which leaves out drafts and pre-releases and
@@ -13,9 +13,11 @@ from __future__ import annotations
 import http.client
 import json
 import platform
+import shlex
 import ssl
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -217,10 +219,27 @@ def desktop_archive(
 
 
 def update_command(kind: str, info: BuildInfo) -> str:
-    """The shell command that updates this kind of install; ``""`` for the desktop app."""
+    """The shell command for this install. A desktop app or commit pin has none."""
     if kind == "vcs":
-        url = info.vcs_url or f"https://github.com/{REPO}"
-        return f'pip install -U "git+{url}"'
+        if info.commit_pinned:
+            return ""
+        url = urllib.parse.urlsplit(info.vcs_url or f"https://github.com/{REPO}")
+        ref = info.ref
+        upstream = (
+            url.hostname == "github.com"
+            and url.path.strip("/").removesuffix(".git").lower() == REPO
+        )
+        if upstream and ref == f"v{info.release}" and info.channel == "stable":
+            ref = "stable"
+        path = f"{url.path}@{ref}" if ref else url.path
+        fragment = f"subdirectory={info.subdirectory}" if info.subdirectory else ""
+        requirement = f"git+{url._replace(path=path, fragment=fragment).geturl()}"
+        quoted = (
+            shlex.quote(requirement)
+            if any(c in requirement for c in '"$`\\')
+            else f'"{requirement}"'
+        )
+        return f"pip install -U {quoted}"
     return UPDATE_COMMANDS.get(kind, "")
 
 
@@ -251,7 +270,8 @@ def check_for_updates(
     except UpdateCheckError as error:
         return UpdateCheck("error", info.version, str(error), install_kind=kind)
     try:
-        newest, current = Version(release.version), Version(info.version)
+        newest = Version(release.version)
+        current = Version(info.release if info.channel == "stable" else info.version)
     except InvalidVersion:
         return UpdateCheck(
             "error",
@@ -284,6 +304,11 @@ def check_for_updates(
         + f"; this is v{info.version}."
     )
     if kind != "desktop":
+        if kind == "vcs" and info.commit_pinned:
+            message += (
+                f" This install is pinned to commit {info.ref}. Choose a new Git "
+                "revision in your installation command to update it."
+            )
         return UpdateCheck(
             "update_available",
             info.version,

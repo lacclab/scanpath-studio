@@ -141,6 +141,9 @@ def merge_short_fixations(
                             candidates.append((distance, neighbor))
             if candidates:
                 _, target = min(candidates)
+                from .fixation_source import merge_sources
+
+                merge_sources(out, target, index)
                 out.at[target, "duration_ms"] = (
                     float(out.at[target, "duration_ms"]) + duration
                 )
@@ -550,9 +553,7 @@ def duration_mass_table(
     out = chars.copy()
     out["duration_mass_ms"] = 0.0
     analysis = fixations
-    if "excluded" in analysis:
-        analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
-    keys = grouping_columns(analysis)
+    keys = grouping_columns(fixations)
     if keys != grouping_columns(out):
         raise ValueError(
             "Screen ID is set in only one of the word and fixation tables; set "
@@ -667,6 +668,61 @@ def _letter_position_in_word(
     return offset / advance + 1
 
 
+def _sample_velocities(
+    samples: pd.DataFrame, pixels_per_degree: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sorted sample times, the speed from each sample to the next, and how
+    many of the pairs before each sample are broken: a missing position at
+    either end, or a break in acquisition order between them."""
+    points = samples[["timestamp_ms", "x", "y"]].apply(pd.to_numeric, errors="coerce")
+    points = points.replace([np.inf, -np.inf], np.nan)
+    # An untimed row marks a break in acquisition order. Removing it before
+    # differencing would connect the samples on either side of it.
+    points["segment"] = points["timestamp_ms"].isna().cumsum()
+    points = points.dropna(subset=["timestamp_ms"]).sort_values(
+        "timestamp_ms", kind="stable"
+    )
+    times, x, y, segment = points.to_numpy(dtype=float, na_value=np.nan).T
+    dt = np.diff(times)
+    split = np.diff(segment) != 0
+    dt[(dt == 0) | split] = np.nan
+    lost = np.isnan(x) | np.isnan(y)
+    broken = np.cumsum(np.concatenate([[False], lost[:-1] | lost[1:] | split]))
+    speeds = np.hypot(np.diff(x), np.diff(y)) / dt / pixels_per_degree * 1000
+    return times, speeds, broken
+
+
+def _eye_streams(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """One stream per eye. An empty key represents an unspecified eye."""
+    if "eye" not in frame or frame["eye"].isna().all():
+        return {"": frame}
+    aliases = {"l": "left", "r": "right"}
+    labels = {}
+    for value in frame["eye"].dropna().unique():
+        name = str(value).strip().casefold()
+        labels[value] = aliases.get(name, name)
+    return dict(iter(frame.groupby(frame["eye"].map(labels).fillna(""), sort=False)))
+
+
+def _peak_sample_speed(stream, start_end: float, next_onset: float) -> float:
+    """Maximum speed from sample pairs with both endpoints inside the saccade.
+
+    ``NaN`` when the saccade's samples hold a tracking gap. A blink or a lost
+    signal is bracketed by samples the closing or opening lid distorts, whose
+    positions jump far faster than any eye moves, and nothing in one pair of
+    samples tells such a jump from a real one; trimming a fixed number of
+    samples beside the gap would depend on the sampling rate and the tracker.
+    """
+    if stream is None or not (np.isfinite(start_end) and np.isfinite(next_onset)):
+        return np.nan
+    times, speeds, broken = stream
+    first = times.searchsorted(start_end, side="left")
+    last = times.searchsorted(next_onset, side="right") - 1
+    if last <= first or broken[last] > broken[first]:
+        return np.nan
+    return float(np.fmax.reduce(speeds[first:last]))
+
+
 def saccade_table(
     fixations: pd.DataFrame,
     *,
@@ -675,8 +731,14 @@ def saccade_table(
     words: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Materialize one row per saccade with geometry and visual-angle units."""
+    from .data import TIMESTAMP_SYNTHESIZED, with_onset_provenance
+
     if fixations.empty:
         return pd.DataFrame()
+    if pixels_per_degree is not None and not (
+        np.isfinite(pixels_per_degree) and pixels_per_degree > 0
+    ):
+        pixels_per_degree = None
     out = []
     analysis = fixations
     if "excluded" in analysis:
@@ -687,67 +749,87 @@ def saccade_table(
     # frame per fixation (a `to_numeric` over every word id plus a boolean
     # mask, twice per saccade), which grows with corpus × trial count.
     word_geometry = _word_letter_geometry(words, keys)
+    # A 1 kHz reading can have tens of thousands of samples. Index them on
+    # their own clock once so each saccade reads just its interval.
+    velocities = {}
+    if (
+        pixels_per_degree
+        and raw_gaze is not None
+        and {"timestamp_ms", "x", "y"} <= set(raw_gaze)
+        and keys == grouping_columns(raw_gaze)
+    ):
+        analysis = with_onset_provenance(fixations)
+        for group, samples in raw_gaze.groupby(keys, sort=False):
+            group = group if isinstance(group, tuple) else (group,)
+            velocities[group] = {
+                eye: _sample_velocities(rows, pixels_per_degree)
+                for eye, rows in _eye_streams(samples).items()
+            }
+    if "excluded" in analysis:
+        analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
     for identity, chunk in analysis.groupby(keys, sort=False, dropna=False):
         identity = identity if isinstance(identity, tuple) else (identity,)
-        chunk = chunk.sort_values("timestamp_ms")
-        records = chunk.to_dict("records")
-        for start, end in itertools.pairwise(records):
-            dx, dy = float(end["x"] - start["x"]), float(end["y"] - start["y"])
-            distance = math.hypot(dx, dy)
-            start_duration = pd.to_numeric(start.get("duration_ms", 0), errors="coerce")
-            start_end = float(start["timestamp_ms"]) + (
-                float(start_duration) if pd.notna(start_duration) else 0.0
+        samples_by_eye = velocities.get(identity, {})
+        fixations_by_eye = _eye_streams(chunk)
+        for eye, events in fixations_by_eye.items():
+            gaze = samples_by_eye.get(eye)
+            if len(samples_by_eye) == len(fixations_by_eye) == 1:
+                sample_eye, stream = next(iter(samples_by_eye.items()))
+                if not eye or not sample_eye:
+                    gaze = stream
+            records = events.sort_values("timestamp_ms", kind="stable").to_dict(
+                "records"
             )
-            duration = max(float(end["timestamp_ms"]) - start_end, 0.0)
-            peak_velocity = np.nan
-            if raw_gaze is not None and not raw_gaze.empty and pixels_per_degree:
-                gaze = raw_gaze
-                for key, value in zip(keys, identity):
-                    if key in gaze:
-                        gaze = gaze[gaze[key] == value]
-                if "timestamp_ms" in gaze:
-                    gaze = gaze[
-                        pd.to_numeric(gaze["timestamp_ms"], errors="coerce").between(
-                            start_end, float(end["timestamp_ms"])
-                        )
-                    ].sort_values("timestamp_ms")
-                    if len(gaze) >= 2:
-                        dt = pd.to_numeric(gaze["timestamp_ms"], errors="coerce").diff()
-                        gd = np.hypot(
-                            pd.to_numeric(gaze["x"], errors="coerce").diff(),
-                            pd.to_numeric(gaze["y"], errors="coerce").diff(),
-                        )
-                        speed = gd / dt.replace(0, np.nan) / pixels_per_degree * 1000
-                        peak_velocity = float(speed.max())
+            for start, end in itertools.pairwise(records):
+                dx, dy = float(end["x"] - start["x"]), float(end["y"] - start["y"])
+                distance = math.hypot(dx, dy)
+                start_duration = pd.to_numeric(
+                    start.get("duration_ms"), errors="coerce"
+                )
+                start_end = (
+                    pd.to_numeric(start["timestamp_ms"], errors="coerce")
+                    + start_duration
+                )
+                next_onset = pd.to_numeric(end["timestamp_ms"], errors="coerce")
+                duration = max(next_onset - start_end, 0.0)
+                peak_velocity = np.nan
+                if not (
+                    start.get(TIMESTAMP_SYNTHESIZED, False)
+                    or end.get(TIMESTAMP_SYNTHESIZED, False)
+                ):
+                    peak_velocity = _peak_sample_speed(gaze, start_end, next_onset)
 
-            def _letter_position(event, _identity=identity):
-                return _letter_position_in_word(event, word_geometry, _identity)
-
-            row = dict(zip(keys, identity))
-            row.update(
-                xs=start["x"],
-                ys=start["y"],
-                xe=end["x"],
-                ye=end["y"],
-                dX=dx,
-                dY=dy,
-                distance_px=distance,
-                duration_ms=duration,
-                angle=math.degrees(math.atan2(-dy, dx)),
-                amplitude_deg=distance / pixels_per_degree
-                if pixels_per_degree and pixels_per_degree > 0
-                else np.nan,
-                peak_velocity_deg_s=peak_velocity,
-                blink_before=bool(start.get("blink_before", False)),
-                blink_after=bool(end.get("blink_after", False)),
-                launch_word_id=start.get("word_id"),
-                landing_word_id=end.get("word_id"),
-                launch_line=start.get("line_id", start.get("line_idx")),
-                landing_line=end.get("line_id", end.get("line_idx")),
-                launch_letter=_letter_position(start),
-                landing_letter=_letter_position(end),
-            )
-            out.append(row)
+                row = dict(zip(keys, identity))
+                row.update(
+                    xs=start["x"],
+                    ys=start["y"],
+                    xe=end["x"],
+                    ye=end["y"],
+                    dX=dx,
+                    dY=dy,
+                    distance_px=distance,
+                    duration_ms=duration,
+                    angle=math.degrees(math.atan2(-dy, dx)),
+                    amplitude_deg=distance / pixels_per_degree
+                    if pixels_per_degree
+                    else np.nan,
+                    peak_velocity_deg_s=peak_velocity,
+                    blink_before=bool(start.get("blink_before", False)),
+                    blink_after=bool(end.get("blink_after", False)),
+                    launch_word_id=start.get("word_id"),
+                    landing_word_id=end.get("word_id"),
+                    launch_line=start.get("line_id", start.get("line_idx")),
+                    landing_line=end.get("line_id", end.get("line_idx")),
+                    launch_letter=_letter_position_in_word(
+                        start, word_geometry, identity
+                    ),
+                    landing_letter=_letter_position_in_word(
+                        end, word_geometry, identity
+                    ),
+                )
+                if "eye" in start:
+                    row["eye"] = start["eye"]
+                out.append(row)
     return pd.DataFrame(out)
 
 

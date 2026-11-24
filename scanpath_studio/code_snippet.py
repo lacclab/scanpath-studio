@@ -37,6 +37,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from .column_names import encode_field_list
+from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS, OPACITY_OPTIONS
+from .figure_views import (
+    SECOND_SCANPATH_OPTIONS,
+    STATIC_COMPARISON_LAYER_STYLES,
+    STYLE_KEYS_FOR_TWO_SCANPATHS,
+    options_for_view,
+)
+
 #: Where ``tabs._publish_snippet_state`` parks the :class:`FigureState` the
 #: Share subtab writes its snippet from. Session-local and never serialized —
 #: it is derived from state that *is* on the wire, so it carries no contract of
@@ -153,8 +162,6 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
         return tuple(DEFAULT_FIGURE_SIZE)
     if kind == SOURCE_POTEC:
         return (1680, 1050)  # PoTeC monitor (DELL P2210)
-    if kind == SOURCE_AUTHOR:
-        return (1200, 800)
     # MultiplEYE stamps each session set's own monitor on its fixations, so it
     # is read off the data like any other dataset's.
     return None
@@ -185,12 +192,20 @@ def _loader_columns() -> frozenset:
     """Every column ``load_scanpath_data`` hands back without being asked — the
     canonical ones, the recognized optional ones, and the per-fixation fields
     the builders compute — plus the two non-column ``color_by`` values."""
+    from .chart_axes import ELAPSED
     from .constants import UNIFORM_COLOR_FIELD
-    from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
+    from .data import (
+        FIX_OPTIONAL_FIELDS,
+        WORD_OPTIONAL_FIELDS,
+        empty_fixations_frame,
+        empty_words_frame,
+    )
 
     return frozenset(
         {
             *empty_fixations_frame().columns,
+            *empty_words_frame().columns,
+            ELAPSED,
             *(entry[1] for entry in (*FIX_OPTIONAL_FIELDS, *WORD_OPTIONAL_FIELDS)),
             "order_in_trial",
             "pass_index",
@@ -248,13 +263,18 @@ def _synthetic_python(source: SnippetSource) -> list[str]:
     ]
 
 
+def _file_tables(source: SnippetSource) -> tuple[list, list]:
+    if "words" not in source.options and "fixations" not in source.options:
+        return ["words.csv"], ["fixations.csv"]
+    return source.options.get("words") or [], source.options.get("fixations") or []
+
+
 def _files_python(source: SnippetSource) -> list[str]:
-    words = source.options.get("words") or ["words.csv"]
-    fixations = source.options.get("fixations") or ["fixations.csv"]
+    words, fixations = _file_tables(source)
     return [
         "words, fixations = sps.load_scanpath_data(",
-        f"    {_py(_one_or_list(words))},",
-        f"    {_py(_one_or_list(fixations))},",
+        f"    {_py(_one_or_list(words) if words else None)},",
+        f"    {_py(_one_or_list(fixations) if fixations else None)},",
         *_schema_python(source),
         *_keep_python(source),
         ")",
@@ -342,13 +362,12 @@ def _demo_cli(source: SnippetSource) -> list[str]:
 
 
 def _files_cli(source: SnippetSource) -> list[str]:
-    argv = []
-    words = source.options.get("words") or ["words.csv"]
-    fixations = source.options.get("fixations") or ["fixations.csv"]
-    argv += ["--words", *[str(p) for p in words]]
+    words, fixations = _file_tables(source)
+    argv = ["--words", *map(str, words)] if words else []
     if schema := source.options.get("word_schema"):
         argv += ["--word-schema", json.dumps(schema, separators=(",", ":"))]
-    argv += ["--fixations", *[str(p) for p in fixations]]
+    if fixations:
+        argv += ["--fixations", *map(str, fixations)]
     if schema := source.options.get("fix_schema"):
         argv += ["--fix-schema", json.dumps(schema, separators=(",", ":"))]
     return argv + _keep_cli(source)
@@ -841,8 +860,48 @@ def _is_data_uri(value) -> bool:
     return isinstance(value, str) and value.startswith("data:")
 
 
+def _snippet_options(settings, kind, compare, *, explicit):
+    """Current values and defaults for the same view, for either emitter."""
+    from . import api
+
+    defaults = api.figure_options(kind)
+    if explicit or kind == "static":
+        return settings, defaults
+    dual = compare is not None and bool(compare.trial)
+    names = options_for_view(defaults, kind, comparing=dual)
+    if kind == "animation" and dual:
+        # If a Hide filter removes one reading, the remaining trail uses the
+        # single-replay style. B's selected screen can also hold only words.
+        flags_b = settings.get("fixation_flags_b")
+        if flags_b is None:
+            flags_b = (settings.get("style_b") or {}).get("fixation_flags")
+        # Caller-supplied frames can omit a screen present in the Words table,
+        # including the implicit first screen. File loaders require matching parts.
+        supplied_frames = any(
+            settings.get(key) is not None for key in ("words_b", "fixations_b")
+        )
+        if (
+            compare.screen is not None
+            or supplied_frames
+            or any(
+                isinstance(rule, dict) and rule.get("mode") == "Hide"
+                for flags in (settings.get("fixation_flags"), flags_b)
+                for rule in (flags or {}).values()
+            )
+        ):
+            names.update(STYLE_KEYS_FOR_TWO_SCANPATHS)
+    return (
+        {name: value for name, value in settings.items() if name in names},
+        {name: value for name, value in defaults.items() if name in names},
+    )
+
+
 def figure_kwargs(
-    settings: dict, kind: str = "static", *, explicit: bool = False
+    settings: dict,
+    kind: str = "static",
+    *,
+    explicit: bool = False,
+    compare: CompareTarget | None = None,
 ) -> dict:
     """The figure keywords a snippet has to pass, in ``api`` vocabulary.
 
@@ -851,9 +910,11 @@ def figure_kwargs(
     are keys already at their effective default — unless ``explicit``, which
     emits the full form. Ordered as ``figure_options`` lists them, so two
     snippets from neighbouring states read as neighbours."""
-    from . import api
+    settings, defaults = _snippet_options(settings, kind, compare, explicit=explicit)
+    return _figure_kwargs(settings, kind, defaults, explicit=explicit)
 
-    defaults = api.figure_options(kind)
+
+def _figure_kwargs(settings, kind, defaults, *, explicit):
     out = {}
     for key, default in defaults.items():
         if key not in settings:
@@ -870,6 +931,13 @@ def figure_kwargs(
         ):
             continue  # B inheriting A's flags is the builder's default
         if key in _COMPARE_STYLE_SIDES:
+            if not explicit and kind == "animation" and isinstance(value, dict):
+                value = {
+                    k: v
+                    for k, v in value.items()
+                    if k not in STATIC_COMPARISON_LAYER_STYLES
+                    and not (key == "style_a" and k == "fixation_flags")
+                }
             value = _drop_inherited_filters(value, settings)
             # The rail always builds a complete style dict, so the one an
             # untouched Compare carries is not a choice anyone made — only
@@ -899,7 +967,7 @@ _LAYER_OPTIONS = {
         "word_box_fill_color",
         "word_box_fill_opacity",
     ),
-    "show_order": ("order_font_size", "order_font_color", "order_label_position"),
+    "show_order": tuple(FIXATION_LABEL_OPTIONS),
     "show_heatmap": (
         "heatmap_metric",
         "heatmap_style",
@@ -1020,7 +1088,7 @@ def _active_flags(flags) -> dict:
         if not isinstance(spec, dict) or str(spec.get("mode") or "Off") == "Off":
             continue
         entry = {"mode": spec.get("mode")}
-        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+        if category in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
             entry["threshold_ms"] = float(spec["threshold_ms"])
         out[category] = entry
     return out
@@ -1149,6 +1217,16 @@ def _comma_list(flag: str) -> Any:
     return emit
 
 
+def _hover_fields(flag: str) -> Any:
+    def emit(fields):
+        if fields is None:
+            return []
+        value, as_json = encode_field_list(fields)
+        return [f"{flag}-json" if as_json else flag, value]
+
+    return emit
+
+
 def _highlight_column(value):
     """``--highlight-column``. ``None`` is the real request "highlight nothing",
     which the flag spells as an empty string — not the absence of the flag,
@@ -1173,7 +1251,7 @@ def _fixation_flags(value, flag: str = "--fixation-flag"):
         parts = [f"{category}={mode.lower()}"]
         # Only for the two categories that have one — `oob` / `blink` carry a
         # stale default threshold in the app's dict that the CLI would reject.
-        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+        if category in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
             parts.append(f"threshold_ms={_num(spec['threshold_ms'])}")
         if spec.get("symbol"):
             parts.append(f"symbol={spec['symbol']}")
@@ -1258,7 +1336,7 @@ def _classes_coloured(settings: dict) -> bool:
     return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
 
 
-def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
+def _matching_palette(settings: dict, defaults: dict) -> tuple[str | None, dict]:
     """The ``--palette`` a CLI snippet can name instead of spelling it out.
 
     A palette writes eight colors at once, so naming it saves flags. A
@@ -1270,10 +1348,8 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
 
     Returns ``(name, colors)`` — the colors the named palette supplies — or
     ``(None, {})``."""
-    from . import api
     from .constants import PALETTES
 
-    defaults = api.figure_options(kind)
     best: tuple[str | None, dict] = (None, {})
     best_score = 0
     for name in PALETTES:
@@ -1297,14 +1373,11 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
 
 
 def _restate_against_palette(
-    kwargs: dict, settings: dict, kind: str, palette_colors: dict
+    kwargs: dict, settings: dict, defaults: dict, palette_colors: dict
 ) -> dict:
     """The figure keywords to write after ``--palette``: the colors it got right
     dropped, and every one it got wrong restated — a color still at its default
     included, which `figure_kwargs` would not otherwise write."""
-    from . import api
-
-    defaults = api.figure_options(kind)
     out = dict(kwargs)
     for key, value in palette_colors.items():
         if _inert(key, settings):
@@ -1437,8 +1510,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "show_saccade_arrows": _flag_when("--saccade-arrows", True),
     "show_coordinate_grid": _flag_when("--coordinate-grid", True),
     "coordinate_grid_spacing": _valued("--coordinate-grid-spacing"),
-    "word_hover_fields": _comma_list("--word-hover-fields"),
-    "fixation_hover_fields": _comma_list("--fixation-hover-fields"),
+    "word_hover_fields": _hover_fields("--word-hover-fields"),
+    "fixation_hover_fields": _hover_fields("--fixation-hover-fields"),
     "color_by": _valued("--color-by"),
     "fixation_color": _valued("--fixation-color"),
     "fixation_symbol": _valued("--fixation-symbol"),
@@ -1456,7 +1529,12 @@ _CLI_EMITTERS: dict[str, Any] = {
     "highlight_column": _highlight_column,
     "critical_span_style": _mapped(
         "--critical-span-style",
-        {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
+        {
+            "Mark text": "mark-text",
+            "Mark border": "mark-border",
+            "Underline": "underline",
+            "None": "none",
+        },
     ),
     "fixation_flags": _fixation_flags,
     "legend_layout": _legend_layout,
@@ -1464,11 +1542,13 @@ _CLI_EMITTERS: dict[str, Any] = {
     "marker_size_range": _marker_size_range,
     "marker_size_scale": _valued("--marker-size-scale"),
     "marker_duration_range": _two_numbers("--marker-duration-range"),
-    "duration_size_legend": _flag_when("--no-duration-size-legend", False),
+    "duration_size_legend": _switch(
+        "--duration-size-legend", "--no-duration-size-legend"
+    ),
     "saccade_color": _valued("--saccade-color"),
     "saccade_style": _valued("--saccade-style"),
     "saccade_width": _valued("--saccade-width"),
-    "saccade_opacity": _valued("--saccade-opacity"),
+    **{name: _valued(option.flag) for name, option in OPACITY_OPTIONS.items()},
     # The rail's finer design choices.
     "saccade_arrow_size": _valued("--saccade-arrow-size"),
     "heatmap_opacity": _valued("--heatmap-opacity"),
@@ -1500,14 +1580,14 @@ _CLI_EMITTERS: dict[str, Any] = {
     # Each flag below is spelled after its option; `tests/test_code_snippet.py`
     # fails on an option with no row here, so a new one cannot quietly fall
     # back to being "named".
-    "fixation_opacity": _valued("--fixation-opacity"),
     "hollow_fixations": _flag_when("--hollow-fixations", True),
     "color_by_line": _flag_when("--color-by-line", True),
     "fixation_color_range": _two_numbers("--fixation-color-range"),
     "heatmap_range": _two_numbers("--heatmap-range"),
-    "order_font_size": _int_valued("--order-font-size"),
-    "order_font_color": _valued("--order-font-color"),
-    "order_label_position": _valued("--order-label-position"),
+    **{
+        name: _int_valued(option.flag) if option.kind == "int" else _valued(option.flag)
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+    },
     "text_color": _valued("--text-color"),
     "redact_text": _flag_when("--redact-text", True),
     "highlight_text_color": _valued("--highlight-text-color"),
@@ -1571,22 +1651,6 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_size_b": _pair("--stimulus-image-size-b", "x"),
     "background_image_origin_b": _pair("--stimulus-image-origin-b", ","),
 }
-
-#: Options that only mean something beside a second scanpath, and whose `render`
-#: flag is refused without `--compare-with`. A *single* replay carries them too —
-#: the animation builder takes them and ignores them — so there they are left
-#: off the command rather than written into one `render` would reject.
-_COMPARE_ONLY_SETTINGS = frozenset(
-    {
-        "show_legend",
-        "label_a",
-        "label_b",
-        "compare_stimulus",
-        "fixation_flags_b",
-        "style_a",
-        "style_b",
-    }
-)
 
 
 # ---------------------------------------------------------------------------
@@ -1672,11 +1736,8 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     # The disclosure is a rail choice, not a derived value: `illustration_reasons`
     # (what the app resolved it to) is in `_DERIVED_SETTINGS`, so without the
     # *label mode* the snippet would silently re-derive at "auto" and disagree
-    # with the figure on screen. `compare_scanpaths` has no such parameter —
-    # `state_caveats` says so rather than passing a keyword it would reject.
-    if state.kind != "comparison" and (
-        explicit or str(state.illustration_label).lower() != "auto"
-    ):
+    # with the figure on screen.
+    if explicit or str(state.illustration_label).lower() != "auto":
         out.append(("illustration_label", str(state.illustration_label).lower()))
     if state.title:
         out.append(("title", str(state.title)))
@@ -1820,13 +1881,14 @@ def _second_dataset_tables(compare: CompareTarget) -> tuple[list, list]:
     return [B_WORDS_PLACEHOLDER], [B_FIXATIONS_PLACEHOLDER]
 
 
-def _second_dataset_python(compare: CompareTarget) -> list[str]:
+def _second_dataset_python(compare: CompareTarget, keep: list[str]) -> list[str]:
     words, fixations = _second_dataset_tables(compare)
     lines = [
         f"# Scanpath B is from a second dataset, {compare.dataset}.",
         "words_b, fixations_b = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
+        *([f"    keep_columns={_py(keep)},"] if keep else []),
         ")",
     ]
     if compare.canvas:
@@ -1899,7 +1961,7 @@ def python_snippet(
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
     if other is not None:
-        lines += _second_dataset_python(other)
+        lines += _second_dataset_python(other, _kept_columns(state.settings))
     raw_gaze_b = _second_raw_gaze(state)
     if raw_gaze_b is not None:
         lines.append(f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))})")
@@ -1965,7 +2027,7 @@ def python_snippet(
     for name, value in _call_kwargs(state, explicit=explicit):
         call.append(f"    {name}={_py(value)},")
     for name, value in figure_kwargs(
-        state.settings, state.kind, explicit=explicit
+        state.settings, state.kind, explicit=explicit, compare=state.compare
     ).items():
         if name == "critical_span_style" and value == "None":
             value = None  # no marking is Python's None, not 'None'
@@ -1992,6 +2054,12 @@ def _comment_lines(note: str, width: int = 79) -> list[str]:
     return [f"# {line}" for line in textwrap.wrap(plain, width - 2)]
 
 
+def _id_argument(flag: str, value: str) -> list[str]:
+    """Keep an ID beginning with a hyphen attached to its argparse option."""
+    value = str(value)
+    return [f"{flag}={value}"] if value.startswith("-") else [flag, value]
+
+
 def cli_snippet(
     source: SnippetSource,
     state: FigureState,
@@ -2015,29 +2083,34 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
+    if other is not None and "--keep-columns" not in argv:
+        keep = _kept_columns(state.settings)
+        if keep:
+            argv += ["--keep-columns", *keep]
     if _writes_image_folder(source, state):
         argv += _image_folder_cli(source)
 
     if state.participant:
-        argv += ["-p", str(state.participant)]
+        argv += _id_argument("-p", state.participant)
     if state.trial:
-        argv += ["-t", str(state.trial)]
+        argv += _id_argument("-t", state.trial)
+    if state.kind == "comparison" or (
+        state.kind == "animation" and state.compare is not None and state.compare.trial
+    ):
+        compare = state.compare or CompareTarget()
+        argv += _id_argument("--compare-participant", compare.participant)
+        argv += _id_argument("--compare-trial", compare.trial)
     if state.screen:
-        argv += ["--screen", str(state.screen)]
+        argv += _id_argument("--screen", state.screen)
     if _names_screen_b(state):
-        argv += ["--compare-screen", str(state.compare.screen)]
+        argv += _id_argument("--compare-screen", state.compare.screen)
     if state.canvas:
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
     if explicit or state.base_font_size != 16:
         argv += ["--font-size", str(int(state.base_font_size))]
     if state.font_family and (explicit or _non_default_font(state.font_family)):
         argv += ["--font-family", str(state.font_family)]
-    # `render`'s compare branch passes neither to `compare_scanpaths` (which has
-    # no parameter for either), so emitting them beside a Python form that
-    # correctly omits them would be the two flavours contradicting each other.
-    if state.kind != "comparison" and (
-        explicit or str(state.illustration_label).lower() != "auto"
-    ):
+    if explicit or str(state.illustration_label).lower() != "auto":
         argv += ["--illustration-label", str(state.illustration_label).lower()]
     if state.title:
         argv += ["--title", str(state.title)]
@@ -2056,13 +2129,8 @@ def cli_snippet(
         # it, and the replay's B-side options (`--compare-stimulus`, the
         # labels, the legend) are refused without it. A second dataset's B is
         # named in that dataset's own tables, as in Python.
-        if state.compare is not None and state.compare.trial:
-            argv += [
-                "--compare-with",
-                f"{state.compare.participant}:{state.compare.trial}",
-            ]
-            if other is not None:
-                argv += _second_dataset_cli(other, explicit=explicit)
+        if other is not None:
+            argv += _second_dataset_cli(other, explicit=explicit)
     else:
         if state.drift_correction:
             # Both flags exist only behind SCANPATH_EXPERIMENTAL=1, so
@@ -2097,7 +2165,6 @@ def cli_snippet(
         argv.append("--no-raw-gaze")
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
-        argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
         if other is not None:
             argv += _second_dataset_cli(other, explicit=explicit)
         raw_gaze_b = _second_raw_gaze(state)
@@ -2113,15 +2180,22 @@ def cli_snippet(
             label_a, label_b = compare.labels
             argv += ["--label-a", str(label_a), "--label-b", str(label_b)]
 
-    palette, palette_colors = _matching_palette(state.settings, state.kind)
-    kwargs = figure_kwargs(state.settings, state.kind, explicit=explicit)
+    settings, defaults = _snippet_options(
+        state.settings, state.kind, state.compare, explicit=explicit
+    )
+    # A two-reading palette changes the individual markers and lines too.
+    # Spell those styles out so an explicit override survives copying the command.
+    palette, palette_colors = (
+        (None, {})
+        if state.kind == "comparison" or state.compare
+        else _matching_palette(settings, defaults)
+    )
+    kwargs = _figure_kwargs(settings, state.kind, defaults, explicit=explicit)
     if palette:
         from .plots import palette_slug
 
         argv += ["--palette", palette_slug(palette)]  # no shell quotes
-        kwargs = _restate_against_palette(
-            kwargs, state.settings, state.kind, palette_colors
-        )
+        kwargs = _restate_against_palette(kwargs, settings, defaults, palette_colors)
     for key, value in kwargs.items():
         # Never emit class colours the figure isn't drawing —
         # `--saccade-type-color` implies By type, so emitting them into a
@@ -2132,7 +2206,7 @@ def cli_snippet(
                     value, palette_colors.get("saccade_class_colors")
                 )
             continue
-        if key in _COMPARE_ONLY_SETTINGS and (
+        if key in SECOND_SCANPATH_OPTIONS and (
             state.kind == "animation" and state.compare is None
         ):
             continue  # a single replay takes these and draws nothing with them
@@ -2146,10 +2220,20 @@ def cli_snippet(
     # three flags, so a translated invocation has to carry them or write a
     # differently-sized file than the Python form beside it.
     # So do the print width + dpi `save_figure` takes, as `render`'s flags.
-    for name in ("width", "height", "scale", "width_mm", "width_in", "dpi"):
+    for name in (
+        "width",
+        "height",
+        "scale",
+        "width_mm",
+        "width_in",
+        "dpi",
+        "proof_width_mm",
+    ):
         value = (save_kwargs or {}).get(name)
         if value is not None:
             argv += [f"--{name.replace('_', '-')}", _num(value)]
+    if (save_kwargs or {}).get("compact_png"):
+        argv.append("--compact-png")
 
     argv += ["-o", output]
     unsupported.extend(source.cli_unsupported)
@@ -2277,12 +2361,6 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
                 "Without it, B's screen is read from its data and may not match."
             )
         notes.append(note)
-    if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
-        notes.append(
-            "`compare_scanpaths` has no `illustration_label` parameter, so the "
-            "snippet leaves out your Illustration label (**"
-            f"{str(state.illustration_label).capitalize()}**)."
-        )
     return notes
 
 

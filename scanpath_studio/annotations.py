@@ -23,6 +23,7 @@ tested) and a thin session-backed layer plus the small render helpers used by
 
 from __future__ import annotations
 
+import html
 import json
 from collections.abc import Iterable
 
@@ -32,7 +33,7 @@ import streamlit as st
 from .constants import ICONS, md_literal, upload_limit_mb
 from .data import respell_reading
 from .fields import PANEL_LABEL_W, panel_field, row_label
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
 #: The annotations file (🗂️ Data → Annotations, an Export bundle's
@@ -44,6 +45,9 @@ SCHEMA_VERSION = 3
 # Per-trial annotation widgets use this prefix so they can be cleared on import
 # (forcing a re-seed from the freshly loaded store), and on a dataset swap.
 _WIDGET_PREFIX = "annotrial_"
+#: The trial editor's last saved edit, ``(dataset, (participant, trial,
+#: screen or None), message)``, for that reading's editor to confirm.
+_RECEIPT_KEY = "_annotation_edit_receipt"
 
 # Always-available tag suggestions (users can add their own on top).
 PRESET_TAGS = ["To exclude", "Review", "Good example", "Check alignment"]
@@ -81,6 +85,12 @@ def is_empty_entry(entry: Entry) -> bool:
     )
 
 
+def _record_key(record: dict) -> Key:
+    key = (str(record["participant_id"]), str(record["trial_id"]))
+    screen = record.get("screen_id")
+    return (*key, str(screen)) if screen not in (None, "") else key
+
+
 def records_to_store(records: list[dict]) -> dict[Key, Entry]:
     """Build a ``{(pid, tid): entry}`` store from a list of flat records."""
     store: dict[Key, Entry] = {}
@@ -93,13 +103,7 @@ def records_to_store(records: list[dict]) -> dict[Key, Entry]:
             rec.get("star", False), rec.get("tags", []), rec.get("note", "")
         )
         if not is_empty_entry(entry):
-            screen_id = rec.get("screen_id")
-            key = (
-                (str(pid), str(tid), str(screen_id))
-                if screen_id not in (None, "")
-                else (str(pid), str(tid))
-            )
-            store[key] = entry
+            store[_record_key(rec)] = entry
     return store
 
 
@@ -134,10 +138,15 @@ def serialize(store: dict[Key, Entry], *, dataset: str | None = None) -> str:
     return json.dumps(document, indent=2)
 
 
-def file_dataset(text: str) -> str | None:
+def _json_document(text: str | bytes):
+    """Accept exported bytes or text a caller has already decoded."""
+    return json.loads(text.removeprefix("\ufeff") if isinstance(text, str) else text)
+
+
+def file_dataset(text: str | bytes) -> str | None:
     """The ``dataset`` an annotations file names, if any (schema 3+)."""
     try:
-        data = json.loads(text)
+        data = _json_document(text)
     except ValueError:
         return None
     name = data.get("dataset") if isinstance(data, dict) else None
@@ -178,7 +187,7 @@ def _check_record(index: int, record: object) -> None:
         raise AnnotationsFileError(f"{where}: note must be text")
 
 
-def deserialize(text: str) -> dict[Key, Entry]:
+def deserialize(text: str | bytes) -> dict[Key, Entry]:
     """Parse a JSON document (object with ``annotations`` or a bare list).
 
     The shape is checked before anything is built, so a JSON file that is not
@@ -187,7 +196,7 @@ def deserialize(text: str) -> dict[Key, Entry]:
     importing nothing or failing half-way. Invalid JSON raises ``ValueError``
     from :func:`json.loads`.
     """
-    data = json.loads(text)
+    data = _json_document(text)
     if isinstance(data, dict):
         if "annotations" not in data:
             raise AnnotationsFileError("it has no annotations list")
@@ -196,9 +205,22 @@ def deserialize(text: str) -> dict[Key, Entry]:
         records = data
     if not isinstance(records, list):
         raise AnnotationsFileError("its annotations are not a list")
+    seen: dict[Key, tuple[int, Entry]] = {}
     for index, record in enumerate(records):
         _check_record(index, record)
-    return records_to_store(records)
+        key = _record_key(record)
+        entry = _normalize_entry(
+            record.get("star"), record.get("tags"), record.get("note")
+        )
+        if key in seen:
+            first, previous = seen[key]
+            if entry != previous:
+                raise AnnotationsFileError(
+                    f"entries {first + 1} and {index + 1} disagree for {' / '.join(key)}"
+                )
+        else:
+            seen[key] = (index, entry)
+    return {key: entry for key, (_, entry) in seen.items() if not is_empty_entry(entry)}
 
 
 def _trial_of(key: Key) -> tuple[str, str]:
@@ -241,14 +263,21 @@ def merge_records(
     # inside a part; read it the dataset's way when that is unambiguous
     # (`data.respell_reading`).
     if any(_trial_of(key) not in keep for key in incoming):
-        incoming = {
-            (
+        resolved = {}
+        origins = {}
+        for key, entry in incoming.items():
+            reading = (
                 key
                 if _trial_of(key) in keep
-                else (*respell_reading(key[0], key[1], keep), *key[2:])
-            ): entry
-            for key, entry in incoming.items()
-        }
+                else (*respell_reading(*key[:2], keep), *key[2:])
+            )
+            if reading in resolved and resolved[reading] != entry:
+                raise AnnotationsFileError(
+                    f"{origins[reading]!r} and {key!r} resolve to the same reading but carry different annotations"
+                )
+            resolved[reading] = entry
+            origins[reading] = key
+        incoming = resolved
     applied = {key: entry for key, entry in incoming.items() if _trial_of(key) in keep}
     store.update(applied)
     return len(applied), len(incoming) - len(applied)
@@ -315,7 +344,7 @@ PENDING_DATASET = "\x00pending"
 #: and the picker's "same dataset" answer (``compare_source.THIS_DATASET``).
 #: Pinned equal by a test; not imported, since both modules import this one.
 _COMPARE_PREFIX = "cmp"
-_COMPARE_SAME_DATASET = "This dataset"
+_COMPARE_SAME_DATASET = SAME_DATASET
 
 
 def _stored(session) -> dict[str, dict[Key, Entry]]:
@@ -360,6 +389,7 @@ def _reseed_editors_in(session) -> None:
         if isinstance(k, str) and k.startswith(_WIDGET_PREFIX)
     ]:
         del session[key]
+    session.pop(_RECEIPT_KEY, None)
 
 
 def activate_dataset(session, dataset: str, *, adopt: bool = True) -> bool:
@@ -817,6 +847,23 @@ def _save_entry_callback(
         note=str(state[note_key]) if note_key in state else str(entry["note"]),
         screen_id=screen_id,
     )
+    scope = f"screen {screen_id}" if screen_id is not None else "whole trial"
+    state[_RECEIPT_KEY] = (
+        state.get(OWNER_KEY),
+        _receipt_reading(participant_id, trial_id, screen_id),
+        f"Updated in this session for {participant_id} / {trial_id} ({scope}).",
+    )
+
+
+def _receipt_reading(
+    participant_id: str, trial_id: str, screen_id: str | None
+) -> tuple[str, str, str | None]:
+    """The editor an edit receipt belongs to: its reading and its scope."""
+    return (
+        str(participant_id),
+        str(trial_id),
+        None if screen_id is None else str(screen_id),
+    )
 
 
 def widget_slug(
@@ -891,6 +938,19 @@ def render_trial_annotations(
         label += f" · {', '.join(entry['tags'])}"
     container = st.container() if bare else st.expander(label, expanded=False)
     with container:
+        # Said in the editor of the reading it is about, until another
+        # reading's editor (or another scope's) is the one on screen.
+        receipt = st.session_state.get(_RECEIPT_KEY)
+        reading = _receipt_reading(participant_id, trial_id, annotation_screen)
+        if receipt and tuple(receipt[:2]) == (
+            st.session_state.get(OWNER_KEY),
+            reading,
+        ):
+            st.html(
+                f'<p role="status" aria-live="polite">{html.escape(receipt[2])}</p>'
+            )
+        elif receipt:
+            st.session_state.pop(_RECEIPT_KEY, None)
         # `label | field` rows, so the five stacked controls fit under the
         # plot without scrolling. Unlike the rail (`controls._labeled`'s note),
         # the checkbox is split too: here the label column is the row spine every
@@ -1060,12 +1120,19 @@ def _plural(count: int, noun: str) -> str:
 def _import_dataset_annotations(
     uploader_key: str, trials: frozenset, dataset_name: str = ""
 ) -> None:
+    st.session_state.pop("_annotation_import_preview", None)
+    st.session_state.pop("_open_annotation_dispute", None)
+    st.session_state["_annotation_import_revision"] = (
+        st.session_state.get("_annotation_import_revision", 0) + 1
+    )
     upload = st.session_state.get(uploader_key)
     if upload is None:
         return
     try:
-        text = upload.getvalue().decode("utf-8")
+        text = upload.getvalue()
         records = store_to_records(deserialize(text))
+        incoming = {}
+        _, skipped = merge_records(incoming, records, trials)
     except (UnicodeDecodeError, ValueError) as exc:
         # Nothing was merged yet, so the dataset's annotations are untouched,
         # and the fresh uploader key below lets another file be chosen.
@@ -1078,20 +1145,115 @@ def _import_dataset_annotations(
             int(st.session_state.get(_DATASET_NONCE_KEY, 0)) + 1
         )
         return
-    # Into the open dataset, whatever the file names — an older file names
-    # none, and one exported from another dataset is still the user's choice to
-    # bring here. The name is said.
-    applied, skipped = merge_records(_store(), records, trials)
-    note = f"Imported {_plural(applied, 'annotation')}."
-    source = file_dataset(text)
-    if source and source != dataset_name:
-        note = f"Imported {_plural(applied, 'annotation')} exported from **{md_literal(source)}**."
-    if skipped:
-        note += (
-            f" Skipped {_plural(skipped, 'annotation')} on trials this dataset "
-            "doesn't have."
+    st.session_state["_annotation_import_preview"] = (
+        st.session_state.get(OWNER_KEY, dataset_name),
+        incoming,
+        skipped,
+        file_dataset(text),
+    )
+
+
+def _open_disputed_reading(reading: Key) -> None:
+    from .url_state import request_trial
+
+    st.session_state["_open_annotation_dispute"] = reading
+    request_trial(*reading[:2], screen_id=reading[2] if len(reading) == 3 else None)
+
+
+def render_disputed_note(host, participant, trial, screen) -> None:
+    """Both reviewers' entries for a reading explicitly opened from the import."""
+    preview = st.session_state.get("_annotation_import_preview")
+    key = st.session_state.get("_open_annotation_dispute")
+    if not preview or preview[0] != st.session_state.get(OWNER_KEY) or not key:
+        return
+    if key[:2] != (str(participant), str(trial)) or (
+        len(key) == 3 and key[2] != str(screen)
+    ):
+        return
+    current, incoming = _store().get(key), preview[1].get(key)
+    if not current or not incoming or current == incoming:
+        return
+    scope = "Whole trial" if len(key) == 2 else f"Screen {key[2]}"
+    host.markdown(f"**{md_literal(scope)} · differing annotations**")
+    host.table(pd.DataFrame([current, incoming], index=["Current", "Incoming"]))
+    from .app import open_dataset_panel
+
+    host.button(
+        "Return to annotation import",
+        on_click=open_dataset_panel,
+        args=("Annotations",),
+        key="annotation_return_to_import",
+    )
+
+
+def _review_import(dataset_name: str, open_trials: frozenset) -> None:
+    preview = st.session_state.get("_annotation_import_preview")
+    if not preview or preview[0] != st.session_state.get(OWNER_KEY, dataset_name):
+        return
+    _, incoming, skipped, source = preview
+    current = _store()
+    disagreements = [k for k in incoming if k in current and current[k] != incoming[k]]
+    new = sum(k not in current for k in incoming)
+    same = len(incoming) - len(disagreements) - new
+    st.markdown("**Review annotation import**")
+    if source:
+        st.caption(f"File exported from **{md_literal(source)}**.")
+    st.caption(
+        f"{new} new · {same} identical · {len(disagreements)} differing · {skipped} outside this dataset"
+    )
+    if disagreements:
+        rows = []
+        for k in disagreements:
+            pid, tid, *part = k
+            rows.append(
+                dict(
+                    participant_id=pid,
+                    trial_id=tid,
+                    screen_id=part[0] if part else None,
+                    current=current[k],
+                    incoming=incoming[k],
+                )
+            )
+        st.dataframe(pd.DataFrame(rows), hide_index=True)
+        st.download_button(
+            "Download disagreements",
+            json.dumps(rows, ensure_ascii=False, indent=2),
+            file_name="annotation_disagreements.json",
+            mime="application/json",
         )
-    _refresh_dataset_widgets(note)
+        available = [k for k in disagreements if k[:2] in open_trials]
+        if available:
+            reading = st.selectbox(
+                "Reading to inspect", available, format_func=lambda k: " / ".join(k)
+            )
+            st.button(
+                "Open disputed reading",
+                on_click=_open_disputed_reading,
+                args=(reading,),
+            )
+        elif open_trials is not None:
+            st.caption("The current trial filters hide these readings.")
+    replace = bool(disagreements) and st.checkbox(
+        "Replace differing annotations with the file's entries",
+        key=_dataset_widget_key(
+            f"replace_{st.session_state.get('_annotation_import_revision', 0)}"
+        ),
+    )
+    apply, cancel = st.columns(2)
+    if apply.button("Apply import", key=_dataset_widget_key("apply"), type="primary"):
+        accepted = {
+            key: value
+            for key, value in incoming.items()
+            if key not in current or (replace and key in disagreements)
+        }
+        current.update(accepted)
+        st.session_state.pop("_annotation_import_preview", None)
+        _refresh_dataset_widgets(f"Imported {_plural(len(accepted), 'annotation')}.")
+        st.rerun()
+    if cancel.button("Cancel import", key=_dataset_widget_key("cancel")):
+        st.session_state.pop("_annotation_import_preview", None)
+        _refresh_dataset_widgets("Import canceled.")
+        st.rerun()
 
 
 #: Cell text of a row's **Open** button — `ButtonColumn` takes its label from
@@ -1125,7 +1287,7 @@ def _open_annotation(
     if (pid, tid) not in open_trials:
         st.session_state[_DATASET_NOTE_KEY] = (
             f"error:Can't open {where}: the trial filters hide it. Clear or "
-            f"change the filters on {ICONS['view_scanpath']} **Scanpath**, "
+            f"change the filters on {ICONS['view_scanpath']} **Scanpath View**, "
             "then open it again."
         )
         return
@@ -1229,10 +1391,11 @@ def render_dataset_annotations(
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "Choose a file saved here or in an Export bundle. Imported annotations "
-            "replace existing ones for the same trial or screen. Annotations for "
-            "trials outside this dataset are skipped."
+            "Choose an annotations JSON file to compare its entries with this dataset."
         )
+    _review_import(
+        dataset_name, trials if open_trials is None else _trial_set(open_trials)
+    )
     delete_slot = toolbar.container(width="content")
 
     if not records:
@@ -1259,7 +1422,7 @@ def render_dataset_annotations(
             "",
             type="tertiary",
             width="small",
-            help="Open this trial in the Scanpath view, on its screen for a "
+            help="Open this trial in the Scanpath View, on its screen for a "
             "screen annotation.",
             on_click=_open_annotation,
             args=(open_key, records, trials, _trial_set(open_trials)),

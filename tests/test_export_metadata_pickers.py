@@ -1,20 +1,4 @@
-"""Which metadata fields ride along in the export bundle.
-
-Three near-identical pickers, one per grain, each with the same two contracts:
-
-* **Every field selected returns `None`** — "no restriction" — so a bundle
-  exported without touching the control is byte-identical to one made with no
-  metadata control at all. Returning the full tuple instead would work, but it
-  makes the export options differ for no reason.
-* **The persisted selection is pruned against *this* table's fields.** Attaching
-  a second table leaves a selection naming only the first one's columns;
-  Streamlit filters invalid values out silently and the widget yields `[]`, and
-  an empty tuple means "leave the table out of the bundle" — so a stale key
-  reads as a deliberate omission and the file is simply missing from the zip.
-
-Both failure modes are silent in the produced artefact, which is why they are
-pinned here rather than left to the panel that renders them.
-"""
+"""Metadata publication choices across table replacement and bundle creation."""
 
 from __future__ import annotations
 
@@ -105,16 +89,6 @@ class TestEveryGrainPicker:
     def test_a_still_valid_selection_is_left_alone(
         self, session, picker, state_key, build, suffix
     ):
-        """The prune must only remove what this table cannot offer.
-
-        What the picker *returns* for a partial selection is not asserted here:
-        outside a script run `st.multiselect` yields its `default=` rather than
-        the session value, so bare mode cannot see the user's pick. The ordering
-        rule that turns the pick into a tuple is one line
-        (`tuple(n for n in names if n in chosen)`) and is exercised through the
-        panel by `tests/test_export.py`; the pruning above it is what has a
-        silent failure mode, and that is testable here.
-        """
         table = build()
         session[state_key] = table
         kept = [table.fields[0].name]
@@ -124,20 +98,14 @@ class TestEveryGrainPicker:
 
         assert session[f"bulk{suffix}"] == kept
 
-    def test_a_stale_selection_is_pruned_not_read_as_an_omission(
+    def test_an_entirely_stale_selection_keeps_the_table_out(
         self, session, picker, state_key, build, suffix
     ):
-        """A leftover key naming another table's columns yields `[]`, and `()`
-        means "leave the table out of the bundle"."""
         session[state_key] = build()
         session[f"bulk{suffix}"] = ["a_column_from_another_study"]
 
-        chosen = picker("bulk")
-
-        # Nothing survived the prune, so the key is dropped and the control
-        # falls back to "everything" rather than to "nothing".
-        assert f"bulk{suffix}" not in session
-        assert chosen is None
+        assert picker("bulk") == ()
+        assert session[f"bulk{suffix}"] == []
 
     def test_a_partly_stale_selection_keeps_the_half_that_is_real(
         self, session, picker, state_key, build, suffix
@@ -150,3 +118,103 @@ class TestEveryGrainPicker:
         picker("bulk")
 
         assert session[f"bulk{suffix}"] == [real]
+
+
+def _publication_picker_app():
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import export
+    from scanpath_studio import metadata as md
+
+    replacement = st.toggle("Replace tables")
+    fields = (
+        {"initials": ["AB"], "age": [25]}
+        if replacement
+        else {"group": ["C"], "condition": ["A"]}
+    )
+    combos = pd.DataFrame(
+        {"participant_id": ["p1"], "trial_id": ["t1"], "text_id": ["x1"]}
+    )
+    st.session_state[md.SESSION_KEY] = md.build_participant_metadata(
+        pd.DataFrame({"participant_id": ["p1"], **fields}),
+        "participant_id",
+        participants=["p1"],
+    )
+    st.session_state[md.TRIAL_SESSION_KEY] = md.build_trial_metadata(
+        pd.DataFrame({"trial_id": ["t1"], **fields}), "trial_id", keys={("p1", "t1")}
+    )
+    st.session_state[md.TEXT_SESSION_KEY] = md.build_text_metadata(
+        pd.DataFrame({"text_id": ["x1"], **fields}), "text_id", keys={"x1"}
+    )
+    options = export.ExportOptions(
+        include_png=False,
+        include_svg=False,
+        include_plot_config=False,
+        metadata_fields=export._render_metadata_field_picker("bulk"),
+        trial_metadata_fields=export._render_trial_metadata_field_picker("bulk"),
+        text_metadata_fields=export._render_text_metadata_field_picker("bulk"),
+    )
+    if st.button("Build"):
+        st.session_state["zip"], _ = export.bulk_export(
+            combos,
+            pd.DataFrame(),
+            combos,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+            x_field="x",
+            y_field="y",
+            settings={
+                "participant_metadata": md.active().frame,
+                "trial_metadata": md.active_trials().frame,
+                "text_metadata": md.active_texts().frame,
+            },
+            options=options,
+        )
+
+
+def test_replacing_metadata_cannot_widen_an_explicit_publication_choice():
+    import io
+    import zipfile
+
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_publication_picker_app).run()
+    paths = {"participants": "participant_id", "trials": "trial_id", "texts": "text_id"}
+
+    def headers():
+        at.button[0].click().run()
+        assert not at.exception
+        with zipfile.ZipFile(io.BytesIO(at.session_state["zip"])) as archive:
+            return {
+                grain: pd.read_csv(
+                    archive.open(f"metadata/{grain}.csv")
+                ).columns.tolist()
+                for grain in paths
+                if f"metadata/{grain}.csv" in archive.namelist()
+            }
+
+    # Leave text untouched. Explicitly select one participant field and all
+    # trial fields, then verify the ZIP, including the next table's headers.
+    at.multiselect(key="bulk_meta_fields").set_value(["group"])
+    at.multiselect(key="bulk_trial_meta_fields").set_value(["group"]).run()
+    at.multiselect(key="bulk_trial_meta_fields").set_value(["group", "condition"]).run()
+    assert headers() == {
+        "participants": ["participant_id", "group"],
+        "trials": ["trial_id", "group", "condition"],
+        "texts": ["text_id", "group", "condition"],
+    }
+    at.toggle[0].set_value(True).run()
+    assert headers() == {"texts": ["text_id", "initials", "age"]}
+    assert (
+        sum("none of your selected fields" in caption.value for caption in at.caption)
+        == 2
+    )
+    at.multiselect(key="bulk_meta_fields").set_value(["age"])
+    at.multiselect(key="bulk_trial_meta_fields").set_value(["age"])
+    at.multiselect(key="bulk_text_meta_fields").set_value(["age"]).run()
+    assert headers() == {grain: [key, "age"] for grain, key in paths.items()}
+    at.toggle[0].set_value(False).run()
+    assert headers() == {}

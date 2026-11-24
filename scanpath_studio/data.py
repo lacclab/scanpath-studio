@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import contextlib
+import functools
 import glob
 import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -23,7 +26,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from . import progress
+from . import fixation_source, progress
 from .constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
@@ -44,6 +47,7 @@ from .multipart import (
     SCREEN_TIMESTAMP,
     grouping_columns,
     normalize_screen_identity,
+    part_catalog,
     validate_matching_parts,
 )
 
@@ -275,6 +279,19 @@ def hashable_key(value):
     if isinstance(value, (list, tuple)):
         return tuple(hashable_key(v) for v in value)
     return value
+
+
+def set_digest(items) -> str:
+    """An exact, order-free cache-key part for a large set of keys.
+
+    Unlike ``hash(frozenset(...))``, two different sets never share a key
+    short of a BLAKE2 collision, so a cached result is never served for
+    another set's readings."""
+    digest = hashlib.blake2b(digest_size=16)
+    for part in sorted(repr(item) for item in items):
+        digest.update(part.encode("utf-8"))
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 #: Session-state home of the no-copy frame caches, one entry per slot.
@@ -519,7 +536,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
 
     def _publish(value: Any) -> None:
         with _INFLIGHT_LOCK:
-            wins = store.get((_LATEST_REQUESTED, slot)) == key
+            wins = store.get((_LATEST_REQUESTED, slot), _MISSING) == key
             if wins:
                 previous = store.get(slot)
                 if keep > 1 and previous is not None and previous[0] != key:
@@ -554,6 +571,8 @@ def forget_frame_cache(slot: str) -> None:
         return  # No runtime: there is no cache.
     if store:
         with _INFLIGHT_LOCK:
+            # A conversion already in flight must not repopulate a forgotten slot.
+            store.pop((_LATEST_REQUESTED, slot), None)
             store.pop(slot, None)
             store.pop((_EARLIER, slot), None)
 
@@ -603,7 +622,7 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     results downstream.
 
     ``hash_pandas_object`` raises on columns of unhashable objects (lists/arrays —
-    e.g. parquet-preserved span-index fields). We stringify and retry rather than
+    e.g. parquet-preserved span-index fields). We hash their Arrow encoding rather than
     drop the content signal entirely: zeroing the hash would collapse every frame
     of the same shape + columns to one fingerprint, serving stale cached results
     when switching between two such frames. If even that fails the key becomes
@@ -643,24 +662,59 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     return value
 
 
+def share_dataset_fingerprint(entry: dict) -> str:
+    """Portable identity for the three recording tables of an added dataset."""
+    tables = tuple(entry.get(k) for k in ("words", "fixations", "raw_gaze"))
+    keys = tuple(frame_fingerprint(table) for table in tables)
+    return _share_dataset_digest(keys, tables)
+
+
+@st.cache_data(show_spinner=False, max_entries=128)
+def _share_dataset_digest(keys: tuple, _tables: tuple) -> str:
+    # A cache key may describe a local loader or path. Only table contents
+    # belong on a link another installation must be able to verify.
+    parts = [
+        _compute_frame_fingerprint(table.reset_index(drop=True))
+        if table is not None and not table.empty
+        else None
+        for table in _tables
+    ]
+    return (
+        "v1-" + hashlib.blake2b(json.dumps(parts).encode(), digest_size=16).hexdigest()
+    )
+
+
 def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
     """The actual hash behind :func:`frame_fingerprint`, memo aside."""
     cols = tuple(map(str, df.columns))
     n = len(df)
 
     def _hash(frame: pd.DataFrame) -> str:
+        logical_types = [
+            pd.api.types.infer_dtype(frame[col], skipna=True) for col in frame
+        ]
+        digest = hashlib.blake2b(json.dumps(logical_types).encode(), digest_size=16)
         try:
             per_row = pd.util.hash_pandas_object(frame, index=True)
         except TypeError:
-            # Unhashable cell objects — stringify so content still drives the key.
-            per_row = pd.util.hash_pandas_object(frame.astype(str), index=True)
+            # Parquet restores a list cell as an ndarray. Preserve its full
+            # contents, including long arrays whose printable repr is truncated.
+            import pyarrow as pa
+
+            table = pa.Table.from_pandas(
+                frame, preserve_index=True
+            ).replace_schema_metadata(None)
+            digest.update(table.schema.serialize())
+            for offset in range(0, len(table), 65536):
+                for batch in table.slice(offset, 65536).combine_chunks().to_batches():
+                    digest.update(batch.serialize())
+            return digest.hexdigest()
         # Digest the per-row hashes in ORDER. Summing them is order-invariant,
         # so a frame and a `sort_values` of itself — same rows, same index
         # labels, different order — would share a key while yielding different
         # results downstream.
-        return hashlib.blake2b(
-            per_row.to_numpy(dtype="uint64").tobytes(), digest_size=16
-        ).hexdigest()
+        digest.update(per_row.to_numpy(dtype="uint64").tobytes())
+        return digest.hexdigest()
 
     try:
         return (n, cols, _hash(df))
@@ -1791,72 +1845,75 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
         trial=pick_column(raw_gaze, TRIAL_CANDIDATES),
         screen_id=pick_column(raw_gaze, SCREEN_ID_CANDIDATES),
         screen_index=pick_column(raw_gaze, SCREEN_INDEX_CANDIDATES),
+        canvas_width=pick_column(raw_gaze, CANVAS_WIDTH_CANDIDATES),
+        canvas_height=pick_column(raw_gaze, CANVAS_HEIGHT_CANDIDATES),
         text_id=pick_column(raw_gaze, TEXT_ID_CANDIDATES),
         word_id=pick_column(raw_gaze, FIX_WORD_ID_CANDIDATES),
         text=pick_column(raw_gaze, TEXT_CANDIDATES),
         x=pick_column(raw_gaze, RAW_GAZE_X_CANDIDATES),
         y=pick_column(raw_gaze, RAW_GAZE_Y_CANDIDATES),
         timestamp=pick_column(raw_gaze, RAW_GAZE_TIMESTAMP_CANDIDATES),
+        eye=pick_column(raw_gaze, ["eye", "EYE_TRACKED", "EYE_USED"]),
+        pupil_area=pick_column(raw_gaze, ["pupil_area"]),
+        pupil_diameter=pick_column(raw_gaze, ["pupil_diameter"]),
     )
 
 
-def validate_word_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a Words table schema.
-
-    Participant ID is optional: Words tables without one are treated as
-    stimulus-level (one row per word per *text*, not per reading) and are
-    broadcast across the participants found in the fixations — see
-    ``broadcast_stimulus_words``."""
-    problems = []
-    for key, label in [
-        ("trial", "Trial ID"),
-        ("word_id", "Word ID"),
-    ]:
-        if not schema.get(key):
-            problems.append(f"missing {label}")
-    has_xywh = all(schema.get(k) for k in ["x", "y", "width", "height"])
-    has_box = all(schema.get(k) for k in ["left", "right", "top", "bottom"])
-    if not has_xywh and not has_box:
-        problems.append("missing Word box (its edges, or x/y with width and height)")
-    return problems
+@dataclass(frozen=True)
+class MappingBlocker:
+    message: str
+    fields: tuple[str, ...]
 
 
-def validate_fix_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a fixations schema.
+def mapping_blockers(table: str, schema: dict) -> list[MappingBlocker]:
+    """Each blocking requirement and the mapping controls that can satisfy it."""
+    required = {
+        "words": (("trial", "Trial ID"), ("word_id", "Word ID")),
+        "fixations": (("trial", "Trial ID"), ("duration", "Duration")),
+        "raw_gaze": (("trial", "Trial ID"), ("x", "X"), ("y", "Y")),
+    }
+    issues = [
+        MappingBlocker(f"missing {label}", (field,))
+        for field, label in required[table]
+        if not schema.get(field)
+    ]
+    if table == "words":
+        origin = ("x", "y", "width", "height")
+        edges = ("left", "right", "top", "bottom")
+        if not all(schema.get(k) for k in origin) and not all(
+            schema.get(k) for k in edges
+        ):
+            fields = tuple(k for k in (*origin, *edges) if not schema.get(k))
+            issues.append(
+                MappingBlocker(
+                    "missing Word box (its edges, or x/y with width and height)", fields
+                )
+            )
+    if table == "fixations" and not schema.get("word_id"):
+        missing = tuple(k for k in ("x", "y") if not schema.get(k))
+        if missing:
+            issues.append(
+                MappingBlocker(
+                    "missing X and Y, or a Word ID to place each fixation at its word's center",
+                    (*missing, "word_id"),
+                )
+            )
+    return issues
 
-    X/Y coordinates are optional when a Word ID is mapped: AOI-sequence
-    datasets (fixations recorded as "which word", not "which pixel") get
-    coordinates from the matching word-box centers — see
-    ``fill_fixation_xy_from_words``."""
-    problems = []
-    # Participant is optional — a dataset without it is treated as a single
-    # anonymous reader (see SYNTHETIC_PARTICIPANT).
-    for key, label in [
-        ("trial", "Trial ID"),
-        ("duration", "Duration"),
-    ]:
-        if not schema.get(key):
-            problems.append(f"missing {label}")
-    has_xy = schema.get("x") and schema.get("y")
-    if not has_xy and not schema.get("word_id"):
-        problems.append(
-            "missing X and Y, or a Word ID to place each fixation at its word's center"
-        )
-    return problems
+
+def validate_word_schema(schema: dict[str, str | None]) -> list[str]:
+    """Return blockers for words. A missing participant makes words stimulus-level."""
+    return [issue.message for issue in mapping_blockers("words", schema)]
 
 
-def validate_raw_gaze_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a raw gaze schema."""
-    problems = []
-    # Participant optional — single anonymous reader when absent.
-    for key, label in [
-        ("trial", "Trial ID"),
-        ("x", "X"),
-        ("y", "Y"),
-    ]:
-        if not schema.get(key):
-            problems.append(f"missing {label}")
-    return problems
+def validate_fix_schema(schema: dict[str, str | None]) -> list[str]:
+    """Return blockers for fixations. Word IDs can supply positions from boxes."""
+    return [issue.message for issue in mapping_blockers("fixations", schema)]
+
+
+def validate_raw_gaze_schema(schema: dict[str, str | None]) -> list[str]:
+    """Return blockers for raw gaze, which can belong to one anonymous reader."""
+    return [issue.message for issue in mapping_blockers("raw_gaze", schema)]
 
 
 # Column added when concatenating several files (multi-file upload, glob, or a
@@ -1898,6 +1955,24 @@ def split_source_file(
     for i in range(parts.shape[1]):
         df[f"{prefix}{i + 1}"] = parts[i].to_numpy()
     return df
+
+
+def split_named_columns(
+    frame, column: str, delimiter: str, existing: set
+) -> tuple[pd.DataFrame, list[str]]:
+    """Split a source column into the next available numbered columns."""
+    split = split_source_file(frame, delimiter=delimiter, column=column)
+    added = [name for name in split.columns if name not in frame.columns]
+    existing = set(existing)
+    names = []
+    n = 1
+    while len(names) < len(added):
+        candidate = f"{column}_{n}"
+        if candidate not in existing:
+            names.append(candidate)
+            existing.add(candidate)
+        n += 1
+    return split.rename(columns=dict(zip(added, names))), names
 
 
 def extract_columns_from_source_file(
@@ -2127,12 +2202,15 @@ def _read_by_extension(
     *,
     sep: str | None = None,
     file_columns: Sequence[str] | None = None,
+    reopen: Callable[[], contextlib.AbstractContextManager] | None = None,
 ) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
 
     ``sep`` and ``file_columns`` are the delimiter and the column names of a
     text table when the caller already knows them (a zip member, which cannot
-    be peeked at); otherwise they are read off the header line.
+    be peeked at); otherwise they are read off the header line. ``reopen``
+    opens a fresh copy of a text stream that cannot be rewound
+    (:func:`_read_delimited`).
 
     ``plan`` narrows the read to the columns normalization keeps and
     declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
@@ -2163,12 +2241,22 @@ def _read_by_extension(
                 sep or _sniff_delimiter(buf, name),
                 plan,
                 file_columns=file_columns,
+                reopen=reopen,
             )
         # First sheet.
-        frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
+        with pd.ExcelFile(buf) as book:
+            sheet = book.sheet_names[0]
+            frame = pd.read_excel(
+                book, sheet_name=sheet, **_excel_na_kwargs(book, plan)
+            )
+            frame.attrs["source_worksheet"] = sheet
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     return _read_delimited(
-        buf, sep or _sniff_delimiter(buf, name), plan, file_columns=file_columns
+        buf,
+        sep or _sniff_delimiter(buf, name),
+        plan,
+        file_columns=file_columns,
+        reopen=reopen,
     )
 
 
@@ -2215,9 +2303,32 @@ def _first_line(head: bytes) -> bytes:
     """
     encoding = _bom_encoding(head)
     if encoding is not None and encoding != "utf-8-sig":
-        line = head.decode(encoding, "ignore").split("\n", 1)[0].rstrip("\r")
-        return line.encode("utf-8")
-    return head.split(b"\n", 1)[0].rstrip(b"\r")
+        text = head.decode(encoding, "ignore")
+        end = _unquoted_line_end(text, '"', "\n")
+        return (text if end < 0 else text[:end]).rstrip("\r").encode("utf-8")
+    end = _unquoted_line_end(head, b'"', b"\n")
+    return (head if end < 0 else head[:end]).rstrip(b"\r")
+
+
+def _unquoted_line_end(text, quote, newline) -> int:
+    """Where the first record of ``text`` ends: its first newline outside a
+    quoted field ("Notes\\n(free text)" is one header cell), or -1."""
+    # One forward pass: every quote and newline is found once, so a header
+    # with an unclosed quote and many lines costs no more than reading it.
+    inside, pos, line_end = False, 0, -1
+    while True:
+        if line_end < pos:
+            line_end = text.find(newline, pos)
+            if line_end < 0:
+                return -1
+        quote_at = text.find(quote, pos, line_end)
+        if quote_at >= 0:
+            inside = not inside
+            pos = quote_at + 1
+        elif inside:
+            pos = line_end + 1
+        else:
+            return line_end
 
 
 def _sniff_delimiter(buf, name: str) -> str:
@@ -2305,6 +2416,8 @@ def _read_delimited(
     plan: ReadPlan | None,
     *,
     file_columns: Sequence[str] | None = None,
+    filter_chunk: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    reopen: Callable[[], contextlib.AbstractContextManager] | None = None,
     **extra,
 ) -> pd.DataFrame:
     """``read_csv`` with the encoding fallback a non-UTF-8 export needs.
@@ -2320,21 +2433,28 @@ def _read_delimited(
     renamed ``.csv``) and is refused as such, rather than tokenized into a
     parser error.
 
-    A planned read (``plan.columns``) of a table held in memory (an upload)
-    leaves out the rows with more fields than its header, and says so in the
-    frame's `READ_NOTES_ATTR` — see :func:`_overflow_lines` for why `usecols`
-    alone would keep them.
+    Planned reads check every record against the header. ``usecols`` stops the
+    parser counting fields, so the read itself takes one column more than the
+    header names (:func:`_with_extra_column`), which a record with a field too
+    many fills. Only then are the records scanned (:func:`_scan_records`): a
+    table whose every row has one field more is read with the first as an
+    unnamed row label, as pandas reads it; otherwise a projected read skips
+    the overlong records and reports their physical lines in
+    `READ_NOTES_ATTR`, and a whole-table read reports the first one as an
+    error. A stream that cannot be rewound is
+    scanned and read again through ``reopen``, which opens a fresh copy of it
+    as a context manager; without one it is taken into memory first.
 
-    A whole-file read with verbatim columns needs the header (``file_columns``,
-    else read off the file first) to name every other column's NA spellings;
-    a stream that cannot be rewound is taken into memory for it.
+    A planned read needs the header (``file_columns``, else read off the file
+    first) to name every other column's NA spellings.
     """
     rereadable = _can_reread(buf)
-    if plan is not None and plan.verbatim and not plan.columns and file_columns is None:
-        if not rereadable:
-            data = buf.read()
-            buf = io.BytesIO(data) if isinstance(data, bytes) else io.StringIO(data)
-            rereadable = True
+    checked = plan is not None and "nrows" not in extra
+    if checked and not rereadable and (file_columns is None or reopen is None):
+        data = buf.read()
+        buf = io.BytesIO(data) if isinstance(data, bytes) else io.StringIO(data)
+        rereadable = True
+    if checked and file_columns is None:
         file_columns = _header(buf, sep)
         _rewind(buf)
     head = _peek(buf, _BINARY_SNIFF_BYTES) if rereadable else b""
@@ -2342,18 +2462,132 @@ def _read_delimited(
     if not bom and b"\x00" in head:
         raise _not_text_error(str(getattr(buf, "name", buf)), head)
     kwargs = {**_read_kwargs(plan, file_columns), **extra}
-    skipped: list[int] = []
-    if plan is not None and plan.columns and "nrows" not in extra and rereadable:
-        header = _header(buf, sep)
-        _rewind(buf)
-        skipped = _overflow_lines(buf, sep, len(header))
-        if skipped:
-            kwargs["skiprows"] = skipped
+    if not checked:
+        return _parse_delimited(buf, sep, bom, kwargs, filter_chunk)
+    header = list(file_columns)
+    kwargs["index_col"] = False
+    probe = _unused_name(header)
+    try:
+        return _parse_delimited(
+            buf,
+            sep,
+            bom,
+            _probe_kwargs(plan, header, kwargs, probe),
+            filter_chunk,
+            probe=probe,
+        )
+    except _ExtraFields:
+        pass
+    except ValueError as exc:
+        # A header the probe column could not be appended to (pandas then
+        # finds neither it nor the columns after it) reads through the scan.
+        if probe not in str(exc):
+            raise
+    with contextlib.ExitStack() as stack:
+        if rereadable:
+            _rewind(buf)
+            scan = _scan_records(buf, sep, len(header), bom)
+            source = buf
+        else:
+            scanned = stack.enter_context(reopen())
+            scan = _scan_records(
+                scanned, sep, len(header), _bom_encoding(scanned.peek(4)[:4])
+            )
+            source = stack.enter_context(reopen())
+        if scan.row_labels:
+            # R's `write.table()` names every column but its row names: read
+            # as pandas does, the first field of each row is its label, and
+            # the label is left out.
+            kwargs.update(
+                header=0,
+                names=[probe, *header],
+                usecols=list(plan.columns or header),
+            )
+        elif scan.overlong and not plan.columns:
+            raise _overflow_error(getattr(buf, "name", buf), scan, len(header))
+        elif scan.overlong:
+            kwargs["skiprows"] = [record for record, _, _ in scan.overlong]
+        frame = _parse_delimited(source, sep, bom, kwargs, filter_chunk)
+    if scan.overlong and not scan.row_labels:
+        frame.attrs[READ_NOTES_ATTR] = [_skipped_rows_note(scan)]
+    return frame
+
+
+class _ExtraFields(Exception):
+    """A planned read met a record with a field past its header's last."""
+
+
+def _unused_name(header: Sequence[str]) -> str:
+    """A column name ``header`` does not hold."""
+    name = "_sps_extra_field"
+    while name in header:
+        name += "_"
+    return name
+
+
+def _probe_kwargs(plan: ReadPlan, header: list[str], kwargs: dict, probe: str) -> dict:
+    """``kwargs`` for a read that also takes the extra column ``probe``.
+
+    Any text in the probe's column is a field, "NA" included, so pandas'
+    default missing spellings move from all columns to the planned ones, by
+    name, where they mean what they always do.
+    """
+    columns = list(plan.columns or header)
+    out = {**kwargs, "usecols": [*columns, probe]}
+    out["dtype"] = {**kwargs.get("dtype", {}), probe: str}
+    if out.get("keep_default_na", True):
+        out.update(_verbatim_na_kwargs(plan, columns))
+    return out
+
+
+def _parse_delimited(
+    buf,
+    sep: str,
+    bom: str | None,
+    kwargs: dict,
+    filter_chunk: Callable[[pd.DataFrame], pd.DataFrame] | None,
+    *,
+    probe: str | None = None,
+) -> pd.DataFrame:
+    """``read_csv`` under each encoding of :func:`_read_delimited` in turn.
+
+    With ``probe``, the header line is read with that column added at its
+    end, and :class:`_ExtraFields` is raised when a record fills it.
+    """
+    if filter_chunk is not None:
+        kwargs = {**kwargs, "chunksize": 25_000}
+
+    def checked(frame: pd.DataFrame) -> pd.DataFrame:
+        if probe is None:
+            return frame
+        extra = frame.pop(probe)
+        if (extra.notna() & extra.ne("")).any():
+            raise _ExtraFields
+        return frame
+
     for encoding in (bom,) if bom else _TEXT_ENCODINGS:
         try:
-            frame = pd.read_csv(
-                buf, sep=sep, low_memory=False, encoding=encoding, **kwargs
-            )
+            with contextlib.ExitStack() as stack:
+                source = buf
+                if probe is not None:
+                    source = _with_extra_column(buf, sep, probe)
+                    if source is None:
+                        raise _ExtraFields
+                    stack.enter_context(source)
+                frame = pd.read_csv(
+                    source, sep=sep, low_memory=False, encoding=encoding, **kwargs
+                )
+                if filter_chunk is not None:
+                    # Consume the chunks inside the encoding retry. A later
+                    # chunk can contain the first byte the selected encoding
+                    # cannot read.
+                    with frame as chunks:
+                        frame = pd.concat(
+                            (filter_chunk(checked(chunk)) for chunk in chunks),
+                            ignore_index=True,
+                        )
+                else:
+                    frame = checked(frame)
         except UnicodeDecodeError:
             if bom or encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
                 raise
@@ -2364,66 +2598,236 @@ def _read_delimited(
                 encoding,
             )
             continue
-        if skipped:
-            frame.attrs[READ_NOTES_ATTR] = [_skipped_rows_note(skipped)]
         return frame
     raise AssertionError("unreachable: latin-1 decodes every byte")
 
 
-def _overflow_lines(buf, sep: str, n_fields: int) -> list[int]:
-    """The 0-based line numbers of an in-memory table's rows that hold more
-    fields than its header's ``n_fields``.
+#: Byte-order marks and the codec each table's text after it is in.
+_BOM_CODECS = (
+    (b"\xff\xfe\x00\x00", "utf-32-le"),
+    (b"\x00\x00\xfe\xff", "utf-32-be"),
+    (b"\xef\xbb\xbf", "utf-8"),
+    (b"\xff\xfe", "utf-16-le"),
+    (b"\xfe\xff", "utf-16-be"),
+)
 
-    A planned read hands ``read_csv`` a ``usecols``, and with one the parser
-    keeps such a row, cut to the planned columns, without a word — though the
-    extra field shifted every value after it into the wrong column (a trial
-    ID that is really an X). Asking the parser instead costs a second parse of
-    the whole file, so the delimiters are counted here: the whole buffer's
-    first, which settles a clean table at once, and line by line only when
-    that total is off (a long row, or a short or blank one beside it). Empty
-    trailing fields are not extra fields.
 
-    Only a buffer already in memory (an upload) is counted, and only text
-    whose delimiters can be counted as bytes: a file with quoted values
-    (whose delimiters may be data) or a UTF-16/32 export reads as before.
+class _Prefixed(io.RawIOBase):
+    """``prefix``, then the rest of ``source`` — closed with this stream only
+    when ``owned``."""
+
+    def __init__(self, prefix: bytes, source, *, owned: bool) -> None:
+        self._prefix = memoryview(prefix)
+        self._source = source
+        self._owned = owned
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        if self._prefix:
+            n = min(len(buffer), len(self._prefix))
+            buffer[:n] = self._prefix[:n]
+            self._prefix = self._prefix[n:]
+            return n
+        return self._source.readinto(buffer)
+
+    def close(self) -> None:
+        if self._owned and not self.closed:
+            self._source.close()
+        super().close()
+
+
+def _with_extra_column(buf, sep: str, name: str):
+    """``buf`` (a path, or a stream read from where it is and left open) with
+    one more column, ``name``, at the end of its header line.
+
+    The line ends at its first CR or LF, in the codec its byte-order mark
+    names. None when it doesn't end within the first `_HEADER_MAX_BYTES`.
     """
-    getvalue = getattr(buf, "getvalue", None)
-    if not callable(getvalue) or len(sep) != 1 or n_fields < 1:
-        return []
-    data = getvalue()
-    if not isinstance(data, bytes) or b'"' in data:
-        return []
-    if _bom_encoding(data[:4]) not in (None, "utf-8-sig"):
-        return []
-    delimiter = sep.encode()
-    end = len(data)
-    while end and data[end - 1] in b"\r\n \t" + delimiter:
-        end -= 1
-    n_lines = data.count(b"\n", 0, end) + 1
-    if data.count(delimiter, 0, end) == n_lines * (n_fields - 1):
-        return []
-    trailing = b"\r \t" + delimiter
-    long_lines: list[int] = []
-    start = data.find(b"\n", 0, end) + 1
-    line = 1
-    while 0 < start < end:
-        stop = data.find(b"\n", start, end)
-        stop = end if stop == -1 else stop
-        if data[start:stop].rstrip(trailing).count(delimiter) > n_fields - 1:
-            long_lines.append(line)
-        start = stop + 1
-        line += 1
-    return long_lines
+    owned = isinstance(buf, (str, os.PathLike))
+    source = open(buf, "rb") if owned else buf
+    head = source.read(_HEADER_MAX_BYTES)
+    text = isinstance(head, str)
+    mark, codec = b"", "latin-1"
+    if not text:
+        mark, codec = next(
+            ((m, c) for m, c in _BOM_CODECS if head.startswith(m)), (mark, codec)
+        )
+    unit = 1 if text else len("\n".encode(codec))
+    line_end = -1
+    for char in "\r\n":
+        token = char if text else char.encode(codec)
+        at = head.find(token, len(mark))
+        while at >= 0 and (at - len(mark)) % unit:
+            at = head.find(token, at + 1)
+        if at >= 0 and (line_end < 0 or at < line_end):
+            line_end = at
+    quote = '"' if text else '"'.encode(codec)
+    quotes, at = 0, head.find(quote, len(mark))
+    while 0 <= at < (line_end if line_end >= 0 else len(head)):
+        quotes += (at - len(mark)) % unit == 0
+        at = head.find(quote, at + 1)
+    if (line_end < 0 and len(head) == _HEADER_MAX_BYTES) or quotes % 2:
+        # No line end in reach, or the first one sits inside a quoted header
+        # cell ("Notes\n(free text)"): the record scan, which follows
+        # quoting, reads this table instead.
+        if owned:
+            source.close()
+        return None
+    if line_end < 0:
+        line_end = len(head)  # a header with no rows and no line end
+    added = sep + name
+    if text:
+        return io.StringIO(head[:line_end] + added + head[line_end:] + source.read())
+    prefix = head[:line_end] + added.encode(codec) + head[line_end:]
+    return io.BufferedReader(_Prefixed(prefix, source, owned=owned), 1 << 20)
 
 
-def _skipped_rows_note(lines: list[int]) -> str:
-    """What a read says about the rows `_overflow_lines` found (0-based)."""
+#: Records :func:`_scan_records` scans between progress checkpoints.
+_SCAN_REPORT_EVERY = 1 << 16
+
+
+@dataclass(frozen=True)
+class _RecordScan:
+    """What :func:`_scan_records` found in a table's records, against a header
+    of ``n_fields`` columns."""
+
+    #: Records with a field past the header's last, as (zero-based record,
+    #: first physical line, last occupied field).
+    overlong: list[tuple[int, int, int]]
+    #: Data records, blank lines left out.
+    rows: int
+    #: Every data record has exactly one field more than the header, and some
+    #: hold text in it: the leading field is a row label the header leaves
+    #: unnamed (R's `write.table()` with its default row names).
+    row_labels: bool
+
+
+def _scan_records(buf, sep: str, n_fields: int, bom: str | None) -> _RecordScan:
+    """Each CSV record of ``buf`` checked against a header of ``n_fields``.
+
+    The parser's skiprows counts records, while a researcher opening the file
+    sees physical lines. Quoted separators and newlines are data. Empty extra
+    fields at the end of a record are common in exported spreadsheets, so a
+    record is overlong only when it holds text past the header's last field.
+    A record of exactly one field more on every row is the row-label layout
+    instead, which a trailing delimiter on every row is not.
+    """
+    if isinstance(buf, (str, os.PathLike)):
+        with open(buf, "rb") as source:
+            return _scan_records(source, sep, n_fields, bom)
+    # Only ASCII CSV syntax matters here. Latin-1 decodes every byte of both
+    # UTF-8 and legacy exports without changing delimiters or quotes.
+    text = isinstance(buf.read(0), str)
+    lines = (
+        buf if text else io.TextIOWrapper(buf, encoding=bom or "latin-1", newline="")
+    )
+    overlong = []
+    rows = 0
+    labelled, filled = True, False
+    try:
+        for record, (line, width, fields) in enumerate(_record_widths(lines, sep)):
+            if not record % _SCAN_REPORT_EVERY:
+                # A checkpoint: the loading card stays live, and Cancel works.
+                progress.report()
+            if not record or not fields:
+                continue  # the header, or a blank line the parser skips
+            rows += 1
+            labelled = labelled and fields == n_fields + 1
+            filled = filled or width == n_fields + 1
+            if width > n_fields:
+                overlong.append((record, line, width))
+    finally:
+        if not text:
+            lines.detach()
+        if _can_reread(buf):
+            _rewind(buf)
+    return _RecordScan(overlong, rows, bool(rows) and labelled and filled)
+
+
+def _record_widths(lines, sep: str):
+    """Yield the first line, last occupied field and number of fields of each
+    logical CSV row."""
+    quoted = False
+    for line_number, line in enumerate(lines):
+        line = line.rstrip("\r\n")
+        if not quoted:
+            first_line, field, width = line_number, 1, 0
+            if '"' not in line:
+                occupied = line.rstrip(sep)
+                yield (
+                    first_line,
+                    occupied.count(sep) + 1 if occupied else 0,
+                    line.count(sep) + 1 if line else 0,
+                )
+                continue
+        offset = 0
+        while offset < len(line):
+            if not quoted and line[offset] == '"':
+                quoted = True
+                offset += 1
+            if quoted:
+                quote = line.find('"', offset)
+                if quote < 0:
+                    # The physical newline is part of this field.
+                    width = field
+                    break
+                if quote > offset:
+                    width = field
+                offset = quote + 1
+                if offset < len(line) and line[offset] == '"':
+                    width = field
+                    offset += 1
+                    continue
+                quoted = False
+            delimiter = line.find(sep, offset)
+            end = len(line) if delimiter < 0 else delimiter
+            if end > offset:
+                width = field
+            if delimiter < 0:
+                break
+            field += 1
+            offset = delimiter + 1
+        if not quoted:
+            yield first_line, width, field
+
+
+def _overflow_hint(scan: _RecordScan) -> str:
+    """What makes the records :func:`_scan_records` found overlong, likely."""
+    if len(scan.overlong) == scan.rows > 1:
+        return (
+            "Every row has more fields than the header: check that it names "
+            "every column"
+        )
+    return "A delimiter inside a value that isn't quoted does this"
+
+
+def _overflow_error(name, scan: _RecordScan, n_fields: int) -> TableReadError:
+    """A whole-table read's refusal of the overlong records in ``scan``."""
+    _, line, width = scan.overlong[0]
+    count = len(scan.overlong)
+    where = f"has a row with more fields than its header: line {line + 1}"
+    if count > 1:
+        where = (
+            f"has {count} rows with more fields than its header: line {line + 1}, "
+            "the first,"
+        )
+    return TableReadError(
+        str(name),
+        f"{where} has {width}, the header {n_fields}",
+        f"{_overflow_hint(scan)}. Fix the file, then read the table again.",
+    )
+
+
+def _skipped_rows_note(scan: _RecordScan) -> str:
+    """What a projected read says about the overlong records it skipped."""
+    lines = [line for _, line, _ in scan.overlong]
     shown = ", ".join(str(n + 1) for n in lines[:5]) + (" …" if len(lines) > 5 else "")
     one = len(lines) == 1
     return (
         f"Skipped {len(lines)} row{'' if one else 's'} with more fields than the "
-        f"header (line{'' if one else 's'} {shown}). A delimiter inside a value "
-        "that isn't quoted does this."
+        f"header (line{'' if one else 's'} {shown}). {_overflow_hint(scan)}."
     )
 
 
@@ -2445,6 +2849,8 @@ NUMERIC_SCHEMA_FIELDS = frozenset(
         "height",
         "left",
         "line",
+        "pupil_area",
+        "pupil_diameter",
         "right",
         "screen_index",
         "screen_timestamp",
@@ -2547,7 +2953,12 @@ _PREVIEW_ROWS = 200
 
 
 def mapping_value_preview(
-    df: pd.DataFrame | None, field_key: str, column, *, limit: int = 3
+    df: pd.DataFrame | None,
+    field_key: str,
+    column,
+    *,
+    limit: int = 3,
+    show_time_input: bool = False,
 ) -> str:
     """A few of ``column``'s values and what the app reads them as.
 
@@ -2596,7 +3007,9 @@ def mapping_value_preview(
         for source, value in zip(values, parsed):
             if pd.isna(value):
                 shown.append(f"{source} (not a number)")
-            elif factor != 1.0:
+            elif factor != 1.0 or (
+                show_time_input and field_key in _PREVIEW_TIME_FIELDS
+            ):
                 shown.append(f"{source} → {number(value * factor)}{unit}")
             else:
                 shown.append(f"{number(value)}{unit}")
@@ -3091,6 +3504,29 @@ def _rows_missing_identity(
     return blank, missing & ~blank
 
 
+def input_row_counts(source: pd.DataFrame, schema: dict, normalized_rows: int) -> dict:
+    """Rows supplied and rows usable before stimulus words expand across readings."""
+    counts = {
+        "read": len(source),
+        "eligible": normalized_rows,
+        "blank": 0,
+        "missing_identity": 0,
+        "missing_id_columns": [],
+    }
+    if normalized_rows != len(source):
+        blank, unkeyed = _rows_missing_identity(source, schema)
+        counts.update(
+            blank=int(blank.sum()),
+            missing_identity=int(unkeyed.sum()),
+            missing_id_columns=[
+                c
+                for c in _identity_columns(source, schema)
+                if _id_missing(source.loc[unkeyed, c]).any()
+            ],
+        )
+    return counts
+
+
 def _drop_rows_missing_identity(source: pd.DataFrame, schema: dict) -> pd.DataFrame:
     """``source`` without the rows :func:`_rows_missing_identity` flags."""
     blank, unkeyed = _rows_missing_identity(source, schema)
@@ -3280,9 +3716,8 @@ def _read_kwargs(
     :func:`_read_by_extension` — `usecols=[]` would parse nothing at all, and
     the two must not disagree about what an empty plan means.
 
-    ``file_columns`` is the file's header, needed only by a whole-file read
-    (no ``columns``) with verbatim columns: :func:`_verbatim_na_kwargs` names
-    every column being read.
+    Whole-file reads use ``file_columns`` to distinguish identity and verbatim
+    columns from fields that use pandas' ordinary missing-value spellings.
     """
     if plan is None:
         return {}
@@ -3292,7 +3727,7 @@ def _read_kwargs(
     text = {column: str for column in (*plan.identity, *plan.verbatim)}
     if text:
         kwargs["dtype"] = text
-    if plan.verbatim:
+    if plan.verbatim or plan.identity:
         kwargs.update(_verbatim_na_kwargs(plan, plan.columns or file_columns or ()))
     elif plan.na_values:
         kwargs["na_values"] = plan.na_values
@@ -3312,6 +3747,11 @@ def _verbatim_na_kwargs(plan: ReadPlan, columns: Iterable[str]) -> dict:
         for column in columns
         if column not in plan.verbatim
     }
+    # Blank IDs are missing. Any nonempty spelling (including "NA" and
+    # "NULL") identifies a reader, trial, text or screen literally.
+    for column in plan.identity:
+        if column not in plan.verbatim:
+            na_values[column] = [""]
     return {"keep_default_na": False, "na_values": na_values}
 
 
@@ -3344,21 +3784,15 @@ PANDAS_DEFAULT_NA = frozenset(
 
 
 def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
-    """``read_excel`` keywords that keep a plan's verbatim columns literal.
-
-    A workbook is read whole and pruned after, so the NA spellings name every
-    column of its header (:func:`_verbatim_na_kwargs`), which is read first.
-    Excel is never the large-file format, so the second pass is cheap.
-    """
+    """Read the header from the open workbook to set each column's NA rules."""
     if plan is None:
         return {}
     kwargs: dict = {}
     if plan.identity:
         kwargs["dtype"] = {column: str for column in plan.identity}
-    if not plan.verbatim:
+    if not (plan.verbatim or plan.identity):
         return kwargs
-    header = list(pd.read_excel(buf, nrows=0).columns)
-    _rewind(buf)
+    header = list(pd.read_excel(buf, sheet_name=0, nrows=0).columns)
     return {**kwargs, **_verbatim_na_kwargs(plan, header)}
 
 
@@ -3504,11 +3938,8 @@ def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[st
     """A table's column names, without parsing its rows.
 
     The header pass that :func:`plan_table_read` plans from. Delimited text
-    reads zero rows and columnar formats read their schema; anything else
-    (Excel, a zip of several members) falls back to reading the table, because
-    there is no cheaper way to learn its columns and those formats are not the
-    ones that hurt. ``kind`` (``"words"`` / ``"fixations"``) picks a mixed
-    zip's members the way :func:`zip_member_split` does.
+    and workbooks read zero rows. Parquet and Feather V2 expose their schema
+    directly. ``kind`` picks a mixed zip's members as :func:`zip_member_split` does.
     """
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     _rewind(file_like_or_path)
@@ -3520,10 +3951,20 @@ def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[st
 
             return list(pq.read_schema(file_like_or_path).names)
         if name.endswith(".feather"):
-            from pyarrow import feather
+            import pyarrow as pa
 
-            return list(feather.read_table(file_like_or_path, columns=[]).schema.names)
-        if name.endswith((".tsv", ".tab", ".csv", ".txt")):
+            try:
+                return list(pa.ipc.open_file(file_like_or_path).schema.names)
+            except pa.ArrowInvalid:
+                # Feather V1 predates Arrow IPC and its zero-column projection
+                # returns no names. Let the regular reader validate it.
+                from pyarrow import feather
+
+                _rewind(file_like_or_path)
+                return list(feather.read_table(file_like_or_path).schema.names)
+        if name.endswith((".xlsx", ".xls")) and _is_workbook(file_like_or_path, name):
+            return list(pd.read_excel(file_like_or_path, nrows=0).columns)
+        if name.endswith((".tsv", ".tab", ".csv", ".txt", ".xls", ".xlsx")):
             return _header(file_like_or_path, _sniff_delimiter(file_like_or_path, name))
         # Rewound afterwards too (the `finally`): the caller reads the table
         # again, and a buffer left at its end reads as an empty file.
@@ -3875,7 +4316,25 @@ def _tag_and_concat(
         for df, label in zip(frames, labels):
             if source_column not in df.columns:
                 df[source_column] = label
+    # Store per-file record counts once, without adding a column to every raw
+    # words/sample table. Nested archives already know their member names.
+    spans = []
+    for frame, label, name in zip(frames, labels, names or labels):
+        nested = frame.attrs.get(fixation_source.FILE_SPANS)
+        if nested:
+            spans.extend(nested)
+        else:
+            actual = Path(str(name).replace("\\", "/")).name
+            stem = Path(actual).stem
+            prefix, _, tail = str(label).rpartition(stem)
+            filename = prefix + (
+                stem + tail if tail.startswith(Path(actual).suffix) else actual + tail
+            )
+            spans.append(
+                (filename if not filename.startswith("<") else None, len(frame))
+            )
     if len(frames) == 1:
+        frames[0].attrs[fixation_source.FILE_SPANS] = tuple(spans)
         return frames[0]
     # Each part's read notes, named by the file they are about (``names``,
     # where ``labels`` are the shortened source labels).
@@ -3885,6 +4344,7 @@ def _tag_and_concat(
         for note in pop_read_notes(df)
     ]
     out = pd.concat(frames, ignore_index=True, sort=False)
+    out.attrs[fixation_source.FILE_SPANS] = tuple(spans)
     if notes:
         out.attrs[READ_NOTES_ATTR] = notes
     return out
@@ -4041,6 +4501,11 @@ class _BudgetedZipMember(io.RawIOBase):
         self._limit_label = limit_label
         self.consumed = 0
 
+    @property
+    def name(self) -> str:
+        """The member's name, which a message about its rows gives."""
+        return self._name
+
     def readable(self) -> bool:
         return True
 
@@ -4056,6 +4521,17 @@ class _BudgetedZipMember(io.RawIOBase):
                 "so it was not read. Re-create the zip and upload it again."
             )
         return read
+
+
+@contextlib.contextmanager
+def _open_member(
+    zf: zipfile.ZipFile, info: zipfile.ZipInfo, budget: int, limit_label: str
+):
+    """A fresh read of one zip member, under its byte budget."""
+    with zf.open(info) as inner:
+        yield io.BufferedReader(
+            _BudgetedZipMember(inner, budget, info.filename, limit_label=limit_label)
+        )
 
 
 #: What each table kind's members are called in the mixed-zip message.
@@ -4324,6 +4800,11 @@ def _read_zipped_table(
                                 member_plan,
                                 sep=sep,
                                 file_columns=header,
+                                # A member stream cannot rewind: a record
+                                # scan and a second read each open it again.
+                                reopen=functools.partial(
+                                    _open_member, zf, info, member_budget, limit_label
+                                ),
                             )
                         )
                     except UnicodeDecodeError:
@@ -4690,9 +5171,8 @@ def resolve_stimulus_image_paths(
     return match.apply(frame)
 
 
-@st.cache_data
-def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load bundled demo IA and fixation tables (prefer Parquet).
+def read_sample_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Read bundled demo IA and fixation tables (prefer Parquet).
 
     The tables ship per-trial stimulus-image references (``image_path`` +
     ``image_x``/``image_y`` origin) pointing at the rendered paragraph PNGs
@@ -4702,18 +5182,66 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     words = _resolve_sample_image_paths(_load_bundled("ia"))
     fixations = _resolve_sample_image_paths(_load_bundled("fixations"))
     if words.empty or fixations.empty:
-        st.error(
-            "The bundled demo is missing from this installation. Reinstall "
-            "Scanpath Studio, then reload the page."
+        raise FileNotFoundError(
+            "The bundled demo is missing from this installation. Reinstall Scanpath Studio."
         )
-        return pd.DataFrame(), pd.DataFrame()
     return words, fixations
 
 
 @st.cache_data
-def load_sample_raw_gaze() -> pd.DataFrame:
-    """Load bundled raw gaze sample (millisecond-level x,y)."""
+def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The bundled demo for app sessions, with its missing-installation message."""
+    try:
+        return read_sample_tables()
+    except FileNotFoundError as exc:
+        st.error(str(exc))
+        return pd.DataFrame(), pd.DataFrame()
+
+
+def read_sample_raw_gaze() -> pd.DataFrame:
+    """Read the demo's 1 kHz EyeLink positions, timestamps, pupil area and eye."""
     return _load_bundled("raw_gaze")
+
+
+def normalized_sample_raw_gaze() -> tuple[pd.DataFrame, dict | None, tuple[str, ...]]:
+    """The demo samples, mapping and original headers shared by both scanpaths.
+
+    The samples are read and normalized once per process: the demo is the same
+    file for everyone, and a copy per session would cost each visitor ~54 MB.
+    Each session gets its own shallow copy of that frame, which shares its
+    buffers, so a column assigned, a value set or ``attrs`` edited by one
+    session lands in its copy only (pandas copy-on-write). Every copy carries
+    the shared frame's fingerprint, so caches keyed on it are shared too.
+    """
+    shared, schema, columns, ident = _shared_sample_raw_gaze()
+    if shared.empty:
+        return pd.DataFrame(), None, columns
+
+    def own_copy() -> pd.DataFrame:
+        frame = shared.copy(deep=False)
+        assign_fingerprint(frame, ident)
+        return frame
+
+    # Kept for the session rather than made per call: the trial index
+    # `utils.extract_trial` reads is built once per frame object (~125 ms here).
+    frame = frame_cache("demo_raw_gaze", ident, own_copy)
+    return frame, dict(schema), columns
+
+
+@st.cache_resource(show_spinner=False)
+def _shared_sample_raw_gaze() -> tuple[
+    pd.DataFrame, dict | None, tuple[str, ...], tuple[str, str]
+]:
+    """The one normalized demo frame, private to `normalized_sample_raw_gaze`."""
+    # Drawn once per load, so no session hashes 400k rows to look it up.
+    ident = ("source", uuid.uuid4().hex)
+    sample = read_sample_raw_gaze()
+    if sample.empty:
+        return sample, None, (), ident
+    schema = propose_raw_gaze_schema(sample)
+    if validate_raw_gaze_schema(schema):
+        return pd.DataFrame(), None, tuple(sample.columns), ident
+    return normalize_raw_gaze(sample, schema), schema, tuple(sample.columns), ident
 
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
@@ -4727,17 +5255,17 @@ def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
 
 
 def normalize_raw_gaze(
-    raw_gaze: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
+    raw_gaze: pd.DataFrame,
+    schema: dict,
+    *,
+    keep_columns: set | None = None,
+    _renormalizing: bool = False,
 ) -> pd.DataFrame:
     """Normalize raw gaze data to canonical column names.
 
-    ``keep_columns`` carries user-chosen extra source columns through
-    verbatim, the same "Extra fields to keep" mechanism
-    :func:`normalize_words`/:func:`normalize_fixations` have — raw
-    gaze has no optional-fields *registry* of its own (no semantic field
-    here is common enough across exports to earn a canonical name the way
-    ``saccade_amplitude`` does for fixations), so this only ever carries
-    unclaimed columns, via :func:`_carry_extra_columns`.
+    Keep every identified sample, including tracking loss. Pupil measurements
+    retain their recorded units. ``keep_columns`` carries additional source
+    columns through verbatim, as it does for words and fixations.
     """
     # Samples with no participant or trial id belong to no trial (the rule
     # the other two tables follow).
@@ -4771,9 +5299,14 @@ def normalize_raw_gaze(
     # trial_id — a raw-gaze-only dataset still needs *a* text_id column for
     # the trial picker (utils.build_combo_options).
     if schema.get("text_id"):
-        df["text_id"] = raw_gaze[schema["text_id"]].astype(str)
+        df["text_id"] = trial_id_series(raw_gaze, schema["text_id"])
     else:
         df["text_id"] = df["trial_id"]
+    mapped = _text_id_mapped_flag(
+        raw_gaze, schema, renormalizing=_renormalizing, paragraph_fallback=False
+    )
+    if mapped is not None:
+        df[TEXT_ID_MAPPED] = mapped
     df = _copy_screen_fields(df, raw_gaze, schema)
     if schema.get("text"):
         df["text"] = raw_gaze[schema["text"]].astype(str)
@@ -4786,6 +5319,11 @@ def normalize_raw_gaze(
         df["word_id"] = raw_gaze[schema["word_id"]]
     df["x"] = _to_number(raw_gaze[schema["x"]])
     df["y"] = _to_number(raw_gaze[schema["y"]])
+    if schema.get("eye"):
+        df["eye"] = raw_gaze[schema["eye"]]
+    for measurement in ("pupil_area", "pupil_diameter"):
+        if schema.get(measurement):
+            df[measurement] = _to_number(raw_gaze[schema[measurement]])
     skip = _schema_source_columns(schema)
     if schema.get("timestamp"):
         onset = schema["timestamp"]
@@ -4852,6 +5390,8 @@ AOI_TRIAL_ID = "_aoi_trial_id"
 #: trial-id fallback — written by `normalize_*` from the schema, so a mapped
 #: Text ID whose values happen to equal the trial ids still counts.
 TEXT_ID_MAPPED = "_text_id_mapped"
+# A mapped blank Word ID is an explicit unassigned fixation.
+FIX_WORD_ID_MAPPED = "_fix_word_id_mapped"
 #: On a fixation: its `timestamp_ms` was made up by `normalize_fixations`
 #: because the table mapped no onset — the reading order 0, 1, 2, …, kept so
 #: fixations still sort, but not a time. Anything that needs elapsed time
@@ -4873,22 +5413,64 @@ INTERNAL_COLUMNS = frozenset(
         BASE_TRIAL_ID,
         AOI_TRIAL_ID,
         TEXT_ID_MAPPED,
+        FIX_WORD_ID_MAPPED,
+        *fixation_source.PRIVATE_COLUMNS,
         TIMESTAMP_SYNTHESIZED,
         SCREEN_ORDER_DERIVED,
     }
 )
 
 
-def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
-    """Whether any of these fixations has a made-up ``timestamp_ms``.
+def synthesized_onset_mask(fixations: pd.DataFrame) -> pd.Series:
+    """Which onsets were supplied by normalization or cannot be read as time.
 
-    True when normalization had no onset column to read and numbered the
-    fixations instead (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
-    column — one built by hand, or stored by an older version — counts as
-    recorded."""
-    if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
-        return False
-    return bool(fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool).any())
+    A legacy frame without provenance may carry a 0,1,… counter instead of
+    timestamps. Recognize only that exact sequence, and only if a fixation
+    overlaps the next one on that apparent 1 ms clock. A single onset is valid.
+    """
+    if "timestamp_ms" not in fixations:
+        return pd.Series(True, index=fixations.index)
+    ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
+    missing = ~np.isfinite(ts)
+    if TIMESTAMP_SYNTHESIZED in fixations:
+        return missing | fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    if fixations.empty or "duration_ms" not in fixations:
+        return missing
+    # Normalization numbers the whole reading, including across screen changes.
+    groups = [fixations[key] for key in PARENT_KEY if key in fixations]
+    if not groups:
+        groups = [np.zeros(len(fixations), dtype=int)]
+    by_reading = ts.groupby(groups, sort=False, dropna=False)
+    rank = by_reading.rank(method="first") - 1
+    length = by_reading.transform("size")
+    ordinal = ts.eq(rank).groupby(groups, sort=False, dropna=False).transform("all")
+    durations = pd.to_numeric(fixations["duration_ms"], errors="coerce")
+    overlap = (
+        ((rank < length - 1) & (durations > 1))
+        .groupby(groups, sort=False, dropna=False)
+        .transform("any")
+    )
+    return missing | (ordinal & overlap)
+
+
+def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
+    """Whether any fixation in the reading lacks a measured onset."""
+    return fixations is not None and bool(synthesized_onset_mask(fixations).any())
+
+
+def with_onset_provenance(fixations: pd.DataFrame) -> pd.DataFrame:
+    """Resolve an older reading's clock before selecting screens or fixations."""
+    if (
+        fixations.empty
+        or TIMESTAMP_SYNTHESIZED in fixations
+        or "timestamp_ms" not in fixations
+    ):
+        return fixations
+    result = fixations.assign(
+        **{TIMESTAMP_SYNTHESIZED: synthesized_onset_mask(fixations)}
+    )
+    assign_derived(result, "fixation_onset_provenance", fixations)
+    return result
 
 
 #: Scratch column the stimulus broadcast merges through.
@@ -4910,15 +5492,30 @@ def drop_internal_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.drop(columns=present) if present else frame
 
 
-def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
+def shareable_frame(frame: pd.DataFrame, *, table: str | None = None) -> pd.DataFrame:
     """``frame`` as it leaves the app: no bookkeeping, no made-up clock.
 
     :func:`drop_internal_columns`, and also ``timestamp_ms`` when normalization
     numbered the fixations itself (:func:`timestamps_synthesized`): those
     numbers are a sort order, and a file that carried them under that name
     would read back as recorded milliseconds."""
-    if timestamps_synthesized(frame) and "timestamp_ms" in frame.columns:
-        frame = frame.drop(columns="timestamp_ms")
+    if (
+        "timestamp_ms" in frame
+        and not frame.empty
+        and table in (None, "fixations", "raw_gaze")
+    ):
+        if table == "raw_gaze":
+            # A sample every millisecond can be a real clock. Only fixations
+            # were ever given an ordinal in place of a timestamp.
+            synthesized = ~np.isfinite(
+                pd.to_numeric(frame["timestamp_ms"], errors="coerce")
+            )
+        else:
+            synthesized = synthesized_onset_mask(frame)
+        if synthesized.all() and table != "raw_gaze":
+            frame = frame.drop(columns="timestamp_ms")
+        elif synthesized.any():
+            frame = frame.assign(timestamp_ms=frame["timestamp_ms"].mask(synthesized))
     return drop_internal_columns(frame)
 
 
@@ -5553,8 +6150,13 @@ def match_text_word_ids(
             number[known] = merged["word_id"].to_numpy(dtype=float)
         fixations = fixations.copy()
         fixations["word_id"] = number
+        if not words_text:
+            # An incompatible text key cannot identify a numbered word.
+            # The source's blank keys still mean that no word was assigned.
+            fixations.loc[fixations[WORD_KEY].notna(), FIX_WORD_ID_MAPPED] = False
     elif words_text and fixations["word_id"].notna().any():
         fixations = fixations.copy()
+        fixations.loc[fixations["word_id"].notna(), FIX_WORD_ID_MAPPED] = False
         fixations["word_id"] = np.nan
         rewrites.append(WORD_IDS_SET_ASIDE)
     return fixations, tuple(rewrites)
@@ -5737,8 +6339,8 @@ def _key_frame(frame: pd.DataFrame, ids: pd.Series) -> pd.DataFrame:
 def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
     """Detect a 1-based fixation ``word_id`` against 0-based word boxes.
 
-    Some exports (the bundled OneStop demo among them) number the fixation
-    report's word column ``1..N`` while the Words table numbers its rows
+    Some exports number the fixation report's word column ``1..N``
+    while the Words table numbers its rows
     ``0..N-1``, so every fixation's pre-assigned ``word_id`` points at the *next*
     word. ``measures.assign_fixations_to_words`` keeps existing ids, so the
     computed reading measures then attach to the wrong words.
@@ -6693,7 +7295,10 @@ def _copy_screen_fields(
         if not column:
             continue
         values = source[column]
-        df[destination] = _to_number(values) if numeric else values
+        if schema_key == "screen_timestamp":
+            df[destination] = _as_ms(_to_number(values), column)
+        else:
+            df[destination] = _to_number(values) if numeric else values
     # This function rebuilds the frame from the mapping, so a `screen_index`
     # the public corpora stamp onto their frames would otherwise be dropped and
     # screen order re-derived from row order: AOI-file order on the words, each
@@ -6743,12 +7348,16 @@ def _text_id_values(
 
 
 def _text_id_mapped_flag(
-    source: pd.DataFrame, schema: dict, *, renormalizing: bool
+    source: pd.DataFrame,
+    schema: dict,
+    *,
+    renormalizing: bool,
+    paragraph_fallback: bool = True,
 ) -> bool | np.ndarray | None:
     """What ``normalize_*`` write to ``_text_id_mapped`` (``None``: nothing).
 
     A schema Text ID — auto-detected or picked — or a literal
-    ``unique_paragraph_id`` is mapped. On ✏️ Edit dataset the proposal maps
+    ``unique_paragraph_id`` fallback (Words and Fixations) is mapped. On ✏️ Edit dataset the proposal maps
     Text ID to the stored ``text_id`` column itself, which says nothing new: the
     stored frame's own flag is kept, and a frame stored without one gets none
     (so its values decide)."""
@@ -6757,7 +7366,9 @@ def _text_id_mapped_flag(
         if TEXT_ID_MAPPED in source.columns:
             return source[TEXT_ID_MAPPED].fillna(False).astype(bool).to_numpy()
         return None
-    return bool(text) or "unique_paragraph_id" in source.columns
+    return bool(text) or (
+        paragraph_fallback and "unique_paragraph_id" in source.columns
+    )
 
 
 def _drop_reserved_columns(
@@ -7013,14 +7624,23 @@ def normalize_fixations(
     schema: dict[str, str],
     *,
     keep_columns: set | None = None,
+    keep_source_cells: bool = False,
     _renormalizing: bool = False,
 ) -> pd.DataFrame:
     if not _renormalizing:
         fixations = _drop_reserved_columns(fixations, schema, table="Fixations")
     _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
-    fixations = _drop_rows_missing_identity(fixations, schema)
+    blank, unkeyed = _rows_missing_identity(fixations, schema)
+    keep = ~(blank | unkeyed)
+    source = fixations
+    if not keep.all():
+        fixations = source.loc[keep]
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
+    if keep_source_cells:
+        fixation_source.record_rows(
+            df, source, np.flatnonzero(keep), remap=_renormalizing
+        )
     if schema.get("participant"):
         # str or list (a composite participant id, joined like the trial id).
         df["participant_id"] = trial_id_series(fixations, schema["participant"])
@@ -7081,8 +7701,6 @@ def normalize_fixations(
 
     if SCREEN_ID in df.columns:
         part_keys = grouping_columns(df)
-        if SCREEN_TIMESTAMP not in df.columns:
-            df[SCREEN_TIMESTAMP] = df.groupby(part_keys, sort=False).cumcount()
         if SCREEN_FIXATION_ID not in df.columns:
             df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
@@ -7105,15 +7723,24 @@ def normalize_fixations(
             df,
             fixations,
             keep_columns,
-            _schema_source_columns(schema) | emitted | {WORD_KEY},
+            _schema_source_columns(schema)
+            | emitted
+            | {WORD_KEY}
+            | fixation_source.PRIVATE_COLUMNS,
         )
 
+    if keep_source_cells:
+        fixation_source.record_cells(df, fixations, schema, remap=_renormalizing)
     df = _preserve_composite_columns(df, fixations, schema["trial"])
-    synthesized = _synthesized_timestamps(fixations, schema, _renormalizing)
-    if synthesized is None:
-        df = df.drop(columns=[TIMESTAMP_SYNTHESIZED], errors="ignore")
+    word_source = schema.get("word_id")
+    if _renormalizing and word_source == "word_id" and FIX_WORD_ID_MAPPED in fixations:
+        df[FIX_WORD_ID_MAPPED] = (
+            fixations[FIX_WORD_ID_MAPPED].fillna(False).astype(bool)
+        )
     else:
-        df[TIMESTAMP_SYNTHESIZED] = synthesized
+        df[FIX_WORD_ID_MAPPED] = bool(word_source)
+    synthesized = _synthesized_timestamps(fixations, schema, _renormalizing)
+    df[TIMESTAMP_SYNTHESIZED] = False if synthesized is None else synthesized
 
     df["order_in_trial"] = (
         df.sort_values(["timestamp_ms", "duration_ms"])
@@ -7124,10 +7751,9 @@ def normalize_fixations(
     if SCREEN_ID in df.columns:
         df["order_in_screen"] = (
             df.sort_values([SCREEN_INDEX, SCREEN_TIMESTAMP, "duration_ms"])
-            .groupby(grouping_columns(df), sort=False)
-            .cumcount()
-            + 1
-        )
+            if SCREEN_TIMESTAMP in df
+            else df
+        ).groupby(grouping_columns(df), sort=False).cumcount() + 1
     return df
 
 
@@ -7238,20 +7864,20 @@ def _synthesized_timestamps(
 ) -> pd.Series | None:
     """The :data:`TIMESTAMP_SYNTHESIZED` flags for a normalized fixations frame.
 
-    Every row when no onset is mapped. A remap that keeps the stored
+    Every row when no onset is mapped, otherwise the missing or nonfinite cells.
+    A remap that keeps the stored
     ``timestamp_ms`` as the onset keeps the stored flags — those numbers are
     still the ones normalization made up. ``None`` when the timestamps are
     the data's own."""
     onset = schema.get("timestamp")
     if not onset:
         return pd.Series(True, index=fixations.index)
-    if (
-        renormalizing
-        and onset == "timestamp_ms"
-        and TIMESTAMP_SYNTHESIZED in fixations.columns
-    ):
-        return fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-    return None
+    missing = (
+        synthesized_onset_mask(fixations)
+        if renormalizing and onset == "timestamp_ms"
+        else ~np.isfinite(_to_number(fixations[onset]))
+    )
+    return missing if missing.any() else None
 
 
 def remap_normalized_frame(
@@ -7371,10 +7997,16 @@ def remap_normalized_frame(
         )
     elif kind == "fixations":
         result = normalize_fixations(
-            working, schema, keep_columns=keep, _renormalizing=True
+            working,
+            schema,
+            keep_columns=keep,
+            keep_source_cells=fixation_source.SOURCE_ROW in working,
+            _renormalizing=True,
         )
     elif kind == "raw_gaze":
-        result = normalize_raw_gaze(working, schema, keep_columns=keep)
+        result = normalize_raw_gaze(
+            working, schema, keep_columns=keep, _renormalizing=True
+        )
     else:
         raise ValueError(f"unknown frame kind: {kind!r}")
     if "unique_trial_id" not in result.columns and "trial_id" in result.columns:
@@ -7912,11 +8544,14 @@ def trial_pool(*frames: pd.DataFrame | None) -> pd.DataFrame:
 def text_ids(*frames: pd.DataFrame | None) -> set[str]:
     """The distinct text ids across every frame that carries one.
 
-    ``unique_text_id`` when any frame has it, else ``text_id`` — one id space,
-    never a union of the two. Counting the words table alone would say
-    **0 texts** for a fixations-only dataset whose fixations name twelve.
+    For identified readings, use the same recorded text as metadata joins.
+    Tables without reading identities use their unique text IDs when present.
     """
     present = [f for f in frames if f is not None and not f.empty]
+    if present and all(names_readings(f) for f in present):
+        from .metadata import recording_keys, text_keys
+
+        return text_keys(recording_keys(*present))
     column = (
         "unique_text_id"
         if any("unique_text_id" in f.columns for f in present)
@@ -7946,6 +8581,15 @@ def filter_frame_to_keys(frame: pd.DataFrame, keys: set) -> pd.DataFrame:
         [frame["participant_id"].astype(str), frame["trial_id"].astype(str)]
     )
     return frame[idx.isin(keys)]
+
+
+def dataset_part_catalog(
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """List the screens recorded in any of the dataset's three tables."""
+    return part_catalog(words, fixations, raw_gaze)
 
 
 def filter_to_keys(
@@ -8023,7 +8667,7 @@ def raw_gaze_in_pool(
         # Per raw-gaze table, not per filter change: `frame_cache` keeps one
         # entry per slot, so toggling a filter back rebuilds this — and the
         # samples' own keys are the one full pass worth not repeating.
-        present = _raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
+        present = raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
         pooled = trial_keys(words_pool) | trial_keys(fixations_pool)
         keep = {k for k in present if k in pooled or (keep_unknown and k not in known)}
         return raw_gaze if keep == present else filter_frame_to_keys(raw_gaze, keep)
@@ -8032,7 +8676,7 @@ def raw_gaze_in_pool(
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
-def _raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
+def raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
     """`trial_keys` of one (narrowed) raw-gaze table, cached on its fingerprint."""
     progress.report()
     return trial_keys(_raw_gaze)

@@ -811,6 +811,24 @@ class TestLatestRequestWins:
     when it finally finishes — its own caller still gets its value, but the shared
     store does not."""
 
+    def test_forgetting_a_slot_releases_an_inflight_build(self):
+        slot = "t_forgotten"
+        building = threading.Event()
+        release = threading.Event()
+
+        def build():
+            building.set()
+            release.wait()
+            return "old"
+
+        thread = _run_daemon(lambda: frame_cache(slot, None, build))
+        with _released_afterward(release):
+            _wait_or_fail(building, msg="the build never started")
+            data_module.forget_frame_cache(slot)
+        _join_or_fail(thread)
+
+        assert frame_cache(slot, None, lambda: "new") == "new"
+
     def test_a_slow_earlier_build_does_not_clobber_a_newer_one(self, monkeypatch):
         """K_A is slow and in flight; K_B is requested (a fresh, independent
         build — a different ident) and answered while A is still running;

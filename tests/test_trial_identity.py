@@ -222,7 +222,7 @@ def test_data_inspection_reports_the_verdict():
     wrong reads as an error box, and "we checked and it's fine" is the answer
     the user gets most of the time."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-    from tests.conftest import APP_SCRIPT, pin_data_view
+    from tests.conftest import APP_SCRIPT, open_dataset_editor
 
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)
@@ -230,8 +230,7 @@ def test_data_inspection_reports_the_verdict():
     # Computed on the unfiltered frames, before the view renders.
     assert at.session_state["_trial_identity_report"]["trials"] > 0
 
-    pin_data_view(at)
-    at.run(timeout=90)
+    open_dataset_editor(at, timeout=90)
     assert not at.exception, at.exception
     # A section of its own on the Data page, not a heading inside "What's in
     # this dataset": it carries a verdict, and the fix it names is an edit to
@@ -273,17 +272,6 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
 
         assert st.session_state[TRIAL_IDENTITY_CHECK_KEY] == "add"
         st.session_state.clear()
-
-    def test_saving_an_edited_mapping_asks_for_the_check(self):
-        """Source-level: `_apply_remap` needs a whole stored dataset and the
-        editor's pending schemas to run. What must not silently regress is that
-        saving still asks."""
-        import inspect
-
-        from scanpath_studio.tabs import _apply_remap
-
-        source = inspect.getsource(_apply_remap)
-        assert 'st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "edit"' in source
 
     def test_main_raises_the_modal_and_no_longer_writes_a_banner(self):
         import inspect

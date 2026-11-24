@@ -35,10 +35,9 @@ _PNG_1x1 = bytes.fromhex(
     "426082"
 )
 
-#: The one demo trial the bundled raw gaze covers, and a second reading of a
-#: different reader to compare it with.
-TRIAL = ("l37_1129", "l37_1129_2_2_2_Adv")
-OTHER = ("l7_1090", "l7_1090_2_2_2_Adv")
+#: Two recorded readings of the same paragraph.
+TRIAL = ("l37_273", "l37_273_2_2_2_Adv")
+OTHER = ("l7_183", "l7_183_2_2_2_Adv")
 
 #: Every figure option at a value that is *not* its default. The guard below
 #: asserts this covers `api.figure_options(kind)` for every kind, so adding an
@@ -74,7 +73,7 @@ NON_DEFAULT = {
     "marker_size_range": (5, 20),
     "marker_size_scale": "log",
     "marker_duration_range": (80.0, 900.0),
-    "duration_size_legend": False,
+    "duration_size_legend": True,
     "legend_layout": {
         "saccades": {
             "position": "right-outside",
@@ -300,6 +299,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             "marker_duration_range",
             (80.0, 900.0),
         ),
+        (["--duration-size-legend"], "duration_size_legend", True),
         (["--no-duration-size-legend"], "duration_size_legend", False),
         (["--no-color-legend"], "show_color_legend", False),
         (["--no-highlight-legend"], "show_highlight_legend", False),
@@ -403,23 +403,26 @@ def test_the_sample_raw_gaze_reaches_the_builder(monkeypatch):
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--sample-raw-gaze"])
     frame = seen["raw_gaze"]
-    assert set(frame["trial_id"]) == {TRIAL[1]}
+    assert {TRIAL[1], OTHER[1]} <= set(frame["trial_id"])
 
 
 def test_a_raw_gaze_file_reaches_the_builder(monkeypatch, tmp_path):
     path = tmp_path / "gaze.csv"
-    api.load_sample_raw_gaze(names="canonical").to_csv(path, index=False)
+    samples = api.load_sample_raw_gaze(names="canonical").head(100)
+    samples.to_csv(path, index=False)
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--raw-gaze", str(path)])
-    assert len(seen["raw_gaze"]) == len(api.load_sample_raw_gaze(names="canonical"))
+    assert len(seen["raw_gaze"]) == len(samples)
 
 
 def test_a_raw_gaze_mapping_names_the_columns(monkeypatch, tmp_path):
     """`--raw-gaze-schema` is `--fix-schema`'s twin: a table whose columns
     auto-detection can't read is mapped by hand."""
     path = tmp_path / "gaze.csv"
-    frame = api.load_sample_raw_gaze(names="canonical").rename(
-        columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"}
+    frame = (
+        api.load_sample_raw_gaze(names="canonical")
+        .head(100)
+        .rename(columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"})
     )
     frame.drop(columns=["unique_trial_id", "text_id"]).to_csv(path, index=False)
     with pytest.raises(SystemExit, match="--raw-gaze-schema"):
@@ -721,13 +724,129 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
             "Reader A",
             "--label-b",
             "Reader B",
-            "--fixation-opacity",
-            "0.5",
+            "--no-fixations",
         ],
     )
-    assert f"--compare-with {OTHER[0]}:{OTHER[1]}" in printed
+    assert f"--compare-participant {OTHER[0]}" in printed
+    assert f"--compare-trial {OTHER[1]}" in printed
     assert "--label-a 'Reader A'" in printed
+    assert "--no-fixations" in printed
+    assert [(t.name, t.mode) for t in first.data if t.showlegend] == [
+        ("Reader A", "lines"),
+        ("Reader B", "lines"),
+    ]
     assert first.to_json() == second.to_json()
+
+
+@pytest.mark.parametrize("replay", [False, True], ids=["compare", "co-animation"])
+def test_b_fixation_window_round_trips(monkeypatch, capsys, replay):
+    """B's window is a builder parameter, so the printed recipe names it, in
+    both languages."""
+    mode = ["--animate", "--anim-max-frames", "8"] if replay else []
+    flags = [*_COMPARE, *mode, "--compare-fix-index-range", "5:30"]
+    original, from_cli, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--compare-fix-index-range 5:30" in command
+    assert original.to_json() == from_cli.to_json()
+    (whole,) = _figures(monkeypatch, [[*_BASE[:-2], *_COMPARE, *mode, "-o", "a.html"]])
+    assert whole.to_json() != original.to_json()
+
+    _figures(
+        monkeypatch, [[*_BASE[:-2], *flags, "--print-code", "python", "-o", "a.html"]]
+    )
+    python = capsys.readouterr().out
+    assert "fix_index_range_b=(5, 30)" in python
+    namespace = {}
+    exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["fig"].to_json() == original.to_json()
+
+
+@pytest.mark.parametrize("replay", [False, True], ids=["compare", "co-animation"])
+def test_compact_code_keeps_the_drawn_styles_in_both_languages(
+    monkeypatch, capsys, replay
+):
+    flags = [
+        *_COMPARE,
+        "--fixation-index",
+        "--order-font-color",
+        "#654321",
+        "--marker-size-range",
+        "12",
+        "31",
+        "--saccade-width",
+        "8",
+        "--style-a",
+        "fix_color=#aa0000,saccade_width=3",
+        "--style-b",
+        "fix_color=#00aa00,marker_size_range=6:18,box_color=#ff8800",
+    ]
+    if replay:
+        flags += ["--animate", "--anim-max-frames", "8"]
+    original, from_cli, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--order-font-color" not in command and "--saccade-width" not in command
+    assert "fix_color=#aa0000" in command and "--marker-size-range" in command
+    assert ("box_color=#ff8800" in command) == (not replay)
+
+    _figures(
+        monkeypatch, [[*_BASE[:-2], *flags, "--print-code", "python", "-o", "a.html"]]
+    )
+    python = capsys.readouterr().out
+    assert "order_font_color=" not in python and "\n    saccade_width=" not in python
+    assert "'fix_color': '#00aa00'" in python
+    namespace = {}
+    exec(compile(python, "<compact snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["fig"].to_json() == from_cli.to_json() == original.to_json()
+
+
+def test_a_co_animation_keeps_the_single_style_when_a_filter_can_hide_all_of_b(
+    monkeypatch, capsys
+):
+    flags = [
+        *_COMPARE,
+        "--animate",
+        "--anim-max-frames",
+        "8",
+        "--fixation-index",
+        "--order-font-color",
+        "#654321",
+        "--compare-fixation-flag",
+        "short=hide,threshold_ms=99999",
+    ]
+    original, reproduced, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--order-font-color" in command
+    assert any(
+        t.mode == "text" and t.textfont.color == "#654321" for t in original.data
+    )
+    assert original.to_json() == reproduced.to_json()
+
+
+def test_a_words_only_first_screen_in_caller_frames_keeps_the_single_replay_style():
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = api.load_scanpath_data(
+        *make_multipart_synthetic_data(), names="canonical"
+    )
+    a, b = ("synthetic", "multipart_demo"), ("b", "multipart_demo")
+    words_b = words.assign(participant_id=b[0])
+    fix_b = fixations[fixations["screen_id"] == "question"].assign(participant_id=b[0])
+    options = {
+        "words_b": words_b,
+        "fixations_b": fix_b,
+        "show_order": True,
+        "order_font_color": "#654321",
+    }
+    compact = cs.figure_kwargs(
+        options, "animation", compare=cs.CompareTarget(participant=b[0], trial=b[1])
+    )
+    assert compact["order_font_color"] == "#654321"
+
+    original = api.animate_scanpath(words, fixations, *a, trial_b=b, **options)
+    reproduced = api.animate_scanpath(
+        words, fixations, *a, trial_b=b, words_b=words_b, fixations_b=fix_b, **compact
+    )
+    assert original.to_json() == reproduced.to_json()
+    assert any(
+        t.mode == "text" and t.textfont.color == "#654321" for t in reproduced.data
+    )
 
 
 def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):

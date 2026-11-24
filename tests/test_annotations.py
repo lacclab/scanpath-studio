@@ -41,6 +41,18 @@ def test_records_store_roundtrip():
     assert again == store
 
 
+def test_conflicting_old_and_current_composite_spellings_are_atomic():
+    current, legacy = r"a\_b_c", "a_b_c"
+    records = [
+        {"participant_id": "p", "trial_id": tid, "note": note}
+        for tid, note in [(current, "First"), (legacy, "Second")]
+    ]
+    store = {("p", "unrelated"): {"star": True, "tags": [], "note": "Existing"}}
+    with pytest.raises(annotations_mod.AnnotationsFileError, match="same reading"):
+        annotations_mod.merge_records(store, records, {("p", current)})
+    assert list(store) == [("p", "unrelated")]
+
+
 def test_empty_entries_are_pruned():
     records = [
         {
@@ -90,12 +102,17 @@ def test_serialize_deserialize_roundtrip():
                 "trial_id": "t",
                 "star": True,
                 "tags": ["x"],
-                "note": "n",
+                "note": "Relevé α",
             }
         ]
     )
     text = serialize(store)
-    assert deserialize(text) == store
+    assert (
+        deserialize(text)
+        == deserialize("\ufeff" + text)
+        == deserialize(text.encode("utf-8-sig"))
+        == store
+    )
 
 
 def test_deserialize_accepts_bare_list():
@@ -334,7 +351,9 @@ class TestPerDatasetStore:
             )
             == []
         )
-        session[COMPARE_SOURCE_STATE_KEY] = "This dataset"
+        from scanpath_studio.session_keys import SAME_DATASET
+
+        session[COMPARE_SOURCE_STATE_KEY] = SAME_DATASET
         assert "A tag" in annotations_mod.known_tags("cmp")
 
     def test_compare_constants_match_their_owners(self):
@@ -678,6 +697,66 @@ def _bad_import_app():
     ann._import_dataset_annotations("_upload", frozenset({("p", "t")}), "test")
 
 
+def _review_import_app():
+    import io
+
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    trials = frozenset({("01", "trial"), ("01", "new")})
+    ann.activate_dataset(st.session_state, "uploaded-id")
+    if "_initialized" not in st.session_state:
+        ann.set_entry(
+            "01", "trial", screen_id="page1", star=False, tags=[], note="Original"
+        )
+        st.session_state["uploaded"] = io.BytesIO(st.session_state["_incoming"])
+        ann._import_dataset_annotations("uploaded", trials, "Pilot")
+        st.session_state["_initialized"] = True
+    if st.button("Choose another file"):
+        st.session_state["uploaded"] = io.BytesIO(st.session_state["_incoming"])
+        ann._import_dataset_annotations("uploaded", trials, "Pilot")
+    ann._review_import("Pilot", trials)
+    ann.render_disputed_note(st, "01", "trial", "page1")
+
+
+def test_review_conflicting_import_preserves_local_note_until_explicit_acceptance():
+    from streamlit.testing.v1 import AppTest
+
+    key = ("01", "trial", "page1")
+    incoming = {
+        key: dict(star=True, tags=["review"], note="Incoming"),
+        ("01", "new"): dict(star=True, tags=[], note="Added"),
+    }
+    at = AppTest.from_function(_review_import_app)
+    at.session_state["_incoming"] = serialize(
+        incoming, dataset="Coauthor's pilot"
+    ).encode()
+    at.run()
+    assert not at.exception
+    assert (
+        at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY][key]["note"]
+        == "Original"
+    )
+    next(b for b in at.button if b.label == "Open disputed reading").click().run()
+    assert at.table[0].value["note"].tolist() == ["Original", "Incoming"]
+    at.checkbox[0].check().run()
+    incoming[key]["note"] = "Second file"
+    at.session_state["_incoming"] = serialize(incoming).encode()
+    next(b for b in at.button if b.label == "Choose another file").click().run()
+    assert not at.checkbox[0].value
+    next(b for b in at.button if b.label == "Apply import").click().run()
+    assert not at.exception
+    assert (
+        at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY][key]["note"]
+        == "Original"
+    )
+    assert (
+        at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY][("01", "new")]["note"]
+        == "Added"
+    )
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -751,6 +830,51 @@ class TestEditorKeysAreTheStoreKeys:
         slug = annotations_mod.widget_slug
         assert slug("a__b", "c") != slug("a", "b__c")
         assert slug("p", "t") != slug("p", "t", "parent")
+
+
+def _two_readings_app():
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    ann.activate_dataset(st.session_state, "Pilot")
+    pick = st.selectbox("Reading", ["one", "two"])
+    ann.render_trial_annotations("P1", "T1" if pick == "one" else "T2", bare=True)
+
+
+class TestTheEditReceipt:
+    """ "Updated in this session" confirms an edit in the editor of the reading
+    it was made on, and goes once another reading is open."""
+
+    @staticmethod
+    def _receipts(at) -> list[str]:
+        return [
+            str(el.proto.body)
+            for el in at.get("html")
+            if "Updated in this session" in str(el.proto.body)
+        ]
+
+    def test_it_is_said_for_its_own_reading_only(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_two_readings_app).run()
+        assert self._receipts(at) == []
+        at.checkbox[0].check().run()
+        assert not at.exception, at.exception
+        (receipt,) = self._receipts(at)
+        assert "P1 / T1 (whole trial)" in receipt
+
+        at.selectbox[0].set_value("two").run()
+        assert self._receipts(at) == []
+        at.selectbox[0].set_value("one").run()
+        assert self._receipts(at) == [], "the receipt was for the earlier visit"
+
+    def test_a_dataset_switch_drops_it(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[annotations_mod._RECEIPT_KEY] = ("A", ("P1", "T1", None), "done")
+        annotations_mod.activate_dataset(session, "B")
+        assert annotations_mod._RECEIPT_KEY not in session
 
 
 class TestTrialFiltersAreTrialLevel:

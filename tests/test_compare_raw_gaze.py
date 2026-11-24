@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pandas as pd
+import numpy as np
 import pytest
 
 import scanpath_studio.api as sps
@@ -10,9 +10,9 @@ from scanpath_studio import cli
 from scanpath_studio.constants import compare_palette_color
 from scanpath_studio.tabs import _raw_gaze_missing_note
 
-PID = "l37_1129"
-A = (PID, "l37_1129_2_2_2_Adv")  # the trial the demo's samples belong to
-B = (PID, "l37_1129_2_1_1_Ele")
+PID = "l37_273"
+A = (PID, "l37_273_2_2_2_Adv")
+B = (PID, "l37_273_2_1_1_Ele")
 
 
 @pytest.fixture(scope="module")
@@ -21,27 +21,20 @@ def demo():
     return words, fixations, sps.load_sample_raw_gaze(names="canonical")
 
 
-@pytest.fixture(scope="module")
-def both_samples(demo):
-    """The demo's samples for A, plus a shifted copy standing in for B's."""
-    raw = demo[2]
-    return pd.concat([raw, raw.assign(trial_id=B[1], x=raw["x"] + 5)])
-
-
 def _raw_traces(fig):
     return [t for t in fig.data if t.name and t.name.endswith("raw gaze")]
 
 
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
-def test_each_reading_draws_its_own_samples_in_its_colour(demo, both_samples, layout):
-    words, fixations, _ = demo
-    fig = sps.compare_scanpaths(
-        words, fixations, A, B, raw_gaze=both_samples, layout=layout
-    )
+def test_each_reading_draws_its_own_samples_in_its_colour(demo, layout):
+    words, fixations, raw = demo
+    fig = sps.compare_scanpaths(words, fixations, A, B, raw_gaze=raw, layout=layout)
     traces = _raw_traces(fig)
     assert len(traces) == 2
-    a_samples = both_samples[both_samples["trial_id"] == A[1]]
-    assert list(traces[0].x) == list(a_samples["x"])
+    for trace, reading in zip(traces, (A, B), strict=True):
+        samples = raw.loc[raw["trial_id"] == reading[1]]
+        np.testing.assert_array_equal(trace.x, samples["x"].to_numpy())
+        np.testing.assert_array_equal(trace.y, samples["y"].to_numpy())
     # Each in its scanpath's own colour — the A/B cue — not one time ramp.
     assert [t.marker.color for t in traces] == [
         compare_palette_color(0),
@@ -51,15 +44,34 @@ def test_each_reading_draws_its_own_samples_in_its_colour(demo, both_samples, la
         assert [t.xaxis for t in traces] == ["x", "x2"]
 
 
-def test_samples_sit_under_both_scanpaths_in_an_overlay(demo, both_samples):
-    words, fixations, _ = demo
-    fig = sps.compare_scanpaths(words, fixations, A, B, raw_gaze=both_samples)
+def test_samples_sit_under_both_scanpaths_in_an_overlay(demo):
+    words, fixations, raw = demo
+    fig = sps.compare_scanpaths(words, fixations, A, B, raw_gaze=raw)
     names = [t.name or "" for t in fig.data]
     raw_at = [i for i, n in enumerate(names) if n.endswith("raw gaze")]
     first_scanpath = min(
         i for i, t in enumerate(fig.data) if t.legendgroup and i not in raw_at
     )
     assert max(raw_at) < first_scanpath
+
+
+def test_comparison_never_shares_unscreened_samples_between_pages():
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fix = make_multipart_synthetic_data()
+    reading = tuple(fix[["participant_id", "trial_id"]].iloc[0])
+    raw = fix[["participant_id", "trial_id", "x", "y", "timestamp_ms"]]
+    fig = sps.compare_scanpaths(
+        words,
+        fix,
+        reading,
+        reading,
+        screen="intro",
+        screen_b="question",
+        raw_gaze=raw,
+        layout="side_by_side",
+    )
+    assert not _raw_traces(fig)
 
 
 def test_the_size_and_opacity_settings_apply(demo):
@@ -73,15 +85,17 @@ def test_the_size_and_opacity_settings_apply(demo):
         raw_gaze_marker_size=7.0,
         raw_gaze_opacity=0.3,
     )
-    (trace,) = _raw_traces(fig)
-    assert trace.marker.size == 7.0
-    assert trace.marker.opacity == 0.3
+    traces = _raw_traces(fig)
+    assert len(traces) == 2
+    for trace in traces:
+        assert trace.marker.size == 7.0
+        assert trace.marker.opacity == 0.3
 
 
-def test_the_layer_can_be_switched_off(demo, both_samples):
-    words, fixations, _ = demo
+def test_the_layer_can_be_switched_off(demo):
+    words, fixations, raw = demo
     fig = sps.compare_scanpaths(
-        words, fixations, A, B, raw_gaze=both_samples, show_raw_gaze=False
+        words, fixations, A, B, raw_gaze=raw, show_raw_gaze=False
     )
     assert not _raw_traces(fig)
 
@@ -90,7 +104,8 @@ def test_a_trial_compared_with_itself_draws_its_samples_twice(demo):
     words, fixations, raw = demo
     fig = sps.compare_scanpaths(words, fixations, A, A, raw_gaze=raw)
     traces = _raw_traces(fig)
-    assert [len(t.x) for t in traces] == [len(raw), len(raw)]
+    count = (raw["trial_id"] == A[1]).sum()
+    assert [len(t.x) for t in traces] == [count, count]
 
 
 def test_a_second_dataset_takes_its_own_samples(demo):
@@ -186,6 +201,7 @@ def test_compare_raw_gaze_needs_compare_with(tmp_path):
 def test_the_rail_peeks_at_bs_dataset_for_samples():
     """The rail is drawn before B loads, so whether B's dataset has
     raw gaze is read without loading it."""
+    import pandas as pd
     import streamlit as st
 
     from scanpath_studio.compare_source import THIS_DATASET, source_has_raw_gaze

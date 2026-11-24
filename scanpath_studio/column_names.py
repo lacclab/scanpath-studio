@@ -21,6 +21,31 @@ from dataclasses import dataclass, field
 
 from .constants import SAMPLE_INDEX, WORD_KEY
 
+
+def split_field_list(value: str) -> list[str]:
+    """Column names in a comma-separated CLI argument or share link."""
+    return [name.strip() for name in value.split(",") if name.strip()]
+
+
+def json_field_list(value: str) -> list[str]:
+    """An ordered JSON array of exact column names, including an empty selection."""
+    fields = json.loads(value)
+    if not isinstance(fields, list) or not all(
+        isinstance(name, str) for name in fields
+    ):
+        raise ValueError("Expected a JSON array of column names.")
+    return fields
+
+
+def encode_field_list(fields: Iterable[str]) -> tuple[str, bool]:
+    """The shortest lossless CLI or URL form and whether it uses JSON."""
+    names = list(fields)
+    joined = ",".join(names)
+    if joined and split_field_list(joined) == names:
+        return joined, False
+    return json.dumps(names, ensure_ascii=False, separators=(",", ":")), True
+
+
 #: How a canonical column came to be.
 MAPPED = "mapped"  # read from one source column, unchanged
 COMPOSITE = "composite"  # several source columns joined (a composite id)
@@ -620,11 +645,12 @@ def table_figure_labels(
     out = across_tables(drawn).figure_labels(
         [column for cols in columns.values() for column in cols]
     )
-    words = maps.get("words")
-    if words is not None and "words" in columns:
-        for column, label in words.figure_labels(columns["words"]).items():
+    for table in ("words", "raw_gaze"):
+        if table not in drawn:
+            continue
+        for column, label in drawn[table].figure_labels(columns[table]).items():
             if out.get(column) != label:
-                out[f"words:{column}"] = label
+                out[f"{table}:{column}"] = label
     return out
 
 
@@ -791,7 +817,7 @@ def from_schema(
         )
         _registry(out, data.FIX_OPTIONAL_FIELDS, present, keep)
     else:  # raw gaze
-        for key in ("x", "y", "text", "word_id"):
+        for key in ("x", "y", "text", "word_id", "eye", "pupil_area", "pupil_diameter"):
             if schema.get(key):
                 out[key] = SourceName((str(schema[key]),))
         if schema.get("timestamp"):

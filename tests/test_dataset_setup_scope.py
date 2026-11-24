@@ -181,8 +181,8 @@ class TestAddingADataset:
         added = _add(session, "Mine", _ESTIMATED)
         _open(added)
         session["global_canvas_width"] = 2200
-        renamed = wizard.rename_dataset(added, "Theirs")
-        _open(renamed)
+        assert wizard.rename_dataset(added, "Theirs") == "Theirs"
+        _open(added)
         assert session["global_canvas_width"] == 2200
         _open(DEMO_CHOICE)
         assert _figure(session) == (2560, 1440, True)

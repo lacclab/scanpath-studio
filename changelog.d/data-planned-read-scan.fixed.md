@@ -1,0 +1,1 @@
+Large CSV and TSV tables load faster again: a planned read no longer checks every line against the header before reading, only a table that turns out to have a row with a field too many, and that check keeps the loading card live and Cancel working.

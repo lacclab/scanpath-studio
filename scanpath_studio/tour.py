@@ -1,60 +1,4 @@
-"""First-visit welcome tour.
-
-Two interchangeable styles, both introducing the app's main surfaces (data
-sources, filters, viz controls, tabs, annotations) the first time a session
-opens the app, replayable any time from ❓ Help → Tutorials:
-
-- ``"spotlight"`` (default): a floating card that walks through the *actual*
-  UI — each step scrolls the target section into view and pulses an outline
-  around it. Rendered by ``render_spotlight_tour()`` early in ``main()``.
-- ``"dialog"``: a self-contained multi-step ``st.dialog`` modal.
-
-Switch styles with the ``TOUR_STYLE`` constant below.
-
-Mechanics worth knowing before editing:
-
-- Both styles run as *fragments*: Back/Next clicks rerun only the tour body,
-  so navigation is instant instead of waiting for a full-app rerun (which
-  re-renders the heavy plot embeds, ~10 s). The spotlight's Done / ✕ just
-  clear ``tour_mode`` — the fragment then renders nothing and the card +
-  highlight CSS disappear with it, again with no full rerun. The dialog's
-  Skip/Done close the modal client-side (``_close_dialog_clientside``).
-- The spotlight card streams to the browser *before* the heavy first-load
-  work, but its Done / ✕ are ordinary Streamlit buttons — a click only
-  schedules a rerun, which can't run until that ~10 s load finishes, so the
-  card + dimming backdrop would linger the whole time. A same-origin listener
-  (``_dismiss_listener_script``) hides them instantly on click; the button's
-  native click still clears ``tour_mode`` once Streamlit catches up.
-- Spotlight targets are ``.st-key-tour_grp_*`` classes from keyed wrapper
-  containers around the page sections (app.py / tabs.py / controls.py) plus
-  Streamlit's stable ``data-testid`` for the nav (``menu.NAV_SELECTOR``). Keep
-  ``_SPOTLIGHT_STEPS`` (Full) and ``_SIMPLE_SPOTLIGHT_STEPS`` (only what
-  Essentials draws) in sync with them; ``_spotlight_steps`` picks by mode.
-- Every spotlight step points at the Scanpath view, so the tour runs only
-  there: started on another view it switches to Scanpath first, and left for
-  another view it folds to its tab (``_keep_tour_on_scanpath``).
-- ``tour_seen`` is set **before** the tour is shown, not when it's finished.
-  For the dialog style, setting it on Done only would make an X-dismissal
-  re-open the modal on the very next widget interaction (any full rerun
-  re-calls ``maybe_show_welcome_tour``), making the X appear broken.
-- The tour is suppressed for embeds (``?embed=true``) and deep links
-  (``?source=…&participant=…``): those sessions arrive mid-workflow from an
-  external tool and shouldn't be greeted by a tutorial.
-- **"Don't show this again"** persists in a first-party *cookie*, not
-  session state — there are no user accounts, and session state dies with the
-  tab. A cookie is the one browser-side store Python can also *read*
-  (``st.context.cookies``); ``localStorage`` would need a bidirectional custom
-  component to get the value back to the server. The checkbox writes it via a
-  same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
-  Replaying the tour ignores the opt-out entirely, so it is never lost.
-- **The FAQ** is another ❓ Help entry: a short
-  ``st.dialog`` of recurring questions (``_faq_dialog``), deliberately kept to a
-  handful of answers with the complete version on the docs site
-  (``docs/faq.md``). It is armed exactly like the tour — the ❓ Help nav entry
-  (``menu._arm_help_action``) calls ``_arm_faq``, which sets a request flag that
-  ``maybe_show_faq`` serves early in ``main()``, so the modal never waits out the
-  rest of the rerun (~10 s of plot embeds) before appearing.
-"""
+"""In-app help for replaying a reading, following a task and setting up a dataset."""
 
 from __future__ import annotations
 
@@ -64,42 +8,46 @@ from typing import TYPE_CHECKING
 import streamlit as st
 
 from scanpath_studio import ui_mode
+from scanpath_studio.build_info import build_info
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
-from scanpath_studio.menu import NAV_SELECTOR, switch_to_view
-from scanpath_studio.session_keys import UI_MODE
+from scanpath_studio.session_keys import (
+    CORPUS_GROUP_BY,
+    CORPUS_MEASURE,
+    CORPUS_SUBTAB,
+    SINGLE_ANIMATE,
+    SINGLE_COMPARE_TOGGLE,
+    SINGLE_SCREEN_ID,
+    SINGLE_TRIAL_ID,
+    UI_MODE,
+)
 
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
-    CITATION,
+    DATA_CURRENT,
+    DATA_INSPECTION_KEY,
+    DATA_LIBRARY,
+    DATA_WORKSPACE_KEY,
+    DATA_WORKSPACE_REQUEST,
+    DATASET_EDITOR_OPEN_KEY,
+    DEMO_CHOICE,
+    GUIDE_RETURN_KEY,
     ICONS,
-    STREAMLIT_PRIVACY_URL,
     SUBTAB_ANNOTATIONS,
-    SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
     SUBTAB_SHARE,
-    drift_correction_enabled,
-    md_literal,
     preprocessing_enabled,
-    similarity_enabled,
     spoken,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
 
-# Name of the first-party cookie holding the "don't show the welcome tour
-# again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
-# data, just a UI preference.
+# Reuse the welcome preference so a browser that previously dismissed it stays quiet.
 TOUR_OPTOUT_COOKIE = "sps_tour_optout"
 _TOUR_OPTOUT_MAX_AGE = 365 * 24 * 60 * 60
-
-# First-entry tutorial style: "spotlight" (floating card pointing at the real
-# UI) or "dialog" (self-contained modal walkthrough). Both stay available in
-# code; this only picks which one auto-opens / the replay button launches.
-TOUR_STYLE = "spotlight"
 
 # The trial filters live behind one funnel, and a *closed* Streamlit popover
 # renders no body — so `tour_grp_narrow_by` is absent from the page until the
@@ -125,291 +73,191 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
-    #: The Corpus Analysis subtabs are lazy (only the open one renders), so a
-    #: step aimed at a control inside one has to open it, as ``subtab``
-    #: does for the Scanpath view. A label from ``tabs.CORPUS_SUBTABS``.
+    #: The published Corpus section, plus the summary unit when the step
+    #: targets Texts or Participants in Overview.
     corpus_subtab: str | None = None
+    corpus_group_by: str | None = None
     #: The step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
     dataset_editor: bool = False
+    data_section: str = DATA_CURRENT
     #: The step's target is built inside a popover, so it is not in the
     #: page until that popover's trigger is clicked. The selector of the trigger;
     #: the spotlight opens it before it looks for the target (`_popover_script`).
     popover: str = ""
-    optional: bool = False
-    #: A step about a feature this build may not show. ``"preprocessing"``
-    #: is the only value so far; a step whose gate is closed is dropped from the
-    #: tutorial entirely (`steps_of`), so it never spotlights a surface that is
-    #: not there or counts toward "step 3 of 7".
     gate: str | None = None
 
 
 @dataclass(frozen=True)
 class TutorialDefinition:
-    """Registry entry shown by the Help chooser."""
+    """The same instructions are available to read or follow in the app."""
 
     id: str
     title: str
-    outcome: str
-    estimated_time: str
-    prerequisite: str
-    availability: str
-    completion_test: str
     docs_url: str
     steps: tuple[TutorialStep, ...]
+    requires_full: bool = False
 
 
-# Each tutorial's "Read this in the docs" button opens the docs page that
-# covers the same task, not a copy of these steps.
-DOCS_URL = CITATION["docs_url"]
+DOCS_URL = build_info().docs_url
 DOCS_TUTORIALS_URL = f"{DOCS_URL}tutorials/"
 
-# NLD similarity scoring is hidden unless SCANPATH_EXPERIMENTAL=1, so the
-# comparison tutorial must not promise a ranking this build does not show —
-# the same honesty rule `faq_items()` applies to the drift-correction answers.
-# The flag is an environment variable, fixed for the life of the process, so
-# resolving it once at import is equivalent to checking it per render.
-_SIMILARITY_SENTENCE = (
-    " Similarity scores (NLD) rank the closest trials for you."
-    if similarity_enabled()
-    else ""
-)
 
-TUTORIALS: tuple[TutorialDefinition, ...] = (
+TUTORIALS = (
     TutorialDefinition(
-        id="load_inspect",
-        title="Load and verify a dataset",
-        outcome="Check the tables and column mapping.",
-        estimated_time="3 min",
-        prerequisite="A demo or uploaded dataset",
-        availability="always",
-        completion_test="Data page opened",
-        docs_url=f"{DOCS_URL}guides/loading-data/",
-        steps=(
+        "load_inspect",
+        "Import and check a recording",
+        f"{DOCS_URL}guides/loading-data/#add-your-own-data",
+        (
             TutorialStep(
-                "Choose the dataset",
-                f"Datasets are set up and checked on the {ICONS['view_data']} "
-                "**Data Management** page. Start at the list of datasets: click a "
-                "row to open it, or **+ Add dataset** for your own tables.",
-                ".st-key-tutorial_available_datasets",
+                "Add your files",
+                "In **Data Management → Dataset library**, choose **Add dataset → Import files**. "
+                "Add a Fixations, Words or Raw gaze table, map its columns, and check the recording setup.",
+                ".st-key-data_page_add",
                 view=_VIEW_DATA,
+                data_section=DATA_LIBRARY,
             ),
             TutorialStep(
                 "Check the column mapping",
-                f"The {ICONS['edit']} on a dataset's row opens its setup screen, "
-                "where you can review **2 · Data tables & column mapping**. "
-                "This tells the app which columns contain IDs, positions and "
-                "other values. Rows marked ✨ were detected automatically; "
-                "check them and change any that need correcting.",
+                "In **Current dataset**, open **Edit dataset → Data tables & column mapping**. Check that the participant, "
+                "trial, and coordinates match your source columns. Save changes if you correct a mapping.",
                 ".st-key-tutorial_column_mapping",
                 view=_VIEW_DATA,
                 dataset_editor=True,
             ),
             TutorialStep(
-                "Check what was loaded",
-                f"**{ICONS['search']} What's in the … dataset** opens on "
-                f"{ICONS['stats']} Stats. Review the counts and summary statistics "
-                "to check that the data loaded as you expected. The other tabs "
-                "show the data tables and annotations.",
+                "Check what loaded",
+                "In **Current dataset → Overview**, check the participant and trial counts. "
+                "Open **Tables** to inspect the records or **Data checks** to review problems.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
-                "Check that each trial ID identifies one reading",
-                "The **Trial identity** part checks the whole dataset before any "
-                "filtering. If a trial ID groups several readings together, "
-                "the app draws them as one scanpath. Check the warning for "
-                "columns, such as a session or block ID, that distinguish them.",
-                ".st-key-tutorial_trial_identity",
-                view=_VIEW_DATA,
-                dataset_editor=True,
-            ),
-            TutorialStep(
-                "Decide on preprocessing",
-                f"**Preprocessing**, the last part of the {ICONS['edit']} Edit screen, can "
-                "soft-exclude or merge short fixations before anything is "
-                "measured. It is off by default, applies to every view and keeps "
-                "your original rows.",
+                "Review preprocessing if needed",
+                "Under **Edit dataset → Preprocessing**, you can exclude or merge short fixations. "
+                "This is optional and is off by default.",
                 ".st-key-tutorial_preprocessing",
                 view=_VIEW_DATA,
                 dataset_editor=True,
-                optional=True,
                 gate="preprocessing",
             ),
         ),
     ),
     TutorialDefinition(
-        id="filter_annotate",
-        title="Filter and mark trials",
-        outcome="Star, tag and export trials.",
-        estimated_time="4 min",
-        prerequisite="At least one trial",
-        availability="has_trials",
-        completion_test="Export panel reached after annotation review",
-        docs_url=f"{DOCS_TUTORIALS_URL}data-filtering/",
-        steps=(
+        "filter_annotate",
+        "Filter and mark trials",
+        f"{DOCS_TUTORIALS_URL}data-filtering/exclude-unsuitable-trials/",
+        (
             TutorialStep(
-                "Filter the trial list",
-                f"The {ICONS['trial_filter']} filter beside the trial picker, "
-                "opened here for you, lets you choose texts, participants, "
-                "conditions and annotations (favorites and tags). This "
-                "tutorial doesn't change any filter.",
-                ".st-key-tour_grp_narrow_by",
-                popover=FUNNEL_TRIGGER,
-            ),
-            TutorialStep(
-                "Review one trial at a time",
-                "Use the **Select trial** dropdown, the slider (it shows *index / "
-                "total*) or ◀ ▶ to step through the filtered trial list.",
+                "Pick a reading",
+                "In **Scanpath View**, choose a reading in **Select trial**.",
                 ".st-key-tour_grp_trial_picker",
             ),
             TutorialStep(
-                "Move between screens",
-                "If a reading spans several screens, a screen picker appears "
-                "at the right end of the trial row. Use it to view each screen "
-                "with its own text and fixations.",
-                ".st-key-tour_grp_screen_picker",
-                optional=True,
-            ),
-            TutorialStep(
-                "Annotate a trial or screen",
-                "Add a favorite, tags or notes to the whole trial. For trials "
-                "with several screens, you can annotate the current screen separately.",
+                "Mark the trial",
+                "Under **Annotations**, add a tag or favorite. For a reading with "
+                "several screens, choose whether the mark applies to one screen or the whole trial.",
                 ".st-key-tutorial_annotations",
                 subtab=SUBTAB_ANNOTATIONS,
             ),
             TutorialStep(
-                "Export your selected trials",
-                "Open **Export** and choose which trials and data tables to "
-                "include. For trials with several screens, exported rows "
-                "include their screen IDs.",
-                ".st-key-tutorial_export",
-                subtab=SUBTAB_EXPORT,
+                "Filter the trial list",
+                "Open the filter beside **Select trial**. Under **By trial annotation**, "
+                "include or exclude a tag, or show favorites. The trial picker now lists the matching readings.",
+                ".st-key-tour_grp_narrow_by",
+                popover=FUNNEL_TRIGGER,
             ),
         ),
+        requires_full=True,
     ),
     TutorialDefinition(
-        id="publication_figure",
-        title="Build a publication figure",
-        outcome="Export a figure and save its settings.",
-        estimated_time="4 min",
-        prerequisite="Words or fixations for a selected trial",
-        availability="has_visual_data",
-        completion_test="Export panel reached",
-        docs_url=f"{DOCS_TUTORIALS_URL}exporting-figures/",
-        steps=(
+        "compare_readings",
+        "Compare readings",
+        f"{DOCS_URL}guides/scanpath-visualization/controls/#compare",
+        (
             TutorialStep(
-                "Choose layers and colors",
-                "Use the design presets, palette and layer controls.",
-                ".st-key-tour_grp_viz_controls",
-            ),
-            TutorialStep(
-                "Choose a static figure or a replay",
-                "Turn on **Animate** to inspect fixation order and timing. "
-                "Multipart trials replay one screen at a time.",
-                ".st-key-tour_grp_view_modes",
-            ),
-            TutorialStep(
-                "Save the figure and its settings",
-                "Open **Export** for this figure (PNG, SVG, PDF, HTML) or a bundle "
-                "of many. Include the settings file in a bundle so the figures can "
-                "be redrawn.",
-                ".st-key-tutorial_export",
-                subtab=SUBTAB_EXPORT,
-            ),
-            TutorialStep(
-                "Keep the figure reproducible",
-                f"**{ICONS['share']} Share** offers a **Link**, **Code** or a "
-                "**Settings file**. None of these includes the data, so keep the "
-                "original data too.",
-                ".st-key-tutorial_share",
-                subtab=SUBTAB_SHARE,
-                optional=True,
-            ),
-        ),
-    ),
-    TutorialDefinition(
-        id="compare_readings",
-        title="Compare trials of one text",
-        outcome="Show other readings of the same text.",
-        estimated_time="3 min",
-        prerequisite="Two trials sharing a text (and screen for multipart data)",
-        availability="has_comparable_readings",
-        completion_test="Comparisons panel reached",
-        docs_url=f"{DOCS_URL}guides/scanpath-visualization/#under-the-plot",
-        steps=(
-            TutorialStep(
-                "Choose the reference trial",
-                "Pick the trial to compare the others against. The comparison "
-                "panel uses this trial and its active screen.",
+                "Choose the first reading",
+                "In **Scanpath View**, pick a trial with fixations. Choose the **Scanpath** tile for a static comparison.",
                 ".st-key-tour_grp_trial_picker",
             ),
             TutorialStep(
-                "Compare like with like",
-                f"Open **{ICONS['comparisons']} Comparisons** and set **Match "
-                "field** to the text id. The grid shows the other trials of *this* "
-                "text at one scale." + _SIMILARITY_SENTENCE,
-                ".st-key-tutorial_comparisons",
-                subtab=SUBTAB_COMPARISONS,
+                "Choose the second reading",
+                "Turn on **Compare readings**. Choose a different reading with fixations in **Trial B**. "
+                "If you only have one, choose another dataset under **Dataset B**.",
+                ".st-key-tour_grp_view_modes",
+            ),
+            TutorialStep(
+                "Compare the paths",
+                "Open **Compare settings** and choose **Side by side** or **Overlay**. "
+                "An overlay across datasets needs the same recording screen size.",
+                ".st-key-tour_grp_view_modes",
+            ),
+        ),
+        requires_full=True,
+    ),
+    TutorialDefinition(
+        "explore_corpus",
+        "Analyze a corpus",
+        f"{DOCS_TUTORIALS_URL}corpus-analysis/analyze-one-text/",
+        (
+            TutorialStep(
+                "Choose a text and a measure",
+                "In **Texts**, select a dot or search for a text. Choose a reading measure, "
+                "such as first fixation duration. The view uses the trials in your current selection.",
+                ".st-key-tutorial_corpus_subtabs",
+                view=_VIEW_CORPUS,
+                corpus_subtab="Overview",
+                corpus_group_by="Text",
+            ),
+            TutorialStep(
+                "Read the result",
+                "Open **Chart settings** and choose **Cohort profile**. Set **Aggregate** "
+                "to how you want to combine the readings and check how many participants contributed.",
+                ".st-key-tutorial_corpus_analysis",
+                view=_VIEW_CORPUS,
+                corpus_subtab="Per text",
+            ),
+            TutorialStep(
+                "Save the table and recipe",
+                "Open **Download results**. Save the **CSV** for the values and the **JSON recipe** for the analysis choices. "
+                "Keep the original dataset with them.",
+                ".st-key-tutorial_corpus_analysis",
+                view=_VIEW_CORPUS,
+                corpus_subtab="Per text",
             ),
         ),
     ),
     TutorialDefinition(
-        id="explore_corpus",
-        title="Explore changes across trials",
-        outcome="Inspect mean fixation duration across trials.",
-        estimated_time="4 min",
-        prerequisite="Variation across trials, participants, or texts",
-        availability="has_corpus_variation",
-        completion_test="Corpus Analysis opened",
-        docs_url=f"{DOCS_TUTORIALS_URL}corpus-analysis/",
-        # Walks one real question end to end, because a list of the subtabs is
-        # a menu, not a tutorial.
-        steps=(
+        "publication_figure",
+        "Export or reproduce a figure",
+        f"{DOCS_URL}guides/exporting/#from-the-app-to-a-script",
+        (
             TutorialStep(
-                "Open Corpus Analysis",
-                "Open **Corpus Analysis** to summarize multiple trials. "
-                "It uses the same data and the filters you set on "
-                "the Scanpath view.",
-                NAV_SELECTOR,
+                "Save the current figure",
+                "In **Scanpath → Export**, choose a download format under **Current figure**. "
+                "HTML keeps the figure interactive. Use **Cite** beside the download for the reference.",
+                ".st-key-tutorial_export",
+                subtab=SUBTAB_EXPORT,
             ),
             TutorialStep(
-                "Open Per participant",
-                "Select **Per participant** to inspect one participant across trials.",
-                ".st-key-tutorial_corpus_subtabs",
-                view=_VIEW_CORPUS,
+                "Reproduce the figure in code",
+                "Open **Share → Code**, choose **Python** or **CLI**, and copy the example. "
+                "For an uploaded dataset, point it to your own files.",
+                ".st-key-tutorial_share",
+                subtab=SUBTAB_SHARE,
             ),
             TutorialStep(
-                "Choose the participant and the view",
-                "Pick the participant on the left, then set **View** to **Per-trial trend**. "
-                "It plots one point per trial across the experiment. Trial order "
-                "comes from your data; check any notice about an inferred order.",
-                ".st-key-tutorial_per_reader_view",
-                view=_VIEW_CORPUS,
-                corpus_subtab="Per participant",
-            ),
-            TutorialStep(
-                "Read average fixation duration across the experiment",
-                "Set the measure to **fixation duration**. Each point shows the "
-                "mean for one trial. Look for changes across trials, then return "
-                "to individual readings to investigate them.",
-                ".st-key-tutorial_corpus_analysis",
-                view=_VIEW_CORPUS,
-            ),
-            TutorialStep(
-                "Compare this participant with the others",
-                "Use **Distribution vs cohort** to compare this participant "
-                "with the others in the selection. Check the sample size "
-                "alongside the plotted values.",
-                ".st-key-tutorial_per_reader_view",
-                corpus_subtab="Per participant",
-                view=_VIEW_CORPUS,
-                optional=True,
+                "Share the settings",
+                "Choose **Share → Settings file** to download the plot settings. Send your "
+                "coauthor the source data separately so they can use the same reading.",
+                ".st-key-tutorial_share",
+                subtab=SUBTAB_SHARE,
             ),
         ),
     ),
 )
+
 
 _TUTORIAL_BY_ID = {tutorial.id: tutorial for tutorial in TUTORIALS}
 
@@ -432,363 +280,95 @@ def steps_of(tutorial: TutorialDefinition) -> tuple[TutorialStep, ...]:
     )
 
 
-# (title, markdown body) per step — keep bodies to a few lines each; the tour
-# should take well under a minute.
-_STEPS = [
-    (
-        f"{ICONS['app']} Welcome to Scanpath Studio",
-        "Scanpath Studio draws **eye movements in reading** as scanpaths, true "
-        "to scale over the text.",
-    ),
-    (
-        f"{ICONS['datasets']} Data Management",
-        "Use the demo, or **upload your own** fixations / word tables "
-        "(CSV / TSV / Parquet). Columns are detected automatically, and you can "
-        "remap any field in the wizard.",
-    ),
-    (
-        f"{ICONS['trial_filter']} Filter trials",
-        "Narrow trials by participant or condition. Each tab has its own trial picker.",
-    ),
-    (
-        f"{ICONS['plot_controls']} Plot controls",
-        "Toggle and style each layer: fixations, saccades, heatmap, word boxes, "
-        f"text. Set the monitor in {ICONS['view_data']} **Edit dataset → Recording "
-        "setup** to keep figures true to scale.",
-    ),
-    (
-        f"{ICONS['views']} Three views",
-        "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
-        "**Data Management** (set up and inspect the dataset). Bulk export is the "
-        "**Export** subtab in Scanpath.",
-    ),
-    (
-        f"{ICONS['annotations']} Annotate & save",
-        f"Star, tag, and note trials, then filter to them. **{ICONS['view_data']} Data Management → "
-        "Annotations** exports them as JSON. Replay this via "
-        "**Tutorials → Welcome tour**. 👀",
-    ),
-]
-
-
-def _close_dialog_clientside() -> None:
-    """Hide the open dialog instantly by clicking its own ✕ from a tiny script.
-
-    The documented way to close a dialog programmatically is a full-app
-    ``st.rerun()`` — but on this app a full rerun re-renders the heavy plot
-    embeds, so the modal lingered ~10 s after Skip/Done. Instead, run inside
-    the (fast) dialog-fragment rerun and click the dialog's close button:
-    the modal hides client-side immediately and Streamlit's normal dismiss
-    handling syncs state in the background. ``st.iframe`` embeds are
-    same-origin, so the script can reach the parent document.
-    """
-    embed_html_iframe(
-        """<script>
-        window.parent.document
-            .querySelector('div[role="dialog"] button[aria-label="Close"]')
-            ?.click();
-        </script>""",
-        height=0,
+def sample_reading_available() -> bool:
+    """Whether the current dataset has a bundled sample reading to replay."""
+    state = st.session_state
+    source = state.get("_pending_source_choice") or state.get(
+        "data_source_choice", DEMO_CHOICE
     )
-
-
-def tour_opted_out() -> bool:
-    """True when this browser asked never to be shown the welcome tour again.
-
-    Reads the ``sps_tour_optout`` cookie. Within a session
-    ``_tour_dismissed`` — a plain data flag, not any checkbox's own widget
-    key — wins, so ticking either the tour's own checkbox or the 🧭
-    Tutorials picker's copy of it takes effect immediately rather than
-    waiting for the browser to hand the cookie back on the next load. The
-    ``tour_dont_show`` key (the tour's own checkbox, or a value parked there
-    directly before either checkbox has rendered) is honoured as a fallback,
-    so setting it directly — as tests do — works. Defensive about
-    ``st.context`` because bare-mode / AppTest runs have no request behind
-    them.
-    """
-    if "_tour_dismissed" in st.session_state:
-        return bool(st.session_state["_tour_dismissed"])
-    if "tour_dont_show" in st.session_state:
-        return bool(st.session_state["tour_dont_show"])
-    try:
-        return st.context.cookies.get(TOUR_OPTOUT_COOKIE) == "1"
-    except Exception:  # no request context (bare mode, AppTest, headless import)
-        return False
-
-
-def _tour_optout_script(opted_out: bool) -> str:
-    """A same-origin script that writes (or clears) the opt-out cookie.
-
-    ``st.iframe`` embeds share the app's origin, so the parent document's
-    ``cookie`` is writable from here — the only way to persist a preference
-    browser-side without a user account.
-    """
-    if opted_out:
-        value = f"{TOUR_OPTOUT_COOKIE}=1; max-age={_TOUR_OPTOUT_MAX_AGE}"
-    else:
-        value = f"{TOUR_OPTOUT_COOKIE}=; max-age=0"
+    context = state.get("_tutorial_context") or {}
     return (
-        "<script>window.parent.document.cookie = "
-        f'"{value}; path=/; SameSite=Lax";</script>'
+        source == DEMO_CHOICE
+        and not state.get("_show_upload_wizard")
+        and bool(context.get("selected_has_fixations"))
     )
 
 
-def _render_tour_optout(host=st, *, key_suffix: str = "") -> None:
-    """The "Don't show this again" checkbox + the cookie write that backs it.
+def sample_replay_outside_scanpath(words, fixations, combos) -> bool:
+    """Can the Scanpath selection replay when its trial picker is off screen?"""
+    from .data import trial_keys
+    from .multipart import PART_KEY, SCREEN_ID, extract_part
+    from .utils import extract_trial, split_reading_key
 
-    Two call sites: the welcome tour's own first/last step (``host=st``,
-    ``key_suffix=""`` — the ``tour_dont_show`` key) and the 🧭 Tutorials
-    picker's Welcome tour card (``host=<that card's container>``,
-    ``key_suffix="_picker"``). Both can be on screen in the same run — the
-    picker can be reopened while the tour it started is still settling onto
-    screen — so they need distinct widget keys, synced as a pair: seeded from
-    :func:`tour_opted_out` only when nothing has touched *this* particular
-    checkbox since it last agreed with that shared truth (``_synced_key``),
-    not via ``value=``, which Streamlit only consults before a widget's key
-    first exists.
+    if fixations.empty or combos.empty:
+        return False
+    selection = st.session_state.get("_share_selection") or {}
+    participant = selection.get("participant_id")
+    trial = selection.get("trial_id")
+    screen = selection.get("screen_id")
+    if trial is None:
+        participant, trial = split_reading_key(st.session_state.get(SINGLE_TRIAL_ID))
+        screen = st.session_state.get(SINGLE_SCREEN_ID)
+    if participant is not None and trial is not None:
+        rows = extract_trial(fixations, participant, trial)
+        if rows.empty or (SCREEN_ID not in words and SCREEN_ID not in rows):
+            return not rows.empty
+        from .tabs import _part_catalog_for_display
 
-    Whichever is ticked writes ``_tour_dismissed`` — a plain data flag,
-    deliberately never a widget's own key — rather than the other checkbox's
-    ``tour_dont_show``/``tour_dont_show_picker`` key directly: Streamlit
-    refuses `st.session_state[key] = ...` for any key whose widget has
-    already been instantiated *anywhere* in the current run, and both
-    checkboxes CAN render in the same run (see above), so writing into the
-    other one's own key would raise the moment that happens. `tour_opted_out`
-    reads `_tour_dismissed` first, which is what makes either checkbox's
-    click visible to the auto-open gate and to the other checkbox.
-    """
-    key = f"tour_dont_show{key_suffix}"
-    synced_key = f"_{key}_synced"
-    shared_truth = tour_opted_out()
-    if key not in st.session_state or (
-        st.session_state.get(synced_key) == st.session_state[key]
-        and st.session_state[key] != shared_truth
-    ):
-        st.session_state[key] = shared_truth
-    opted_out = host.checkbox(
-        "Don't show this again",
-        key=key,
-        help="Skip the tour on future visits. **Tutorials → Welcome tour** under "
-        f"{ICONS['help']} Help brings it back.",
-    )
-    st.session_state[synced_key] = opted_out
-    st.session_state["_tour_dismissed"] = opted_out
-    embed_html_iframe(_tour_optout_script(opted_out), height=0)
-
-
-def _step_back() -> None:
-    st.session_state["tour_step"] = max(0, st.session_state.get("tour_step", 0) - 1)
-
-
-def _step_next() -> None:
-    st.session_state["tour_step"] = st.session_state.get("tour_step", 0) + 1
-
-
-@st.dialog("Quick tour", width="large")
-@guarded()
-def _tour_dialog() -> None:
-    """One tour step + Back / Skip / Next navigation.
-
-    Back/Next mutate ``tour_step`` via ``on_click`` callbacks — the callback
-    runs before the fragment rerun, so the body re-renders at the new step.
-    Skip/Done close the dialog client-side (see ``_close_dialog_clientside``).
-    """
-    step = min(st.session_state.get("tour_step", 0), len(_STEPS) - 1)
-    title, body = _STEPS[step]
-    st.subheader(title)
-    st.markdown(body)
-    st.progress((step + 1) / len(_STEPS), text=f"Step {step + 1} of {len(_STEPS)}")
-    if step in (0, len(_STEPS) - 1):
-        _render_tour_optout()
-
-    back_col, skip_col, next_col = st.columns(3)
-    back_col.button(
-        "← Back",
-        key="tour_back",
-        width="stretch",
-        disabled=step == 0,
-        on_click=_step_back,
-    )
-    if step < len(_STEPS) - 1:
-        if skip_col.button("Skip tour", key="tour_skip", width="stretch"):
-            _close_dialog_clientside()
-        next_col.button(
-            "Next →",
-            key="tour_next",
-            width="stretch",
-            type="primary",
-            on_click=_step_next,
+        catalog = _part_catalog_for_display(
+            extract_trial(words, participant, trial), rows
         )
-    else:
-        if next_col.button("✓ Done", key="tour_done", width="stretch", type="primary"):
-            _close_dialog_clientside()
+        if catalog.empty:
+            return True
+        screens = catalog[SCREEN_ID].astype(str).tolist()
+        screen = screen if screen in screens else screens[0]
+        return (
+            SCREEN_ID in rows
+            and not extract_part(rows, participant, trial, screen).empty
+        )
+    if not trial_keys(combos).issubset(trial_keys(fixations)):
+        # Before a first visit to the picker, its sort can choose any reading.
+        return False
+    if SCREEN_ID not in words:
+        return True
+    if SCREEN_ID not in fixations:
+        return False
+    # Any screen the picker could open must have recorded fixations.
+    return bool(
+        words.set_index(list(PART_KEY))
+        .index.isin(fixations.set_index(list(PART_KEY)).index)
+        .all()
+    )
 
 
-# Spotlight steps: (selector, title, body). ``selector`` is what gets the
-# pulsing outline + scroll-into-view; None for the selector-less welcome step.
-# Bodies are markdown, kept short — the card is ~400 px wide. A body names a
-# control the way the screen draws it: an icon-only button as its icon plus the
-# chevron its menu shows (`ICONS["menu_arrow"]`), then a noun ("the **+ ⌄**
-# button beside it"), never the icon standing in for a word.
-#
-# ``"dock"`` moves the card off its bottom-right corner (`_CARD_DOCKS`) on a
-# step whose target, or the popover it opens, sits there: bottom-left while the
-# filter popover, the trial summary and the rail are spotlit, top-right (over
-# the rail) for the plot, whose size legend is in its bottom-right corner, and
-# for the panels under the plot.
-# Walks the whole Scanpath screen in reading order: the plot → the
-# selection/controls above it → the chips → the rail (view modes + controls) →
-# the bottom panel → the nav. Every target is in the page or on the nav bar, so
-# no step has to expand a panel before it can scroll to it — except one inside a
-# popover, which names its trigger (``"popover"``). Keep selectors in sync with
-# the keyed wrappers in tabs.py / app.py / controls.py and `menu.NAV_SELECTOR`.
-_SPOTLIGHT_STEPS = [
-    {
-        "selector": None,
-        "title": f"{ICONS['app']} Welcome to Scanpath Studio",
-        # The sentence naming the open dataset is added by `_welcome_body`,
-        # from the dataset actually open.
-        "body": "Explore **eye movements in reading** as scanpaths over the "
-        "text. **Next** starts a quick tour, or choose **Skip tour** to "
-        "explore on your own.",
-    },
+def _dismiss_invitation() -> None:
+    st.session_state.pop("_sample_invitation", None)
+    st.session_state["_tour_dismissed"] = True
+    st.session_state["_write_invitation_cookie"] = True
+
+
+def _use_own_data() -> None:
+    from .wizard import _enter_add_data_wizard
+
+    _dismiss_invitation()
+    _enter_add_data_wizard()
+
+
+_SPOTLIGHT_STEPS = (
     {
         "selector": ".st-key-tour_grp_plot",
-        "dock": "top",
-        "title": f"{ICONS['view_scanpath']} The scanpath",
-        "body": "This is the main plot. Each circle is a **fixation**. Its size "
-        "shows how long it lasted (the legend in the corner gives the sizes in "
-        "ms). The lines between the circles are **saccades**.",
+        "title": "Follow the fixations",
+        "body": "During a fixation, the eyes stay relatively still. The replay follows one "
+        "reader's fixations in time order. Choose **Pause**, then **Next fixation** "
+        "to see when a fixation began and how long it lasted, in milliseconds.",
     },
-    {
-        "selector": ".st-key-tour_grp_data_source",
-        "title": f"{ICONS['datasets']} Your datasets",
-        "body": "Pick the **dataset** you're viewing here; the "
-        f"**{ICONS['add']} {ICONS['menu_arrow']}** button beside it adds your own. "
-        f"{ICONS['view_data']} **Data Management** lists them all: click a row "
-        "there to open one.",
-    },
-    # Picking comes before narrowing: the picker is the control a new reader
-    # reaches for first, and narrowing only means something once they have seen
-    # the pool it narrows. Each step targets its own container, so each lights
-    # up only its own control.
     {
         "selector": ".st-key-tour_grp_trial_picker",
-        "title": f"{ICONS['pick_trial']} Pick a trial",
-        "body": "Choose a trial in the list, or go to the previous or next one "
-        "with ◀ ▶. You can also drag the slider: it shows the trial's number "
-        "and id.",
+        "title": "Try another reading",
+        "body": "Choose another trial to see how the eyes moved during that reading. "
+        "To watch the same trial again, choose **Restart**, then **Play** above the plot.",
     },
-    {
-        "selector": ".st-key-tour_grp_narrow_by",
-        "popover": FUNNEL_TRIGGER,
-        "dock": "left",
-        "title": f"{ICONS['trial_filter']} Filter the trials",
-        # Drawn as the button is — Streamlit's Material funnel
-        # (`tabs._FILTER_ICON`) and its chevron — since "the funnel" in words
-        # sent readers hunting for an emoji the app never draws.
-        "body": f"The **{ICONS['trial_filter']} {ICONS['menu_arrow']}** "
-        "button beside the trial picker opens filters for texts, participants, "
-        "conditions and annotations. It is open here so you can take a look.",
-    },
-    {
-        "selector": ".st-key-tour_grp_chips",
-        "dock": "left",
-        "title": f"{ICONS['chips']} Trial summary",
-        "body": "This row shows the trial's **identity, conditions and "
-        f"statistics**. The **{ICONS['edit']} {ICONS['menu_arrow']}** button "
-        "at the right lets you choose and reorder the fields, or hide the summary.",
-    },
-    {
-        "selector": ".st-key-tour_grp_view_modes",
-        "dock": "left",
-        "title": f"{ICONS['animate']} Animate & compare",
-        "body": "**Animate** replays the trial fixation by fixation. "
-        "**Compare** adds a second scanpath, overlaid or side by side, from this "
-        "dataset or from another one via **Dataset B**. The "
-        f"**{ICONS['menu_arrow']}** beside each toggle opens its settings.",
-    },
-    {
-        "selector": ".st-key-tour_grp_viz_controls",
-        "dock": "left",
-        "title": f"{ICONS['plot_controls']} Plot controls",
-        "body": "Turn each layer on or off and set its style: fixations, "
-        "saccades, stimulus, word boxes, heatmap, raw gaze. **Design presets** "
-        "switch between Scanpath, Heatmap, Illustration and Custom. "
-        f"**{ICONS['designs']} My designs** saves your own.",
-    },
-    {
-        "selector": ".st-key-tour_grp_subtabs",
-        "dock": "top",
-        "title": f"{ICONS['panels']} More about this trial",
-        "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & context**, "
-        f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export**, and "
-        f"**{ICONS['share']} Share** (link, code or settings file).",
-    },
-    {
-        "selector": NAV_SELECTOR,
-        "title": f"{ICONS['nav']} The menu bar",
-        "body": f"**{ICONS['view_scanpath']} Scanpath** is this view. "
-        f"**{ICONS['view_corpus']} Corpus Analysis** shows all participants "
-        f"together. **{ICONS['view_data']} Data Management** lists your datasets "
-        f"and adds new ones. **{ICONS['help']} Help** opens in a window.",
-    },
-]
-
-# Essentials mode's tour: the same card, over only what Essentials draws. Its steps
-# point at the picker row, the plot, the View tiles, the subtab bar and the
-# switch, never at a control that mode hides (the filter funnel, the summary
-# table, the Animate / Compare rows, the layer controls), so no step spotlights
-# an element that is not on screen. The subtab step says what the ＋ More tab
-# holds, since the Full-only panels have no tab here to point at.
-_SIMPLE_SPOTLIGHT_STEPS = [
-    _SPOTLIGHT_STEPS[0],
-    {
-        "selector": ".st-key-tour_grp_trial_picker",
-        "title": f"{ICONS['pick_trial']} Pick a trial",
-        "body": "Choose the **dataset** and a **trial** here, and go to the "
-        f"previous or next trial with ◀ ▶. **{ICONS['add']} More** lists what "
-        "Full adds, such as filtering and sorting the trials.",
-    },
-    {
-        "selector": ".st-key-tour_grp_plot",
-        "dock": "top",
-        "title": f"{ICONS['view_scanpath']} The scanpath",
-        "body": "Each circle is a **fixation**; its size shows how long it "
-        "lasted. The lines between them are **saccades**. Use the controls "
-        "above the plot to pause or restart the replay.",
-    },
-    {
-        "selector": ".st-key-tour_grp_simple_views",
-        "dock": "left",
-        "title": f"{ICONS['plot_controls']} Choose a view",
-        "body": "**Animation** replays the reading, **Scanpath** shows a "
-        "static plot, **Heatmap** shades each word by fixation time, and "
-        "**Illustration** creates a schematic for slides and papers. **Palette** "
-        "changes the colors.",
-    },
-    {
-        "selector": ".st-key-tour_grp_subtabs",
-        "dock": "top",
-        "title": f"{ICONS['panels']} Export and share",
-        "body": "**Export** saves the figure; **Share** makes a link or the code "
-        f"for it. **{ICONS['add']} More** lists what Full adds: the passage "
-        "with its questions, comparisons across readers, annotations, and "
-        "exporting every trial.",
-    },
-    {
-        "selector": f".st-key-{ui_mode.SWITCH_BOX_KEY}",
-        "title": f"{ICONS['settings']} Essentials or Full",
-        "body": "**Full** shows every control. Switch here at any time: "
-        "your settings stay as they are. The tutorials under "
-        f"**{ICONS['help']} Help** use Full.",
-    },
-]
-
-
-def _spotlight_steps() -> list[dict]:
-    """The welcome tour's steps for the session's mode."""
-    return _SIMPLE_SPOTLIGHT_STEPS if ui_mode.is_simple() else _SPOTLIGHT_STEPS
+)
 
 
 #: The stacking order of the floating card and its folded tab (written as a
@@ -869,46 +449,6 @@ _CARD_CSS = """
     margin-bottom: 0.9rem;
 }
 .st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.9rem; }
-/* "Don't show this again": a footnote between the progress bar and the
-   footer, so it's muted and pulled tight rather than reading as another step.
-   The setup guide's card (same `tour_card` shape) gives its own opt-out the
-   identical treatment. */
-.st-key-tour_dont_show,
-.st-key-wizard_guide_dont_show { margin-top: -0.5rem !important; }
-.st-key-tour_dont_show label,
-.st-key-wizard_guide_dont_show label { opacity: 0.8; }
-.st-key-tour_dont_show label p,
-.st-key-wizard_guide_dont_show label p { font-size: 0.85rem !important; }
-"""
-
-#: Where a step's ``"dock"`` puts the card instead of the bottom-right corner.
-#: ``left`` keeps the plot's right side, the filter popover and the rail clear;
-#: ``top`` lifts it over the rail, clear of the plot's size legend and the
-#: panels under the plot, below Streamlit's fixed header (3.75rem).
-_CARD_DOCKS = {
-    "left": ".st-key-tour_card { left: 1.25rem; right: auto; }",
-    "top": ".st-key-tour_card { top: 4.75rem; bottom: auto; }",
-}
-
-# Welcome step only: center the card like a modal and dim the app behind it
-# (the `.tour-backdrop` div is rendered only on that step). From step 2 on,
-# the card sits in a corner (bottom-right unless the step docks it elsewhere,
-# see `_CARD_DOCKS`) so it never covers the highlighted section.
-_WELCOME_CSS = """
-.st-key-tour_card {
-    top: 50%;
-    left: 50%;
-    right: auto;
-    bottom: auto;
-    transform: translate(-50%, -50%);
-    width: 500px;
-}
-.tour-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 999980;
-    background: rgba(0, 0, 0, 0.45);
-}
 """
 
 
@@ -927,7 +467,7 @@ def _card_colors_css() -> str:
 # -----------------------------------------------------------------------------
 # Moving and folding a guide card
 # -----------------------------------------------------------------------------
-# Every guide card — the welcome tour, a tutorial, the setup guide — can be
+# Every guide card — sample replay, task walkthrough or setup guide — can be
 # dragged by its title to wherever it covers nothing, and folded (—) to a small
 # tab that keeps its place. ``kind`` names the card ("tour", "tutorial",
 # "wizard"): its folded flag, its buttons' keys and its remembered spot are its
@@ -945,8 +485,6 @@ def guide_folded(kind: str) -> bool:
 
 def _set_guide_folded(kind: str, folded: bool) -> None:
     st.session_state[_guide_folded_key(kind)] = folded
-    if kind == "tour" and not folded:
-        _send_tour_to_scanpath()
 
 
 def _guide_card() -> DeltaGenerator:
@@ -996,18 +534,18 @@ def _render_guide_pill(
             args=(kind, False),
             help=f"Open the {name} again.",
         )
-        if on_close is not None:
-            st.button(
-                f"✕ {spoken(f'Close the {name}')}",
-                key=f"guide_close_{kind}",
-                on_click=on_close,
-                help=f"Close the {name}",
-            )
+        if on_close is not None and st.button(
+            f"✕ {spoken(f'Close the {name}')}",
+            key=f"guide_close_{kind}",
+            help=f"Close the {name}",
+        ):
+            on_close()
+            st.rerun(scope="app")
         embed_html_iframe(_guide_drag_script(kind), height=0)
 
 
 #: The card's title is its handle; the fold button sits in the corner, left of
-#: the welcome tour's ✕ where there is one; the folded tab is a fixed pill.
+#: the sample guide's ✕ where there is one. The folded tab is a fixed pill.
 _GUIDE_MOVE_CSS = """
 .st-key-tour_card h2 { cursor: move; user-select: none; }
 [class*="st-key-guide_fold_"] {
@@ -1051,7 +589,7 @@ _GUIDE_MOVE_CSS = """
 }
 [class*="st-key-guide_pill_"] p { margin: 0; font-size: 0.88rem; white-space: nowrap; }
 [class*="st-key-guide_pill_"] button { min-height: 1.8rem; padding: 0 0.6rem; }
-/* The tab's ✕ (the welcome tour's): a glyph beside Open, like the card's ✕. */
+/* The folded guide has a close button beside Open. */
 [class*="st-key-guide_close_"] button {
     border: none !important;
     background: transparent !important;
@@ -1113,6 +651,15 @@ _GUIDE_DRAG_SCRIPT = """<script>
     } catch (e) {}
     if (el.dataset.spsDrag) return;
     el.dataset.spsDrag = "1";
+    el.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const close = el.querySelector('.st-key-tour_sp_close button, .st-key-tutorial_exit button, ' +
+        '.st-key-wizard_sp_exit button, .st-key-wizard_sp_done button, [class*="st-key-guide_close_"] button');
+      if (close) {
+        event.preventDefault();
+        close.click();
+      }
+    });
     el.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0 || ev.target.closest("button, input, label, a")) return;
       if (!el.matches(PILL) && !ev.target.closest("h2")) return;
@@ -1141,37 +688,79 @@ def _guide_drag_script(kind: str) -> str:
     return _GUIDE_DRAG_SCRIPT.replace("__KIND__", kind)
 
 
-def _exit_spotlight() -> None:
-    st.session_state["tour_mode"] = None
+def _request_sample_exit(*, return_to_view: bool = True) -> None:
+    st.session_state["_sample_exit"] = return_to_view
+
+
+def restore_sample_on_rerun() -> None:
+    """Restore the plot before widgets mount when the guide closed on the last run."""
+    if "_sample_exit" in st.session_state:
+        _exit_spotlight(return_to_view=st.session_state.pop("_sample_exit"))
+
+
+def _data_location() -> dict:
+    """Remember the Data Management tab, its inspection panel and an open editor."""
+    state = st.session_state
+    return {
+        DATA_WORKSPACE_KEY: state.get(DATA_WORKSPACE_REQUEST)
+        or state.get(DATA_WORKSPACE_KEY, DATA_CURRENT),
+        DATA_INSPECTION_KEY: state.get(DATA_INSPECTION_KEY, "Overview"),
+        DATASET_EDITOR_OPEN_KEY: bool(state.get(DATASET_EDITOR_OPEN_KEY)),
+    }
+
+
+def _restore_guide_location(original: dict) -> None:
+    """Apply the user's settings through the same paths as their controls."""
+    if CORPUS_SUBTAB in original:
+        from .corpus_navigation import request_route
+
+        request_route()
+    for key, value in original.items():
+        if key == DATA_WORKSPACE_KEY:
+            # The tab may still belong to the previous page's widget tree.
+            # The Data page consumes this request before mounting its tabs.
+            st.session_state[DATA_WORKSPACE_REQUEST] = value
+        elif key == "global_anim_autoplay":
+            from .controls import write_through
+
+            write_through(key, value)
+        else:
+            st.session_state[key] = value
+
+
+def _exit_spotlight(*, return_to_view: bool = True) -> None:
+    """Undo the sample guide's temporary plot choices and return to its caller."""
+    state = st.session_state
+    state["tour_mode"] = None
+    state.pop("_sample_restart", None)
+    original = state.pop(GUIDE_RETURN_KEY, {})
+    if not return_to_view:
+        for key in (
+            "main_nav",
+            CORPUS_SUBTAB,
+            CORPUS_GROUP_BY,
+            CORPUS_MEASURE,
+            DATA_WORKSPACE_KEY,
+            DATA_INSPECTION_KEY,
+            DATASET_EDITOR_OPEN_KEY,
+        ):
+            original.pop(key, None)
+    _restore_guide_location(original)
 
 
 def _dismiss_listener_script(
     selector: str | None,
-    exit_keys: tuple[str, ...] = ("tour_sp_done", "tour_sp_close", "tour_sp_skip"),
+    exit_keys: tuple[str, ...] = ("tour_sp_done", "tour_sp_close"),
 ) -> str:
-    """JS that lets Done / ✕ close the tour *instantly*, even mid-load.
-
-    The card streams to the browser early (before the ~10 s data/plot work),
-    but its Done / ✕ are ordinary Streamlit buttons: a click only schedules a
-    rerun, which Streamlit can't process until the in-flight first run
-    finishes — so the card and its dimming backdrop linger for the whole load.
-
-    This same-origin script attaches a plain ``click`` listener to those
-    buttons that hides the card, backdrop, and highlight outline immediately
-    via an injected ``!important`` stylesheet — no server roundtrip. The
-    button's native click still fires too, so ``_exit_spotlight`` runs whenever
-    Streamlit catches up and clears ``tour_mode`` durably. Re-arming the tour
-    re-renders this script, which first drops any stale hide style so the
-    replayed card is visible.
-    """
+    """Hide the guide immediately while a busy app handles its close button."""
     outline_clear = (
         f"{selector} {{ outline: none !important; animation: none !important; }}"
         if selector
         else ""
     )
     hide_css = (
-        '.st-key-tour_card, [class*="st-key-guide_pill_"], .tour-backdrop, '
-        f"#{_GROUP_RING_ID} {{ display: none !important; }} " + outline_clear
+        '.st-key-tour_card, [class*="st-key-guide_pill_"] { display: none !important; } '
+        + outline_clear
     )
     btn_selectors = [f".st-key-{k} button" for k in exit_keys]
     return f"""<script>
@@ -1183,7 +772,6 @@ def _dismiss_listener_script(
             s.id = "tour-instant-hide";
             s.textContent = {hide_css!r};
             doc.head.appendChild(s);
-            doc.querySelectorAll(".tour-backdrop").forEach((e) => e.remove());
         }};
         let tries = 0;
         (function wire() {{
@@ -1203,33 +791,19 @@ def _dismiss_listener_script(
     </script>"""
 
 
-#: Targets that match several elements which read as one control — the nav's
-#: links, one `stTopNavLinkContainer` each. Outlining every match drew a row of
-#: separate brackets, so these get one ring drawn around all of them instead
-#: (`_group_ring_script`), an element of its own the step's CSS styles.
-_GROUP_SELECTORS = frozenset({NAV_SELECTOR})
-_GROUP_RING_ID = "tour-group-ring"
-
-
 def _highlight_css(selector: str, accent: str) -> str:
-    """The pulsing outline drawn around a tour/guide target.
-
-    Shared by the welcome tour, the tutorials and the setup guide, so every
-    guide highlights its target with exactly the same treatment.
-
-    A `_GROUP_SELECTORS` target outlines the one ring `_group_ring_script`
-    places around its matches, not each match.
-    """
+    """Outline the control named in the current guide step."""
     if not selector:
         return ""
-    if selector in _GROUP_SELECTORS:
-        selector = f"#{_GROUP_RING_ID}"
     return f"""
 {selector} {{
     outline: 3px solid {accent};
     outline-offset: 3px;
     border-radius: 0.5rem;
     animation: tour-pulse 1.6s ease-in-out infinite;
+}}
+@media (prefers-reduced-motion: reduce) {{
+    {selector} {{ animation: none; }}
 }}
 @keyframes tour-pulse {{
     0%, 100% {{ box-shadow: 0 0 0 0 color-mix(in srgb, {accent} 50%, transparent); }}
@@ -1238,95 +812,6 @@ def _highlight_css(selector: str, accent: str) -> str:
 """
 
 
-def _group_ring_script(selector: str) -> str:
-    """Place one ring around every visible match of a `_GROUP_SELECTORS` target.
-
-    The ring is a ``position: fixed`` box in the page, sized to the matches'
-    union (the nav's whole row, ❓ Help included, when they sit in Streamlit's
-    nav strip) and styled by the step's own `_highlight_css`. It is added to the
-    page by a script that runs in the page, not in this iframe, so it keeps
-    following the nav after the iframe is gone — and it removes itself once the
-    tour card has gone, or once the step's CSS no longer outlines it (the next
-    step, or the tour ended), so no ring can outlive its step.
-    """
-    page_js = f"""
-(function () {{
-    const win = window, doc = document;
-    if (win.__tourGroupRing) win.clearInterval(win.__tourGroupRing);
-    const selector = {selector!r};
-    const visible = (el) => {{
-        const r = el.getBoundingClientRect();
-        if (!r.width || !r.height) return false;
-        const cs = win.getComputedStyle(el);
-        return cs.visibility !== "hidden" && cs.display !== "none"
-            && cs.opacity !== "0";
-    }};
-    let ticks = 0, styled = false;
-    const stop = () => {{
-        win.clearInterval(win.__tourGroupRing);
-        win.__tourGroupRing = null;
-        doc.getElementById({_GROUP_RING_ID!r})?.remove();
-    }};
-    const place = () => {{
-        ticks += 1;
-        let ring = doc.getElementById({_GROUP_RING_ID!r});
-        if (!ring) {{
-            ring = doc.createElement("div");
-            ring.id = {_GROUP_RING_ID!r};
-            // Above Streamlit's header (the nav lives in it), under popovers.
-            ring.style.cssText = "position:fixed;pointer-events:none;"
-                + "z-index:1000050;";
-            doc.body.appendChild(ring);
-        }}
-        const outlined = win.getComputedStyle(ring).outlineStyle !== "none";
-        styled = styled || outlined;
-        const cardGone = !doc.querySelector(".st-key-tour_card");
-        if ((styled && !outlined) || (ticks > 50 && (cardGone || !outlined))) {{
-            stop();
-            return;
-        }}
-        const matches = [...doc.querySelectorAll(selector)].filter(visible);
-        const strip = matches[0]?.closest(".rc-overflow");
-        const boxes = strip
-            ? [...strip.children].filter(visible)
-            : matches;
-        if (!boxes.length) {{
-            ring.style.display = "none";
-            return;
-        }}
-        const rects = boxes.map((el) => el.getBoundingClientRect());
-        const left = Math.min(...rects.map((r) => r.left));
-        const top = Math.min(...rects.map((r) => r.top));
-        const right = Math.max(...rects.map((r) => r.right));
-        const bottom = Math.max(...rects.map((r) => r.bottom));
-        Object.assign(ring.style, {{
-            display: "block",
-            left: left + "px",
-            top: top + "px",
-            width: right - left + "px",
-            height: bottom - top + "px",
-        }});
-    }};
-    place();
-    win.__tourGroupRing = win.setInterval(place, 200);
-}})();
-"""
-    return f"""<script>
-    (function () {{
-        const doc = window.parent.document;
-        const s = doc.createElement("script");
-        s.textContent = {page_js!r};
-        doc.head.appendChild(s);
-        s.remove();
-    }})();
-    </script>"""
-
-
-#: Measured live (Streamlit 1.62, 1440×900): a popover's panel is drawn at
-#: ``z-index: 1000060``, above the card's 999995 — so on a step that opens one,
-#: the panel covers the card's left edge and cuts the first word off every
-#: line. Raise the card **only on those steps**; everywhere else it stays under
-#: Streamlit's own overlays, where a floating card belongs.
 _CARD_OVER_POPOVER_CSS = ".st-key-tour_card { z-index: 1000070; }"
 
 
@@ -1336,8 +821,7 @@ def _all_popover_triggers() -> str:
     Derived from the steps themselves rather than listed, so a step that starts
     opening a second popover is closed again by the steps after it for free.
     """
-    declared = {step.get("popover") for step in _SPOTLIGHT_STEPS}
-    declared |= {step.popover for tutorial in TUTORIALS for step in tutorial.steps}
+    declared = {step.popover for tutorial in TUTORIALS for step in tutorial.steps}
     return ", ".join(sorted(trigger for trigger in declared if trigger))
 
 
@@ -1417,9 +901,7 @@ _TOP_OVERLAYS = (
 def _scroll_into_view_script(selector: str) -> str:
     """Centre `selector`'s first *visible* match within its own scroller.
 
-    Every subtlety here was observed live; see the call site in
-    `render_spotlight_tour` for the full list. The short version: match the first
-    visible element (inactive tab panels hold invisible duplicates), and scroll
+    Match the first visible element (inactive tab panels hold invisible duplicates), and scroll
     the nearest scrollable ancestor instead of calling `scrollIntoView` (which
     moves the document).
 
@@ -1491,326 +973,200 @@ def _scroll_into_view_script(selector: str) -> str:
                 </script>"""
 
 
-@st.fragment
-@guarded()
-def render_spotlight_tour() -> None:
-    """Floating tour card + pulsing highlight for the current spotlight step.
-
-    Call early in ``main()``, right after ``maybe_show_welcome_tour()``, so
-    the card streams to the browser before the heavy data/plot work instead
-    of seconds after the page opens. A replay arms the tour (``_arm_tour``)
-    before the run that draws it, so it shows on that run. Runs as a
-    fragment: Back/Next/close rerun only this function, so the highlight moves
-    instantly and ✕ makes the card + CSS vanish without a full-app rerun
-    (the fragment then renders nothing, which clears its previous elements).
-    """
-    if st.session_state.get("tour_mode") != "spotlight":
-        return
-    if (
-        st.session_state.get(_TOUR_TO_SCANPATH_KEY)
-        and not guide_folded("tour")
-        and st.session_state.get("main_nav", _VIEW_SCANPATH) != _VIEW_SCANPATH
-    ):
-        # Opened again from its tab on another view. This is a fragment rerun,
-        # which cannot change the view; the full run it hands over to does
-        # (`_keep_tour_on_scanpath`). A full run has already taken the request
-        # by the time it draws this fragment, so this never fires there.
-        st.rerun(scope="app")
-    steps = _spotlight_steps()
-    n = len(steps)
-    step_idx = min(st.session_state.get("tour_step", 0), n - 1)
-    step = steps[step_idx]
-
-    # Fall back to the app's brand blue (matches the pinned theme
-    # `.streamlit/config.toml` primaryColor), never Streamlit's default red, so
-    # the tour accent stays consistent even if the runtime doesn't expose the
-    # theme option.
-    accent = st.get_option("theme.primaryColor") or "#1f77b4"
-    progress_text = f"Step {step_idx + 1} of {n}"
-    if guide_folded("tour"):
-        # Folded: the tab alone — no backdrop, highlight or opened popover.
-        st.markdown(
-            "<style>" + _card_colors_css() + _GUIDE_MOVE_CSS + "</style>",
-            unsafe_allow_html=True,
-        )
-        _render_guide_pill(
-            "tour", "Welcome tour", progress_text, "tour", on_close=_exit_spotlight
-        )
-        return
-
-    highlight = _highlight_css(step["selector"], accent)
-    st.markdown(
-        "<style>"
-        + _CARD_CSS
-        + _card_colors_css()
-        + _GUIDE_MOVE_CSS
-        + (_WELCOME_CSS if step_idx == 0 else "")
-        + _CARD_DOCKS.get(step.get("dock", ""), "")
-        + (_CARD_OVER_POPOVER_CSS if step.get("popover") else "")
-        + highlight
-        + "</style>",
-        unsafe_allow_html=True,
-    )
-    if step_idx == 0:
-        st.markdown('<div class="tour-backdrop"></div>', unsafe_allow_html=True)
-
-    with _guide_card():
-        # Close (✕) in the top-right corner — exits the tour like "Exit"/"Done"
-        # (CSS pins it; the dismiss listener wires it for instant close too).
-        st.button(
-            # `spoken` names the glyph for screen readers.
-            f"✕ {spoken('Close the tour')}",
-            wrap=True,
-            key="tour_sp_close",
-            on_click=_exit_spotlight,
-            help="Close the tour",
-        )
-        _render_guide_fold_button("tour", "tour")
-        # <h2> keeps the page heading outline valid (the card sits right under
-        # the page <h1>; an <h4> here would be an h1→h4 jump). Sized down to a
-        # compact look via `.st-key-tour_card h2` in _CARD_CSS.
-        st.markdown(f"## {step['title']}")
-        st.markdown(_welcome_body(step["body"]) if step_idx == 0 else step["body"])
-        st.progress((step_idx + 1) / n, text=progress_text)
-        # The opt-out sits on the two steps where a user decides they're
-        # finished with the tour — the welcome (bail out now) and the last step
-        # (done, don't greet me again). Keeping it off the middle steps preserves
-        # the card's tight vertical rhythm.
-        if step_idx in (0, n - 1):
-            _render_tour_optout()
-        # The ✕ in the corner closes the tour from any step, so the footer is
-        # Back / Next (Skip tour / Next on the welcome, Back / Done on the last).
-        back_col, next_col = st.columns(2)
-        if step_idx == 0:
-            # The welcome has nothing to go back to, so its left slot is a
-            # plainly labelled way out instead of a disabled Back — a first-time
-            # reader should not have to read the ✕ glyph to start exploring.
-            # Same exit as ✕ / Done; Help → Tutorials replays it.
-            back_col.button(
-                "Skip tour",
-                key="tour_sp_skip",
-                width="stretch",
-                on_click=_exit_spotlight,
-                help="Close the tour and start exploring. Replay it any time "
-                "from Help → Tutorials.",
-            )
-        else:
-            back_col.button(
-                "← Back",
-                key="tour_sp_back",
-                width="stretch",
-                on_click=_step_back,
-            )
-        if step_idx < n - 1:
-            next_col.button(
-                "Next →",
-                key="tour_sp_next",
-                width="stretch",
-                type="primary",
-                on_click=_step_next,
-            )
-        else:
-            next_col.button(
-                "✓ Done",
-                key="tour_sp_done",
-                width="stretch",
-                type="primary",
-                on_click=_exit_spotlight,
-            )
-
-        # Make Done / ✕ hide the tour instantly, even while the app's first
-        # run is still loading (the Streamlit click alone would only take
-        # effect once that ~10 s run finishes). See _dismiss_listener_script.
-        embed_html_iframe(_dismiss_listener_script(step["selector"]), height=0)
-        embed_html_iframe(_guide_drag_script("tour"), height=0)
-
-        # Open the popover this step points inside (and close the one the last
-        # step opened) BEFORE the find-and-scroll below goes looking — a closed
-        # popover has no body for it to find.
-        popover_script = _popover_script(step.get("popover", ""))
-        if popover_script:
-            embed_html_iframe(popover_script, height=0)
-
-        if step["selector"] in _GROUP_SELECTORS:
-            embed_html_iframe(_group_ring_script(step["selector"]), height=0)
-        if step["selector"]:
-            # Bring the highlighted section into view. Same-origin iframe
-            # trick as _close_dialog_clientside; no-op if the selector is
-            # gone. Subtleties, all observed live:
-            # - The find+scroll retries until the target is visible, riding
-            #   out Streamlit's re-render.
-            # - Match the first *visible* element, not the first match:
-            #   Streamlit keeps inactive tab panels laid out but
-            #   visibility-hidden, so a selector can hit an invisible
-            #   duplicate (e.g. the Raw Data panel's inner tab strip) and
-            #   scroll the page to nowhere.
-            # - No scrollIntoView: smooth gets cancelled by Streamlit's
-            #   re-renders, and instant also scrolls the document. Instead,
-            #   center the target within its nearest scrollable ancestor only.
-            # - Skip targets that are already fully on screen.
-            # - The iframe stays INSIDE the fixed-position card: at the bottom
-            #   of the main column, its (re)mount could yank the main scroller
-            #   to the page bottom to reveal it.
-            embed_html_iframe(
-                _scroll_into_view_script(step["selector"]),
-                height=0,
-            )
-
-
-def tour_suppressed(query_params) -> bool:
-    """True when the session shouldn't be greeted by the tour.
-
-    Embeds (``?embed=true``) and deep links (``?source=…&participant=…``)
-    arrive mid-workflow from an external tool. Takes the params as a mapping
-    (rather than reading ``st.query_params`` itself) because AppTest can't
-    inject query params — this stays unit-testable.
-    """
-    if (query_params.get("embed") or "").lower() in {"true", "1"}:
-        return True
-    return any(k in query_params for k in ("source", "participant", "trial", "tab"))
-
-
-#: Set while the spotlight tour waits to be taken to the Scanpath view, the one
-#: view that draws every section its steps point at. Armed by starting the tour
-#: or opening its folded tab anywhere else; served by `_keep_tour_on_scanpath`.
-_TOUR_TO_SCANPATH_KEY = "_tour_to_scanpath"
-
-
-def _send_tour_to_scanpath() -> None:
-    """Ask the next full run to take the tour to the Scanpath view.
-
-    ``main_nav`` holds the view the last run drew (``menu.render_nav`` mirrors
-    it), so a tour started or reopened on Scanpath asks for nothing.
-    """
-    if st.session_state.get("main_nav", _VIEW_SCANPATH) != _VIEW_SCANPATH:
-        st.session_state[_TOUR_TO_SCANPATH_KEY] = True
-
-
-def _keep_tour_on_scanpath(active_view: str) -> None:
-    """Keep the open spotlight tour on the Scanpath view.
-
-    Every step points at a section of that view — the plot, the trial picker,
-    the rail — so the tour is never shown open anywhere else:
-
-    - started (or reopened from its tab) on another view, it switches to
-      Scanpath, where the dataset in the picker is loaded and drawn, before its
-      first card is drawn;
-    - left for another view mid-tour, it folds to its tab, which keeps its step
-      and brings it back to Scanpath when opened;
-    - left on its last step, which points at the nav (or, in Essentials, at the
-      switch the other views hide) and so invites the click, it ends, as Done
-      would.
-
-    One switch per request: the request is dropped before switching, so a page
-    that holds the screen whatever the nav says (the add-dataset wizard) folds
-    the tour on the next run rather than switching forever. Where the nav
-    already sits on Scanpath under such a page, the tour folds at once.
-    """
-    to_scanpath = st.session_state.pop(_TOUR_TO_SCANPATH_KEY, False)
-    if (
-        st.session_state.get("tour_mode") != "spotlight"
-        or guide_folded("tour")
-        or active_view == _VIEW_SCANPATH
-    ):
-        return
-    if to_scanpath and st.session_state.get("main_nav") != _VIEW_SCANPATH:
-        switch_to_view(_VIEW_SCANPATH)  # reruns
-        return
-    if st.session_state.get("tour_step", 0) >= len(_spotlight_steps()) - 1:
-        _exit_spotlight()
-        return
-    _set_guide_folded("tour", True)
-
-
-def _start_tour() -> None:
-    """Kick off the configured tour style from step 0."""
-    st.session_state["tour_step"] = 0
-    _set_guide_folded("tour", False)
-    if TOUR_STYLE == "spotlight":
-        st.session_state["tour_mode"] = "spotlight"
-    else:
-        _tour_dialog()
-
-
-def _open_dataset_name() -> str | None:
-    """The name of the dataset this session has open, as the picker shows it."""
-    from scanpath_studio.constants import DEMO_CHOICE, PUBLIC_DATASETS_CHOICE
-
-    token = st.session_state.get("data_source_choice", DEMO_CHOICE)
-    if token == PUBLIC_DATASETS_CHOICE:
-        token = st.session_state.get("public_dataset_choice")
-    if not token:
-        return None
-    from scanpath_studio.app import _dataset_display_name  # app imports tour
-
-    return _dataset_display_name(str(token))
-
-
-def _welcome_body(body: str) -> str:
-    """The welcome card's text, naming the dataset that is open."""
-    name = _open_dataset_name()
-    if not name:
-        return body
-    lead, _, rest = body.partition("**Next**")
-    return f"{lead}**{md_literal(name)}** is open; **Next**{rest}" if rest else body
+# A replay that was already open can be paused, finished, or mid-trial. Its
+# iframe might be reused, so mounting Animation with autoplay would not alone
+# replay that reading. Use the player's own controls once, as it becomes ready.
+_RESTART_SAMPLE_SCRIPT = """<script>
+(() => {
+    const parentDoc = window.parent.document;
+    const stage = ".st-key-tour_grp_plot iframe[tabindex='0']";
+    let attempts = 0;
+    function replay() {
+        const frame = parentDoc.querySelector(stage);
+        const bar = frame?.contentDocument?.querySelector('[data-sps-transport]');
+        const play = bar?.querySelector('[data-name="play"]');
+        const restart = bar?.querySelector('[data-name="restart"]');
+        if (play && restart) {
+            restart.click();
+            play.click();
+        } else if (++attempts < 200) {
+            window.setTimeout(replay, 150);
+        }
+    }
+    replay();
+})();
+</script>"""
 
 
 def _arm_tour() -> None:
-    """Arm the tour from step 0, for the chooser's *Welcome tour → Start*.
+    """Replay the selected bundled reading in its current interface mode."""
+    if not sample_reading_available():
+        return
+    state = st.session_state
+    if state.get("tutorial_active"):
+        _restore_tutorial_return()
+    view = state.get("main_nav", _VIEW_SCANPATH)
+    if state.get("tour_mode") != "spotlight":
+        original = {"main_nav": view}
+        if view == _VIEW_CORPUS and CORPUS_SUBTAB in state:
+            original.update(
+                {
+                    k: state[k]
+                    for k in (CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE)
+                    if k in state
+                }
+            )
+        elif view == _VIEW_DATA:
+            original.update(_data_location())
+        state[GUIDE_RETURN_KEY] = original
+    # This guide follows one reader's fixation markers, including when the
+    # original view was a heatmap or a replay showing only saccades.
+    from .controls import write_through
 
-    The chooser reruns the app right after, so the tour's render call early in
-    ``main()`` picks the request up on that run. A dialog can't be opened from
-    here, so the dialog style sets a request flag that
-    ``maybe_show_welcome_tour`` (the early call site) serves.
-    """
-    st.session_state["tour_step"] = 0
+    desired = {
+        SINGLE_ANIMATE: True,
+        SINGLE_COMPARE_TOGGLE: False,
+        "global_show_fix": True,
+        "global_anim_autoplay": True,
+    }
+    for key, value in desired.items():
+        previous = state.get(key, key in {"global_show_fix", "global_anim_autoplay"})
+        if previous != value:
+            state[GUIDE_RETURN_KEY].setdefault(key, previous)
+            if key == "global_anim_autoplay":
+                write_through(key, value)
+            else:
+                state[key] = value
+    if state.get("_sample_invitation"):
+        _dismiss_invitation()
+    state["main_nav"] = _VIEW_SCANPATH
+    state["tour_seen"] = True
+    state["tour_step"] = 0
+    state["tour_mode"] = "spotlight"
+    state["_sample_restart"] = True
     _set_guide_folded("tour", False)
-    if TOUR_STYLE == "spotlight":
-        st.session_state["tour_mode"] = "spotlight"
-    else:
-        st.session_state["_tour_dialog_requested"] = True
 
 
 def maybe_show_welcome_tour(active_view: str | None = None) -> None:
-    """Start the welcome tour once per session, unless this is an embed/deep link.
+    """Offer the sample on a fresh demo visit, in the page beside the work."""
+    from .persistence import session_was_restored
 
-    Call from ``main()`` after the URL presets are read (the suppression
-    checks look at ``st.query_params``) and after the nav has resolved
-    ``active_view``, but BEFORE the heavy data/plot work, immediately followed
-    by ``render_spotlight_tour()`` — Streamlit streams elements in run order,
-    so anything rendered after the data load appears seconds late. The dialog
-    style opens here and overlays whatever renders after it; the spotlight
-    style arms ``tour_mode`` and, off the Scanpath view, switches to it
-    (`_keep_tour_on_scanpath`). ``active_view`` defaults to the view
-    ``main_nav`` holds.
-    """
-    _maybe_start_welcome_tour()
-    _keep_tour_on_scanpath(
-        active_view or st.session_state.get("main_nav", _VIEW_SCANPATH)
+    state = st.session_state
+    view = active_view or state.get("main_nav", _VIEW_SCANPATH)
+    if state.pop("_write_invitation_cookie", False):
+        embed_html_iframe(
+            f'<script>window.parent.document.cookie = "{TOUR_OPTOUT_COOKIE}=1; '
+            f'max-age={_TOUR_OPTOUT_MAX_AGE}; path=/; SameSite=Lax";</script>',
+            height=0,
+        )
+    if state.get("tour_mode") == "wizard" and not state.get("_show_upload_wizard"):
+        _exit_wizard_guide()
+    if not state.get("tour_seen"):
+        state["tour_seen"] = True
+        if (
+            view == _VIEW_SCANPATH
+            and not st.context.is_embedded
+            and not ui_mode.has_link_params(st.query_params)
+            and not session_was_restored(state)
+            and not state.get("_tour_dismissed")
+            and st.context.cookies.get(TOUR_OPTOUT_COOKIE) != "1"
+            and sample_reading_available()
+        ):
+            state["_sample_invitation"] = True
+    if view != _VIEW_SCANPATH or not sample_reading_available():
+        state.pop("_sample_invitation", None)
+        if state.get("tour_mode") == "spotlight":
+            _request_sample_exit(return_to_view=False)
+            st.rerun(scope="app")
+        return
+    if state.get("tutorial_active"):
+        state.pop("_sample_invitation", None)
+    if not state.get("_sample_invitation"):
+        return
+    with st.container(
+        key="sample_invitation",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    ):
+        st.markdown("A sample reading is open.", width="content")
+        st.button(
+            "Replay this reading", key="sample_invitation_replay", on_click=_arm_tour
+        )
+        st.button(
+            "Import my data", key="sample_invitation_import", on_click=_use_own_data
+        )
+        st.button(
+            "Dismiss",
+            key="sample_invitation_dismiss",
+            type="tertiary",
+            on_click=_dismiss_invitation,
+        )
+
+
+@st.fragment
+@guarded()
+def render_spotlight_tour() -> None:
+    """Two optional steps on the sample's plot and trial picker, shared by both modes."""
+    state = st.session_state
+    if state.get("tour_mode") != "spotlight":
+        return
+    step_index = min(state.get("tour_step", 0), len(_SPOTLIGHT_STEPS) - 1)
+    step = _SPOTLIGHT_STEPS[step_index]
+    progress = f"Step {step_index + 1} of {len(_SPOTLIGHT_STEPS)}"
+    styles = _card_colors_css() + _GUIDE_MOVE_CSS
+    if guide_folded("tour"):
+        st.markdown(f"<style>{styles}</style>", unsafe_allow_html=True)
+        _render_guide_pill(
+            "tour",
+            "Replay a sample reading",
+            progress,
+            "sample guide",
+            on_close=_request_sample_exit,
+        )
+        return
+    accent = st.get_option("theme.primaryColor") or "#1f77b4"
+    highlight = _highlight_css(step["selector"], accent)
+    st.markdown(
+        f"<style>{_CARD_CSS}{styles}{highlight}</style>", unsafe_allow_html=True
     )
-
-
-def _maybe_start_welcome_tour() -> None:
-    """The once-per-session start behind :func:`maybe_show_welcome_tour`."""
-    if st.session_state.pop("_tour_dialog_requested", False):
-        # Replay request from `_arm_tour`.
-        _tour_dialog()
-        return
-    if st.session_state.get("tour_seen"):
-        return
-    if tour_suppressed(st.query_params):
-        return
-    if tour_opted_out():  # "Don't show this again", persisted in a cookie
-        return
-    st.session_state["tour_seen"] = True  # before opening — see module docstring
-    # A session recovered from *Saved on this computer* belongs to
-    # someone who has used the app here before — a new browser, or cleared
-    # site data, cleared the cookie opt-out, not their experience.
-    from scanpath_studio.persistence import session_was_restored
-
-    if session_was_restored(st.session_state):
-        return
-    _start_tour()
+    with _guide_card():
+        if st.button(
+            f"✕ {spoken('Close the sample guide')}",
+            key="tour_sp_close",
+            wrap=True,
+            help="Close the sample guide and return to your work.",
+        ):
+            _request_sample_exit()
+            st.rerun(scope="app")
+        _render_guide_fold_button("tour", "sample guide")
+        st.markdown(f"## {step['title']}")
+        st.markdown(step["body"])
+        st.progress((step_index + 1) / len(_SPOTLIGHT_STEPS), text=progress)
+        back, forward = st.columns(2)
+        if step_index:
+            back.button(
+                "Back",
+                key="tour_sp_back",
+                on_click=state.update,
+                args=({"tour_step": step_index - 1},),
+            )
+        if step_index + 1 < len(_SPOTLIGHT_STEPS):
+            forward.button(
+                "Next",
+                key="tour_sp_next",
+                type="primary",
+                on_click=state.update,
+                args=({"tour_step": step_index + 1},),
+            )
+        elif forward.button("Done", key="tour_sp_done", type="primary"):
+            _request_sample_exit()
+            st.rerun(scope="app")
+        embed_html_iframe(_guide_drag_script("tour"), height=0)
+        embed_html_iframe(_dismiss_listener_script(step["selector"]), height=0)
+        embed_html_iframe(_scroll_into_view_script(step["selector"]), height=0)
+        if state.pop("_sample_restart", False):
+            embed_html_iframe(_RESTART_SAMPLE_SCRIPT, height=0)
 
 
 # -----------------------------------------------------------------------------
@@ -1819,100 +1175,78 @@ def _maybe_start_welcome_tour() -> None:
 
 
 def build_tutorial_context(words, fixations, combos) -> dict[str, object]:
-    """Small, serializable availability snapshot for the tutorial chooser."""
-    n_trials = len(combos) if combos is not None else 0
-    has_words = bool(words is not None and not words.empty)
-    has_fixations = bool(fixations is not None and not fixations.empty)
-    comparable = False
-    corpus_variation = n_trials >= 2
-    if combos is not None and not combos.empty:
-        source = (
-            fixations
-            if fixations is not None and not fixations.empty
-            else words
-            if words is not None and not words.empty
-            else combos
-        )
-        if not {"participant_id", "trial_id"}.issubset(source.columns):
-            source = combos
-        comparison_columns = [
-            column for column in ("text_id", "screen_id") if column in source.columns
-        ]
-        if "text_id" in comparison_columns:
-            readings = source[
-                [
-                    "participant_id",
-                    "trial_id",
-                    *comparison_columns,
-                ]
-            ].drop_duplicates()
-            comparable = bool(
-                readings.groupby(comparison_columns, dropna=False).size().max() >= 2
-            )
-        elif "text_id" in combos.columns:
-            comparable = bool(combos.groupby("text_id", dropna=False).size().max() >= 2)
-        if "text_id" in combos.columns:
-            corpus_variation |= combos["text_id"].nunique(dropna=True) >= 2
-        if "participant_id" in combos.columns:
-            corpus_variation |= combos["participant_id"].nunique(dropna=True) >= 2
+    """The trial picker covers every table. Compare and Corpus require more."""
+    from scanpath_studio.aggregation import available_measures
+
     return {
-        "n_trials": n_trials,
-        "has_words": has_words,
-        "has_fixations": has_fixations,
-        "has_comparable_readings": comparable,
-        "has_corpus_variation": corpus_variation,
+        "n_trials": len(combos) if combos is not None else 0,
+        # Dataset B has independent filters and includes the packaged sources.
+        # A single A reading with fixations can be compared across datasets.
+        "has_fixations": fixations is not None and not fixations.empty,
+        "has_word_measures": bool(
+            words is not None
+            and not words.empty
+            and available_measures(words, None, per_word_only=True)
+        ),
     }
 
 
 def tutorial_availability(
-    tutorial: TutorialDefinition, context: dict[str, object]
+    tutorial: TutorialDefinition,
+    context: dict[str, object],
+    *,
+    needs_add_button: bool = False,
 ) -> tuple[bool, str]:
-    """Whether a tutorial can start, plus an actionable explanation."""
-    rule = tutorial.availability
-    if rule == "always":
+    """Whether this walkthrough can reach its controls in the current session."""
+    if context.get("wizard_open"):
+        return False, "Finish adding your dataset, or use Setup help in the form."
+    if tutorial.id == "load_inspect":
+        if needs_add_button and context.get("editor_open"):
+            return False, (
+                "In **Data Management → Current dataset**, save or cancel your open edit "
+                "to use **Add dataset**."
+            )
         return True, ""
-    if rule == "has_trials":
-        available = int(context.get("n_trials", 0)) >= 1
-        return available, "Open a dataset with trials, or loosen the filters."
-    if rule == "has_visual_data":
-        available = bool(context.get("has_words") or context.get("has_fixations"))
+    if tutorial.id == "compare_readings":
         return (
-            available,
-            "Open a dataset with words or fixations, or loosen the filters.",
+            bool(context.get("n_trials") and context.get("has_fixations")),
+            "For the first reading, choose a dataset that contains fixations.",
         )
-    if rule == "has_comparable_readings":
-        available = bool(context.get("has_comparable_readings"))
-        return available, "Need two trials of the same text."
-    if rule == "has_corpus_variation":
-        available = bool(context.get("has_corpus_variation"))
-        return available, "Need variation across trials, participants, or texts."
-    return False, f"Unknown availability rule: {rule}."
-
-
-#: What a rule lacks when the trial filters, not the dataset, are
-#: why a tutorial cannot start.
-_FILTERED_REASONS = {
-    "has_trials": "no trial is left.",
-    "has_visual_data": "no trial left has words or fixations.",
-    "has_comparable_readings": "no two trials left share a text.",
-    "has_corpus_variation": "only one trial is left.",
-}
+    if tutorial.id == "explore_corpus":
+        return (
+            bool(context.get("has_word_measures")),
+            "To try this, map a reading measure in your Words table.",
+        )
+    return bool(context.get("n_trials")), "Open a dataset with at least one trial."
 
 
 def filtered_reason(
     tutorial: TutorialDefinition, context: dict[str, object]
 ) -> str | None:
-    """Why the **filters** keep ``tutorial`` from starting, or ``None``.
-
-    ``None`` unless the tutorial is unavailable on the filtered pool but would
-    be available on the whole dataset — the context's ``unfiltered`` snapshot,
-    which `app.main` stashes only while a filter narrows the pool."""
+    """Say how to start a walkthrough that the trial filters rule out."""
     unfiltered = context.get("unfiltered")
     if not isinstance(unfiltered, dict) or tutorial_availability(tutorial, context)[0]:
         return None
     if not tutorial_availability(tutorial, unfiltered)[0]:
         return None
-    return _FILTERED_REASONS.get(tutorial.availability)
+    if tutorial.id == "compare_readings":
+        return "Widen the trial filters to include a reading with fixations."
+    if tutorial.id == "explore_corpus":
+        return "Widen the trial filters to include readings with a mapped word measure."
+    return "Widen the trial filters to include at least one reading."
+
+
+def _navigate_from_guide(action, *args) -> None:
+    """Apply navigation in a widget callback, before any target widgets mount."""
+    action(*args)
+    st.session_state["_guide_navigation_requested"] = True
+
+
+def _rerun_after_guide_navigation() -> None:
+    # A fragment can disappear as a result of its own callback (Exit or Done).
+    # Its parent must still redraw the view, even if the button is gone.
+    if st.session_state.pop("_guide_navigation_requested", False):
+        st.rerun(scope="app")
 
 
 def _tutorial_progress() -> dict[str, int]:
@@ -1923,87 +1257,105 @@ def _tutorial_completed() -> dict[str, bool]:
     return st.session_state.setdefault("tutorial_completed", {})
 
 
-def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
-    """Start/resume one tutorial while remembering where Exit should return.
-
-    The tutorials spotlight controls that only Full draws (Compare,
-    annotations, the layer controls), so a session in Essentials moves to Full
-    for them. That is the session's mode only: it is not the viewer's own
-    choice, so the cookie keeps what they picked.
-    """
-    if tutorial_id not in _TUTORIAL_BY_ID:
+def _start_use_case(tutorial_id: str) -> None:
+    """Start on the first unfinished step and remember where the guide was opened."""
+    tutorial = _TUTORIAL_BY_ID.get(tutorial_id)
+    if (
+        tutorial is None
+        or not tutorial_availability(
+            tutorial,
+            st.session_state.get("_tutorial_context", {}),
+            needs_add_button=True,
+        )[0]
+    ):
         return
-    context = st.session_state.get("_tutorial_context") or {}
-    tutorial = _TUTORIAL_BY_ID[tutorial_id]
-    available, _ = tutorial_availability(tutorial, context)
-    if not available:
-        return
-    st.session_state["tutorial_return"] = {
+    if st.session_state.get("tour_mode") == "spotlight":
+        _exit_spotlight()
+    if st.session_state.get("tutorial_active"):
+        _restore_tutorial_return()
+    st.session_state[GUIDE_RETURN_KEY] = {
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
         "single_subtab": _current_subtab(),
+        **{
+            k: st.session_state[k]
+            for k in (CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE)
+            if k in st.session_state
+        },
+        **_data_location(),
+        UI_MODE: ui_mode.current_mode(),
     }
-    if ui_mode.is_simple():
+    if tutorial.requires_full:
         st.session_state[UI_MODE] = ui_mode.ADVANCED
-    if restart:
-        _tutorial_progress()[tutorial_id] = 0
-        _tutorial_completed().pop(tutorial_id, None)
-    else:
-        _tutorial_progress().setdefault(tutorial_id, 0)
-    # Navigate to the step's own page right away when it names a different
-    # view, rather than opening the card on whatever page the user stands on.
-    # Covers resume too — the current step (not always index 0) is what the
-    # card is about to show. `tutorial_return` above already captured the page
-    # being left, so Exit still comes back to it.
-    step_index = int(_tutorial_progress().get(tutorial_id, 0))
+    progress = _tutorial_progress()
+    completed = _tutorial_completed().pop(tutorial_id, False)
+    if completed:
+        progress[tutorial_id] = 0
     steps = steps_of(tutorial)
-    if 0 <= step_index < len(steps):
-        _open_tutorial_surface(steps[step_index])
+    step_index = max(0, min(progress.get(tutorial_id, 0), len(steps) - 1))
+    progress[tutorial_id] = step_index
+    _open_tutorial_surface(steps[step_index])
     st.session_state["tutorial_active"] = tutorial_id
     _set_guide_folded("tutorial", False)
-    # Never stack this task card over the automatic welcome/setup card.
     st.session_state["tour_mode"] = None
 
 
 def _move_use_case(tutorial_id: str, delta: int) -> None:
     tutorial = _TUTORIAL_BY_ID[tutorial_id]
-    current = int(_tutorial_progress().get(tutorial_id, 0))
-    _tutorial_progress()[tutorial_id] = max(
-        0, min(len(steps_of(tutorial)) - 1, current + delta)
-    )
+    current = _tutorial_progress().get(tutorial_id, 0)
+    steps = steps_of(tutorial)
+    target = max(0, min(len(steps) - 1, current + delta))
+    _tutorial_progress()[tutorial_id] = target
+    _open_tutorial_surface(steps[target])
 
 
 def _finish_use_case(tutorial_id: str) -> None:
     _tutorial_completed()[tutorial_id] = True
-    _tutorial_progress()[tutorial_id] = len(steps_of(_TUTORIAL_BY_ID[tutorial_id])) - 1
-    st.session_state["tutorial_active"] = None
+    _restore_tutorial_return()
 
 
 def _restore_tutorial_return() -> None:
-    location = st.session_state.get("tutorial_return") or {}
-    if location.get("main_nav") is not None:
-        st.session_state["main_nav"] = location["main_nav"]
-    if location.get("single_subtab") is not None:
-        st.session_state["single_subtab"] = location["single_subtab"]
+    """Leave from any step, including a paused guide, with the original view and mode."""
+    location = st.session_state.pop(GUIDE_RETURN_KEY, {})
+    _restore_guide_location(location)
     st.session_state["tutorial_active"] = None
 
 
-def _open_tutorial_surface(step: TutorialStep) -> None:
-    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+def change_tutorial_mode(mode: str) -> None:
+    """Honor an explicit mode change while the viewer follows a task."""
+    active = _TUTORIAL_BY_ID.get(st.session_state.get("tutorial_active"))
+    if active is None:
+        return
+    if active.requires_full and mode == ui_mode.SIMPLE:
+        _restore_tutorial_return()
+    else:
+        st.session_state[GUIDE_RETURN_KEY][UI_MODE] = mode
 
+
+def _open_tutorial_surface(step: TutorialStep) -> None:
     st.session_state["main_nav"] = step.view
     if step.subtab is not None:
         st.session_state["single_subtab"] = step.subtab
     if step.corpus_subtab is not None:
-        st.session_state["corpus_subtab"] = step.corpus_subtab
-    # The Data page's two screens. A step that points into the editor
-    # opens it; one that points at the overview closes it, so walking back up a
-    # tutorial does not leave the editor covering the table the previous step
-    # was about.
+        from .corpus_navigation import request_route
+
+        request_route()
+        st.session_state[CORPUS_SUBTAB] = step.corpus_subtab
+    if step.corpus_group_by is not None:
+        st.session_state["corpus_group_by"] = step.corpus_group_by
     if step.view == _VIEW_DATA:
         if step.dataset_editor:
             st.session_state[DATASET_EDITOR_OPEN_KEY] = True
-        else:
-            st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
+        elif step.data_section == DATA_CURRENT or st.session_state.get(
+            DATASET_EDITOR_OPEN_KEY
+        ):
+            from .app import open_dataset_panel
+
+            open_dataset_panel("Overview")
+            # Going Back to Add files can leave the editor. Its normal leave
+            # prompt keeps an unfinished edit on screen until the user decides.
+            if st.session_state.get(DATASET_EDITOR_OPEN_KEY):
+                return
+        st.session_state[DATA_WORKSPACE_REQUEST] = step.data_section
 
 
 _KNOWN_VIEWS = (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA)
@@ -2018,22 +1370,37 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     page*, offering to open the panel they are looking at and withholding its
     spotlight.
     """
-    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
-
     current_view = st.session_state.get("main_nav", _VIEW_SCANPATH)
     if current_view not in _KNOWN_VIEWS:
         current_view = _VIEW_SCANPATH
     if current_view != step.view:
         return False
+    if step.view == _VIEW_DATA and (
+        st.session_state.get(DATA_WORKSPACE_KEY, DATA_CURRENT) != step.data_section
+        or (
+            step.data_section == DATA_CURRENT
+            and not step.dataset_editor
+            and st.session_state.get(DATA_INSPECTION_KEY, "Overview") != "Overview"
+        )
+    ):
+        return False
     # On the Data page, "which screen" is part of the answer — an
     # editor step is not open while the overview is showing, and vice versa.
-    if step.view == _VIEW_DATA and bool(
-        st.session_state.get(DATASET_EDITOR_OPEN_KEY)
-    ) != bool(step.dataset_editor):
+    if (
+        step.view == _VIEW_DATA
+        and step.data_section == DATA_CURRENT
+        and bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY))
+        != bool(step.dataset_editor)
+    ):
         return False
     if (
         step.corpus_subtab is not None
-        and st.session_state.get("corpus_subtab", "Per text") != step.corpus_subtab
+        and st.session_state.get("corpus_subtab", "Overview") != step.corpus_subtab
+    ):
+        return False
+    if (
+        step.corpus_group_by is not None
+        and st.session_state.get("corpus_group_by") != step.corpus_group_by
     ):
         return False
     return step.subtab is None or _current_subtab() == step.subtab
@@ -2052,129 +1419,119 @@ def _arm_tutorial_library() -> None:
 
 
 def maybe_show_tutorial_library() -> None:
-    """Open the tutorial chooser if the ❓ Help nav entry armed it.
-
-    Served early in ``main()`` beside :func:`maybe_show_faq`, for the same
-    reason: before the heavy data/plot work, so the modal does not wait out the
-    rest of the run.
-    """
+    """Open Task guides after this run has resolved its dataset and filters."""
     if st.session_state.pop("_tutorial_library_requested", False):
         _tutorial_library_dialog()
 
 
 def stash_tutorial_context(context: dict[str, object]) -> None:
-    """Park the context the tutorial chooser reads, without rendering anything.
-
-    The ❓ Help entries are nav entries, with no widget to hang this on — but
-    the dialog needs to know what is loaded, and it can be opened from any
-    view, so the stash has to happen every run.
-    """
-    st.session_state["_tutorial_context"] = dict(context)
+    """Save the small availability snapshot the guide fragments read."""
+    context["editor_open"] = bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY))
+    st.session_state["_tutorial_context"] = context
 
 
-@st.dialog(f"{ICONS['tutorials']} Tutorials", width="large")
+@st.dialog(f"{ICONS['tutorials']} Task guides", width="medium")
 @guarded()
 def _tutorial_library_dialog() -> None:
-    """The chooser: outcome, prerequisites, time, and progress per tutorial."""
-    context = st.session_state.get("_tutorial_context") or {}
-    st.markdown("**Choose a tutorial.**")
-    st.caption(
-        "Follow along in the app. Tutorials highlight the controls without "
-        "changing your data, filters or plot settings."
-    )
-    welcome = st.container(border=True)
-    welcome_head, welcome_action = welcome.columns([3, 1], vertical_alignment="center")
-    welcome_head.markdown("**Welcome tour**")
-    welcome_head.caption("A quick introduction to Scanpath Studio.")
-    welcome_head.caption("App overview · about 2 minutes")
-    if welcome_action.button("Start", key="tutorial_start_welcome", width="stretch"):
-        _arm_tour()
-        st.rerun(scope="app")
-    # The welcome tour's own "Don't show this again", reachable here too.
-    _render_tour_optout(welcome, key_suffix="_picker")
-    # One bordered card per tutorial, so each reads as one choice.
-    for tutorial in TUTORIALS:
-        available, reason = tutorial_availability(tutorial, context)
-        completed = bool(_tutorial_completed().get(tutorial.id))
-        progress = int(_tutorial_progress().get(tutorial.id, 0))
-        started = progress > 0 and not completed
-        card = st.container(border=True)
-        head, action = card.columns([3, 1], vertical_alignment="center")
-        badge = " ✓" if completed else ""
-        head.markdown(f"**{tutorial.title}**{badge}")
-        head.caption(tutorial.outcome)
-        if started:
-            state = f"Paused at step {progress + 1} of {len(steps_of(tutorial))}"
-        elif completed:
-            state = "Completed"
-        else:
-            state = f"{len(steps_of(tutorial))} steps · {tutorial.estimated_time}"
-        head.caption(f"{state} · needs {tutorial.prerequisite.lower()}")
-        # Handled by return value, not `on_click`, because **an `st.dialog` body
-        # is a fragment**: a callback here would rerun only the dialog, so the
-        # state `_start_use_case` writes would never reach `main()` — the
-        # chooser would sit there unchanged and the task card it hands over to
-        # would never be drawn. `st.rerun(scope="app")` both closes the modal (the
-        # `_tutorial_library_requested` flag was already popped, so the next run
-        # does not re-open it) and renders the card underneath.
-        if action.button(
-            "Resume" if started else "Start",
-            key=f"tutorial_start_{tutorial.id}",
-            disabled=not available,
-            type="primary" if started else "secondary",
-            width="stretch",
-        ):
-            _start_use_case(tutorial.id)
-            st.rerun(scope="app")
-        # Only offered once there is progress to discard.
-        if (started or completed) and action.button(
-            "Start over",
-            key=f"tutorial_restart_{tutorial.id}",
-            disabled=not available,
-            width="stretch",
-        ):
-            _start_use_case(tutorial.id, restart=True)
-            st.rerun(scope="app")
-        if not available:
-            because = filtered_reason(tutorial, context)
-            card.caption(
-                f"{ICONS['warning']} Unavailable with the current filters: {because}"
-                if because
-                else f"{ICONS['warning']} Unavailable: {reason.lower()}"
+    """Each row can be read locally, even when its walkthrough is unavailable."""
+    _rerun_after_guide_navigation()
+    context = st.session_state.get("_tutorial_context", {})
+    with st.expander("Replay a sample reading"):
+        st.markdown(
+            "1. In **Scanpath View**, choose **Bundled demo**.\n"
+            "2. Pick a reading in **Select trial** and turn on **Animation**.\n"
+            "3. Press **Play** to watch the reading. Use **Pause** and **Next fixation** to inspect one fixation at a time. "
+            "Turn off **Animation** to return to your figure."
+        )
+        if sample_reading_available():
+            st.button(
+                "Show me in the app",
+                key="tutorial_start_welcome",
+                on_click=_navigate_from_guide,
+                args=(_arm_tour,),
             )
+        else:
+            st.caption(
+                "In **Scanpath View**, open **Bundled demo** and select a trial with fixations. "
+                "For a trial with several screens, choose a screen with fixations."
+            )
+        st.markdown(
+            f"[Read the replay guide online ↗]({DOCS_URL}install/#replay-a-sample-reading)"
+        )
+    for tutorial in TUTORIALS:
+        with st.expander(tutorial.title):
+            if tutorial.requires_full:
+                st.caption("Uses Full mode.")
+            st.markdown(
+                "\n".join(
+                    f"{i}. {step.body}" for i, step in enumerate(steps_of(tutorial), 1)
+                )
+            )
+            available, reason = tutorial_availability(
+                tutorial, context, needs_add_button=True
+            )
+            if available:
+                completed = bool(_tutorial_completed().get(tutorial.id))
+                paused = not completed and tutorial.id in _tutorial_progress()
+                if tutorial.requires_full and ui_mode.is_simple():
+                    label = "Resume in Full" if paused else "Open in Full"
+                elif paused:
+                    label = "Resume walkthrough"
+                elif completed:
+                    label = "Start again"
+                else:
+                    label = "Show me in the app"
+                st.button(
+                    label,
+                    key=f"tutorial_start_{tutorial.id}",
+                    on_click=_navigate_from_guide,
+                    args=(_start_use_case, tutorial.id),
+                )
+            else:
+                st.caption(filtered_reason(tutorial, context) or reason)
+            st.markdown(f"[Read the guide online ↗]({tutorial.docs_url})")
 
 
 @st.fragment
 @guarded()
 def render_use_case_tutorial() -> None:
-    """Render the active named tutorial with safe, explicit navigation."""
+    """Render the active guide and return to its launching view on Exit or Done."""
+    _rerun_after_guide_navigation()
     tutorial_id = st.session_state.get("tutorial_active")
     tutorial = _TUTORIAL_BY_ID.get(tutorial_id)
     if tutorial is None:
         return
     context = st.session_state.get("_tutorial_context") or {}
-    available, reason = tutorial_availability(tutorial, context)
+    steps = steps_of(tutorial)
+    step_index = max(0, min(_tutorial_progress().get(tutorial.id, 0), len(steps) - 1))
+    available, reason = tutorial_availability(
+        tutorial, context, needs_add_button=step_index == 0
+    )
     if not available:
-        because = filtered_reason(tutorial, context)
-        st.warning(
-            f"Tutorial paused. With the current filters, {because}"
-            if because
-            else f"Tutorial paused: {reason}"
+        st.info(
+            f"**{tutorial.title}** is paused. {filtered_reason(tutorial, context) or reason}"
+        )
+        st.button(
+            "Exit guide",
+            key="tutorial_exit",
+            on_click=_navigate_from_guide,
+            args=(_restore_tutorial_return,),
         )
         return
-    step_index = min(
-        int(_tutorial_progress().get(tutorial.id, 0)), len(steps_of(tutorial)) - 1
-    )
-    steps = steps_of(tutorial)
     step = steps[step_index]
     progress_text = f"Step {step_index + 1} of {len(steps)}"
     if guide_folded("tutorial"):
-        # Folded: the tab alone — no highlight or opened popover.
         st.markdown(
             "<style>" + _card_colors_css() + _GUIDE_MOVE_CSS + "</style>",
             unsafe_allow_html=True,
         )
-        _render_guide_pill("tutorial", tutorial.title, progress_text, "tutorial")
+        _render_guide_pill(
+            "tutorial",
+            tutorial.title,
+            progress_text,
+            "guide",
+            on_close=_restore_tutorial_return,
+        )
         return
     surface_open = _tutorial_surface_is_open(step)
     selector = step.selector if surface_open else None
@@ -2191,63 +1548,58 @@ def render_use_case_tutorial() -> None:
         unsafe_allow_html=True,
     )
     with _guide_card():
-        if selector in _GROUP_SELECTORS:
-            # Inside the card, like every tour iframe (see render_spotlight_tour).
-            embed_html_iframe(_group_ring_script(selector), height=0)
         st.markdown(f"## {tutorial.title}")
         _render_guide_fold_button("tutorial", "tutorial")
         st.markdown(f"**{step.title}**")
         st.markdown(step.body)
-        if not surface_open and st.button(
-            "Open this panel",
-            key="tutorial_open_surface",
-            type="primary",
-            width="stretch",
-        ):
-            _open_tutorial_surface(step)
-            st.rerun()
+        if not surface_open:
+            st.button(
+                "Open this panel",
+                key="tutorial_open_surface",
+                type="primary",
+                width="stretch",
+                on_click=_navigate_from_guide,
+                args=(_open_tutorial_surface, step),
+            )
         st.progress(
             (step_index + 1) / len(steps),
             text=progress_text,
         )
-        st.link_button(
-            "Read this in the docs ↗",
-            tutorial.docs_url,
-            width="stretch",
-        )
+        st.markdown(f"[Read the guide online ↗]({tutorial.docs_url})")
         back_col, exit_col, next_col = st.columns(3)
         back_col.button(
-            "← Back",
+            "Back",
             key="tutorial_back",
             disabled=step_index == 0,
-            on_click=_move_use_case,
-            args=(tutorial.id, -1),
             width="stretch",
+            on_click=_navigate_from_guide,
+            args=(_move_use_case, tutorial.id, -1),
         )
-        if exit_col.button("Exit", key="tutorial_exit", width="stretch"):
-            _restore_tutorial_return()
-            st.rerun()
+        exit_col.button(
+            "Exit",
+            key="tutorial_exit",
+            width="stretch",
+            on_click=_navigate_from_guide,
+            args=(_restore_tutorial_return,),
+        )
         if step_index < len(steps) - 1:
             next_col.button(
-                "Next →",
+                "Next",
                 key="tutorial_next",
                 type="primary",
-                on_click=_move_use_case,
-                args=(tutorial.id, 1),
                 width="stretch",
+                on_click=_navigate_from_guide,
+                args=(_move_use_case, tutorial.id, 1),
             )
         else:
-            if next_col.button(
-                "✓ Done",
+            next_col.button(
+                "Done",
                 key="tutorial_done",
                 type="primary",
                 width="stretch",
-            ):
-                # Completion leaves the app at the promised outcome even when
-                # the user did not press the last step's optional Open button.
-                _open_tutorial_surface(step)
-                _finish_use_case(tutorial.id)
-                st.rerun()
+                on_click=_navigate_from_guide,
+                args=(_finish_use_case, tutorial.id),
+            )
 
         embed_html_iframe(_guide_drag_script("tutorial"), height=0)
 
@@ -2272,7 +1624,10 @@ def render_use_case_tutorial() -> None:
                             if (++tries < 200) setTimeout(findAndScroll, 150);
                             return;
                         }}
-                        el.scrollIntoView({{behavior: "smooth", block: "center"}});
+                        el.scrollIntoView({{
+                            behavior: doc.defaultView.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+                            block: "center"
+                        }});
                     }})();
                 }})();
                 </script>""",
@@ -2281,271 +1636,31 @@ def render_use_case_tutorial() -> None:
 
 
 # -----------------------------------------------------------------------------
-# FAQ — the handful of questions that come up over and over, answered in-app
-# so nobody has to leave to find out. Deliberately SHORT: the canonical,
-# complete version is docs/faq.md on the docs site, linked from the bottom of
-# the dialog. Keep these answers in sync with that page when either changes.
+# On-demand guide to the Add dataset wizard
 # -----------------------------------------------------------------------------
 
-DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
-
-# (question, markdown answer). Two-to-four lines each — anything longer belongs
-# on the docs page.
-_WHERE_DATA_GOES = "Where does my data go?"
-
-_FAQ_ITEMS = [
-    (
-        "A column was mapped to the wrong field. Where do I fix it?",
-        f"In {ICONS['view_data']} **Data Management → {ICONS['edit']} Edit dataset "
-        "→ 2 · Data tables & column mapping**. You can change the mapping "
-        "without uploading again, using any column kept during import. "
-        "To use a column that was left out, add the dataset again from its files.",
-    ),
-    (
-        "What counts as a “trial”?",
-        "One participant reading one text once, as your **Trial ID** mapping "
-        "defines it. EyeLink's `TRIAL_INDEX` only identifies a trial *within* a "
-        "participant, and the text id defaults to the trial id. If trial order "
-        "was randomized, map your item column as **Text ID**.",
-    ),
-    # The answer depends on where the app runs — `faq_items` fills
-    # it in from `_where_data_goes`, so a hosted copy never says "nowhere".
-    (_WHERE_DATA_GOES, ""),
-    (
-        "My uploaded data vanished after a refresh.",
-        "Local and desktop installs normally restore datasets, settings and "
-        "annotations after a refresh. **Data Management → Saved on this "
-        "computer** shows whether saving is on. To keep copies you can move "
-        "elsewhere, export annotations from **Data Management → Annotations** "
-        "and plot settings from **Scanpath → Share → Settings file**. "
-        "Keep your source data separately.",
-    ),
-    (
-        "How do I stop saving my work, or delete the saved copy?",
-        "Start the app with `scanpath-studio run --no-persist` (or set "
-        "`SCANPATH_STUDIO_PERSIST=0`) to save nothing. "
-        "`scanpath-studio cache --clear` deletes what is already stored. To save "
-        "it somewhere else, set `SCANPATH_STUDIO_STATE_DIR=/your/folder`.",
-    ),
-    (
-        "PDF or video export fails but HTML works.",
-        "The current figure's **PNG** and **SVG** are saved by your browser from "
-        "the plot on screen. **PDF**, **GIF**/**MP4** and the images in the "
-        "export and comparison bundles need Chrome, Chromium or Edge on the "
-        "computer running the app. With a pip install, you can run "
-        "`plotly_get_chrome -y` to install Chrome. **HTML** export works "
-        "without an additional browser installation.",
-    ),
-    (
-        "How do I cite Scanpath Studio?",
-        f"See **{ICONS['about']} About** under {ICONS['help']} Help, or "
-        "`CITATION.cff` in the repository. If you use the bundled demo data, "
-        "cite OneStop Eye Movements too.",
-    ),
-]
-
-# FAQ entries that only make sense while a gated feature is exposed.
-# Appended by `faq_items()` rather than living in `_FAQ_ITEMS`, so the default
-# build never offers an answer about a control it doesn't have.
-_DRIFT_FAQ_ITEMS = [
-    (
-        "What does drift correction do?",
-        "It moves each fixation onto the text **line** it most likely belongs "
-        "to, using one of the ten algorithms from Carr et al. (2021). It changes "
-        "the figure, not your data. Apply one under **Fixations ▾ → Drift "
-        f"correction**, or compare all ten in the **{ICONS['line_assignment']} "
-        "Line assignment** subtab.",
-    ),
-]
+WIZARD_HELP_KEY = "wizard_setup_help"
 
 
-def _where_data_goes() -> str:
-    """ "Where does my data go?" for where this app is running.
-
-    Local means the server listens on loopback only — its own configuration,
-    the same test the recovery copy uses — as ``scanpath-studio`` and the
-    desktop app do. Anything else (the online demo, a bare
-    ``streamlit run``) processes an upload on a server other machines reach.
-    """
-    from scanpath_studio.persistence import (
-        persistence_enabled,
-        server_bound_to_loopback,
-    )
-
-    if not server_bound_to_loopback():
-        kept = (
-            "a saved copy is kept there"  # opted in: SCANPATH_STUDIO_PERSIST=1
-            if persistence_enabled()
-            else "not kept"
-        )
-        return (
-            "Files you upload are processed on the server running this app "
-            f"and {kept}. The app itself has no "
-            "accounts, database or analytics. The online demo runs on Streamlit "
-            "Community Cloud, whose page around the app has its own analytics "
-            f"([privacy policy]({STREAMLIT_PRIVACY_URL}) ↗). To keep your data "
-            "on your computer, run "
-            "the app locally (`pip install scanpath-studio`, then "
-            "`scanpath-studio`)."
-        )
-    answer = (
-        "Your files are processed on your computer. The app has no accounts, "
-        "database or analytics."
-    )
-    if persistence_enabled():
-        answer += (
-            " The app also saves a **local copy** of your datasets, mappings, "
-            "settings and annotations, so you can resume after a refresh. "
-            f"**{ICONS['view_data']} Data Management → Saved on this computer** "
-            "shows what is stored and where."
-        )
-    return answer
-
-
-def faq_items() -> list:
-    """The FAQ entries this build can honestly answer."""
-    items = [
-        (question, _where_data_goes() if question == _WHERE_DATA_GOES else answer)
-        for question, answer in _FAQ_ITEMS
-    ]
-    if drift_correction_enabled():
-        items.extend(_DRIFT_FAQ_ITEMS)
-    return items
-
-
-@st.dialog(f"{ICONS['faq']} Frequently asked questions", width="large")
-@guarded()
-def _faq_dialog() -> None:
-    """The in-app FAQ: short answers in expanders + links to the full docs.
-
-    Kept short on purpose — this is the "before you file an issue" list, not a
-    manual. The docs site carries the complete version (``docs/faq.md``), and
-    the link buttons at the bottom are also the app's route into the docs from
-    a help context.
-    """
-    st.caption(
-        "Short answers to common questions. The documentation site has the "
-        "full answers."
-    )
-    for question, answer in faq_items():
-        with st.expander(question):
-            st.markdown(answer)
-
-    st.divider()
-    docs_col, tutorials_col, close_col = st.columns(3)
-    docs_col.link_button(
-        f"{ICONS['docs']} Full FAQ ↗",
-        DOCS_FAQ_URL,
-        width="stretch",
-        help="The full FAQ on the documentation site. Opens in a new tab.",
-    )
-    tutorials_col.link_button(
-        f"{ICONS['course']} Tutorials ↗",
-        DOCS_TUTORIALS_URL,
-        width="stretch",
-        help="Task-by-task walkthroughs: data collection, data filtering, "
-        "exporting figures, corpus analysis. Opens in a new tab.",
-    )
-    if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
-        _close_dialog_clientside()
-
-
-def _arm_faq() -> None:
-    """Request the FAQ dialog. Called by the ❓ Help nav entry
-    (``menu._arm_help_action``).
-
-    Dialogs can't be opened from there, so this only sets a flag that
-    :func:`maybe_show_faq` — called early in ``main()`` — serves.
-    """
-    st.session_state["_faq_dialog_requested"] = True
-
-
-def maybe_show_faq() -> None:
-    """Open the FAQ dialog if the ❓ Help nav entry armed it.
-
-    Call from ``main()`` next to :func:`maybe_show_welcome_tour`, BEFORE the
-    heavy data / plot work. Served there the modal appears immediately and
-    overlays whatever renders after it, rather than streaming to the browser
-    only after the whole rerun — including the ~10 s plot embeds — has
-    finished.
-    """
-    if st.session_state.pop("_faq_dialog_requested", False):
-        _faq_dialog()
-
-
-# -----------------------------------------------------------------------------
-# Dataset-setup guide (the "📂 Set up your dataset" wizard's own walkthrough).
-#
-# A floating card (``render_spotlight_wizard_guide``) — bottom-right until it is
-# dragged, foldable to a tab — that walks the user through the upload wizard while they fill it in — the same card style and
-# instant-dismiss machinery as the welcome spotlight tour, but keyed on its own
-# step counter (``wizard_guide_step``) and run under ``tour_mode == "wizard"`` so
-# the two never collide. Auto-opens once per session the first time the wizard is
-# shown (unless suppressed for embeds/deep-links, or the welcome spotlight tour
-# is still on screen so the two don't stack), and is replayable from the
-# wizard's "❓ Show setup guide" button.
-#
-# ``wizard_guide_seen`` gates the auto-open, but it is plain session state, so
-# on its own the guide would greet every new tab/session regardless of a prior
-# "I get it, stop". Like the welcome tour, it carries a persistent opt-out: a
-# cookie + checkbox of the same shape.
-# -----------------------------------------------------------------------------
-
-# One year, path=/, SameSite=Lax — same shape as ``TOUR_OPTOUT_COOKIE``, no
-# personal data, just a UI preference.
-WIZARD_GUIDE_OPTOUT_COOKIE = "sps_wizard_guide_optout"
-
-
-def wizard_guide_opted_out() -> bool:
-    """True when this browser asked never to auto-open the setup guide again.
-
-    Same shape as :func:`tour_opted_out`: ``_wizard_guide_dismissed`` (a plain
-    flag, not the checkbox's own widget key — see that function's docstring
-    for why) wins within a session, falling back to the cookie, then to
-    ``False`` with no request context (bare mode / AppTest).
-    """
-    if "_wizard_guide_dismissed" in st.session_state:
-        return bool(st.session_state["_wizard_guide_dismissed"])
-    try:
-        return st.context.cookies.get(WIZARD_GUIDE_OPTOUT_COOKIE) == "1"
-    except Exception:
-        return False
-
-
-def _wizard_guide_optout_script(opted_out: bool) -> str:
-    """A same-origin script that writes (or clears) the opt-out cookie."""
-    if opted_out:
-        value = f"{WIZARD_GUIDE_OPTOUT_COOKIE}=1; max-age={_TOUR_OPTOUT_MAX_AGE}"
-    else:
-        value = f"{WIZARD_GUIDE_OPTOUT_COOKIE}=; max-age=0"
-    return (
-        "<script>window.parent.document.cookie = "
-        f'"{value}; path=/; SameSite=Lax";</script>'
-    )
-
-
-def _render_wizard_guide_optout() -> None:
-    """The "Don't show this again" checkbox for the setup guide.
-
-    One call site (the guide's own running card) — there is no picker
-    equivalent to sync with, unlike the welcome tour's, so this is simpler
-    than :func:`_render_tour_optout`: no second
-    widget key, no last-synced reconciliation, just seed-once-then-let-the-
-    widget-own-it, same as any ordinary Streamlit checkbox. Kept as its own
-    function (rather than inlined) so a second surface — should one ever
-    replay this guide from somewhere else — has one place to reuse.
-    """
-    key = "wizard_guide_dont_show"
-    if key not in st.session_state:
-        st.session_state[key] = wizard_guide_opted_out()
-    opted_out = st.checkbox(
-        "Don't show this again",
-        key=key,
-        help="Skip the setup guide on future visits. "
-        f"**{ICONS['help']} Show setup guide** in the wizard brings it back.",
-    )
-    st.session_state["_wizard_guide_dismissed"] = opted_out
-    embed_html_iframe(_wizard_guide_optout_script(opted_out), height=0)
+def _focus_setup_guide_script() -> str:
+    """Focus the guide heading once its launching popover has closed."""
+    return """<script>
+    (() => {
+        const doc = window.parent.document;
+        let attempts = 0;
+        function focusGuide() {
+            const heading = doc.querySelector(".st-key-tour_card h2");
+            const launch = doc.querySelector(".st-key-wizard_guide_replay button");
+            if (heading && !launch?.checkVisibility()) {
+                heading.tabIndex = -1;
+                heading.focus({preventScroll: true});
+            } else if (++attempts < 120) {
+                window.requestAnimationFrame(focusGuide);
+            }
+        }
+        window.requestAnimationFrame(focusGuide);
+    })();
+    </script>"""
 
 
 # (title, markdown body) per step — an overview, one per part of the wizard in
@@ -2557,10 +1672,8 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['datasets']} Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into a dataset: name it, upload and "
-            "map each table, describe the recording setup, then save it. "
-            "Press **Next** to go through the steps one by one, or **Skip guide** "
-            "to close this guide."
+            "You need at least one table of fixations, words or raw gaze. "
+            "Measurements from the recording setup help place the text and gaze on screen."
         ),
         "selector": "",
         "step_id": None,
@@ -2578,11 +1691,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "2 · Data tables & column mapping",
         "body": (
-            "Upload and map each table in its own row: Fixations, Words "
-            "(interest areas), Raw gaze, then Participant, Trial and Text "
-            "metadata. Under each mapping, add other columns in "
-            "**Extra fields to keep**. Anything still missing is listed "
-            f"above **{ICONS['confirm']} Add dataset**."
+            "Upload a table and check which column supplies each field. "
+            "Use **Extra fields to keep** for other columns you need. "
+            "Anything missing is listed above **Add dataset**."
         ),
         "selector": ".st-key-wiz_part_data",
         "step_id": "data",
@@ -2590,10 +1701,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "3 · Recording setup",
         "body": (
-            "Enter the screen resolution, monitor width, text size and font "
-            "used in the experiment. Estimated and default values are labeled. "
-            "Choose *I know it* to enter a recorded value. These settings "
-            "determine how the figures are drawn."
+            "Choose *I know it* for values recorded during the experiment, "
+            "such as the screen resolution or font size. Check any estimates "
+            "and defaults before saving."
         ),
         "selector": ".st-key-wiz_part_setup",
         "step_id": "setup",
@@ -2616,7 +1726,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['confirm']} Save it",
         "body": (
-            "Click **Add dataset**, then **Open in Scanpath view** or "
+            "Click **Add dataset**, then **Open in Scanpath View** or "
             "**Add another**. Use **Download setup file** to save the mapping "
             "and recording setup. When adding similar data, choose the saved "
             "file or this dataset under *Start from*."
@@ -2633,6 +1743,12 @@ _WIZARD_GUIDE_STEPS = [
 #: whatever the card covers at the bottom can still be scrolled clear of it.
 _WIZARD_GUIDE_PAGE_CSS = """
 [data-testid="stMainBlockContainer"] { padding-bottom: 16rem !important; }
+@media (max-width: 44rem) {
+    .st-key-tour_card {
+        position: relative !important; inset: auto !important; transform: none !important;
+        width: 100% !important; max-width: 100% !important; max-height: 45dvh; overflow-y: auto;
+    }
+}
 """
 
 
@@ -2677,10 +1793,7 @@ def _wizard_guide_progress(step_idx: int, step: dict) -> str:
 
 
 def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -> None:
-    """Back · Skip guide · Next (or ✓ Got it on the last step), one column each.
-
-    *Skip guide*, not *Skip*: the Words table has a mapping field called
-    **Skip** (EyeLink's ``IA_SKIP``) on the same screen."""
+    """Navigation for the optional setup guide."""
     back_col.button(
         "← Back",
         key="wizard_sp_back",
@@ -2690,7 +1803,7 @@ def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -
     )
     if step_idx < n - 1:
         exit_col.button(
-            "Skip guide",
+            "Close guide",
             key="wizard_sp_exit",
             width="stretch",
             on_click=_exit_wizard_guide,
@@ -2704,7 +1817,7 @@ def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -
         )
     else:
         next_col.button(
-            "✓ Got it",
+            "Done",
             key="wizard_sp_done",
             width="stretch",
             type="primary",
@@ -2715,17 +1828,7 @@ def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -
 @st.fragment
 @guarded()
 def render_spotlight_wizard_guide() -> None:
-    """The dataset-setup wizard's step-by-step guide card.
-
-    A floating card, draggable by its title and foldable to a tab (see
-    *Moving and folding a guide card*). Shares the welcome tour's highlight,
-    scroll and instant-dismiss machinery but uses its own ``wizard_guide_step``
-    counter and ``tour_mode == "wizard"`` so the two never collide.
-
-    Call early in the wizard's render (``wizard._render_data_setup``) so it
-    streams to the browser before the heavy upload/normalize work. Runs as a
-    fragment: Back/Next/Skip rerun only the guide.
-    """
+    """Show the requested setup step alongside the editable form."""
     if st.session_state.get("tour_mode") != "wizard":
         return
     steps = _wizard_guide_steps()
@@ -2743,7 +1846,13 @@ def render_spotlight_wizard_guide() -> None:
             + "</style>",
             unsafe_allow_html=True,
         )
-        _render_guide_pill("wizard", "Setup guide", progress_text, "setup guide")
+        _render_guide_pill(
+            "wizard",
+            "Setup guide",
+            progress_text,
+            "setup guide",
+            on_close=_exit_wizard_guide,
+        )
         return
 
     selector = step["selector"]
@@ -2765,19 +1874,14 @@ def render_spotlight_wizard_guide() -> None:
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
         st.markdown(f"## {step['title']}")
         _render_guide_fold_button("wizard", "setup guide")
+        if st.session_state.pop("_focus_setup_guide", False):
+            embed_html_iframe(_focus_setup_guide_script(), height=0)
         st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=progress_text)
-        # Same placement rule as the welcome tour's own opt-out — only
-        # where a user decides they're done with the guide (the first step,
-        # bailing out now, or the last, got it, don't greet me again), so the
-        # short middle step keeps its tight vertical rhythm.
-        if step_idx in (0, n - 1):
-            _render_wizard_guide_optout()
         back_col, exit_col, next_col = st.columns(3)
         _wizard_guide_buttons(back_col, exit_col, next_col, step_idx, n)
     embed_html_iframe(_guide_drag_script("wizard"), height=0)
-    # Hide the guide instantly on Skip/Done, even while the wizard's first run
-    # is still loading (see _dismiss_listener_script).
+    # A busy upload can finish after the user closes the guide.
     embed_html_iframe(
         _dismiss_listener_script(None, exit_keys=("wizard_sp_exit", "wizard_sp_done")),
         height=0,
@@ -2785,39 +1889,9 @@ def render_spotlight_wizard_guide() -> None:
 
 
 def _arm_wizard_guide() -> None:
-    """``on_click`` callback for the wizard's "❓ Show setup guide" button.
-
-    Arms the guide card from step 0, unfolded. Callbacks run before the rerun,
-    so ``render_spotlight_wizard_guide`` (called as the wizard renders) picks it
-    up on the same run — mirroring ``_arm_tour`` for the welcome tour.
-    """
-    st.session_state["wizard_guide_step"] = 0
-    _set_guide_folded("wizard", False)
-    st.session_state["tour_mode"] = "wizard"
-
-
-def maybe_show_wizard_guide() -> None:
-    """Arm the dataset-setup guide automatically the first time the wizard is
-    shown in a session (the replay button arms it on demand via ``_arm_wizard_guide``).
-
-    Call as the active wizard renders, immediately followed by
-    ``render_spotlight_wizard_guide()`` which draws the card. The auto-open is
-    skipped for embeds/deep-links, while the welcome spotlight tour is still
-    on screen (so the two walkthroughs never stack), and for a
-    browser that already asked never to see it again via
-    :func:`wizard_guide_opted_out`. ``wizard_guide_seen`` is set *before*
-    arming (mirroring ``tour_seen``) so a dismissal doesn't re-open it on the
-    next rerun.
-    """
-    if st.session_state.get("wizard_guide_seen"):
-        return
-    if (
-        tour_suppressed(st.query_params)
-        or st.session_state.get("tour_mode") == "spotlight"
-        or wizard_guide_opted_out()
-    ):
-        return
-    st.session_state["wizard_guide_seen"] = True  # before arming — see docstring
+    """Open the optional setup guide at its first step."""
+    st.session_state[WIZARD_HELP_KEY] = False
+    st.session_state["_focus_setup_guide"] = True
     st.session_state["wizard_guide_step"] = 0
     _set_guide_folded("wizard", False)
     st.session_state["tour_mode"] = "wizard"

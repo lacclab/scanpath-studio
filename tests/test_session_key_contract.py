@@ -544,7 +544,7 @@ def _restore_config_app():
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
-        # Figure & canvas → Legends: every legend, as the writer saves them.
+        # Figure → Legends: every legend, as the writer saves them.
         "legends": {
             "compare": {"position": "left", "arrangement": "stacked", "size": 14},
             "saccades": {"position": "right", "arrangement": "auto", "size": None},
@@ -621,8 +621,14 @@ def _restore_config_app():
         "selection": {
             "participant_id": "p1",
             "trial_id": "t1",
-            # Schema 6 — scanpath B by identity, in the same dataset.
-            "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
+            "fixation_window": [2, 4],
+            "window_all_trials": False,
+            "compare": {
+                "participant_id": "p2",
+                "trial_id": "t1",
+                "screen_id": "2",
+                "fixation_window": [3, 5],
+            },
         },
         "mode": {"animate": True, "compare": True},
         # The finer design choices.
@@ -807,7 +813,7 @@ def test_compare_selection_round_trips_through_the_share_link():
 
 
 def _compare_share_unshareable_app():
-    """A stored upload as B can't travel — the link must say so, not drop it."""
+    """A stale selection naming a removed source cannot be shared."""
     import streamlit as st
 
     from scanpath_studio.constants import DEMO_CHOICE
@@ -837,16 +843,48 @@ def test_an_unshareable_compare_source_is_declared_not_dropped():
     # the recipient on a trial id looked up in the *wrong* corpus.
     assert sk.COMPARE_PARAM not in emitted
     assert sk.COMPARE_SOURCE_PARAM not in emitted
+    assert sk.COMPARE_DATASET_PARAM not in emitted
+    assert sk.COMPARE_DATASET_ID_PARAM not in emitted
     assert any("My upload" in caveat for caveat in at.session_state["_caveats"])
 
 
-def test_url_bound_widget_keys_frozen():
-    # Streamlit's bind="query-params" makes the key the URL param and the tab
-    # label its value: renaming either breaks a bookmarked Corpus Analysis view.
+def test_b_dataset_reference_params_are_pinned():
+    params = {
+        sk.COMPARE_DATASET_PARAM,
+        sk.COMPARE_DATASET_ID_PARAM,
+        sk.COMPARE_DATASET_DIGEST_PARAM,
+        sk.COMPARE_CORPUS_PARAM,
+    }
+    assert params == {
+        "cmp_dataset",
+        "cmp_dataset_id",
+        "cmp_dataset_digest",
+        "cmp_corpus",
+    }
+    assert params <= sk.URL_SELECTION_PARAMS
+    assert params <= sk.URL_OPTIONAL_PARAMS
+
+
+def test_fixation_window_scope_param_is_pinned():
+    """*Keep this range across trials* on the link: a switch, written only
+    while on, so a link may lack it."""
+    assert sk.SHARE_TOGGLE_PARAMS["fix_range_all_trials"] == (
+        "single_fix_range_all_trials"
+    )
+    assert "fix_range_all_trials" in sk.URL_OPTIONAL_PARAMS
+
+
+def test_corpus_bookmark_keys_and_sections_frozen():
+    # Existing links and tutorial steps still use the published section names.
     from scanpath_studio import tabs
 
-    assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
+    assert sk.URL_BOUND_WIDGET_KEYS == {
+        "corpus_subtab",
+        "corpus_group_by",
+        "corpus_measure",
+    }
     assert tabs.CORPUS_SUBTABS == (
+        "Overview",
         "Per text",
         "Per sentence",
         "Per participant",
@@ -890,3 +928,10 @@ def test_the_groups_setup_survives_another_subtab():
     assert not at.exception, at.exception
     assert at.toggle(key="groups_compare").value is True
     assert at.multiselect(key="cmp_b").value == ["Adv", "Ele"]
+
+
+def test_replay_fixations_param_is_pinned():
+    """A replay link with fixations hidden says so explicitly; one without
+    this param was written before it existed and reopens with fixations."""
+    assert sk.REPLAY_FIXATIONS_PARAM == "replay_fixations"
+    assert "replay_fixations" in sk.URL_OPTIONAL_PARAMS

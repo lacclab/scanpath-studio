@@ -25,14 +25,33 @@ import shutil
 import sys
 from pathlib import Path
 
+from mkdocs.plugins import event_priority
+
 _SCRIPTS = Path(__file__).resolve().parent
 
 
+@event_priority(100)
 def on_config(config, **kwargs):
     """Make ``docs_support`` importable from the pages' fences. Done here, not
     at import: MkDocs restores ``sys.path`` after loading a hooks file."""
     if str(_SCRIPTS) not in sys.path:
         sys.path.insert(0, str(_SCRIPTS))
+    from docs_support import docs_channel
+
+    from scanpath_studio import __release__
+    from scanpath_studio.build_info import DEV_APP_URL, STABLE_APP_URL, docs_site
+
+    channel = docs_channel()
+    config.site_url = docs_site(channel)
+    config.extra.update(
+        docs_channel=channel,
+        release=__release__,
+        other_docs=docs_site("stable" if channel == "dev" else "dev"),
+    )
+    if channel == "dev":
+        for entry in config.extra["social"]:
+            if entry["link"] == STABLE_APP_URL:
+                entry.update(link=DEV_APP_URL, name="Dev demo")
     return config
 
 
@@ -51,8 +70,12 @@ def _icon_span(match: re.Match) -> str:
     return f'<span class="sps-icon" data-icon="{match.group(1)}" aria-hidden="true"></span>'
 
 
-def on_page_markdown(markdown: str, **kwargs) -> str:
+def on_page_markdown(markdown: str, config=None, **kwargs) -> str:
     """Turn each ``:material/…:`` shortcode outside code into its icon."""
+    from scanpath_studio.build_info import DEV_APP_URL, STABLE_APP_URL
+
+    if config and config.extra["docs_channel"] == "dev":
+        markdown = markdown.replace(f"]({STABLE_APP_URL})", f"]({DEV_APP_URL})")
     out, last = [], 0
     for code in _CODE.finditer(markdown):
         out.append(_ICON.sub(_icon_span, markdown[last : code.start()]))

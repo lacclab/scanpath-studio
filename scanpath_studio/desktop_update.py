@@ -1,7 +1,7 @@
 """One-click *Update & restart* for the desktop app.
 
 Only the frozen bundle can replace itself, so this belongs to the desktop app
-alone: Help → About → *Check for updates* → **Update & restart**, or
+alone: Help → About & citation → App details → *Check for updates* → **Update & restart**, or
 ``ScanpathStudio --update`` headless. An update runs in five steps:
 
 1. :func:`refusal` — can this install update itself at all?

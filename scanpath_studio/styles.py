@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from scanpath_studio.constants import (
+    PALETTES,
     SELECTOR_ROW_FLOOR_CAPS,
     SELECTOR_ROW_FLOORS_REM,
     SELECTOR_ROW_WRAP_REM,
     SELECTOR_SCREEN_FLOOR_REM,
     SELECTOR_SCREEN_PICKER_REM,
     SELECTOR_STEPS_FLOOR_REM,
+    palette_tile_key,
 )
 
 
@@ -117,13 +119,65 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
-    /* The Data page's two screens: the overview (the dataset table +
-       what's in the open dataset) and the ✏️ Edit dataset screen. Same
-       mechanism and same reason as the page above, one level in: the editor is
-       *made* of the widgets that drive `prepare_data`, so it renders every run
-       and is hidden by key rather than skipped. */
-    .st-key-data_overview_offscreen { display: none !important; }
+    /* Source controls feed the loader while the editor is closed. */
     .st-key-data_dataset_editor_offscreen { display: none !important; }
+
+    .st-key-data_identity {
+        border-inline-start: 0.22rem solid var(--sps-accent);
+        background: linear-gradient(105deg, var(--sps-accent-soft), transparent 75%);
+    }
+    .st-key-data_identity h3 { overflow-wrap: anywhere; }
+    .st-key-data_inspection_panel { margin-block: 0.65rem 0.35rem; }
+    .st-key-data_totals { margin-top: 0.35rem; }
+    .st-key-data_averages, .st-key-data_recording_tables {
+        margin-block-start: 0.9rem;
+    }
+    .st-key-data_averages [data-testid="stMetric"] {
+        padding-inline: 0.85rem;
+        border-inline-start: 2px solid var(--sps-border);
+    }
+    .st-key-data_averages [data-testid="stMetricValue"] { font-size: 1.35rem; }
+    .st-key-data_recording_tables {
+        gap: 0 !important;
+    }
+    .st-key-data_recording_tables h4 { margin-bottom: 0.4rem; }
+    .st-key-data_recording_header, .st-key-data_recording_tables button[kind="tertiary"] {
+        padding-inline: 0.75rem;
+        border-bottom: 1px solid var(--sps-border);
+        border-radius: 0;
+    }
+    .st-key-data_recording_header { padding-block: 0.25rem; }
+    .st-key-data_recording_header p { font-size: 0.85rem; }
+    .st-key-data_recording_tables button[kind="tertiary"] {
+        justify-content: start; color: var(--sps-accent);
+        min-height: 2.5rem;
+    }
+    .st-key-data_recording_tables button [data-has-shortcut],
+    .st-key-data_recording_tables button [data-testid="stMarkdownContainer"] {
+        flex: 1; min-width: 0;
+    }
+    .st-key-data_recording_header p, .st-key-data_recording_tables button[kind="tertiary"] p {
+        display: grid; grid-template-columns: minmax(0, 2fr) minmax(3.5rem, 1fr) minmax(5rem, 1fr);
+        align-items: baseline; column-gap: 0.65rem; text-align: end;
+        font-variant-numeric: tabular-nums;
+    }
+    .st-key-data_recording_header strong, .st-key-data_recording_tables button strong { text-align: start; }
+    .st-key-data_recording_tables [data-testid="stExpander"] { margin-top: 0.6rem; }
+    .st-key-data_table_links { margin-block: 0.45rem; }
+    .st-key-data_table_links a { white-space: nowrap; }
+    .st-key-tutorial_data_inspection [id^="data-table-"] { scroll-margin-top: 4rem; }
+    .st-key-tutorial_data_inspection [class*="st-key-data_table_"]:not(.st-key-data_table_links) {
+        margin-block: 0.6rem 0.35rem;
+    }
+    .sps-ds-mobile-status { display: none; }
+    @media (max-width: 640px) {
+        .sps-ds-mobile-status { display: block; font-size: 0.8rem; }
+        .st-key-data_inspection_panel button { padding-inline: 0.45rem; }
+        .st-key-data_workspace [role="tablist"] { gap: 0; }
+        .st-key-data_workspace [role="tab"] { padding-inline: 0.4rem; }
+        .st-key-data_totals [data-testid="stMetric"] { padding: 0.65rem; }
+        .st-key-data_totals [data-testid="stMetricLabel"] span:has(> span > [data-testid="stMetricIcon"]) { display: none; }
+    }
 
     /* The add-dataset wizard's watcher (`wizard_watch`): a script with
        nothing to show, drawn on every run at the top of the page's notices. */
@@ -213,10 +267,7 @@ def get_app_css() -> str:
         position: absolute !important; width: 1px; height: 1px;
         overflow: hidden; clip-path: inset(50%); white-space: nowrap;
     }
-    [class*="st-key-dsrow_current_"] > [class*="st-key-dataset_open_"] button {
-        cursor: default;
-    }
-    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"] {
+    [class*="st-key-dsrow_"]:not(.st-key-dsrow_head) > [data-testid="stLayoutWrapper"] {
         position: relative;
         z-index: 1;
         pointer-events: none;
@@ -293,27 +344,25 @@ def get_app_css() -> str:
         outline-offset: 2px;
         border-radius: 0.25rem;
     }
-    /* Phone width: the name, its Current badge, the key count and Remove.
-       Everything else is in *What's in the dataset*, once it is open. */
+    /* On phones the name wraps beside the participant count and row actions. */
     @media (max-width: 640px) {
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_participants_"])):not(:has(> [class*="st-key-dsc_actions_"])),
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)) {
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)),
+        [class*="st-key-dsrow_"] > [data-testid="stElementContainer"]:has(> [data-testid="stSpace"]) {
             display: none !important;
-        }
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
-        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
-            min-width: 0;
         }
         [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
         [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
             position: relative;
+            flex: 1 1 0 !important;
+            min-width: 0;
         }
-        .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_participants_"]),
         [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants) {
-            width: auto !important;
-            min-width: 3.5rem;
+            width: 5rem !important;
         }
+        .st-key-dataset_table_grid .sps-ds-name { display: block; }
+        .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
     }
 
     /* The 🗂️ Data page: denser, with larger small type. Scoped to the
@@ -677,6 +726,9 @@ def get_app_css() -> str:
     [data-testid="stTab"]:hover { background: var(--sps-accent-soft); }
     [data-testid="stTab"] p { font-weight: 600; }
     [data-testid="stTab"][aria-selected="true"] p { color: var(--sps-accent); }
+    @media (max-width: 400px) {
+        .st-key-about_sections [role="tab"] { padding-inline: 0.375rem; }
+    }
 
     /* Inline code chips (Trial / Participant / Text ids, etc.) -> clean pill
        badges. `:not(pre code)` leaves multi-line code blocks (e.g. the BibTeX in
@@ -896,41 +948,6 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* A rail row with no switch (Filters & highlights, 📐 Figure & canvas) is
-       one control, so its name opens the popover. The ▾ trigger's click target
-       is stretched over the whole row by an `::after` overlay, which keeps the
-       row's look, and the popover still anchors on the ▾ itself. The row is
-       the overlay's containing block, so nothing between it and the button
-       may be positioned. `transform: none` matters for the same reason:
-       the app-wide hover lift (`translateY(-1px)`) would make the button
-       the containing block mid-hover, shrinking the overlay out from under
-       the pointer. The rows with a switch don't get this: their name is the
-       switch's label and flips it, as on Animate and Compare. */
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
-            :has([data-testid="stCheckbox"])
-        ) {
-        position: relative;
-    }
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
-            :has([data-testid="stCheckbox"])
-        ) [data-testid="stPopover"] button {
-        position: static !important;
-        transform: none !important;
-    }
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
-            :has([data-testid="stCheckbox"])
-        ) [data-testid="stPopover"] button::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-    }
-    /* ...and the whole row lights up on hover, not only the ▾ half, since
-       the whole row is what a click opens. */
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_rail_"]:not(
-            :has([data-testid="stCheckbox"])
-        ):has([data-testid="stPopover"] button:hover:enabled) {
-        background: var(--sps-accent-soft);
-    }
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stWidgetLabel"] p,
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
@@ -971,54 +988,34 @@ def get_app_css() -> str:
         min-width: 0;
         max-width: 100%;
     }
-    /* …and the same `p` must give up its bottom margin, or the row
-       grows a scrollbar. Streamlit 1.62 gives every `wrap=False` horizontal
-       container `overflow-x: auto`, and CSS then promotes `overflow-y` from
-       `visible` to `auto` along with it: each row is a scroll box, so anything
-       that overhangs it by a pixel shows a scrollbar on hover. A markdown `p`
-       carries `margin-bottom: 1rem` that Streamlit cancels with a matching
-       negative margin on `stMarkdownContainer` — which fixes the layout but not
-       `scrollHeight`, and the margin still counts there. So the name-only
-       sections (📄 Stimulus · Filters & highlights · 📐 Figure & canvas, the ones
-       drawn with a name instead of a switch) would scroll 8px and lose 11px of
-       width to the scrollbar's gutter.
-       Zeroing both margins rather than setting `overflow: visible` removes the
-       overhang instead of hiding it — the row keeps the horizontal clipping
-       Streamlit put there. Nothing moves: the label is centred by the flex row
-       either way. */
+    /* Horizontal rows can scroll. Remove the trailing paragraph margin so
+       a one-line label does not create a vertical scrollbar. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"],
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"] p {
         margin-bottom: 0;
     }
-    /* A switch's `help` is hover text on the switch itself: on
-       Animate, what it greys; on a greyed layer, why. Streamlit draws `help`
-       as a `?` button after the label, which these rows do not show (and which
-       "Word boxes" has no room for). So the tooltip's hover target is stretched
-       over the whole switch — the <label>, already `position: relative` — and
-       the `?` is not drawn. A click still flips the switch: the target is a
-       plain span inside the <label>, while the `?` button, interactive content
-       that would swallow the click, takes no pointer events. It stays
-       focusable, and shows while it has focus. */
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+    /* Put native help on the switch's hit area. The tooltip button stays
+       focusable, and pointer clicks on the label still toggle visibility. */
+    :is([class*="st-key-split_mode_"], [class*="st-key-plot_layer_"])
         [data-testid="stCheckbox"] [data-testid="stWidgetLabel"]
         > span:has(> [data-testid="stTooltipIcon"]),
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+    :is([class*="st-key-split_mode_"], [class*="st-key-plot_layer_"])
         [data-testid="stCheckbox"] [data-testid="stTooltipIcon"] {
         display: contents;
     }
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+    :is([class*="st-key-split_mode_"], [class*="st-key-plot_layer_"])
         [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] {
         position: absolute;
         inset: 0;
     }
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+    :is([class*="st-key-split_mode_"], [class*="st-key-plot_layer_"])
         [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"] button {
         opacity: 0;
         pointer-events: none;
     }
-    [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
+    :is([class*="st-key-split_mode_"], [class*="st-key-plot_layer_"])
         [data-testid="stCheckbox"] [data-testid="stTooltipHoverTarget"]
         button:focus-visible {
         opacity: 1;
@@ -1045,9 +1042,7 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
         justify-content: stretch;
-        /* 2.6rem, not 2.8: at a 1280px window the rail's longest layer name,
-           "Word boxes", misses by 2px — the ▾ needs no more. */
-        flex: 0 0 2.6rem;
+         flex: 0 0 2.6rem;
         min-width: 2.6rem;
         border-left: 1px solid var(--sps-border);
         border-radius: 0 0.6rem 0.6rem 0;
@@ -1948,9 +1943,7 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* A block heading inside a rail popover (the two halves of Filters &
-       highlights, the groups of 📐 Figure & canvas). A rule and a small label:
-       enough to group, cheap in height. */
+    /* Separate fixation and saccade settings inside Filters & highlights. */
     .sps-rail-subhead {
         /* Above the rows' 0.9rem labels, so a block's title outranks
            its own fields instead of reading as a footnote to them. */
@@ -1958,19 +1951,11 @@ def get_app_css() -> str:
         font-weight: 700;
         letter-spacing: 0.01em;
         opacity: 0.8;
-        /* More room above than below, so the label still reads as belonging to
-           the block under it — but with much less below, "🖥️ Screen & framing"
-           sits almost on the baseline of the "Show full monitor" switch, and the
-           two look like one control. */
         margin: 0.8rem 0 0.45rem;
         padding-top: 0.4rem;
         border-top: 1px solid rgba(128, 128, 128, 0.28);
     }
-    /* The block that opens a popover (Screen & framing in Figure &
-       canvas, Fixations in Filters & highlights) needs no rule above it: the
-       popover's own edge is the boundary. `_rail_subsection(first=True)` marks
-       it, since the popover body is drawn apart from the rail row's keyed
-       container, and its first child differs between the two popovers. */
+    /* The first group already sits against the popover edge. */
     .sps-rail-subhead.sps-rail-subhead-first {
         border-top: none;
         padding-top: 0;
@@ -2074,58 +2059,97 @@ def get_app_css() -> str:
     /* Section dividers default to 32px top+bottom margin — far too airy for the
        narrow rail. Tighten them so the sections sit close together. */
     .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
-    /* The palette divider sits midway between the Palette box and the
-       Fixations card, ~0.55rem from each. Its own margins are zeroed — the
-       rule's, and its markdown wrapper's (Streamlit's -1rem that cancels a
-       paragraph's margin, which with the rule's margins would make the space
-       lopsided) — so the rail's gap and the app-wide 0.25rem under each block
-       set the space above it; the 0.2rem below makes up for the layer rows
-       sitting a little closer than other blocks do. */
-    .st-key-scanpath_rail .st-key-palette_layers_divider > div,
-    .st-key-scanpath_rail .st-key-palette_layers_divider
-        [data-testid="stMarkdownContainer"],
-    .st-key-scanpath_rail .st-key-palette_layers_divider hr {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
+    /* Layer names open their settings. Visibility has a separate, fixed-width
+       switch so a long layer name can wrap without displacing it. */
+    .st-key-plot_editor_tabs [role="tablist"] { gap: 0; }
+    .st-key-plot_editor_tabs [role="tab"] {
+        flex: 1 1 0;
+        justify-content: center;
+        padding-inline: 0.4rem;
     }
-    .st-key-scanpath_rail .st-key-palette_layers_divider {
-        margin-bottom: 0.2rem !important;
+    .st-key-plot_editor_tabs [role="tabpanel"] { padding-top: 0.35rem; }
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] {
+        border-bottom: 1px solid var(--sps-border);
+        align-items: center;
+        padding-right: 0.2rem;
     }
-    /* Plot-rail triggers need enough height for their labels and switch tracks;
-       the app-wide compact button treatment otherwise leaves them cramped. */
-    .st-key-scanpath_rail .st-key-viz_view_scanpath button,
-    .st-key-scanpath_rail .st-key-viz_view_heatmap button,
-    .st-key-scanpath_rail .st-key-viz_view_illustration button,
-    .st-key-scanpath_rail .st-key-viz_view_custom button,
-    .st-key-scanpath_rail [class*="st-key-simple_view_"] button {
-        min-height: 2.6rem;
-        padding-top: 0.25rem;
-        padding-bottom: 0.25rem;
+    .st-key-plot_filter_row > :first-child,
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] > :first-child {
+        flex: 1 1 0;
+        min-width: 0;
     }
-    /* Essentials' View tiles are bigger than Full's presets: an icon over its
-       label, in a tile 4rem tall. Full's `quick_views_grid` keeps its own size. */
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
-        min-height: 4rem;
-        padding-top: 0.4rem;
-        padding-bottom: 0.4rem;
+    .st-key-plot_filter_row > :last-child,
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] > :last-child {
+        flex: 0 0 auto;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] label {
+        position: relative;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.5rem;
+        min-width: 2.5rem;
+        gap: 0;
+    }
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] label > div:first-of-type {
+        margin-top: 0;
+    }
+    /* The name is already on the settings button. Visually hide only the
+       repeated text so the switch keeps its accessible label and help. */
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] [data-testid="stWidgetLabel"] {
+        width: 0;
+        min-width: 0;
+        margin: 0;
+    }
+    .st-key-plot_editor_tabs [class*="st-key-plot_layer_"] [data-testid="stWidgetLabel"] [data-testid="stMarkdownContainer"] {
+        display: none;
+    }
+    .st-key-plot_editor_tabs [class*="st-key-plot_menu_"] button {
+        min-height: 2.5rem;
+        border-radius: 0.4rem;
+        justify-content: flex-start;
+        padding-inline: 0.4rem;
+    }
+    .st-key-plot_editor_tabs [class*="st-key-plot_menu_"] button p {
+        white-space: normal;
+        text-align: left;
+    }
+    .st-key-plot_editor_tabs [class*="st-key-plot_menu_"] button:hover {
+        background: var(--sps-accent-soft);
+    }
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button {
+        min-height: 3.55rem;
+        padding-block: 0.25rem;
+    }
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button > div > span {
         flex-direction: column;
         align-items: center;
-        gap: 0.2rem;
+        gap: 0.15rem;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
-        font-size: 1.05rem;
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button p {
+        font-size: 1rem;
         line-height: 1.2;
     }
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+    __PALETTE_SWATCHES__
+    .st-key-rail_palette_tiles button p::before {
+        content: "";
+        display: block;
+        width: 2.4rem;
+        height: 0.45rem;
+        border-radius: 1rem;
+        margin: 0 auto 0.3rem;
+        background: var(--palette-swatch);
+        box-shadow: 0 0 0 1px rgb(128 128 128 / 45%);
+    }
+    .st-key-viz_palette_custom button p::before { display: none; }
+    .st-key-rail_compare { padding-top: 0.5rem; }
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button
         span:has(> [data-testid="stIconMaterial"]),
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button
         [data-testid="stIconMaterial"] {
-        width: 1.6rem;
-        height: 1.6rem;
-        font-size: 1.6rem;
-        line-height: 1.6rem;
+        width: 1.4rem;
+        height: 1.4rem;
+        font-size: 1.4rem;
+        line-height: 1.4rem;
     }
     /* An Essentials / Full wrapper (`ui_mode.advanced_only` / `simple_only`)
        in the rail is one more block around what it holds. The wrapper takes
@@ -2145,6 +2169,23 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
         min-height: 2.6rem;
     }
+    .st-key-plot_history_actions {
+        display: grid;
+        grid-template-columns: 2rem 2rem minmax(0, 1fr);
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .st-key-plot_history_actions > * { min-width: 0; }
+    .st-key-plot_history_actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 2.6rem;
+        padding-inline: 0.2rem;
+    }
+    /* Keep the spoken label out of the flex row so its gap doesn't shift the arrow. */
+    :is(.st-key-viz_undo, .st-key-viz_redo) button [data-testid="stMarkdownContainer"] {
+        position: absolute;
+    }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
     .st-key-scanpath_rail h5,
@@ -2155,7 +2196,7 @@ def get_app_css() -> str:
         width: 100%;
         justify-content: flex-start;
     }
-    /* The rail's expanders (e.g. 🎨 My designs). Streamlit gives the
+    /* The rail's expanders (e.g. 🎨 My views). Streamlit gives the
        expander label `word-break: break-word`, which in a rail this narrow
        snaps the header mid-word — the same defect the nowrap rule above
        prevents for toggle labels. Break at spaces only, and give the label the
@@ -2182,7 +2223,7 @@ def get_app_css() -> str:
         padding-right: 0.4rem;
         padding-top: 0.1rem;
     }
-    /* Design presets and Palette use the same quietly muted label treatment. */
+    /* View, Layers and Palette use the same quietly muted label treatment. */
     .sps-control-label {
         color: inherit;
         opacity: 0.72;
@@ -2190,36 +2231,30 @@ def get_app_css() -> str:
         line-height: 1.4;
         margin-bottom: 0;
     }
-    .st-key-scanpath_rail .st-key-global_palette [data-testid="stWidgetLabel"] {
-        opacity: 0.72;
+    .st-key-scanpath_rail [data-testid="stMarkdownContainer"]:has(> .sps-control-label) {
+        margin-bottom: 0;
     }
-    /* Give the heading a small breathing space, while keeping the 2×2 grid
-       itself tighter than ordinary Streamlit column rows. Essentials mode's View
-       tiles (`tour_grp_simple_views`) are the same grid. */
-    .st-key-scanpath_rail .st-key-quick_views_grid,
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views {
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) {
         margin-top: 0;
-        padding-top: 0.45rem;
         margin-bottom: 0.05rem;
     }
-    /* The grid's two rows are as far apart as its two columns
+    /* Streamlit gives each unwrapped column a 128px minimum. Both tiles
+       must fit the rail even when its content is narrower than 256px. */
+    :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) [data-testid="stColumn"] { min-width: 0; }
+    /* The grid's rows are as far apart as its two columns
        (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
        app-wide 0.25rem under each block, twice over. The key sits on the
        vertical block itself, so the rule names it, not a child of it. */
-    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"],
     .st-key-scanpath_rail
-        .st-key-tour_grp_simple_views[data-testid="stVerticalBlock"] {
+        :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles)[data-testid="stVerticalBlock"] {
         gap: 0.4rem !important;
     }
-    .st-key-scanpath_rail .st-key-quick_views_grid > div,
-    .st-key-scanpath_rail .st-key-quick_views_grid [data-testid="stColumn"]
-        [data-testid="stVerticalBlock"] > div,
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views > div,
-    .st-key-scanpath_rail .st-key-tour_grp_simple_views [data-testid="stColumn"]
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) > div,
+    .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) [data-testid="stColumn"]
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
-    /* 🎨 My designs. 💾 Save is drawn *into* the expander's own title
+    /* 🎨 My views. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
        right-hand side is empty (the chevron sits left), so the list underneath
        keeps the full width of the rail instead of losing a fifth of it to one
@@ -2321,69 +2356,10 @@ def get_app_css() -> str:
         height: 2.1rem;
         min-height: 0;
     }
-    /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size: the label's own
-       Material icon is what stays — the text collapses around it.
-       The rail is a fifth of the row, and these queries measure its
-       *content* box — 191px on a 1280px laptop. The full-size label
-       needs ~240px ("✎ Illustration", the longest, is 84px at 14px plus 12px
-       padding a side); under that the buttons tighten (padding, gap, a point
-       smaller: 75px), which holds one line down to ~175px. The icon fallback
-       starts at 178px, a few pixels of slack for other platforms' fonts — a
-       window under ~1220px. */
     @container sps-rail (max-width: 240px) {
-        .st-key-quick_views_grid [data-testid="stHorizontalBlock"],
-        .st-key-tour_grp_simple_views [data-testid="stHorizontalBlock"] {
-            gap: 0.4rem !important;
-        }
-        .st-key-viz_view_scanpath button,
-        .st-key-viz_view_heatmap button,
-        .st-key-viz_view_illustration button,
-        .st-key-viz_view_custom button,
-        [class*="st-key-simple_view_"] button {
-            padding-left: 0.25rem;
-            padding-right: 0.25rem;
-        }
-        .st-key-viz_view_scanpath button p,
-        .st-key-viz_view_heatmap button p,
-        .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p,
-        [class*="st-key-simple_view_"] button p {
-            font-size: 0.8125rem;
-            white-space: nowrap;
-        }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
-            font-size: 0.95rem;
-        }
-    }
-    @container sps-rail (max-width: 178px) {
-        .st-key-viz_view_scanpath button p,
-        .st-key-viz_view_heatmap button p,
-        .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p,
-        [class*="st-key-simple_view_"] button p {
-            font-size: 0;
-        }
-        /* The View tiles carry their icon in the `icon=` slot, beside the
-           label: with the label gone, its spacing would push the icon
-           off-centre. */
-        [class*="st-key-simple_view_"] button [data-testid="stIconMaterial"] {
-            margin: 0 !important;
-        }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
-            font-size: 0;
-        }
-        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
-            gap: 0;
-        }
-        /* A markdown `:material/…:` renders as `span[role="img"]` — the
-           `stIconMaterial` test id is only on the `icon=` slot. */
-        .st-key-viz_view_scanpath button p span[role="img"],
-        .st-key-viz_view_heatmap button p span[role="img"],
-        .st-key-viz_view_illustration button p span[role="img"],
-        .st-key-viz_view_custom button p span[role="img"] {
-            font-size: 1.1rem;
-        }
+        :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) [data-testid="stHorizontalBlock"] { gap: 0.4rem !important; }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button { padding-inline: 0.25rem; }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button p { font-size: 0.95rem; }
     }
     /* The rail's heading row holds nothing but the heading; Reset sits
        at the foot of the rail (`plot_reset_footer`), full width like every
@@ -2534,6 +2510,36 @@ def get_app_css() -> str:
         }
     }
 
+    /* On a phone, the figure and its view choices share a single column.
+       Lift the two columns' contents into the same flex flow so opening a
+       tall subtab can never put Export between the figure and its controls. */
+    @media (max-width: 639px) {
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+            flex-direction: column;
+            gap: 0.3rem !important;
+            reading-flow: flex-visual;
+        }
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+        .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail),
+        .st-key-scanpath_rail {
+            display: contents;
+        }
+        .st-key-scanpath_rail > * { order: 1; }
+        .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
+        .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_view_modes, .st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
+        .st-key-plot_controls_header h2 { padding-bottom: 0.25rem !important; }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button {
+            min-height: 44px;
+        }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles)[data-testid="stVerticalBlock"] {
+            gap: 0.15rem !important;
+        }
+        .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) button > div > span {
+            flex-direction: row;
+        }
+    }
+
     /* The rail keeps a floor of 260px; the figure takes the rest
        (it scales uniformly, so a narrower plot column costs nothing but
        size). At a ⅕ share the rail would fall to ~170px at 1024px, and its
@@ -2615,7 +2621,17 @@ def get_app_css() -> str:
         .replace("__SELECTOR_SCREEN_PICKER__", f"{SELECTOR_SCREEN_PICKER_REM}rem")
         .replace("__SELECTOR_ROW_WRAP__", f"{SELECTOR_ROW_WRAP_REM:g}rem")
     )
-    return css
+    swatches = []
+    for name, colors in PALETTES.items():
+        fix, saccade, highlight = (
+            colors[k]
+            for k in ("fixation_color", "saccade_color", "highlight_text_color")
+        )
+        swatches.append(
+            f".st-key-{palette_tile_key(name)} {{ --palette-swatch: linear-gradient(90deg, "
+            f"{fix} 0 33%, {saccade} 33% 66%, {highlight} 66% 100%); }}"
+        )
+    return css.replace("__PALETTE_SWATCHES__", "\n".join(swatches))
 
 
 def compact_css(css: str) -> str:

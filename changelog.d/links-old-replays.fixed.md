@@ -1,0 +1,1 @@
+Share links and settings files from before v0.48.0 that open a replay with fixations hidden show the fixations again, as they were drawn when saved, instead of an empty or saccades-only replay; a saccades-only replay linked from v0.48.0 itself also reopens with fixations, while links made from now on keep it saccades-only.

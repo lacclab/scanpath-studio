@@ -254,6 +254,7 @@ class TestPerTextFigures:
             **_FW,
         )
         assert len(fig.data) == 1  # no lo/hi → line only
+        assert "band" not in fig.layout.title.text
 
     def test_feature_scatter_numeric(self, demo):
         feats = available_features(demo.words)

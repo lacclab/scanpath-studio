@@ -53,7 +53,7 @@ def test_default_is_fixed_sqrt_50_to_600():
     options = api.figure_options("static")
     assert options["marker_size_scale"] == "sqrt"
     assert tuple(options["marker_duration_range"]) == (50, 600)
-    assert options["duration_size_legend"] is True
+    assert options["duration_size_legend"] is False
     for kind in ("animation", "comparison"):
         assert api.figure_options(kind)["marker_size_scale"] == "sqrt"
 
@@ -139,7 +139,8 @@ def contrasting_trials(sample):
     )
     low = spans.sort_values("max").iloc[0]
     high = spans.sort_values("max").iloc[-1]
-    assert high["max"] - low["max"] > 300  # the premise: very different ranges
+    # Only the high-duration reading crosses the filter exercised below.
+    assert low["max"] < 400 < high["max"]
     return (low["participant_id"], low["trial_id"]), (
         high["participant_id"],
         high["trial_id"],
@@ -282,7 +283,7 @@ def test_bulk_export_figures_share_the_scale(sample, contrasting_trials, monkeyp
         "marker_size_range": DEFAULT_MARKER_SIZE_RANGE,
         "marker_size_scale": "sqrt",
         "marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
-        "duration_size_legend": False,
+        "duration_size_legend": True,
     }
     options = export_mod.ExportOptions(
         include_png=False, include_svg=False, include_html=True
@@ -304,6 +305,7 @@ def test_bulk_export_figures_share_the_scale(sample, contrasting_trials, monkeyp
     assert len(built) == 2
     pairs = []
     for trial_fix, fig in built:
+        assert _key_labels(fig)
         pairs += list(zip(trial_fix["duration_ms"], _marker_trace(fig).marker.size))
     _assert_one_size_per_duration(pairs)
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
@@ -313,7 +315,7 @@ def test_bulk_export_figures_share_the_scale(sample, contrasting_trials, monkeyp
             sizing = json.loads(zf.read(name))["sizing"]
             assert sizing["marker_size_scale"] == "sqrt"
             assert sizing["marker_duration_range"] == [50, 600]
-            assert sizing["duration_size_legend"] is False
+            assert sizing["duration_size_legend"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +330,7 @@ def _key_labels(fig):
 def test_the_key_labels_the_bounds_and_round_durations(sample, contrasting_trials):
     words, fixations = sample
     pid, tid = contrasting_trials[0]
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    fig = sps.plot_scanpath(words, fixations, pid, tid, duration_size_legend=True)
     assert _key_labels(fig) == ["≤50", "100", "200", "400 ms"]
     circles = [s for s in fig.layout.shapes if s.type == "circle"]
     diameters = [s.x1 - s.x0 for s in circles]
@@ -341,14 +343,19 @@ def test_the_key_labels_the_bounds_and_round_durations(sample, contrasting_trial
 def test_the_key_is_on_every_fixed_scale_figure_and_toggles(sample, contrasting_trials):
     words, fixations = sample
     (pa, ta), (pb, tb) = contrasting_trials
-    assert _key_labels(sps.animate_scanpath(words, fixations, pa, ta))
-    assert _key_labels(sps.compare_scanpaths(words, fixations, (pa, ta), (pb, tb)))
-    for off in (
-        dict(duration_size_legend=False),
-        dict(marker_size_scale="relative"),
-        dict(show_fixations=False),
+    for build, trials in (
+        (sps.plot_scanpath, (pa, ta)),
+        (sps.animate_scanpath, (pa, ta)),
+        (sps.compare_scanpaths, ((pa, ta), (pb, tb))),
     ):
-        assert not _key_labels(sps.plot_scanpath(words, fixations, pa, ta, **off))
+        assert not _key_labels(build(words, fixations, *trials))
+        assert _key_labels(build(words, fixations, *trials, duration_size_legend=True))
+    for off in (dict(marker_size_scale="relative"), dict(show_fixations=False)):
+        assert not _key_labels(
+            sps.plot_scanpath(
+                words, fixations, pa, ta, duration_size_legend=True, **off
+            )
+        )
     # Two scanpaths at different px ranges have no single key to share.
     split = sps.compare_scanpaths(
         words,
@@ -356,6 +363,7 @@ def test_the_key_is_on_every_fixed_scale_figure_and_toggles(sample, contrasting_
         (pa, ta),
         (pb, tb),
         style_b={"marker_size_range": (4, 12)},
+        duration_size_legend=True,
     )
     assert not _key_labels(split)
 
@@ -374,7 +382,7 @@ def test_the_illustration_stamp_sits_above_the_key(sample, contrasting_trials):
     key_top = float(_compute_marker_sizes(pd.Series([50, 400]))[1]) + 8 + 16
 
     # Key first, stamp after.
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    fig = sps.plot_scanpath(words, fixations, pid, tid, duration_size_legend=True)
     assert _key_labels(fig)
     add_illustration_label(fig, ["schematic"])
     assert _illustration_stamp(fig).yshift >= key_top
@@ -398,7 +406,7 @@ def test_an_older_settings_file_keeps_the_relative_scale():
     old = {"schema": 4, "sizing": {"marker_size_range": [8, 24]}, "layers": {}}
     migrated, note = _migrate_plot_config(old)
     assert note is None
-    assert migrated["schema"] == PLOT_CONFIG_SCHEMA == 8
+    assert migrated["schema"] == PLOT_CONFIG_SCHEMA
     assert migrated["sizing"]["marker_size_scale"] == "relative"
     assert "marker_size_scale" not in old["sizing"]  # the caller's dict is untouched
     # A schema-1 file walks the whole chain to the same answer.
@@ -543,7 +551,7 @@ def _round_trip_app():
     st.session_state["global_show_fix"] = True
     st.session_state["global_marker_size_scale"] = "linear"
     st.session_state["global_marker_duration_range"] = (70, 800)
-    st.session_state["global_duration_size_legend"] = False
+    st.session_state["global_duration_size_legend"] = True
     query, _ = _build_share_query(DEMO_CHOICE)
     st.session_state["_query"] = query
     for key in (
@@ -565,7 +573,7 @@ def test_the_share_link_round_trips_the_scale():
     assert "marker_size_scale=linear" in at.session_state["_query"]
     assert at.session_state["global_marker_size_scale"] == "linear"
     assert at.session_state["global_marker_duration_range"] == (70, 800)
-    assert at.session_state["global_duration_size_legend"] is False
+    assert at.session_state["global_duration_size_legend"] is True
 
 
 # ---------------------------------------------------------------------------

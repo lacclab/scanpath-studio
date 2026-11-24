@@ -1,6 +1,6 @@
 ---
 name: preflight
-description: Pre-commit gate for scanpath-studio — run ruff check + format, the test suite, and verify the changelog has an entry for the pending work; before a PR is opened or updated, also the diff-reviewer. Run before every commit/push.
+description: Pre-commit gate for scanpath-studio — run ruff check + format, the tests for what changed, and verify the changelog has an entry for the pending work; before a PR is opened or updated, also the diff-reviewer. Run before every commit/push.
 disable-model-invocation: true
 ---
 

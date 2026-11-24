@@ -34,9 +34,13 @@ def pytest_collection_modifyitems(config, items):
     spec = os.environ.get(SHARD_ENV)
     if not spec:
         return
-    index, total = (int(part) for part in spec.split("/"))
+    usage = f"{SHARD_ENV}={spec}: expected k/n with 1 <= k <= n"
+    try:
+        index, total = (int(part) for part in spec.split("/"))
+    except ValueError:
+        raise pytest.UsageError(usage) from None
     if not 1 <= index <= total:
-        raise pytest.UsageError(f"{SHARD_ENV}={spec}: expected k/n with 1 <= k <= n")
+        raise pytest.UsageError(usage)
     kept = [item for item in items if shard_of(item.nodeid, total) == index]
     config.hook.pytest_deselected(
         items=[item for item in items if shard_of(item.nodeid, total) != index]

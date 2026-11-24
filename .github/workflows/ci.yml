@@ -3,8 +3,7 @@ name: CI
 # The whole suite runs once per change: on Python 3.12, split over four
 # machines, with coverage. That is what a PR waits for. Every supported Python
 # (3.11–3.15) runs weekly and on each release tag: a failure on one version
-# but not the others has been rare enough that running five on every PR cost
-# far more time than it caught.
+# only is rare, and five runs on every PR would cost more time than they catch.
 on:
   pull_request:
     branches: [main]
@@ -29,15 +28,17 @@ on:
 permissions:
   contents: read
 
+# Per event as well as per ref: a merge to main cancels the previous merge's
+# run, not the weekly all-versions run that happens to share main's ref.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # The suite in four shares (`SCANPATH_TEST_SHARD` in tests/conftest.py), each
   # measuring its own coverage; the Coverage job below adds them up.
   tests:
-    name: Tests ${{ matrix.shard }}/4
+    name: Tests ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -74,16 +75,17 @@ jobs:
           wheel-env/bin/scanpath-studio render --sample -o sample.html
           test -s sample.html
 
-      # -n auto fans the share across the runner's cores; the Streamlit AppTest
-      # integration tests are CPU-bound app boots and dominate the runtime.
+      # -n logical fans the share across every vCPU (`auto` counts physical
+      # cores: 2 of the runner's 4); the Streamlit AppTest integration tests
+      # are CPU-bound app boots and dominate the runtime.
       # One share's coverage is far below the floor, so the floor is checked
       # once the shares are combined; `[tool.coverage.run] core = "sysmon"`
       # keeps measuring cheap on 3.12.
       - name: Run pytest (share ${{ matrix.shard }} of 4)
         env:
-          SCANPATH_TEST_SHARD: ${{ matrix.shard }}/4
+          SCANPATH_TEST_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
           COVERAGE_FILE: .coverage.share${{ matrix.shard }}
-        run: pytest -q -n auto --cov --cov-report= --cov-fail-under=0
+        run: pytest -q -n logical --cov --cov-report= --cov-fail-under=0
 
       - name: Keep this share's coverage
         uses: actions/upload-artifact@v7
@@ -91,6 +93,7 @@ jobs:
           name: coverage-${{ matrix.shard }}
           path: .coverage.share${{ matrix.shard }}
           include-hidden-files: true
+          if-no-files-found: error
           retention-days: 1
 
   # The floor lives in pyproject.toml ([tool.coverage.report] fail_under), so
@@ -98,8 +101,14 @@ jobs:
   coverage:
     name: Coverage
     needs: tests
+    # Runs, and fails, when a share failed, rather than being skipped: a
+    # skipped check counts as passing.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
+      - name: Every share passed
+        run: test "${{ needs.tests.result }}" = success
+
       - uses: actions/checkout@v7
 
       - name: Set up Python
@@ -158,7 +167,7 @@ jobs:
         run: uv pip install --system -e ".[test]"
 
       - name: Run pytest
-        run: pytest -q -n auto
+        run: pytest -q -n logical
 
   windows-export:
     name: Check lab exports and recovery on Windows

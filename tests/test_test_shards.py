@@ -54,7 +54,7 @@ def test_no_share_set_runs_everything(monkeypatch):
     assert len(items) == 5
 
 
-@pytest.mark.parametrize("spec", ["0/4", "5/4"])
+@pytest.mark.parametrize("spec", ["0/4", "5/4", "1-4", "a/4", "1/2/3", "1/0"])
 def test_a_share_outside_its_range_is_refused(spec, monkeypatch):
     with pytest.raises(pytest.UsageError):
         _share(["tests/test_x.py::t"], spec, monkeypatch)

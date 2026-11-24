@@ -18,7 +18,7 @@ from urllib.parse import parse_qsl
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import HealthCheck, example, given, settings
+from hypothesis import HealthCheck, assume, example, given, settings
 from hypothesis import strategies as st
 
 from scanpath_studio import controls, data, measures, plots, url_state
@@ -726,41 +726,78 @@ _EDIT_WORDS = pd.DataFrame(
         "h": [20.0] * 6,
     }
 )
-#: Each source column's name in the frame the first mapping stored: a mapped
-#: field's canonical name, a kept column its own.
-_STORED_NAME = {
-    "subj": "participant_id",
-    "tr": "trial_id",
-    "fx": "x",
-    "fy": "y",
-    "dur": "duration_ms",
-    "ia": "word_id",
-    "word": "text",
-    "w": "width",
-    "h": "height",
+#: Each mapped field's column in the frame normalization stores.
+_CANONICAL = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "x": "x",
+    "y": "y",
+    "duration": "duration_ms",
+    "word_id": "word_id",
+    "text": "text",
+    "width": "width",
+    "height": "height",
+    "text_id": "text_id",
 }
 
 
 def _edited_and_added(raw, first, second, kept, kind):
     """``(added, edited)``: the table added with ``second``, and the table added
-    with ``first`` then edited to ``second``, as the editor stores it."""
+    with ``first`` then edited to ``second``, as the editor stores it.
+
+    The editor offers the stored frame's columns: a column the first mapping
+    used for one field under that field's name, any other kept column under
+    its own. A column the stored frame no longer has can't be picked, and a
+    kept column is one the add's own picker offered, so not one the first
+    mapping used. The add keeps what the stored dataset already held: a part
+    of the first mapping's composite Trial ID that no other field mapped is
+    there under its own name, and the edit keeps it."""
     normalize = data.normalize_words if kind == "words" else data.normalize_fixations
-
-    def stored_name(column):
-        if isinstance(column, list):
-            return [_STORED_NAME.get(c, c) for c in column]
-        return _STORED_NAME.get(column, column)
-
-    added = normalize(
-        raw, second, keep_columns=data.compute_keep_columns(second, keep_columns=kept)
-    )
+    used = {c for col in first.values() for c in data.trial_mapping_columns(col)}
+    parts = data.trial_mapping_columns(first["trial"])
+    copies = {
+        c
+        for field, col in first.items()
+        if field != "trial"
+        for c in data.trial_mapping_columns(col)
+    }
+    kept = set(kept) - used
+    if len(parts) > 1:
+        kept |= set(parts) - copies
     stored = normalize(
         raw, first, keep_columns=data.compute_keep_columns(first, keep_columns=kept)
     )
-    edited = data.remap_normalized_frame(
-        stored, {f: stored_name(c) for f, c in second.items()}, kind=kind
+    names = {}
+    for field, column in first.items():
+        if isinstance(column, str):
+            names.setdefault(column, _CANONICAL[field])
+
+    # What the stored frame holds, from the inputs: each used column under its
+    # field's name, the kept columns and a composite's parts under their own.
+    available = set(names.values()) | kept | (set(parts) if len(parts) > 1 else set())
+
+    def stored_name(column):
+        if isinstance(column, list):
+            return [stored_name(c) for c in column]
+        name = names.get(column, column)
+        assume(name in available)
+        assert name in stored.columns, name
+        return name
+
+    remap = {f: stored_name(c) for f, c in second.items()}
+    added = normalize(
+        raw, second, keep_columns=data.compute_keep_columns(second, keep_columns=kept)
     )
+    edited = data.remap_normalized_frame(stored, remap, kind=kind, stored_schema=first)
     return added.reset_index(drop=True), edited.reset_index(drop=True)
+
+
+def _with_paragraphs(raw: pd.DataFrame, paragraphs: bool) -> pd.DataFrame:
+    """``raw`` with a OneStop-style ``unique_paragraph_id`` column, when asked:
+    the add keeps it, and it is the text id where no Text ID is mapped."""
+    if not paragraphs:
+        return raw
+    return raw.assign(unique_paragraph_id=raw["tr"].map({"t1": "p1", "t2": "p2"}))
 
 
 def _same_dataset(added: pd.DataFrame, edited: pd.DataFrame, trial) -> None:
@@ -775,37 +812,55 @@ def _same_dataset(added: pd.DataFrame, edited: pd.DataFrame, trial) -> None:
     pd.testing.assert_frame_equal(added[shared], edited[shared], check_dtype=False)
 
 
+_FIX_TRIALS = ["tr", "block", ["subj", "block"], ["tr", "block"]]
+
+
 @given(
-    trial=st.sampled_from(["tr", "block", ["subj", "block"], ["tr", "block"]]),
+    was=st.sampled_from(_FIX_TRIALS),
+    trial=st.sampled_from(_FIX_TRIALS),
     duration=st.sampled_from(["dur", "dwell"]),
+    paragraphs=st.booleans(),
 )
-def test_an_edited_fixations_mapping_gives_what_adding_with_it_gives(trial, duration):
+def test_an_edited_fixations_mapping_gives_what_adding_with_it_gives(
+    was, trial, duration, paragraphs
+):
     """Changing a dataset's mapping in ✏️ Edit dataset re-derives its stored
     frame; adding the same files with the new mapping normalizes them afresh.
     Both are the same readings, with the same values."""
     first = {
         "participant": "subj",
-        "trial": "tr",
+        "trial": was,
         "x": "fx",
         "y": "fy",
         "duration": "dur",
     }
     second = first | {"trial": trial, "duration": duration}
     added, edited = _edited_and_added(
-        _EDIT_FIXATIONS, first, second, {"dwell", "block"}, "fixations"
+        _with_paragraphs(_EDIT_FIXATIONS, paragraphs),
+        first,
+        second,
+        {"dwell", "block", "tr"},
+        "fixations",
     )
     _same_dataset(added, edited, trial)
 
 
+_WORD_TRIALS = ["tr", "item", ["subj", "item"]]
+
+
 @given(
-    trial=st.sampled_from(["tr", "item", ["subj", "item"]]),
+    was=st.sampled_from(_WORD_TRIALS),
+    trial=st.sampled_from(_WORD_TRIALS),
     text=st.sampled_from(["word", "label"]),
     text_id=st.sampled_from([None, "item"]),
+    paragraphs=st.booleans(),
 )
-def test_an_edited_words_mapping_gives_what_adding_with_it_gives(trial, text, text_id):
+def test_an_edited_words_mapping_gives_what_adding_with_it_gives(
+    was, trial, text, text_id, paragraphs
+):
     first = {
         "participant": "subj",
-        "trial": "tr",
+        "trial": was,
         "word_id": "ia",
         "text": "word",
         "x": "x",
@@ -817,7 +872,11 @@ def test_an_edited_words_mapping_gives_what_adding_with_it_gives(trial, text, te
     if text_id:
         second["text_id"] = text_id
     added, edited = _edited_and_added(
-        _EDIT_WORDS, first, second, {"item", "label"}, "words"
+        _with_paragraphs(_EDIT_WORDS, paragraphs),
+        first,
+        second,
+        {"item", "label", "tr"},
+        "words",
     )
     _same_dataset(added, edited, trial)
 

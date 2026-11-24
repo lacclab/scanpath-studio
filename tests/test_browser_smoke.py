@@ -1349,3 +1349,37 @@ def test_prepare_single_figure_keeps_draft_when_opening_a_saved_figure(
         assert not page.errors
     finally:
         page.context.close()
+
+
+def test_a_subtab_switch_keeps_the_tab_bar_in_place(app_url, browser):
+    """Scrolled to the bottom of a tall subtab, a switch to a shorter one
+    leaves the tab bar where it was on screen. Only the selected subtab is
+    drawn, so the page gets shorter, and without the reserve the browser
+    pulls the scroll back and the bar jumps down the screen."""
+    page = _open(browser, f"{app_url}/?ui=full")
+    try:
+        subtabs = page.locator(".st-key-single_subtab")
+        bar = subtabs.get_by_role("tablist")
+        subtabs.get_by_role("tab", name=re.compile(r"Export$")).click()
+        _settle(page)
+        tall = subtabs.bounding_box()["height"]
+        page.evaluate(
+            "() => { const main = document.querySelector('[data-testid=\"stMain\"]');"
+            " main.scrollTop = main.scrollHeight; }"
+        )
+        _next_frame(page)
+        # Scrolled at all, or nothing could have jumped.
+        assert page.evaluate(
+            "() => document.querySelector('[data-testid=\"stMain\"]').scrollTop"
+        )
+        before = bar.bounding_box()["y"]
+
+        subtabs.get_by_role("tab", name=re.compile(r"Share$")).click()
+        _settle(page)
+
+        panel = subtabs.get_by_role("tabpanel")
+        assert panel.bounding_box()["height"] < tall  # the page did get shorter
+        assert abs(bar.bounding_box()["y"] - before) <= 1
+        assert not page.errors
+    finally:
+        page.context.close()

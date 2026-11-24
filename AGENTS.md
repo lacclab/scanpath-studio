@@ -70,7 +70,8 @@ scanpath_studio/
 │  ├─ viz_history.py     session-local undo and redo of plot edits
 │  ├─ keyboard.py        keyboard shortcuts for the Scanpath page and its figure
 │  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
-│  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
+│  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py,
+│                        subtab_scroll.py
 │                        browser-only helpers installed into the parent document
 ├─ Data
 │  ├─ data.py            schema inference, normalization, filtering, the stimulus join, fingerprints

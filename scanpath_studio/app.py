@@ -339,6 +339,7 @@ from scanpath_studio.session_keys import (
     PARAM_DATASET_ID,
 )
 from scanpath_studio.styles import compact_css, get_app_css, widen_menu
+from scanpath_studio.subtab_scroll import render_subtab_scroll
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
     _REMAP_DIRTY_KEY,
@@ -9805,6 +9806,8 @@ def _run_app() -> None:
         render_color_picker_commit()
         # In the desktop app's window, a download opens a Save-as dialog.
         render_save_dialog()
+        # A subtab switch keeps the bar where it is on screen.
+        render_subtab_scroll()
         # These Help dialogs can open before the figures and data tables load.
         maybe_show_about()
         maybe_show_feedback()

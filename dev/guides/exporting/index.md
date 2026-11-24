@@ -4,13 +4,13 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 
 ## In the app
 
-| Goal                                  | Where                                          |
-| ------------------------------------- | ---------------------------------------------- |
-| Save the figure or replay on screen   | **Export** → **Current figure**                |
-| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**     |
-| Export many trials and their tables   | **Export** → **Export bundle**                 |
-| Share a view or copy its code         | **Share** → **Link** or **Code**               |
-| Reuse the figure settings             | **My views**, or **Share** → **Settings file** |
+| Goal                                  | Where                                            |
+| ------------------------------------- | ------------------------------------------------ |
+| Save the figure or replay on screen   | **Export** → **Current figure**                  |
+| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**       |
+| Export many trials and their tables   | **Export** → **Export bundle**                   |
+| Share a view or copy its code         | **Share** → **Link** or **Code**                 |
+| Reuse the figure settings             | **My presets**, or **Share** → **Settings file** |
 
 To export multiple trials, switch to Full and open **Export bundle**. Essentials offers **Current figure** for the figure or replay on screen.
 

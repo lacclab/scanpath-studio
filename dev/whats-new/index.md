@@ -8,6 +8,7 @@
 - Smaller PNG files works outside the app too: `render --compact-png` and `save_figure(..., compact_png=True)` / `save_figure_layers(..., compact_png=True)` compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
 - Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
+- Each part of Plot controls (Presets, Palette, Modes, Customize) can be folded away with the chevron beside its label; a folded line names the current choice, and the browser remembers what you folded.
 
 ### Changed
 
@@ -24,6 +25,9 @@
 - Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.
 - A scanpath figure or replay built directly with the plotting module (FigureSettings, make_scanpath_figure, make_scanpath_animation) now draws fixations at the app's, the API's and the CLI's default opacity, 0.7, not 1.0.
 - Changing a dataset's mapping in Edit dataset no longer adds unique_trial_id / unique_text_id columns that adding the same files with that mapping would not, so an edited dataset exports the columns a freshly added one does.
+- The "Stopped loading" notice is now a light banner with a clearer Try again button and a ✕ to close it.
+- Plot controls stay in view and scroll on their own beside the figure; Reset visualization is now a compact Reset, with larger Undo and Redo buttons.
+- Plot controls are grouped under Presets, Palette, Modes and Customize: View is now Presets, My views is now My presets, the Animation switch is now Playback, and Axis preset is now Axis layout.
 
 ### Removed
 

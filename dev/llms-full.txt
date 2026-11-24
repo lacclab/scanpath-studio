@@ -72,7 +72,7 @@ Choose a reading in the demo to explore and save as an interactive figure.
 
 - **2 · Choose a view**
 
-  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **View** in Essentials and Full.
+  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **Presets** in Essentials and Full.
 
 - **3 · Save your figure**
 
@@ -576,13 +576,13 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 
 ## In the app
 
-| Goal                                  | Where                                          |
-| ------------------------------------- | ---------------------------------------------- |
-| Save the figure or replay on screen   | **Export** → **Current figure**                |
-| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**     |
-| Export many trials and their tables   | **Export** → **Export bundle**                 |
-| Share a view or copy its code         | **Share** → **Link** or **Code**               |
-| Reuse the figure settings             | **My views**, or **Share** → **Settings file** |
+| Goal                                  | Where                                            |
+| ------------------------------------- | ------------------------------------------------ |
+| Save the figure or replay on screen   | **Export** → **Current figure**                  |
+| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**       |
+| Export many trials and their tables   | **Export** → **Export bundle**                   |
+| Share a view or copy its code         | **Share** → **Link** or **Code**                 |
+| Reuse the figure settings             | **My presets**, or **Share** → **Settings file** |
 
 To export multiple trials, switch to Full and open **Export bundle**. Essentials offers **Current figure** for the figure or replay on screen.
 
@@ -884,17 +884,17 @@ With **A and B together** on, either pair of trial shortcuts steps both readings
 
 ## Control the layers
 
-Both modes start with the same **View** tiles and **Palette**. In Full, use **Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit its settings or its switch to show or hide it. Choose **Axes** to chart the reading by fixation order or time. **Figure** holds the settings for the whole plot, including framing, titles and legends.
+Both modes start with the same **Presets** tiles and **Palette**. In Full, use **Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit its settings or its switch to show or hide it. Choose **Axes** to chart the reading by fixation order or time. **Figure** holds the settings for the whole plot, including framing, titles and legends.
 
 **Gaze over time** plots elapsed seconds along the horizontal axis and horizontal screen position in pixels on the vertical axis. The length of each horizontal bar shows how long the fixation lasted. Turn **Animation** on to replay the reading on the text, then off to return to the same chart. **Custom** brings back your last hand-edited figure.
 
 | Section                  | What it controls                                                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **View**                 | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
-| **My views**             | save a named view, apply it to another reading, or share it                                                             |
+| **Presets**              | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
+| **My presets**           | save a named preset, apply it to another reading, or share it                                                           |
 | **Palette**              | choose **Colorblind-safe**, **Grayscale**, or **High contrast**                                                         |
 | **Compare readings**     | add a second reading over this one, beside it, or below it                                                              |
-| **Animation settings**   | set playback speed, autoplay, and frame quality                                                                         |
+| **Playback settings**    | set playback speed, autoplay, and frame quality                                                                         |
 | **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                     |
 | **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                             |
 | **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                       |
@@ -961,7 +961,7 @@ You can save each of these to a file and load it again:
 | figure settings                    | **Share** → **Settings file**                                            |
 | favorites, tags and notes          | **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | **Edit dataset** → **Download setup file**                               |
-| saved figure designs               | **My views** → **Export**                                                |
+| saved figure designs               | **My presets** → **Export**                                              |
 
 Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved work → Your session**.
 
@@ -1007,7 +1007,7 @@ The bar above the plot: pick a dataset and a trial, step through the trials, and
 
 ## Plot controls
 
-The **View** and **Palette** tiles appear in both modes. In Full, **My views** sits below the view tiles. The switches below the palette open comparison and replay, and the arrow beside each switch opens its settings.
+The column has four parts: **Presets**, **Palette**, **Modes** and **Customize**. The **Presets** and **Palette** tiles appear in both modes, and in Full, **My presets** sits below the preset tiles. Click beside any of the four labels to fold that part away, and the browser remembers it for your next visit. A folded **Presets**, **Palette** or **Modes** line still names the current choice. Under **Modes**, the switches turn on comparison and, in Full, **Playback**, and the arrow beside each switch opens its settings. Beside a tall figure, the column scrolls on its own.
 
 - **Layers** lists what the plot can draw. Click a layer’s name to edit its settings. The switch on the right shows or hides it. **Filters & highlights** applies to the current reading.
 - **Axes** chooses the X and Y fields and configures the coordinate grid.
@@ -1017,9 +1017,9 @@ Use **Find a setting** in Full when you know what you want to change. Type a wor
 
 If you switch to Essentials while comparing readings, the comparison switch stays available.
 
-### Animation settings
+### Playback settings
 
-Turn **Animation** on to replay the reading. Use the play and pause buttons and the time slider above the plot. Switch **Animation** off to return to your figure. For a saccades-only replay, open **Full**, leave **Saccades** on, and turn **Fixations** off. Each line appears when the reading reaches its next fixation. **Heatmap** and **Raw gaze** are available in static views. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#keyboard-shortcuts). Open **Animation settings** in Full for these controls:
+Turn on the **Animation** tile, or the **Playback** switch under **Modes**, to replay the reading. Use the play and pause buttons and the time slider above the plot. Switch **Animation** off to return to your figure. For a saccades-only replay, open **Full**, leave **Saccades** on, and turn **Fixations** off. Each line appears when the reading reaches its next fixation. **Heatmap** and **Raw gaze** are available in static views. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#keyboard-shortcuts). Open **Playback settings** in Full for these controls:
 
 | Control                               | What it does                                                                                                                                                            |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1043,18 +1043,18 @@ Turn **Animation** on to replay the reading. Use the play and pause buttons and 
 | **Reading labels** → **Available fields**      | The fields a label can use.                                                                                                                                       |
 | **Trial arrows**                               | ◀ ▶ move both scanpaths at once.                                                                                                                                  |
 
-### Views, palette and saved designs
+### Presets, palette and saved presets
 
-Restyle the whole figure in one click, with a ready-made design or one you saved:
+Restyle the whole figure in one click, with a ready-made preset or one you saved:
 
 | Control                                       | What it does                                                                                                                                                                                                                                                                                  |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                                                                                                                           |
+| **Scanpath** / **Heatmap** / **Illustration** | Ready-made presets: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                                                                                                                           |
 | **Gaze over time**                            | Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation. |
 | **Custom**                                    | Restore your last hand-edited figure, including its axes and palette. On first use, start with the figure on screen.                                                                                                                                                                          |
-| **My views**                                  | Your saved designs. Click one to apply it. renames it and deletes it.                                                                                                                                                                                                                         |
-| **My views** →                                | Save the settings on screen as a named design, to apply again later in one click.                                                                                                                                                                                                             |
-| **My views** → **Export** / **Import**        | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name.                                                                                                   |
+| **My presets**                                | Your saved presets. Click one to apply it. renames it and deletes it.                                                                                                                                                                                                                         |
+| **My presets** →                              | Save the settings on screen as a named preset, to apply again later in one click.                                                                                                                                                                                                             |
+| **My presets** → **Export** / **Import**      | Download your presets as a file, or load a file of presets, to share a look with co-authors or move your presets to another computer. A preset in the file replaces yours of the same name.                                                                                                   |
 | **Palette**                                   | Choose **Colorblind-safe**, **Grayscale** for print, or **High contrast**. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines.                                                           |
 
 ### Fixations
@@ -1154,7 +1154,7 @@ The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to s
 | **Dot size**     | Set the raw gaze sample marker size.                                                                                                                        |
 | **Opacity**      | Set the raw gaze sample opacity.                                                                                                                            |
 
-To inspect samples from one reading, open **Axes → Axis preset**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
+To inspect samples from one reading, open **Axes → Axis layout**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
 
 In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A sample with missing gaze coordinates has no pupil area either, so the pupil chart shows a gap there. The raw table and its exports keep those samples.
 
@@ -1178,7 +1178,7 @@ Choose a chart preset, or set the X and Y fields individually. Open **Coordinate
 
 | Control                                        | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Axis preset**                                | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the windowed index sequence, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **Axis layout**                                | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the windowed index sequence, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
 | **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates.                                               |
 | **Grid** → **Show**                            | Show a grid of screen coordinates, in px.                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Grid spacing and labels** → interval         | Set the grid spacing (interval), in px, or let **Auto** choose it.                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -1207,15 +1207,15 @@ Open **Screen & framing**, **Title & labels**, **Hover fields**, or **Legends**.
 | **Legend position and style** → **Arrangement**                    | Choose the legend arrangement: **Stacked** or **Side by side**.                                                                                                                                                                                                              |
 | **Legend position and style** → **Text size**                      | Set the legend text (font) size, in px. Empty uses the figure's text size.                                                                                                                                                                                                   |
 
-### Reset visualization
+### Reset
 
-At the foot of **Full** plot controls, use the arrows beside **Reset visualization** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
+At the foot of **Full** plot controls, use the arrows beside **Reset** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
 
-| Control                 | What it does                                                                                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Undo**                | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial.                                          |
-| **Redo**                | Reapply the change you undid. Making a new plot edit clears the redo list.                                                                                   |
-| **Reset visualization** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
+| Control   | What it does                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Undo**  | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial.                                          |
+| **Redo**  | Reapply the change you undid. Making a new plot edit clears the redo list.                                                                                   |
+| **Reset** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
 
 Changing datasets starts a fresh history. A trial-specific fixation window drops out of history when you leave that reading.
 
@@ -4417,6 +4417,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - Smaller PNG files works outside the app too: `render --compact-png` and `save_figure(..., compact_png=True)` / `save_figure_layers(..., compact_png=True)` compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
 - Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
+- Each part of Plot controls (Presets, Palette, Modes, Customize) can be folded away with the chevron beside its label; a folded line names the current choice, and the browser remembers what you folded.
 
 ### Changed
 
@@ -4433,6 +4434,9 @@ Developed with AI assistance. Cross-check results before publishing.
 - Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.
 - A scanpath figure or replay built directly with the plotting module (FigureSettings, make_scanpath_figure, make_scanpath_animation) now draws fixations at the app's, the API's and the CLI's default opacity, 0.7, not 1.0.
 - Changing a dataset's mapping in Edit dataset no longer adds unique_trial_id / unique_text_id columns that adding the same files with that mapping would not, so an edited dataset exports the columns a freshly added one does.
+- The "Stopped loading" notice is now a light banner with a clearer Try again button and a ✕ to close it.
+- Plot controls stay in view and scroll on their own beside the figure; Reset visualization is now a compact Reset, with larger Undo and Redo buttons.
+- Plot controls are grouped under Presets, Palette, Modes and Customize: View is now Presets, My views is now My presets, the Animation switch is now Playback, and Axis preset is now Axis layout.
 
 ### Removed
 

@@ -250,3 +250,51 @@ class TestTheParsers:
         assert _parse_figure_text("<b>{trial_id}</b>") == "{trial_id}"
         with pytest.raises(ValueError):
             _parse_figure_text(fits + "a")
+
+
+@pytest.mark.timeout(300)
+def test_every_value_a_menu_offers_survives_a_link(monkeypatch):
+    """The other side of the garbage check: a link reads back every value the
+    rail's menus offer, as they offer it. A choice check narrower than its menu
+    would drop a real choice from every link that carries it."""
+    from streamlit.delta_generator import DeltaGenerator
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import url_state
+
+    offered: dict[str, list] = {}
+    for name in ("selectbox", "radio", "segmented_control", "pills", "multiselect"):
+        real = getattr(DeltaGenerator, name)
+
+        def recording(self, label, options=(), *args, _real=real, **kwargs):
+            if kwargs.get("key") in url_state._CHOICE_STATE_PARSERS:
+                offered[kwargs["key"]] = list(options)
+            return _real(self, label, options, *args, **kwargs)
+
+        monkeypatch.setattr(DeltaGenerator, name, recording)
+    for state in ({}, {"single_compare_toggle": True}):
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+        for key in ("global_show_heatmap", "global_show_raw_gaze", "global_show_order"):
+            at.session_state[key] = True
+        for key, value in state.items():
+            at.session_state[key] = value
+        at.run()
+        assert not at.exception, at.exception
+    assert len(offered) > 25, f"only {len(offered)} menus drawn"
+
+    def reads_back(parse, value) -> bool:
+        try:
+            return parse(value) == value
+        except ValueError:  # the link reader's "not one of the options"
+            return False
+
+    refused = {}
+    for key, options in offered.items():
+        parse = url_state._CHOICE_STATE_PARSERS[key]
+        values = (
+            [[option] for option in options] if key.endswith("_classes") else options
+        )
+        dropped = [value for value in values if not reads_back(parse, value)]
+        if dropped:
+            refused[key] = dropped
+    assert not refused, f"a link would drop these menu values: {refused}"

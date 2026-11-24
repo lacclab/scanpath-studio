@@ -144,6 +144,28 @@ def _dismiss_sample_invitation(page) -> None:
         _settle(page)
 
 
+def _next_frame(page) -> None:
+    """Wait for the browser's next animation frame. A scroll made before the
+    call has been reported by then: scroll events go out before a frame's
+    callbacks."""
+    page.evaluate("() => new Promise(done => requestAnimationFrame(() => done()))")
+
+
+def _open_select(page, name: str) -> None:
+    """Open the select labelled ``name`` the way a user does: scroll it into
+    view, then click it.
+
+    Streamlit's select closes its list when anything holding the box scrolls.
+    Playwright's click scrolls an off-screen target into view itself, and the
+    browser reports that scroll on its next frame, after the click has opened
+    the list, which then closes again. Waiting one animation frame after the
+    scroll lets the browser report it first."""
+    box = page.get_by_role("combobox", name=name)
+    box.scroll_into_view_if_needed()
+    _next_frame(page)
+    box.click()
+
+
 def _plot_frame(page, key: str):
     """The iframe holding the true-scale plot drawn under ``key``."""
     deadline = time.time() + 60
@@ -808,7 +830,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         default = chart()
         editor = page.locator(".st-key-plot_editor_tabs")
         editor.get_by_role("tab", name="Axes", exact=True).click()
-        page.get_by_role("combobox", name="Axis layout").click()
+        _open_select(page, "Axis layout")
         page.get_by_role("option", name="Elapsed time by fixation index").click()
         _settle(page)
         editor.get_by_role("tab", name="Layers", exact=True).click()
@@ -873,6 +895,60 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         assert chart() == reset_second
         assert not page.locator('[data-testid="stException"]').count()
         assert page.errors == []
+    finally:
+        page.context.close()
+
+
+def test_the_rail_fits_between_the_header_and_the_window_edge(app_url, browser):
+    """The rail scrolls on its own, so every control in it is reachable only if
+    its box stays on screen: below Streamlit's header, which is drawn over the
+    page, and above the window's bottom edge, at the top of the page and with
+    the page scrolled to its end. A select near the rail's end, scrolled into
+    view, opens on a click."""
+    page = _open(browser, f"{app_url}/?ui=full")
+    rail = """() => {
+        const col = document.querySelector('.st-key-scanpath_rail')
+            .closest('[data-testid="stColumn"]');
+        const box = col.getBoundingClientRect();
+        return {
+            top: box.top,
+            bottom: box.bottom,
+            header: document.querySelector('[data-testid="stHeader"]')
+                .getBoundingClientRect().bottom,
+            window: window.innerHeight,
+            scrolls: col.scrollHeight > col.clientHeight,
+            page: document.querySelector('[data-testid="stMain"]').scrollTop,
+        };
+    }"""
+    try:
+        page.locator(".st-key-plot_editor_tabs").get_by_role(
+            "tab", name="Axes", exact=True
+        ).click()
+        _settle(page)
+        at_top = page.evaluate(rail)
+        assert at_top["scrolls"], "the rail no longer overflows; pick a taller one"
+        page.locator('[data-testid="stMain"]').evaluate(
+            "main => { main.scrollTop = main.scrollHeight; }"
+        )
+        at_end = page.evaluate(rail)
+        assert at_end["page"] > 0, "the page no longer scrolls; the check is moot"
+        for where in (at_top, at_end):
+            assert where["top"] >= where["header"], where
+            assert where["bottom"] <= where["window"], where
+        page.locator('[data-testid="stMain"]').evaluate(
+            "main => { main.scrollTop = 0; }"
+        )
+        page.locator(".st-key-scanpath_rail").evaluate(
+            """rail => {
+                const col = rail.closest('[data-testid="stColumn"]');
+                col.scrollTop = col.scrollHeight;
+            }"""
+        )
+        _next_frame(page)
+        box = page.get_by_role("combobox", name="Axis layout").bounding_box()
+        assert box["y"] + box["height"] <= at_top["bottom"], (box, at_top)
+        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.get_by_role("option", name="Elapsed time by fixation index").wait_for()
     finally:
         page.context.close()
 

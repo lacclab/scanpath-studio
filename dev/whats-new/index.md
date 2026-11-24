@@ -112,6 +112,7 @@
 - Stimulus & context keeps its highlighted spans when you step through a screen with no highlighted words, such as a title, and picks them up even when a trial opens on such a screen.
 - On multi-screen trials the experimental per-word reading measures (`compute_word_metrics`, behind `SCANPATH_EXPERIMENTAL=1`) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.
 - The Data page's Texts table no longer passes off one reader's version of a screen as every reader's: a screen, or a text, that readers saw differently — the demo's answer orders and feedback — is shown once per version with the readers who saw it, and a Differs by reader column names those screens.
+- The blank band between the header and the dataset and trial pickers is gone.
 - The trial summary's chips no longer turn black after the ✏️ menu is opened for the first time in a session.
 - Switching subtabs while scrolled to the bottom of a tall one, such as Export, no longer makes the page jump.
 

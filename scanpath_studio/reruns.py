@@ -11,9 +11,15 @@ another way.
 
 from __future__ import annotations
 
-from typing import Literal, NoReturn
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal, NoReturn
 
 import streamlit as st
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from streamlit.navigation.page import StreamlitPage
 
 
 def rerun(*, scope: Literal["app", "fragment"] = "app") -> NoReturn:
@@ -26,10 +32,12 @@ def rerun(*, scope: Literal["app", "fragment"] = "app") -> NoReturn:
     st.rerun(scope=scope)
 
 
-def switch_page(page, **kwargs) -> NoReturn:
+def switch_page(
+    page: str | Path | StreamlitPage, *, query_params: Mapping | None = None
+) -> NoReturn:
     """`st.switch_page` after `controls.keep_holds_through_rerun`: the run it
     starts brings no browser values either."""
     from scanpath_studio.controls import keep_holds_through_rerun
 
     keep_holds_through_rerun()
-    st.switch_page(page, **kwargs)
+    st.switch_page(page, query_params=query_params)

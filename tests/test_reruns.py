@@ -102,3 +102,42 @@ def test_rerun_keeps_the_holds_only_for_a_rerun_of_the_app(scope, state, monkeyp
     assert started == [{"scope": scope}]
     write = state[controls._PENDING_WRITES_KEY][STYLE]
     assert write.through_rerun is (scope == "app")
+
+
+def test_switch_page_keeps_the_holds_and_passes_the_page_on(state, monkeypatch):
+    """❓ Help's entries bounce back to the view through `switch_page`, whose
+    run brings no browser values either."""
+    started = []
+    monkeypatch.setattr(
+        reruns.st, "switch_page", lambda page, **kw: started.append((page, kw))
+    )
+    reruns.switch_page("view.py", query_params={})
+    assert started == [("view.py", {"query_params": {}})]
+    assert state[controls._PENDING_WRITES_KEY][STYLE].through_rerun is True
+
+
+def test_a_fragments_run_is_not_marked(state, monkeypatch):
+    """A dialog or fragment run holds the browser's own values (no hold was
+    re-applied in it), so the next run reads them as always: a value the
+    browser already shows ends the hold."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        controls,
+        "get_script_run_ctx",
+        lambda: SimpleNamespace(fragment_ids_this_run=["dialog"]),
+    )
+    controls.keep_holds_through_rerun()
+    assert state[controls._PENDING_WRITES_KEY][STYLE].through_rerun is False
+
+
+def test_a_callback_that_reasserts_keeps_the_holds_it_does_not_write(state):
+    """Undo and a view tile put the held values back in their callback before
+    writing their own; the run's own reassert, with nothing newer from the
+    browser, must not take the others as answered."""
+    state[STYLE] = "Solid"  # the click that runs the callback echoes it
+    controls._reassert_in_callback()
+    controls.reassert_pending_writes()  # the run the callback belongs to
+    state[STYLE] = "Solid"  # the browser's next run echoes again
+    controls.reassert_pending_writes()
+    assert state[STYLE] == "Dashed"

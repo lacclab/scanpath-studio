@@ -1654,7 +1654,7 @@ def _apply_view_preset(
     }
     # Callbacks receive the browser's values before the script reconciles
     # closed popovers. Snapshot the design that was actually on screen.
-    reassert_pending_writes()
+    _reassert_in_callback()
     kept = {key: ss[key] for key in keep if key in ss}
     try:
         _apply_view_preset_state(ss, name, saved)
@@ -1734,11 +1734,27 @@ def keep_holds_through_rerun() -> None:
     starts (`st.rerun()`, `st.switch_page`) brings no values from the browser,
     so every hold would read that way and end before the browser's echo
     arrives. Marked, the next run keeps a hold whose key has its written value
-    instead of ending it, and checks any other value as always: an echo the
-    browser sent in a dialog or fragment run, where no hold was re-applied, is
-    put back, and a value the user picked ends the hold."""
+    instead of ending it, and checks any other value as always: a value the
+    user picked ends the hold.
+
+    A dialog's or fragment's run is not marked: no hold was re-applied in it,
+    so the values in place are the browser's own, an echo or the written value
+    it already shows, and the next run's check reads them right."""
+    ctx = get_script_run_ctx()
+    if ctx is not None and ctx.fragment_ids_this_run:
+        return
     for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
         write.through_rerun = True
+
+
+def _reassert_in_callback() -> None:
+    """`reassert_pending_writes`, for a callback about to write over the
+    browser's values. It puts each held value back; the run's own reassert,
+    with no newer values from the browser, would then read them as taken and
+    end every hold the callback does not write again, so they are kept for it
+    (`keep_holds_through_rerun`)."""
+    reassert_pending_writes()
+    keep_holds_through_rerun()
 
 
 #: Design keys no widget draws, which `_hold_view_writes` and
@@ -7406,7 +7422,7 @@ def _step_plot_history(redo: bool) -> None:
                 st.query_params.pop(param, None)
             keys.remove(key)
     shown = {key: ss.get(key) for key in keys}
-    reassert_pending_writes()
+    _reassert_in_callback()
     for key in keys:
         if key in values:
             ss[key] = deepcopy(values[key])

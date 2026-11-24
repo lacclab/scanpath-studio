@@ -17,6 +17,8 @@ check data and manage saved work without opening the app:
 | [`check`](#check) | Run the Data checks on your tables |
 | [`add`](#add) | Add your tables to the app's dataset list |
 | [`remove`](#remove) | Remove a dataset you added from that list |
+| [`annotations`](#annotations) | Read or write a dataset's favorites, tags and notes |
+| [`open`](#open) | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache) | Show or clear the recovery cache |
 | [`version`](#version) | Show the build, and whether a newer release is out |
 | [`cite`](#cite) | Print how to cite Scanpath Studio |
@@ -430,6 +432,68 @@ In Python, use [`remove_dataset`][scanpath_studio.api.remove_dataset].
 from docs_support import cli_reference
 
 print(cli_reference("remove"))
+```
+
+## open
+
+`open` opens the app on a dataset you added, at one reading, with the figure set
+by the same flags [`render`](#render-flags) takes. If the app is running on this
+computer, the link opens in your browser. Otherwise `open` starts the app and
+opens the link once it is up. `--print` prints the link instead.
+
+```bash
+scanpath-studio open "Pilot 3" -p p07 -t t12
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
+```
+
+The link is the one :material/share: **Share** → **Link** writes for the same view.
+Settings it leaves out keep the values the app has. It names the dataset, so it
+opens only where that dataset was added. A link carries no file: `render`'s
+input, output and `--stimulus-image` flags are refused, and
+`--show-stimulus-image` draws the dataset's own pages. In Python, use
+[`app_link`][scanpath_studio.api.app_link].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("open"))
+```
+
+## annotations
+
+`annotations` reads and writes the favorites, tags and notes on a dataset you
+added. `export` writes the same `annotations.json` as **Data Management →
+Annotations → Export**, or a CSV table with one row per annotated reading. `import` reads either: a CSV needs `participant_id` and
+`trial_id`, optionally `screen_id`, and any of `favorite`, `tags` (separated by
+`;`, so a tag can't contain one in a CSV) and `note`. Importing adds a reading's tags to the ones it has, and a
+favorite or note in the file replaces its own; a blank stays as it was. This
+differs from the app's **Import**, which keeps or swaps a reading's whole entry.
+`--replace` makes the dataset's annotations exactly the file's, and is refused
+when none of the file's readings is in the dataset. Readings the dataset does not have are listed
+and left out. If the app is open, reload its browser tab to see the new ones.
+
+```bash
+scanpath-studio annotations import "Pilot 3" qc_flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.json
+```
+
+In Python, use [`write_annotations`][scanpath_studio.api.write_annotations] and
+[`read_annotations`][scanpath_studio.api.read_annotations].
+
+### annotations export
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("annotations export"))
+```
+
+### annotations import
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("annotations import"))
 ```
 
 ## cache

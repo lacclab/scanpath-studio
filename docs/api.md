@@ -179,8 +179,10 @@ sps.save_publication(recipe, "figure-2.svg")
 
 A local app keeps the datasets you add, so they are there the next time it
 starts. `add_dataset` adds one from a script: prepare the tables in Python, add
-them, then run `scanpath-studio` and the app opens on them. `remove_dataset`
-takes one off the list again.
+them, then run `scanpath-studio` and the app opens on them. `app_link` writes
+a link that opens the app on one of them, at a reading, with the figure you
+describe in `plot_scanpath`'s options. `remove_dataset` takes one off the list
+again.
 
 ```python
 sps.add_dataset(
@@ -189,11 +191,30 @@ sps.add_dataset(
     fixations="pilot3/fixation_report.csv",
     canvas_size=(1920, 1080),
 )
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
 ```
 
 ::: scanpath_studio.api.add_dataset
 
+::: scanpath_studio.api.app_link
+
 ::: scanpath_studio.api.remove_dataset
+
+A saved dataset's favorites, tags and notes can be read and written too:
+`write_annotations` tags the readings a script flags, so reviewers find them in
+the app, and `read_annotations` gives back what they marked.
+
+```python
+flags = pd.DataFrame({"participant_id": ["p01"], "trial_id": ["3"], "tags": "Review"})
+sps.write_annotations("Pilot 3", flags)
+sps.read_annotations("Pilot 3")
+```
+
+::: scanpath_studio.api.read_annotations
+
+::: scanpath_studio.api.write_annotations
+
+::: scanpath_studio.api.AnnotationsWriteResult
 
 ::: scanpath_studio.api.cache_status
 

@@ -547,6 +547,91 @@ def test_tiling_boxes_hold_each_point_exactly_once(widths, left, height, draw):
     assert hits == (1 if on_line else 0)
 
 
+# A reading's screens, each a word count; every screen numbers its words from 0
+# and is read at least once (a screen with no fixations is refused on load).
+_SCREEN_LAYOUTS = st.lists(
+    st.integers(min_value=1, max_value=4), min_size=1, max_size=3
+)
+
+
+@given(
+    st.lists(_SCREEN_LAYOUTS, min_size=1, max_size=3),
+    st.booleans(),
+    st.data(),
+)
+@settings(max_examples=40)
+def test_word_metrics_name_every_word_once(readings, screened, draw):
+    """Every word of the input has exactly one row of measures, found by the
+    words' own key — participant, trial, the screen when there is one, word —
+    so the measures merge back one-to-one, however the screens repeat ids."""
+    from scanpath_studio import api
+    from scanpath_studio.multipart import SCREEN_ID, SCREEN_INDEX, grouping_columns
+
+    if not screened:
+        readings = [layout[:1] for layout in readings]
+    word_rows, fixation_rows = [], []
+    clock = 0
+    for reading, layout in enumerate(readings):
+        trial = f"t{reading}"
+        for number, n_words in enumerate(layout, start=1):
+            screen = {SCREEN_ID: f"s{number}", SCREEN_INDEX: number}
+            word_rows += [
+                dict(
+                    participant_id="p",
+                    trial_id=trial,
+                    **screen,
+                    word_id=word,
+                    text=f"w{word}",
+                    x=10.0 + 50 * word,
+                    y=100.0,
+                    width=50.0,
+                    height=20.0,
+                    line_idx=1,
+                )
+                for word in range(n_words)
+            ]
+            for word in draw.draw(
+                st.lists(
+                    st.integers(min_value=0, max_value=n_words - 1),
+                    min_size=1,
+                    max_size=4,
+                )
+            ):
+                clock += 200
+                fixation_rows.append(
+                    dict(
+                        participant_id="p",
+                        trial_id=trial,
+                        **screen,
+                        timestamp_ms=float(clock),
+                        duration_ms=150.0,
+                        x=35.0 + 50 * word,
+                        y=110.0,
+                        word_id=word,
+                    )
+                )
+    words = pd.DataFrame(word_rows)
+    fixations = pd.DataFrame(fixation_rows)
+    if not screened:
+        words = words.drop(columns=[SCREEN_ID, SCREEN_INDEX])
+        fixations = fixations.drop(columns=[SCREEN_ID, SCREEN_INDEX])
+    words, fixations = api.load_scanpath_data(words, fixations, names="canonical")
+
+    metrics = api.compute_word_metrics(words, fixations)
+
+    key = grouping_columns(words, include_word=True)
+    assert (SCREEN_ID in key) == screened
+    screen_columns = {SCREEN_ID, SCREEN_INDEX}
+    assert screen_columns & set(metrics.columns) == (
+        screen_columns if screened else set()
+    )
+    merged = words[key].merge(
+        metrics[key], on=key, how="outer", validate="one_to_one", indicator=True
+    )
+    assert len(merged) == len(words)
+    assert merged["_merge"].eq("both").all()
+
+
 @pytest.mark.parametrize("value", ["1e309", "nan", "-inf"])
 def test_non_finite_range_is_refused(value):
     with pytest.raises(ValueError):
@@ -1136,3 +1221,191 @@ def test_folded_rail_sections_round_trip_through_their_cookie(folded, junk):
     # Stray parts in a cookie never drop a section, nor name an unknown one.
     assert controls.parse_folded_sections(f"{junk}.{value}") >= folded
     assert controls.parse_folded_sections(junk) <= set(controls.RAIL_SECTIONS)
+
+
+#: The readings of the small dataset the annotation properties write to:
+#: whole trials, and screens of a multipart one.
+_ANNOTATED_TRIALS = [("p_1", "t 1"), ("p_1", "07"), ("P2", "t 1")]
+_ANNOTATED_SCREENS = [("p_1", "t 1", "s1"), ("P2", "t 1", "page 2")]
+_TAG = st.text(max_size=12)
+_ANNOTATION_ENTRY = st.fixed_dictionaries(
+    {
+        "star": st.booleans(),
+        "tags": st.lists(_TAG, max_size=4),
+        "note": st.text(max_size=30),
+    }
+)
+_ANNOTATION_STORE = st.dictionaries(
+    st.sampled_from(_ANNOTATED_TRIALS + _ANNOTATED_SCREENS),
+    _ANNOTATION_ENTRY,
+    max_size=5,
+)
+
+
+def _annotated_dataset(folder: str):
+    """A saved dataset, *Data*, with the readings above; its cache folder."""
+    from pathlib import Path
+
+    from scanpath_studio import persistence
+
+    root = Path(folder)
+    fixations = pd.DataFrame(
+        [(p, t, None) for p, t in _ANNOTATED_TRIALS] + _ANNOTATED_SCREENS,
+        columns=["participant_id", "trial_id", "screen_id"],
+    )
+    persistence.store_dataset(
+        {"words": pd.DataFrame(), "fixations": fixations}, "Data", root=root
+    )
+    return root
+
+
+@settings(max_examples=40, suppress_health_check=[HealthCheck.too_slow])
+@given(_ANNOTATION_STORE)
+def test_annotations_a_script_writes_read_back_as_written(raw):
+    """Whatever a script writes as a table — favorites, any tags, any note,
+    on trials and screens — `read_annotations` gives back, normalized as the
+    app normalizes an entry (tags trimmed, sorted and deduplicated)."""
+    import os
+    import tempfile
+    from unittest import mock
+
+    import scanpath_studio.annotations as ann
+    import scanpath_studio.api as sps
+
+    expected = ann.records_to_store(ann.store_to_records(raw))
+    with tempfile.TemporaryDirectory() as folder:
+        root = _annotated_dataset(folder)
+        env = {"SCANPATH_STUDIO_STATE_DIR": str(root), "SCANPATH_STUDIO_PERSIST": "1"}
+        with mock.patch.dict(os.environ, env):
+            table = ann.store_to_frame(expected, screens=True)
+            # The dataset starts with none, so a merge writes exactly these.
+            result = sps.write_annotations("Data", table)
+            assert result.unknown.empty and result.annotated == len(expected)
+            back = sps.read_annotations("Data")
+            pd.testing.assert_frame_equal(
+                back, ann.store_to_frame(expected, screens=True)
+            )
+            # Written back unchanged, it changes nothing, merged or replaced.
+            for mode in ("merge", "replace") if expected else ("merge",):
+                sps.write_annotations("Data", back, mode=mode)
+                pd.testing.assert_frame_equal(sps.read_annotations("Data"), back)
+
+
+@settings(max_examples=40, suppress_health_check=[HealthCheck.too_slow])
+@given(_ANNOTATION_STORE)
+def test_an_app_export_imported_by_a_script_restores_in_the_app(raw):
+    """The app's exported `annotations.json`, imported by `write_annotations`,
+    is the store the next app session restores for that dataset."""
+    import os
+    import tempfile
+    from unittest import mock
+
+    import scanpath_studio.annotations as ann
+    import scanpath_studio.api as sps
+    from scanpath_studio import persistence
+
+    store = ann.records_to_store(ann.store_to_records(raw))
+    exported = ann.serialize(store, dataset="Data")
+    with tempfile.TemporaryDirectory() as folder:
+        root = _annotated_dataset(folder)
+        env = {"SCANPATH_STUDIO_STATE_DIR": str(root), "SCANPATH_STUDIO_PERSIST": "1"}
+        with mock.patch.dict(os.environ, env):
+            sps.write_annotations("Data", json.loads(exported))
+        session: dict = {}
+        assert persistence.restore_state(session, root)
+        assert ann.store_for(session, "Data") == store
+        assert ann.serialize(ann.store_for(session, "Data"), dataset="Data") == exported
+
+
+def _linkable_values() -> dict[str, list]:
+    """Each option a link carries, at its API default and at another value."""
+    from scanpath_studio import api, script_link
+    from tests.test_render_every_option import NON_DEFAULT
+
+    # The player's and the window's, which are no figure options.
+    extra_defaults = {
+        "playback_speed": 1.0,
+        "autoplay": True,
+        "illustration_label": "auto",
+        "fix_index_range": None,
+    }
+    defaults = {
+        **api.figure_options("static"),
+        **api.figure_options("animation"),
+        **extra_defaults,
+    }
+    other = {
+        **NON_DEFAULT,
+        "palette": "Print / grayscale",
+        "playback_speed": 2.0,
+        "autoplay": False,
+        "illustration_label": "show",
+        "fix_index_range": (2, 9),
+    }
+    return {
+        name: [defaults.get(name, other[name]), other[name]]
+        for name in sorted(script_link.LINKED_OPTIONS)
+    }
+
+
+_LINK_TEXT = st.text(min_size=1, max_size=20).filter(lambda s: s == s.strip())
+
+
+@settings(max_examples=60, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    name=_LINK_TEXT,
+    participant=st.one_of(st.none(), _LINK_TEXT),
+    trial=st.one_of(st.none(), _LINK_TEXT),
+    screen=st.one_of(st.none(), _LINK_TEXT),
+    data=st.data(),
+)
+def test_a_script_link_opens_its_dataset_reading_and_settings(
+    name, participant, trial, screen, data
+):
+    """`api.app_link`, read by the app: the dataset it names is the one opened,
+    the reading is the one it names, and every setting it carries lands in the
+    session keys the rail draws from."""
+    from urllib.parse import urlsplit
+
+    from scanpath_studio import api, script_link
+    from scanpath_studio.code_snippet import _comparable
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+
+    values = _linkable_values()
+    chosen = data.draw(st.sets(st.sampled_from(sorted(values)), max_size=12))
+    options = {key: data.draw(st.sampled_from(values[key])) for key in chosen}
+    if trial is None:
+        screen = None
+    with pytest.MonkeyPatch.context() as patch:
+        # Nothing saved: the link names the dataset alone, never from the
+        # user's own saved work.
+        patch.setenv("SCANPATH_STUDIO_STATE_DIR", "/nonexistent/scanpath-studio")
+        url = api.app_link(
+            name, participant, trial, screen=screen, port=8765, **options
+        )
+    parts = urlsplit(url)
+    assert (parts.scheme, parts.netloc, parts.path) == ("http", "localhost:8765", "/")
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+    recipient = {
+        "_datasets": {"their key": {}, "another": {}},
+        DATASET_ALIASES_KEY: {"their key": name, "another": name + " (2)"},
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", query)
+        assert url_state.resolve_link_dataset((), None) == "their key"
+        url_state._apply_url_preset()
+    assert query.get("participant") == participant
+    assert query.get("trial_id") == trial
+    assert query.get("screen") == screen
+    if participant is not None:
+        assert recipient["single_participant"] == participant
+    expected = script_link.options_state(
+        {**options, "palette": api.resolve_palette(options["palette"])}
+        if "palette" in options
+        else options
+    )
+    for key, value in expected.items():
+        assert key in recipient, key
+        assert _comparable(recipient[key]) == _comparable(value), key

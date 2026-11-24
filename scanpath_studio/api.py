@@ -29,7 +29,7 @@ import json
 import logging
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
@@ -1577,7 +1577,11 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
     columns in ``words`` (EyeLink IA exports) are preserved; anything missing is
     computed from fixations + word bounding boxes. Takes the normalized frames
     from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], and
-    answers in the names they carry."""
+    answers in the names they carry.
+
+    One row per word of each reading. On multi-screen data a word is one screen's
+    word: the rows keep the words' screen ID and screen number, so they merge
+    back onto ``words`` by participant, trial, screen and word ID."""
     _require_computed_measures("compute_word_metrics")
     words, word_names = _named_in(words, "words")
     fixations, _fix_names = _named_in(fixations, "fixations")
@@ -2718,6 +2722,24 @@ def _check_canvas_size(canvas_size) -> None:
         )
 
 
+#: What ``illustration=True`` sets: the app's *Illustration* design. An
+#: option given beside it wins.
+ILLUSTRATION_PRESET = {
+    "show_words": False,
+    "show_word_labels": True,
+    "show_fixations": True,
+    "show_order": False,
+    "show_saccades": True,
+    "show_saccade_arrows": False,
+    "show_heatmap": False,
+    "color_by": UNIFORM_COLOR_FIELD,
+    "saccade_color_mode": "One color",
+    "saccade_render_mode": "Arc",
+    "fixation_snap_to_line": True,
+    "fixation_opacity": 1.0,
+}
+
+
 def plot_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2824,21 +2846,7 @@ def plot_scanpath(
             PNG). The figure draws none.
     """
     if illustration:
-        figure_overrides = {
-            "show_words": False,
-            "show_word_labels": True,
-            "show_fixations": True,
-            "show_order": False,
-            "show_saccades": True,
-            "show_saccade_arrows": False,
-            "show_heatmap": False,
-            "color_by": UNIFORM_COLOR_FIELD,
-            "saccade_color_mode": "One color",
-            "saccade_render_mode": "Arc",
-            "fixation_snap_to_line": True,
-            "fixation_opacity": 1.0,
-            **figure_overrides,
-        }
+        figure_overrides = {**ILLUSTRATION_PRESET, **figure_overrides}
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
@@ -4977,6 +4985,291 @@ def remove_dataset(name: str, *, missing_ok: bool = False) -> bool:
             return False
         raise
     return True
+
+
+@dataclass(frozen=True)
+class AnnotationsWriteResult:
+    """What [`write_annotations`][scanpath_studio.api.write_annotations] did.
+
+    Attributes:
+        dataset: The dataset's name, as the dataset list shows it.
+        written: How many readings the annotations were written on.
+        annotated: How many readings of the dataset are annotated now.
+        unknown: The readings the dataset does not have, which were left out:
+            ``participant_id``, ``trial_id`` and ``screen_id`` (blank on a whole
+            trial). Empty when every reading was found.
+    """
+
+    dataset: str
+    written: int
+    annotated: int
+    unknown: pd.DataFrame
+
+
+def _annotation_entries(annotations: Any) -> dict:
+    """What ``write_annotations`` was given, as `annotations.frame_entries` /
+    `record_entries` read it."""
+    import scanpath_studio.annotations as _annotations
+
+    if isinstance(annotations, pd.DataFrame):
+        return _annotations.frame_entries(_cn.to_canonical_frame(annotations))
+    if isinstance(annotations, (str, Path)):
+        path = Path(annotations).expanduser()
+        if path.suffix.lower() == ".csv":
+            table = pd.read_csv(
+                path,
+                dtype=str,
+                keep_default_na=False,
+                encoding="utf-8-sig",
+            )
+            return _annotations.frame_entries(table)
+        document = _annotations._json_document(path.read_bytes())
+        return _annotations.record_entries(_annotations.document_records(document))
+    if isinstance(annotations, dict):
+        return _annotations.record_entries(_annotations.document_records(annotations))
+    if isinstance(annotations, (list, tuple)):
+        return _annotations.record_entries(list(annotations))
+    raise TypeError(
+        "annotations must be a DataFrame, a list of annotation records, an "
+        f"annotations file's contents or a path to one, not {type(annotations).__name__}."
+    )
+
+
+def read_annotations(dataset: str) -> pd.DataFrame:
+    """Read the favorites, tags and notes saved on a dataset's readings.
+
+    What the 🗂️ **Data** page's **Annotations** shows for a dataset you added
+    (in the app or with [`add_dataset`][scanpath_studio.api.add_dataset]), read
+    from the app's saved work on this computer: what reviewers marked in the app,
+    for an analysis to use. An app that is open saves an edit within moments of
+    it being made.
+
+    Args:
+        dataset: The name the dataset list shows, ignoring case.
+
+    Returns:
+        One row per annotated reading: ``participant_id``, ``trial_id``,
+        ``screen_id`` on a dataset recorded over several screens (blank on an
+        annotation of the whole trial), ``favorite`` (bool), ``tags`` (a list of
+        text) and ``note`` (text, ``""`` when none). Ids are text, spelled as the
+        app's trial picker lists them. The columns carry these names whatever the
+        dataset calls its own, as the app's ``annotations.json`` does. Empty, with
+        the same columns, when the dataset has no annotations.
+
+    Raises:
+        StoredDatasetNotFoundError: No saved dataset has this name. The built-in
+            and public datasets' annotations are exported in the app. A
+            ``LookupError``.
+        ValueError: The saved work can't be read or was written by another version.
+
+    Examples:
+        ```python
+        marked = sps.read_annotations("Pilot 3")
+        excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+        ```
+    """
+    from . import persistence as _persistence
+    from .annotations import store_to_frame
+
+    _, store, multipart = _persistence.stored_annotations(dataset)
+    return store_to_frame(store, screens=multipart)
+
+
+def write_annotations(
+    dataset: str,
+    annotations: pd.DataFrame | list[dict] | dict | str | Path,
+    *,
+    mode: str = "merge",
+) -> AnnotationsWriteResult:
+    """Save favorites, tags and notes on a dataset's readings from a script.
+
+    A quality-control script can tag the readings it flags, and reviewers find
+    them in the app — under the trial's **Annotations**, and with the ⭐ / tag trial
+    filters. The dataset is one you added (in the app or with
+    [`add_dataset`][scanpath_studio.api.add_dataset]); the annotations are saved
+    with it on this computer, as the 🗂️ **Data** page's **Annotations → Import**
+    saves an imported file.
+
+    In ``"merge"`` mode a reading's tags are added to the ones it has, and a
+    favorite or note you give replaces its own; what a row leaves blank, an empty
+    note included, stays as it was. This differs from the app's **Import**, which
+    adds new readings and keeps or swaps a reading's whole entry. ``"replace"``
+    makes the dataset's annotations exactly the ones given, and is refused when
+    none of the given readings is in the dataset, so a file made for another
+    dataset deletes nothing.
+
+    Each reading is looked up in the dataset's tables, as the trial picker lists
+    it. One the dataset does not have is left out and listed in the result's
+    ``unknown``. A browser tab that has the app open shows the new annotations
+    once reloaded. Edits made in it in the meantime are kept beside them, except
+    an edit of the same reading, which the tab reports as a conflict.
+
+    Args:
+        dataset: The name the dataset list shows, ignoring case.
+        annotations: A table with ``participant_id``, ``trial_id`` (or
+            ``unique_trial_id``, which wins when there are both, as the trial
+            picker lists it), optionally ``screen_id``, and any of ``favorite`` (true/false), ``tags`` (a list,
+            or text with tags separated by ``;``) and ``note`` — what
+            [`read_annotations`][scanpath_studio.api.read_annotations] returns.
+            Rows on the same reading add their tags together. Or the app's
+            exported ``annotations.json``: its records, the parsed file, or the
+            path to it, where two records on one reading must agree. A path
+            ending in ``.csv`` is read as a table.
+        mode: ``"merge"`` (the default) or ``"replace"``.
+
+    Returns:
+        An [`AnnotationsWriteResult`][scanpath_studio.api.AnnotationsWriteResult]:
+            how many readings were written, how many are annotated now, and the
+            ones the dataset does not have.
+
+    Raises:
+        StoredDatasetNotFoundError: No saved dataset has this name. A
+            ``LookupError``.
+        ValueError: ``mode`` is neither ``"merge"`` nor ``"replace"``; the
+            annotations are not in a form above (a missing id column, a favorite
+            that is not true or false, two rows on one reading with different
+            notes); ``"replace"`` names no reading the dataset has; or the saved
+            work can't be read or was written by another version. Nothing is
+            saved then.
+        TypeError: ``annotations`` is none of the forms above.
+        RuntimeError: Saving is turned off (``SCANPATH_STUDIO_PERSIST=0``).
+
+    Examples:
+        ```python
+        words, fixations = sps.load_scanpath_data(
+            "pilot3/ia_report.csv", "pilot3/fixation_report.csv", names="canonical"
+        )
+        counts = fixations.groupby(["participant_id", "trial_id"]).size()
+        flagged = counts[counts < 20].reset_index()[["participant_id", "trial_id"]]
+        flagged["tags"] = "Few fixations"
+        result = sps.write_annotations("Pilot 3", flagged)
+        print(result.written, "readings tagged;", len(result.unknown), "not found")
+        ```
+    """
+    from . import persistence as _persistence
+
+    if mode not in ("merge", "replace"):
+        raise ValueError(f"mode must be 'merge' or 'replace', not {mode!r}.")
+    if not _persistence.persistence_enabled("http://localhost"):
+        raise RuntimeError(
+            f"Saving is turned off ({_persistence.PERSIST_ENV_VAR}=0), so the app "
+            "would not see the annotations. Unset it to write them."
+        )
+    incoming = _annotation_entries(annotations)
+    shown, written, unknown, after = _persistence.write_stored_annotations(
+        dataset, incoming, replace=mode == "replace"
+    )
+    unknown_frame = pd.DataFrame(
+        [
+            {
+                "participant_id": key[0],
+                "trial_id": key[1],
+                "screen_id": key[2] if len(key) > 2 else None,
+            }
+            for key in unknown
+        ],
+        columns=["participant_id", "trial_id", "screen_id"],
+        dtype=object,
+    )
+    return AnnotationsWriteResult(
+        dataset=shown, written=written, annotated=len(after), unknown=unknown_frame
+    )
+
+
+def app_link(
+    dataset: str,
+    participant: str | None = None,
+    trial: str | None = None,
+    *,
+    screen: str | None = None,
+    port: int = 8501,
+    animate: bool = False,
+    illustration: bool = False,
+    **figure_options: Any,
+) -> str:
+    """A link that opens the local app on a dataset, a reading and a figure.
+
+    The link names the dataset as the app's dataset list shows it, the reading by
+    its participant and trial IDs, and the figure by the options
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] takes, written as 🔗
+    **Share → Link** writes the same view. Open it in a browser while the app runs
+    on this computer (``scanpath-studio`` serves it at ``localhost:8501``), or let
+    ``scanpath-studio open`` start the app and open it. The dataset is one added in
+    the app or with [`add_dataset`][scanpath_studio.api.add_dataset]. The same as
+    ``scanpath-studio open --print``.
+
+    For a dataset saved on this computer the link also carries its share ID and
+    a digest of its tables, as Share's does, so the app checks it is the same
+    data; its tables are read to compute it. Settings the link leaves out keep
+    the values the app has. A link whose dataset the app doesn't have opens
+    nothing from it, and says which dataset is missing.
+
+    Args:
+        dataset: The dataset's name in the app's dataset list, ignoring case for
+            one saved on this computer.
+        participant: The participant ID. Without it, a trial ID that only one
+            participant has still opens that reading.
+        trial: The trial ID. Without it, the app opens the participant's first
+            trial, or the reading it last showed.
+        screen: The screen ID of a trial recorded over several screens.
+        port: The port the app listens on.
+        animate: Open the replay instead of the static figure.
+        illustration: The *Illustration* design, as ``plot_scanpath`` takes it;
+            an option given beside it wins.
+        **figure_options: Figure options, as ``plot_scanpath`` takes them, with
+            its ``fix_index_range`` and ``illustration_label``, plus ``palette``
+            and the replay's ``anim_grid_step_ms``, ``anim_max_frames``,
+            ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
+            value, except where it is a choice of its own (``heatmap_metric``
+            counts fixations, ``fixation_flags`` turns them off). A link carries
+            no file, so ``background_image`` and its size and origin are
+            refused (``show_stimulus_image=True`` draws the dataset's own
+            pages), and no ``title`` or ``caption``, which the app writes from
+            its own patterns.
+
+    Returns:
+        The link, ``http://localhost:<port>/?dataset=…``.
+
+    Raises:
+        TypeError: An option a link can't carry, or no figure option at all.
+        ValueError: An empty dataset name, a screen without a trial, a port
+            outside 1–65535, or a value the app would ignore or clamp.
+
+    Examples:
+        ```python
+        sps.add_dataset("Pilot 3", words="ia.csv", fixations="fixations.csv")
+        url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+        import webbrowser; webbrowser.open(url)
+        ```
+    """
+    from . import persistence as _persistence
+    from .script_link import link_query, local_url
+
+    options = (
+        {**ILLUSTRATION_PRESET, **figure_options}
+        if illustration
+        else dict(figure_options)
+    )
+    if "palette" in options:
+        options["palette"] = resolve_palette(options["palette"])
+    _check_colorscales(options)
+    reference = (
+        _persistence.stored_dataset_reference(dataset)
+        if _persistence.persistence_enabled("http://localhost")
+        else None
+    )
+    shown, share_id, digest = reference or (dataset, None, None)
+    query = link_query(
+        shown,
+        participant,
+        trial,
+        screen=screen,
+        animate=animate,
+        options=options,
+        share_id=share_id,
+        digest=digest,
+    )
+    return local_url(query, port)
 
 
 def _condition_fields(frames: dict, schemas: dict) -> list[str]:

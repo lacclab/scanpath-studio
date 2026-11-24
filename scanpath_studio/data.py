@@ -9417,6 +9417,11 @@ def _compute_word_metrics_cached(
         "participant_id",
         "trial_id",
         "text_id",
+        # A multi-screen trial can number each screen's words from the start,
+        # so a word is named by its screen too. Single-screen frames carry
+        # neither column, and their output keeps its shape.
+        SCREEN_ID,
+        SCREEN_INDEX,
         "word_id",
         "text",
         "line_idx",

@@ -135,6 +135,9 @@ def _parsers() -> dict:
         "check": cli._check_parser,
         "add": cli._add_parser,
         "remove": cli._remove_parser,
+        "annotations export": lambda: cli._annotations_action_parser("export"),
+        "annotations import": lambda: cli._annotations_action_parser("import"),
+        "open": cli._open_parser,
         "cache": cli._cache_parser,
         "version": cli._version_parser,
         "cite": cli._cite_parser,
@@ -266,7 +269,12 @@ def cli_reference(command: str, *, heading: str = "") -> str:
             out += ["", "</div>", ""]
         return "\n".join(out)
     groups = [(g.title, _visible_actions(g)) for g in parser._action_groups]
-    groups = [(title, actions) for title, actions in groups if actions]
+    # `open`'s figure flags are `render`'s own, listed under render flags.
+    groups = [
+        (title, actions)
+        for title, actions in groups
+        if actions and not (command == "open" and title.startswith("figure"))
+    ]
     out = []
     for title, actions in groups:
         if len(groups) > 1:

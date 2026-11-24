@@ -297,6 +297,288 @@ def drop_records(store: dict[Key, Entry], records: list[dict]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# A script's annotations table (`api.read_annotations` / `write_annotations`)
+# ---------------------------------------------------------------------------
+
+#: The columns of the table a script reads and writes; ``screen_id`` only on a
+#: dataset recorded over several screens.
+FRAME_COLUMNS = ("participant_id", "trial_id", "screen_id", "favorite", "tags", "note")
+#: What separates the tags in one cell of a CSV file.
+TAG_SEPARATOR = ";"
+_TRUE_TEXT = frozenset({"true", "1", "yes", "y", "t"})
+_FALSE_TEXT = frozenset({"false", "0", "no", "n", "f"})
+
+#: A reading's annotation as a script gives it: only the fields it states —
+#: ``star`` (bool), ``tags`` (list), ``note`` (non-empty text).
+Given = dict[str, object]
+
+
+def store_to_frame(store: dict[Key, Entry], *, screens: bool = False) -> pd.DataFrame:
+    """One row per annotated reading, in :data:`FRAME_COLUMNS` order.
+
+    ``screen_id`` is a column when ``screens`` or when any entry is on a
+    screen, blank on a whole-trial entry.
+    """
+    records = store_to_records(store)
+    screens = screens or any("screen_id" in record for record in records)
+    columns = [c for c in FRAME_COLUMNS if screens or c != "screen_id"]
+    rows = [
+        {
+            "participant_id": record["participant_id"],
+            "trial_id": record["trial_id"],
+            "screen_id": record.get("screen_id"),
+            "favorite": record["star"],
+            "tags": list(record["tags"]),
+            "note": record["note"],
+        }
+        for record in records
+    ]
+    frame = pd.DataFrame(rows, columns=columns)
+    return frame.astype({"favorite": bool}) if not frame.empty else frame
+
+
+def _missing(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (list, tuple, set, frozenset)) or hasattr(value, "shape"):
+        return False
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _given_favorite(value: object, where: str) -> bool | None:
+    if _missing(value):
+        return None
+    if isinstance(value, (bool, int, float)) and value in (0, 1):
+        return bool(value)
+    if hasattr(value, "item") and not isinstance(value, str):
+        return _given_favorite(value.item(), where)
+    text = str(value).strip().casefold()
+    if not text:
+        return None
+    if text in _TRUE_TEXT:
+        return True
+    if text in _FALSE_TEXT:
+        return False
+    raise AnnotationsFileError(
+        f"{where}: favorite must be true or false, not {value!r}"
+    )
+
+
+def _given_tags(value: object, where: str) -> list[str]:
+    if _missing(value):
+        return []
+    if isinstance(value, str):
+        parts = value.split(TAG_SEPARATOR)
+    elif isinstance(value, (list, tuple, set, frozenset)) or hasattr(value, "tolist"):
+        parts = list(value.tolist() if hasattr(value, "tolist") else value)
+    else:
+        parts = [value]
+    parts = [t for t in parts if not _missing(t)]
+    if any(isinstance(t, bool) or not isinstance(t, (*_ID_TYPES, str)) for t in parts):
+        raise AnnotationsFileError(f"{where}: tags must be text labels")
+    return sorted({str(t).strip() for t in parts if str(t).strip()})
+
+
+def _given_entry(star: object, tags: object, note: object, where: str) -> Given:
+    given: Given = {"tags": _given_tags(tags, where)}
+    favorite = _given_favorite(star, where)
+    if favorite is not None:
+        given["star"] = favorite
+    if not _missing(note) and str(note).strip():
+        given["note"] = str(note).strip()
+    return given
+
+
+def _combine(entries: dict[Key, Given], key: Key, given: Given, where: str) -> None:
+    """Add ``given`` to ``entries``: tags join, a favorite or note must agree."""
+    if key not in entries:
+        entries[key] = given
+        return
+    first = entries[key]
+    for field in ("star", "note"):
+        if field in first and field in given and first[field] != given[field]:
+            raise AnnotationsFileError(
+                f"{where} gives {' / '.join(key)} another {'favorite' if field == 'star' else 'note'}"
+            )
+    entries[key] = {
+        **first,
+        **given,
+        "tags": sorted({*first.get("tags", []), *given.get("tags", [])}),
+    }
+
+
+def _key_text(value: object) -> str:
+    """An id cell as the app keys it: a whole number read as a decimal
+    (``3.0``) is ``3``, as `data.stable_id` casts it; text stays as written,
+    so ``"t.0"`` is not ``"t"``."""
+    if hasattr(value, "item") and not isinstance(value, str):
+        value = value.item()
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def frame_entries(frame: pd.DataFrame) -> dict[Key, Given]:
+    """The readings a table annotates, each with the fields it states.
+
+    ``participant_id`` and ``trial_id`` name the reading — ``unique_trial_id``
+    in place of ``trial_id`` when the table has one, as the trial picker lists
+    it — and an optional ``screen_id`` one screen of it. ``favorite`` (or the file's ``star``),
+    ``tags`` (a list, or text split at :data:`TAG_SEPARATOR`) and ``note``
+    are each optional, and a blank cell states nothing. Rows on the same
+    reading join their tags; their favorites and notes must agree. Other
+    columns are ignored.
+    """
+    if not isinstance(frame, pd.DataFrame):
+        raise TypeError(f"Expected a DataFrame, got {type(frame).__name__}.")
+    # Rows are walked by label; a `pd.concat` result repeats its labels.
+    frame = frame.reset_index(drop=True)
+    if "unique_trial_id" in frame.columns:
+        # The trial picker's id where a table has one (`upload_trials`).
+        frame = frame.drop(columns="trial_id", errors="ignore").rename(
+            columns={"unique_trial_id": "trial_id"}
+        )
+    missing = [c for c in ("participant_id", "trial_id") if c not in frame.columns]
+    if missing:
+        raise AnnotationsFileError(
+            f"the table has no {' or '.join(missing)} column; it needs "
+            "participant_id and trial_id to name each reading"
+        )
+    favorite_column = "favorite" if "favorite" in frame.columns else "star"
+    if not {favorite_column, "tags", "note"} & set(frame.columns):
+        raise AnnotationsFileError(
+            "the table has no favorite, tags or note column, so it annotates nothing"
+        )
+    if frame.empty:
+        return {}
+    ids = {}
+    for column in ("participant_id", "trial_id", "screen_id"):
+        if column not in frame.columns:
+            continue
+        values = frame[column]
+        present = ~values.map(_missing) & (values.astype(str).str.strip() != "")
+        if column != "screen_id" and not present.all():
+            row = int((~present).to_numpy().argmax()) + 1
+            raise AnnotationsFileError(f"row {row} has no {column}")
+        text = pd.Series([None] * len(frame), index=frame.index, dtype=object)
+        if present.any():
+            text[present] = values[present].map(_key_text)
+        ids[column] = text
+    entries: dict[Key, Given] = {}
+    for position, index in enumerate(frame.index):
+        where = f"row {position + 1}"
+        key: Key = (ids["participant_id"][index], ids["trial_id"][index])
+        screen = ids["screen_id"][index] if "screen_id" in ids else None
+        if screen is not None:
+            key = (*key, screen)
+        row = frame.loc[index]
+        given = _given_entry(
+            row.get(favorite_column), row.get("tags"), row.get("note"), where
+        )
+        _combine(entries, key, given, where)
+    return entries
+
+
+def document_records(document: object) -> list[dict]:
+    """The records of an annotations file's parsed JSON — the object the app
+    exports, or a bare list — checked as :func:`deserialize` checks them."""
+    if isinstance(document, dict):
+        if "annotations" not in document:
+            raise AnnotationsFileError("it has no annotations list")
+        document = document["annotations"]
+    if not isinstance(document, list):
+        raise AnnotationsFileError("its annotations are not a list")
+    for index, record in enumerate(document):
+        _check_record(index, record)
+    return document
+
+
+def _as_read(given: Given) -> Entry:
+    """A file record as :func:`deserialize` reads it: a missing star is false."""
+    return _normalize_entry(
+        given.get("star", False), given.get("tags", []), given.get("note", "")
+    )
+
+
+def record_entries(records: list[dict]) -> dict[Key, Given]:
+    """The readings a list of file records annotates, with the fields each
+    record states (a record without ``star`` leaves the favorite as it is).
+
+    Two records on one reading must agree, as :func:`deserialize` requires.
+    """
+    entries: dict[Key, Given] = {}
+    first: dict[Key, int] = {}
+    for index, record in enumerate(document_records(list(records))):
+        key = _record_key(record)
+        given = _given_entry(
+            record.get("star"),
+            record.get("tags"),
+            record.get("note"),
+            f"entry {index + 1}",
+        )
+        if key in entries and _as_read(entries[key]) != _as_read(given):
+            raise AnnotationsFileError(
+                f"entries {first[key] + 1} and {index + 1} disagree for {' / '.join(key)}"
+            )
+        entries[key] = given
+        first.setdefault(key, index)
+    return entries
+
+
+def apply_entries(
+    store: dict[Key, Entry], incoming: dict[Key, Given], *, replace: bool = False
+) -> dict[Key, Entry]:
+    """``store`` with ``incoming`` written over it; a new store.
+
+    Merging, a reading's tags join the ones it has and a stated favorite or
+    note replaces its own; what a row leaves out stays. ``replace`` starts
+    from nothing instead: the store becomes exactly ``incoming``. An entry
+    left with nothing on it is dropped.
+    """
+    result = {} if replace else dict(store)
+    for key, given in incoming.items():
+        old = result.get(key) or default_entry()
+        entry = _normalize_entry(
+            given.get("star", old["star"]),
+            [*old["tags"], *given.get("tags", [])],
+            given.get("note") or old["note"],
+        )
+        if is_empty_entry(entry):
+            result.pop(key, None)
+        else:
+            result[key] = entry
+    return result
+
+
+def resolve_readings(
+    incoming: dict[Key, Given],
+    trials: frozenset[tuple[str, str]],
+    screens: frozenset[tuple[str, str, str]],
+) -> tuple[dict[Key, Given], list[Key]]:
+    """Split ``incoming`` into the readings a dataset has and the ones it lacks.
+
+    ``trials`` are its ``(participant, trial)`` pairs and ``screens`` its
+    ``(participant, trial, screen)`` triples. An id an older file spelled
+    without escaping a ``_`` inside a composite part is read the dataset's
+    way when that is unambiguous (`data.respell_reading`), as an import in
+    the app reads it.
+    """
+    known: dict[Key, Given] = {}
+    unknown: list[Key] = []
+    for key, given in incoming.items():
+        reading = (*respell_reading(key[0], key[1], trials), *key[2:])
+        found = reading in screens if len(reading) == 3 else reading in trials
+        if found:
+            _combine(known, reading, given, f"{' / '.join(key)}")
+        else:
+            unknown.append(key)
+    return known, sorted(unknown)
+
+
+# ---------------------------------------------------------------------------
 # Session-backed layer
 # ---------------------------------------------------------------------------
 

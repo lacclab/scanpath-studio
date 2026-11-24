@@ -1473,9 +1473,9 @@ def landing_positions(
 
     Prefers the pre-computed ``first_fix_x`` on ``words``. When that's absent —
     the pre-aggregated OneStop path — it derives the landing from ``fixations``:
-    the earliest fixation on each ``(participant, trial, word)``, joined to the
-    word box. Returns the landing as a *fraction of the word's interest area* by
-    default, else the px distance from where the word starts.
+    the earliest fixation on each ``(participant, trial[, screen], word)``,
+    joined to the word box. Returns the landing as a *fraction of the word's
+    interest area* by default, else the px distance from where the word starts.
 
     The fraction is ``(x_fix − x) / width`` — 0 at the box's leading edge, 1 at
     its trailing edge — over the experiment's own box. It is the same

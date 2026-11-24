@@ -246,6 +246,47 @@ class TestWordTextIsReadVerbatim:
         data_module.harmonize_frames(words, data_module.empty_fixations_frame())
 
 
+class TestTheWorkbookEngine:
+    """Workbooks are read with calamine (`data.EXCEL_ENGINE`), which pandas is
+    moving its own defaults to. It must give the frame the previous engine
+    gave, on the kinds of cell where engines are known to differ."""
+
+    CELLS = {
+        **CORE,
+        "IA_ID": [1, 2, 3],
+        "RECORDING_SESSION_LABEL": ["p1", "p1", "p1"],
+        "paragraph_id": ["t1", "t1", "t1"],
+        # A word "NA", an empty cell, and ordinary text.
+        "IA_LABEL": ["NA", None, "fox"],
+        "IA_LEFT": [10, 60, 120],
+        "IA_RIGHT": [50, 110, 160],
+        "IA_TOP": [100, 100, 100],
+        "IA_BOTTOM": [130, 130, 130],
+        "IA_DWELL_TIME": [212.5, 0.0, 180.25],
+        "IA_SKIP": [True, False, True],
+        "item": ["007", "010", "100"],
+    }
+
+    def test_calamine_reads_a_workbook_as_openpyxl_did(self, tmp_path):
+        pytest.importorskip("openpyxl")
+        path = tmp_path / "words.xlsx"
+        pd.DataFrame(self.CELLS).to_excel(path, index=False)
+        header = read_table_columns(path)
+        plan = _plan(header)
+
+        def read_with(engine: str) -> pd.DataFrame:
+            with pd.ExcelFile(path, engine=engine) as book:
+                return pd.read_excel(book, **data_module._excel_na_kwargs(book, plan))
+
+        before = read_with("openpyxl")
+        pd.testing.assert_frame_equal(before, read_with(data_module.EXCEL_ENGINE))
+        assert data_module.EXCEL_ENGINE == "calamine"
+        assert header == list(self.CELLS)
+        # The app's reader keeps the plan's columns of that same frame.
+        after = read_table(path, plan=plan)
+        pd.testing.assert_frame_equal(before[list(after.columns)], after)
+
+
 class TestFilesTheReadersUsedToRefuse:
     """An Excel-named text export, a non-UTF-8 CSV and an empty file.
 

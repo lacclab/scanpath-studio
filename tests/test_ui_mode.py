@@ -551,7 +551,7 @@ def test_replay_settings_leave_the_view_highlighted(mode):
     assert _lit_tiles(at) == ["scanpath"]
     at.select_slider(key="single_playback_speed").set_value(2.0).run()
     at.checkbox(key="global_anim_autoplay").uncheck().run()
-    at.selectbox(key="global_anim_quality").set_value("Fine").run()
+    _smoothness(at).set_value("Fine").run()
     assert not at.exception
     assert _lit_tiles(at) == ["scanpath"]
     assert at.session_state["_quick_view_selection"] == "scanpath"
@@ -715,6 +715,11 @@ def _open_samples_only(mode: str = "essentials") -> AppTest:
 
 
 SIMPLE_TILES = ("scanpath", "heatmap", "illustration", "gaze_over_time", "custom")
+
+
+def _smoothness(at: AppTest):
+    """The replay's Smoothness selectbox, drawn under a shadow key that moves."""
+    return next(box for box in at.selectbox if box.key.startswith("_anim_quality__w"))
 
 
 def _lit_tiles(at: AppTest) -> list[str]:

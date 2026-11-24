@@ -2757,6 +2757,26 @@ def reassert_pending_writes() -> None:
         ss.pop(_PENDING_WRITES_KEY, None)
 
 
+def echoes_a_held_write(*keys: str) -> bool:
+    """Whether a key's value is a closed popover's echo of what its widget
+    showed before a `write_through` that is still held, not the user's change.
+
+    A widget's ``on_change`` runs on that echo before the script starts, and
+    so before `reassert_pending_writes` puts the write back. A callback that
+    acted on the echo would undo the write by other means (a preset's name, a
+    derived setting), so it returns when this is true and the hold restores
+    the written value."""
+    pending = st.session_state.get(_PENDING_WRITES_KEY) or {}
+    for key in keys:
+        write = pending.get(key)
+        if write is None or write.fresh or write.stale_echo == _ECHO_UNKNOWN:
+            continue
+        shown = _write_match_key(st.session_state.get(key))
+        if shown == _write_match_key(write.stale_echo):
+            return True
+    return False
+
+
 def _palette_match_key(value):
     """Normalize a colour for comparison — the pickers hand back lowercase hex."""
     return value.lower() if isinstance(value, str) and value.startswith("#") else value

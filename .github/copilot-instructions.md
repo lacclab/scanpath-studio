@@ -18,7 +18,8 @@ Read them before changing code. The rules most worth repeating:
 - **Run the app on loopback**: `scanpath-studio`, or
   `streamlit run streamlit_app.py --server.address 127.0.0.1`.
 - **Before every commit**: `ruff check .` and `ruff format .` (CI gates on both),
-  and `pytest -n auto`.
+  and the tests for what you changed (`pytest -n auto tests/test_<module>.py …`).
+  CI runs the whole suite on every PR.
 - **A user-facing feature reaches every surface** — the UI, the deep link /
   Share, the CLI and the headless API (`AGENTS.md` → *Exposing a feature on
   every surface*).

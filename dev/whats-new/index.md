@@ -73,6 +73,9 @@
 - Preparing a PDF or the offline editor in Prepare figure now shows a loading card with its progress, as the clip does, instead of a page that seems to hang.
 - Two Prepare figure sections open at once, such as a Corpus Analysis chart and its text's stimulus, no longer rebuild each other's editor on every rerun.
 - Scanpath B's fixation and saccade filters, the exported figure's width and DPI, whether the trial summary shows above the plot, and "keep this range across trials" are kept when the app restarts.
+- A renamed built-in dataset that needs a number to stay unique keeps its name within the 80-character limit, as an uploaded dataset's already did.
+- Removing a dataset also clears its saved filters, remembered trial and Compare selection, and closes Edit dataset if it was open on it, so a dataset added later under the same name opens unfiltered on its own first trial, and saving the editor cannot rename another dataset.
+- Saving a drawn scanpath keeps the participant, trial and text tables attached to the draft, as it already kept the draft's annotations.
 - Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
 
 ## Release v0.48.0

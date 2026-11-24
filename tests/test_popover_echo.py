@@ -55,6 +55,29 @@ def test_an_undone_word_highlight_holds_against_the_closed_menus_echo():
 
 
 @pytest.mark.timeout(180)
+@pytest.mark.parametrize("change", ["view tile", "reset"])
+def test_one_click_turns_the_highlight_on_after_a_design_change(change):
+    """A view tile or Reset sets the highlight off without its controls. No
+    widget sits on the style any more, so nothing echoes it and nothing holds
+    it: the next click on the switch turns the highlight on."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    _shadow(at.checkbox, "highlight_span_on").check().run()
+    _shadow(at.radio, "highlight_span_mode").set_value("Underline").run()
+    assert at.session_state[STYLE] == "Underline"
+    if change == "view tile":
+        at.button(key="viz_view_heatmap").click().run()
+    else:
+        at.button(key="reset_viz_settings_btn").click().run()
+        at.button(key="reset_viz_confirm").click().run()
+    assert at.session_state[STYLE] == "None"
+    # The click is the very next run, as in the browser.
+    _shadow(at.checkbox, "highlight_span_on").check().run()
+    assert not at.exception, at.exception
+    expected = "Underline" if change == "view tile" else "Mark text"
+    assert at.session_state[STYLE] == expected
+
+
+@pytest.mark.timeout(180)
 def test_the_style_chosen_while_on_is_kept_while_off():
     """Switching the highlight off and on again keeps its style."""
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()

@@ -1677,8 +1677,9 @@ def _hold_view_writes(
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        # The rail derives the palette name from its colors; the tiles have no value to echo.
-        if key == "global_palette" or key in _MOUNTED_VIEW_KEYS or key not in ss:
+        # No widget draws these keys, so nothing echoes them; a hold would
+        # only read a later pick equal to the old value as an echo and undo it.
+        if key in _UNDRAWN_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
@@ -1689,6 +1690,14 @@ def _hold_view_writes(
             # previous design would overwrite it when the script starts.
             pending.pop(key)
 
+
+#: Design keys no widget draws, which `_hold_view_writes` leaves alone. The
+#: palette name is derived from the colours (the rail's tiles hold no value);
+#: the highlight style and the replay's quality are shown through shadows
+#: (`shadow_widget_key`), whose own keys move instead.
+_UNDRAWN_VIEW_KEYS = frozenset(
+    {"global_palette", "global_critical_span_style", "global_anim_quality"}
+)
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
 #: preset clears their guards — see `_hold_view_writes`.
@@ -2194,9 +2203,9 @@ def _capture_quick_view_state() -> dict[str, object]:
 
 
 #: `global_*` keys that *mirror* a setting rather than hold one, so
-#: they are left out of the drift check below. The highlight-span pair mirrored
-#: `global_critical_span_style`; no widget draws them, but a saved design or a
-#: recovery cache can still hold them. Each `__num*` key is the typed box beside
+#: they are left out of the drift check below. The highlight-span pair is an
+#: older form of `global_critical_span_style` that a saved design can still
+#: hold; no widget draws it. Each `__num*` key is the typed box beside
 #: a slider, registered the first time its popover renders. Neither is anything
 #: the user set apart from the canonical key, which the check does compare.
 _DRIFT_MIRROR_KEYS = frozenset(
@@ -2771,12 +2780,15 @@ def echoes_a_held_write(*keys: str) -> bool:
     acted on the echo would undo the write by other means (a preset's name, a
     derived setting), so it returns when this is true and the hold restores
     the written value."""
-    pending = st.session_state.get(_PENDING_WRITES_KEY) or {}
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY) or {}
     for key in keys:
         write = pending.get(key)
         if write is None or write.fresh or write.stale_echo == _ECHO_UNKNOWN:
             continue
-        shown = _write_match_key(st.session_state.get(key))
+        if write.popover_key and ss.get(write.popover_key):
+            continue  # its menu is open: the widget is mounted, the value a pick
+        shown = _write_match_key(ss.get(key))
         if shown == _write_match_key(write.stale_echo):
             return True
     return False
@@ -9805,6 +9817,8 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_canvas_seeded_for", None)
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
+    # The highlight's style comes back to the first one, as on a fresh start.
+    st.session_state.pop(_SPAN_STYLE_SHOWN_KEY, None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
     # And the raw-gaze layer's dataset default, the same way.
     _forget_raw_gaze_default(st.session_state)

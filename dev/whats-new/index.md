@@ -101,6 +101,7 @@
 - A stimulus page image replaced on disk at the same path now shows the next time the figure is drawn, instead of the old page until a setting changed.
 - A setting changed by a view tile, Undo, Reset or a settings file no longer goes back to its old value when the app reruns itself right after, for example when a dialog closes or a Help page opens.
 - Choosing participants no longer brings back readings a condition leaves out: a condition only the Words table carries now still applies when the chosen readers have no Words rows.
+- The Plot controls rail stays below the header and inside the window, so its last controls show without scrolling the page.
 
 ## Release v0.48.0
 

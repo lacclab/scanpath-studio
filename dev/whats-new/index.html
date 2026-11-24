@@ -2625,12 +2625,14 @@
 <p><h2 id="exec-13--in-development">In development<a class="headerlink" href="#exec-13--in-development" title="Permanent link">&para;</a></h2>
 <h3 id="exec-13--added">Added<a class="headerlink" href="#exec-13--added" title="Permanent link">&para;</a></h3>
 <ul>
+<li>Hovering over Scanpath View, Corpus Analysis or Data Management in the top navigation now says what each view is for.</li>
 <li>Smaller PNG files works outside the app too: <code>render --compact-png</code> and <code>save_figure(..., compact_png=True)</code> / <code>save_figure_layers(..., compact_png=True)</code> compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.</li>
 <li>Share links carry <em>Keep this range across trials</em> (<code>fix_range_all_trials=1</code>), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.</li>
 </ul>
 <h3 id="exec-13--changed">Changed<a class="headerlink" href="#exec-13--changed" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Buttons, help text and guides now name the Scanpath View tab as it appears in the navigation.</li>
+<li>The hosted demo keeps its cached figures and tables within a memory budget, dropping the least recently used ones when many people use it at once.</li>
 <li>The Texts and Participants summary captions now say how the means are weighted: each participant counts equally in a text mean, and each reading counts equally in a participant mean.</li>
 <li>A table inside a zip with rows that have more fields than its header is read like the same table on its own: the Add-dataset wizard skips those rows and names their lines, instead of refusing the archive.</li>
 <li>Gaze charts name their axes clearly: recorded timestamps read "Recorded time (ms)" and pupil charts "Pupil area (tracker units)" or "Pupil diameter (tracker units)", instead of "Time (ms)" and the raw column name.</li>

@@ -4205,12 +4205,14 @@ Developed with AI assistance. Cross-check results before publishing.
 
 ### Added
 
+- Hovering over Scanpath View, Corpus Analysis or Data Management in the top navigation now says what each view is for.
 - Smaller PNG files works outside the app too: `render --compact-png` and `save_figure(..., compact_png=True)` / `save_figure_layers(..., compact_png=True)` compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
 
 ### Changed
 
 - Buttons, help text and guides now name the Scanpath View tab as it appears in the navigation.
+- The hosted demo keeps its cached figures and tables within a memory budget, dropping the least recently used ones when many people use it at once.
 - The Texts and Participants summary captions now say how the means are weighted: each participant counts equally in a text mean, and each reading counts equally in a participant mean.
 - A table inside a zip with rows that have more fields than its header is read like the same table on its own: the Add-dataset wizard skips those rows and names their lines, instead of refusing the archive.
 - Gaze charts name their axes clearly: recorded timestamps read "Recorded time (ms)" and pupil charts "Pupil area (tracker units)" or "Pupil diameter (tracker units)", instead of "Time (ms)" and the raw column name.

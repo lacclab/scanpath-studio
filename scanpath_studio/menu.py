@@ -38,6 +38,7 @@ from scanpath_studio.constants import (
     DATA_WORKSPACE_REQUEST,
     ICONS,
 )
+from scanpath_studio.reruns import switch_page
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -149,7 +150,7 @@ def switch_to_view(view: str) -> None:
         st.session_state[_SWITCHED_KEY] = True
         # Replace the previous page's parameters explicitly. The Corpus subtab
         # binds its selection to the URL, so the default clear can be refused.
-        st.switch_page(_view_page(view), query_params={})
+        switch_page(_view_page(view), query_params={})
 
 
 def _arm_help_action(entry: str) -> None:

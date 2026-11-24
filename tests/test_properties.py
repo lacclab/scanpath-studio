@@ -909,6 +909,177 @@ def test_different_figure_settings_never_share_a_cache_key(first, other, look_al
         )
 
 
+# --- a replayed recipe keeps the readings the app keeps ------------------------
+
+#: Three readers' readings of three texts, and a fourth reader (p4) the
+#: fixations have and the words do not: a condition only the fixations carry
+#: (`difficulty`), one only the words carry (`genre`), and a numeric
+#: trial-level score one reading lacks.
+_POOL_READINGS = [(p, t) for p in ("p1", "p2", "p3") for t in ("t1", "t2", "t3")]
+_FIXATION_READINGS = [*_POOL_READINGS, ("p4", "t1")]
+_POOL_FIXATIONS = pd.DataFrame(
+    {
+        "participant_id": [p for p, _ in _FIXATION_READINGS for _ in range(2)],
+        "trial_id": [t for _, t in _FIXATION_READINGS for _ in range(2)],
+        "difficulty": [
+            "Adv" if (int(p[1]) + int(t[1])) % 2 else "Ele"
+            for p, t in _FIXATION_READINGS
+            for _ in range(2)
+        ],
+        "score": [
+            np.nan if (p, t) == ("p3", "t2") else float(int(p[1]) * int(t[1]))
+            for p, t in _FIXATION_READINGS
+            for _ in range(2)
+        ],
+        "duration_ms": [200.0] * (2 * len(_FIXATION_READINGS)),
+    }
+)
+_POOL_WORDS = pd.DataFrame(
+    {
+        "participant_id": [p for p, _ in _POOL_READINGS],
+        "trial_id": [t for _, t in _POOL_READINGS],
+        "word_id": [1] * len(_POOL_READINGS),
+        "genre": ["news" if t == "t1" else "story" for _, t in _POOL_READINGS],
+    }
+)
+
+
+@given(
+    participants=st.none()
+    | st.lists(st.sampled_from(["p1", "p2", "p3"]), unique=True, max_size=3),
+    difficulty=st.none() | st.sets(st.sampled_from(["Adv", "Ele"]), min_size=1),
+    genre=st.none() | st.sets(st.sampled_from(["news", "story"]), min_size=1),
+    score=st.none() | st.tuples(st.integers(0, 9), st.integers(0, 9)).map(sorted),
+    drop_unknown=st.booleans(),
+)
+def test_a_replayed_recipe_keeps_the_readings_the_app_keeps(
+    participants, difficulty, genre, score, drop_unknown
+):
+    """A Corpus Analysis recipe names the pool's filters; `analyze` replays
+    them with its own reading of the recipe. Both keep the same readings."""
+    from scanpath_studio.analysis_recipe import _select_words
+
+    metadata = {
+        column: values
+        for column, values in (("difficulty", difficulty), ("genre", genre))
+        if values
+    }
+    ranges = {"score": (float(score[0]), float(score[1]))} if score else {}
+    drop = ["score"] if score and drop_unknown else []
+    kept = data.select_trials(
+        _POOL_WORDS, _POOL_FIXATIONS, participants, metadata, ranges, drop
+    ).words
+    selection = {
+        "conditions": {column: sorted(values) for column, values in metadata.items()},
+        "ranges": {column: list(bounds) for column, bounds in ranges.items()},
+        "drop_unknown": drop,
+        "word_fields": sorted(set(metadata) & {"genre"}),
+        "fixation_fields": sorted((set(metadata) | set(ranges)) - {"genre"}),
+    }
+    if participants is not None:
+        selection["participants"] = participants
+    replayed = _select_words(
+        _POOL_WORDS, _POOL_FIXATIONS, selection, metadata={}, annotations=None
+    )
+    assert data.trial_keys(replayed) == data.trial_keys(kept)
+
+
+@given(
+    participants=st.none()
+    | st.lists(st.sampled_from(["p1", "p2", "p3"]), unique=True, max_size=3),
+    difficulty=st.none() | st.sets(st.sampled_from(["Adv", "Ele"]), min_size=1),
+    genre=st.none() | st.sets(st.sampled_from(["news", "story"]), min_size=1),
+    score=st.none() | st.tuples(st.integers(0, 9), st.integers(0, 9)).map(sorted),
+    drop_unknown=st.booleans(),
+    readings=st.none() | st.sets(st.sampled_from(_POOL_READINGS)),
+)
+def test_the_filter_diagnosis_steps_together_keep_what_the_filters_keep(
+    participants, difficulty, genre, score, drop_unknown, readings
+):
+    """The empty-pool report names each filter as a step of its own; applied
+    one after another, the steps keep the pool the filters keep together."""
+    from scanpath_studio import app
+
+    metadata = {
+        column: values
+        for column, values in (("difficulty", difficulty), ("genre", genre))
+        if values
+    }
+    ranges = {"score": (float(score[0]), float(score[1]))} if score else {}
+    drop = ["score"] if score and drop_unknown else []
+    filters = {
+        "participants": participants,
+        "metadata": metadata,
+        "ranges": ranges,
+        "ranges_drop_unknown": drop,
+        "trial_keys": readings,
+        "trial_filter_keys": ("filter_trialmeta_block",)
+        if readings is not None
+        else (),
+        "favorites_only": False,
+        "required_tags": [],
+        "excluded_tags": [],
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(app.st, "session_state", {})
+        steps = app._filter_diagnosis_steps(filters)
+    # As the report applies them: each step on its own to the whole pool.
+    pool = data.trial_keys(_POOL_WORDS) | data.trial_keys(_POOL_FIXATIONS)
+    stepped = set(pool)
+    for _label, apply, _keys in steps:
+        words, fixations = apply(_POOL_WORDS, _POOL_FIXATIONS)
+        stepped &= data.trial_keys(words) | data.trial_keys(fixations)
+    kept = data.select_trials(
+        _POOL_WORDS, _POOL_FIXATIONS, participants, metadata, ranges, drop
+    )
+    kept_words, kept_fixations = kept.words, kept.fixations
+    if readings is not None:
+        kept_words, kept_fixations = data.filter_to_keys(
+            kept_words, kept_fixations, readings
+        )
+    assert stepped == data.trial_keys(kept_words) | data.trial_keys(kept_fixations)
+
+
+@given(
+    participants=st.none()
+    | st.lists(st.sampled_from(["p1", "p2", "p3", "p4"]), unique=True, max_size=4),
+    difficulty=st.none() | st.sets(st.sampled_from(["Adv", "Ele"]), min_size=1),
+    genre=st.none() | st.sets(st.sampled_from(["news", "story"]), min_size=1),
+    score=st.none() | st.tuples(st.integers(0, 9), st.integers(0, 9)).map(sorted),
+    added=st.sampled_from(["participants", "difficulty", "genre", "score"]),
+)
+def test_adding_a_trial_filter_never_widens_the_pool(
+    participants, difficulty, genre, score, added
+):
+    """Each filter decides a reading on its own, so one more filter can only
+    leave readings out — also when the readers picked have no Words rows (p4)
+    and a condition only the Words carry is on."""
+
+    def pool(with_added: bool):
+        chosen = {
+            "participants": participants,
+            "difficulty": difficulty,
+            "genre": genre,
+            "score": score,
+        }
+        if not with_added:
+            chosen[added] = None
+        metadata = {
+            column: chosen[column]
+            for column in ("difficulty", "genre")
+            if chosen[column]
+        }
+        ranges = (
+            {"score": tuple(map(float, chosen["score"]))} if chosen["score"] else {}
+        )
+        kept = data.select_trials(
+            _POOL_WORDS, _POOL_FIXATIONS, chosen["participants"], metadata, ranges
+        )
+        return data.trial_keys(kept.words) | data.trial_keys(kept.fixations)
+
+    assert pool(with_added=True) <= pool(with_added=False)
+
+
 _DATASET_NAME = st.text(min_size=1, max_size=80).filter(
     lambda name: (
         name.strip()

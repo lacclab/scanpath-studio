@@ -33,6 +33,7 @@ import streamlit as st
 from .constants import ICONS, md_literal, upload_limit_mb
 from .data import respell_reading
 from .fields import PANEL_LABEL_W, panel_field, row_label
+from .reruns import rerun
 from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
@@ -1252,11 +1253,11 @@ def _review_import(dataset_name: str, open_trials: frozenset) -> None:
         current.update(accepted)
         st.session_state.pop("_annotation_import_preview", None)
         _refresh_dataset_widgets(f"Imported {_plural(len(accepted), 'annotation')}.")
-        st.rerun()
+        rerun()
     if cancel.button("Cancel import", key=_dataset_widget_key("cancel")):
         st.session_state.pop("_annotation_import_preview", None)
         _refresh_dataset_widgets("Import canceled.")
-        st.rerun()
+        rerun()
 
 
 #: Cell text of a row's **Open** button — `ButtonColumn` takes its label from

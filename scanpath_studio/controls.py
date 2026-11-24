@@ -148,6 +148,7 @@ from .fields import (
     tooltip,
 )
 from .plot_navigation import detail_section, render_setting_finder
+from .reruns import rerun
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
     COMPARE_IDENTITY_STATE_KEY,
@@ -1711,7 +1712,7 @@ def _apply_view_preset(
     }
     # Callbacks receive the browser's values before the script reconciles
     # closed popovers. Snapshot the design that was actually on screen.
-    reassert_pending_writes()
+    _reassert_in_callback()
     kept = {key: ss[key] for key in keep if key in ss}
     try:
         _apply_view_preset_state(ss, name, saved)
@@ -1759,7 +1760,7 @@ def design_state() -> dict:
     return {key: deepcopy(ss[key]) for key in list(ss) if _is_design_key(key)}
 
 
-def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
+def hold_script_writes(before: dict) -> None:
     """Hold the plot settings the script changed since ``before`` (a
     `design_state`) against a closed popover's echo (see `write_through`).
 
@@ -1767,10 +1768,9 @@ def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
     file's. By then `reassert_pending_writes` has put back any held value, so
     the browser shows what an earlier hold recorded, not what ``before`` has;
     a key the script left as it was keeps its hold. The browser answers on the
-    next run, unless the script reruns itself first (``rerun_follows``), and
-    then every hold waits one run more (`keep_holds_through_rerun`). Keys no
-    widget draws, and keys drawn outside every popover, are written plainly,
-    as in `_hold_view_writes`.
+    next run; a rerun the script starts first goes through `reruns.rerun`,
+    which keeps the holds for it. Keys no widget draws, and keys drawn outside
+    every popover, are written plainly, as in `_hold_view_writes`.
     """
     ss = st.session_state
     pending = ss.get(_PENDING_WRITES_KEY) or {}
@@ -1782,20 +1782,37 @@ def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
         earlier = pending.get(key)
         shown = earlier.stale_echo if earlier is not None else old
         write_through(key, ss[key], shown=shown, in_callback=False)
-    if rerun_follows:
-        keep_holds_through_rerun()
 
 
 def keep_holds_through_rerun() -> None:
-    """Keep every held write through a rerun the script starts itself.
+    """Keep the held writes through a rerun the script starts itself.
 
     `reassert_pending_writes` reads a held key that still has its written value
     as the browser having taken it, and ends the hold. A rerun the script
-    starts (`st.rerun()`) brings no values from the browser, so every hold
-    would read that way and end before the browser's echo arrives. Marked
-    fresh, each waits for the run after, which is the browser's."""
+    starts (`st.rerun()`, `st.switch_page`) brings no values from the browser,
+    so every hold would read that way and end before the browser's echo
+    arrives. Marked, the next run keeps a hold whose key has its written value
+    instead of ending it, and checks any other value as always: a value the
+    user picked ends the hold.
+
+    A dialog's or fragment's run is not marked: no hold was re-applied in it,
+    so the values in place are the browser's own, an echo or the written value
+    it already shows, and the next run's check reads them right."""
+    ctx = get_script_run_ctx()
+    if ctx is not None and ctx.fragment_ids_this_run:
+        return
     for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
-        write.fresh = True
+        write.through_rerun = True
+
+
+def _reassert_in_callback() -> None:
+    """`reassert_pending_writes`, for a callback about to write over the
+    browser's values. It puts each held value back; the run's own reassert,
+    with no newer values from the browser, would then read them as taken and
+    end every hold the callback does not write again, so they are kept for it
+    (`keep_holds_through_rerun`)."""
+    reassert_pending_writes()
+    keep_holds_through_rerun()
 
 
 #: Design keys no widget draws, which `_hold_view_writes` and
@@ -2111,10 +2128,10 @@ def _design_delete_dialog(name: str) -> None:
     ):
         delete_design_preset(name)
         _close_design_delete_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if no.button("Cancel", key="design_delete_cancel", width="stretch"):
         _close_design_delete_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 #: The 💾 dialog's name field and its *replace* pick — the draft that closing
@@ -2218,13 +2235,13 @@ def _design_save_dialog() -> None:
         )
     if cancel:
         _close_design_save_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if save:
         if not save_design_preset(name or ""):
             st.error("Give the preset a name first.")
         else:
             _close_design_save_dialog()
-            st.rerun(scope="app")
+            rerun(scope="app")
 
 
 def _render_design_rename(row, name: str) -> None:
@@ -2876,7 +2893,6 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
             on_click=_on_palette_change,
             args=(name,),
         )
-    host.container(key="palette_layers_divider").divider()
 
 
 # Palette setting name → the session key it writes. A palette is applied
@@ -2949,6 +2965,8 @@ class _PendingWidgetWrite:
     stale_echo: object
     fresh: bool  # The script run that made the write hasn't started yet.
     popover_key: str | None = None
+    #: The next run is one the script started itself (`keep_holds_through_rerun`).
+    through_rerun: bool = False
 
 
 _PENDING_WRITES_KEY = "_pending_widget_writes"
@@ -3023,6 +3041,7 @@ def reassert_pending_writes() -> None:
         return
     kept = {}
     for key, write in pending.items():
+        through_rerun, write.through_rerun = write.through_rerun, False
         if write.fresh:
             # The run the callback wrote in: the write itself is what reads
             # back, and the browser has not answered yet.
@@ -3035,7 +3054,11 @@ def reassert_pending_writes() -> None:
             continue
         current = _write_match_key(ss.get(key))
         if current == _write_match_key(write.value):
-            continue  # the browser has it
+            if through_rerun:
+                # A run the script started: nothing came from the browser,
+                # so the value in place is ours, not its answer.
+                kept[key] = write
+            continue  # otherwise the browser has it
         if write.stale_echo == _ECHO_UNKNOWN:
             write.stale_echo = deepcopy(ss.get(key))
         elif current != _write_match_key(write.stale_echo):
@@ -7528,10 +7551,10 @@ def _reset_viz_confirmation_dialog() -> None:
     ):
         reset_viz_settings()
         _close_reset_viz_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if no.button("Cancel", key="reset_viz_cancel", width="stretch"):
         _close_reset_viz_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 _PLOT_HISTORY = "_plot_edit_history"
@@ -7609,7 +7632,7 @@ def _step_plot_history(redo: bool) -> None:
                 st.query_params.pop(param, None)
             keys.remove(key)
     shown = {key: ss.get(key) for key in keys}
-    reassert_pending_writes()
+    _reassert_in_callback()
     for key in keys:
         if key in values:
             ss[key] = deepcopy(values[key])

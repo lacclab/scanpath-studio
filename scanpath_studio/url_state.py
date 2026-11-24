@@ -140,6 +140,7 @@ from .dataset_identity import (
 )
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
+from .reruns import rerun
 from .session_keys import (
     COMPARE_CORPUS_PARAM,
     COMPARE_DATASET_DIGEST_PARAM,
@@ -3848,7 +3849,7 @@ def _apply_uploaded_plot_config(
         st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     from . import publication, publication_ui
-    from .controls import design_state, hold_script_writes, keep_holds_through_rerun
+    from .controls import design_state, hold_script_writes
 
     if config.get("schema") == publication.SCHEMA:
         try:
@@ -3856,8 +3857,7 @@ def _apply_uploaded_plot_config(
         except ValueError as exc:
             st.toast(str(exc), icon=ICONS["warning"])
             return
-        keep_holds_through_rerun()
-        st.rerun()
+        rerun()
 
     # The file writes the rail's values before its widgets draw, and a menu the
     # user had open sends back what it last showed on the next run.
@@ -3870,14 +3870,14 @@ def _apply_uploaded_plot_config(
         return
     st.session_state["_plot_config_skipped"] = skipped
     staged = st.session_state.get(PENDING_PREPROC_RESTORE_KEY) or {}
-    rerun = any(st.session_state.get(k) != v for k, v in staged.items())
-    hold_script_writes(before, rerun_follows=rerun)
-    if rerun:
+    restaged = any(st.session_state.get(k) != v for k, v in staged.items())
+    hold_script_writes(before)
+    if restaged:
         # Preprocessing reshapes the frames this run already filtered and drew,
         # so run again with the restored values in place (the toast is replayed
         # by the next run's `_apply_uploaded_plot_config`).
         st.session_state[_PLOT_CONFIG_TOAST_KEY] = (applied, bool(skipped))
-        st.rerun()
+        rerun()
     st.session_state.pop(PENDING_PREPROC_RESTORE_KEY, None)
     _toast_restored(applied, bool(skipped))
 

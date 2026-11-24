@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from streamlit.testing.v1 import AppTest
 
 from scanpath_studio.data import (
     diagnose_trial_identity,
@@ -287,37 +288,51 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
         assert st.session_state[TRIAL_IDENTITY_CHECK_KEY] == "add"
         st.session_state.clear()
 
+    @pytest.mark.timeout(240)
     def test_main_raises_the_modal_and_no_longer_writes_a_banner(self):
-        import inspect
+        """Asked for, the verdict is drawn in the modal and nowhere else; on
+        the next run, with nothing asked, it is not drawn at all."""
+        from scanpath_studio.constants import TRIAL_IDENTITY_CHECK_KEY
 
-        from scanpath_studio import app
+        at = demo_dataset_app(["article_id", "article_batch"])
+        at.session_state[TRIAL_IDENTITY_CHECK_KEY] = "edit"
+        at.run()
+        assert not at.exception, at.exception
+        assert _verdicts(at) == ["dialog"]
+        assert "trial_identity_alert_edit" in {b.key for b in at.button}
+        at.run()
+        assert not at.exception, at.exception
+        assert _verdicts(at) == []
+        assert "trial_identity_alert_edit" not in {b.key for b in at.button}
 
-        # `main` wraps the run in a loading scope; `_run_app` is the run.
-        source = inspect.getsource(app._run_app)
-        assert "_trial_identity_alert_dialog(" in source
-        assert "TRIAL_IDENTITY_CHECK_KEY" in source
-        # No banner (`menu.notices.warning(f"{identity_warning} …")`), pinned
-        # by what it would say rather than by `menu.notices.warning` itself:
-        # "no fixation has word boxes" is a banner there on purpose —
-        # a state where every trial draws without text, not a verdict to raise
-        # once where the mapping is chosen.
-        assert "{identity_warning}" not in source
-        assert "WORDS_JOIN_NOTHING_WARNING" in source
+    @pytest.mark.timeout(240)
+    def test_words_that_join_no_fixation_still_get_a_banner(self):
+        """Unlike the verdict, a Words table that matches no fixation is a state
+        every trial draws in — without its text — so it stays on the page."""
+        at = demo_dataset_app(words_trials_shifted=True)
+        at.run()
+        assert not at.exception, at.exception
+        assert any("No fixation has word boxes" in w.value for w in at.warning)
 
     def test_the_modal_offers_the_mapping_and_a_way_to_keep_it(self):
-        import inspect
+        """Editing opens ✏️ Edit dataset focused on the mapping; keeping it
+        changes nothing. That both act on the button's return value, not a
+        callback, is checked in test_add_dataset_next_step.py
+        (`test_the_next_step_dialogs_act_on_return_values`)."""
+        from scanpath_studio.constants import (
+            DATASET_EDITOR_OPEN_KEY,
+            FOCUS_MAPPING_KEY,
+        )
 
-        from scanpath_studio import app
-
-        source = inspect.getsource(app._trial_identity_alert_dialog)
-        assert "trial_identity_alert_edit" in source
-        assert "trial_identity_alert_keep" in source
-        # Return values, never `on_click`: a dialog body is a fragment, so a
-        # callback here would rerun the modal and leave the page behind it
-        # untouched.
-        assert "on_click=" not in source
-        # Editing means the ✏️ Edit dataset screen, focused on the mapping.
-        assert "_open_mapping_editor()" in source
+        at = AppTest.from_function(_identity_dialog_app).run()
+        assert not at.exception, at.exception
+        at.button(key="trial_identity_alert_keep").click().run()
+        assert not at.exception, at.exception
+        assert not at.session_state[DATASET_EDITOR_OPEN_KEY]
+        at.button(key="trial_identity_alert_edit").click().run()
+        assert not at.exception, at.exception
+        assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
+        assert at.session_state[FOCUS_MAPPING_KEY] == "My corpus"
 
     def test_opening_the_editor_focuses_the_open_datasets_mapping(self):
         import streamlit as st
@@ -335,3 +350,76 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
         assert st.session_state[DATASET_EDITOR_OPEN_KEY] is True
         assert st.session_state[FOCUS_MAPPING_KEY] == "My corpus"
         st.session_state.clear()
+
+
+def demo_dataset_app(trial_columns=None, *, words_trials_shifted: bool = False):
+    """An app on the 🗂️ Data page with the bundled demo added as "Lab" — its
+    Trial ID mapped from ``trial_columns`` (the detected mapping when None) —
+    not yet run.
+
+    ``words_trials_shifted`` renames every Words trial, so the Words table
+    joins no fixation.
+    """
+    from scanpath_studio.data import (
+        harmonize_frames,
+        load_sample_data,
+        normalize_fixations,
+        normalize_words,
+        propose_fix_schema,
+        propose_word_schema,
+    )
+    from tests.conftest import APP_SCRIPT, pin_data_view
+
+    raw_words, raw_fixations, *_ = load_sample_data()
+    word_schema = propose_word_schema(raw_words)
+    fix_schema = propose_fix_schema(raw_fixations)
+    if trial_columns is not None:
+        word_schema["trial"] = list(trial_columns)
+        fix_schema["trial"] = list(trial_columns)
+    words, fixations = harmonize_frames(
+        normalize_words(raw_words, word_schema),
+        normalize_fixations(raw_fixations, fix_schema),
+    )
+    if words_trials_shifted:
+        words = words.assign(trial_id=words["trial_id"].astype(str) + "_elsewhere")
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["_datasets"] = {
+        "Lab": {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "schemas": {"words": word_schema, "fixations": fix_schema},
+            "filter_fields": [],
+            "composite_trial_columns": list(trial_columns or []),
+        }
+    }
+    at.session_state["data_source_choice"] = "Lab"
+    pin_data_view(at)
+    return at
+
+
+def _verdicts(at) -> list[str]:
+    """Where each warning carrying the Trial ID verdict is drawn: ``"dialog"``
+    inside a modal, ``"page"`` anywhere else."""
+    from tests.conftest import page_nodes
+
+    return [
+        "dialog" if any(block.type == "dialog" for block in around) else "page"
+        for node, around in page_nodes(at._tree)
+        if type(node).__name__ == "Warning"
+        and "look like several trials merged" in node.value
+    ]
+
+
+def _identity_dialog_app():
+    """The Trial ID verdict's modal for an open dataset, raised on every run."""
+    import streamlit as st
+
+    from scanpath_studio import app
+    from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+
+    st.session_state["data_source_choice"] = "My corpus"
+    st.session_state.setdefault(DATASET_EDITOR_OPEN_KEY, False)
+    app._trial_identity_alert_dialog(
+        "add", "**2 of 2 trials look like several trials merged.**"
+    )

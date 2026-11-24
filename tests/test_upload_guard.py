@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from scanpath_studio.data import (
     UPLOAD_SIZE_WARN_BYTES,
     upload_exceeds_limit,
@@ -53,23 +55,47 @@ def test_onestop_repeated_export_would_trip_guard():
 # machine. Same loopback test the wizard's "run locally" tip uses.
 
 
-def test_the_size_warning_is_skipped_on_a_local_run():
-    """A local run must not be asked to confirm its own file size.
+def _upload_box_app():
+    """One upload box; the rows it read go to ``_rows``."""
+    import streamlit as st
 
-    Asserted at the source rather than through the UI: the warning lives inside
-    `_read_uploaded_frame`, whose whole reason for existing is that
-    `st.file_uploader` cannot be driven from `AppTest` — so there is no headless
-    path that renders it. What this pins is that the gate stays welded to the
-    size check; a separate `if` elsewhere would not stop the warning rendering.
-    """
-    import inspect
+    from scanpath_studio import app
 
-    from scanpath_studio import app as app_module
-
-    source = inspect.getsource(app_module._read_uploaded_frame)
-    # The gate must be *on the same condition* as the size check — a separate
-    # `if` elsewhere would not stop the warning rendering.
-    assert "upload_exceeds_limit(uploaded) and not is_loopback_url(" in source, (
-        "the large-upload warning is no longer gated on being hosted"
+    frame = app._read_uploaded_frame(
+        uploader_label="Fixations",
+        upload_help="",
+        state_prefix="col_map_fix",
+        multi=False,
     )
-    assert "Load it anyway" in source  # still there for the hosted demo
+    st.session_state["_rows"] = len(frame)
+
+
+@pytest.mark.parametrize("local", [True, False], ids=["local", "hosted"])
+def test_the_size_warning_is_skipped_on_a_local_run(monkeypatch, local):
+    """A local run must not be asked to confirm its own file size; the
+    hosted demo reads a large upload only once it is ticked."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+
+    monkeypatch.setattr(app, "upload_exceeds_limit", lambda uploaded: True)
+    monkeypatch.setattr(app, "is_loopback_url", lambda url: local)
+    at = AppTest.from_function(_upload_box_app, default_timeout=60).run()
+    at.file_uploader[0].set_value(
+        (
+            "fixations.csv",
+            b"participant,trial,x,y,duration\np1,t1,1,2,200\n",
+            "text/csv",
+        )
+    ).run()
+    assert not at.exception, at.exception
+    asked = [box for box in at.checkbox if box.label == "Load it anyway"]
+    if local:
+        assert not asked and not at.warning
+        assert at.session_state["_rows"] == 1
+        return
+    assert asked and any("online demo" in w.value for w in at.warning)
+    assert at.session_state["_rows"] == 0
+    asked[0].check().run()
+    assert not at.exception, at.exception
+    assert at.session_state["_rows"] == 1

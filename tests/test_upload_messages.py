@@ -679,31 +679,34 @@ class TestWizardWording:
         assert "at least one table" in bodies
 
     def test_the_guide_and_the_start_from_line_say_it_literally(self):
-        """Read by people with intermediate English: no idioms."""
-        import inspect
-
-        from scanpath_studio import app, wizard
+        """Read by people with intermediate English: no idioms. The backup
+        reminder's link text is checked where it is drawn, in
+        test_backup_reminder.py."""
+        from scanpath_studio import wizard
         from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
 
         bodies = " ".join(step["body"] for step in _WIZARD_GUIDE_STEPS)
         for idiom in ("dive in", "Follow along", "Say how you know", "drawn to"):
             assert idiom not in bodies
         assert wizard._START_SCRATCH == "An empty form"
-        reminder = inspect.getsource(app._render_backup_reminder)
-        assert "What to back up" not in reminder
-        assert "How to keep copies of your work" in reminder
 
     def test_the_guide_button_is_not_the_skip_field(self):
         """The Words mapping has a field called *Skip* (``IA_SKIP``)."""
-        import inspect
-
         from scanpath_studio import tour
         from scanpath_studio.data import READING_MEASURE_FIELDS
 
         assert any(label == "Skip" for _k, _c, label, *_ in READING_MEASURE_FIELDS)
-        source = inspect.getsource(tour._wizard_guide_buttons)
-        assert '"Close guide"' in source
-        assert '"Skip",' not in source
+        labels: list[str] = []
+
+        class _Column:
+            def button(self, label, **kwargs):
+                labels.append(label)
+
+        n = len(tour._WIZARD_GUIDE_STEPS)
+        for step_idx in range(n):
+            tour._wizard_guide_buttons(_Column(), _Column(), _Column(), step_idx, n)
+        assert "Close guide" in labels
+        assert not [label for label in labels if "Skip" in label]
 
     def test_the_add_screen_titles_the_name_field(self):
         from streamlit.testing.v1 import AppTest

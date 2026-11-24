@@ -6,6 +6,7 @@ normalization) and ``data.dropped_columns`` (the columns discarded at import,
 surfaced as a note in the Data Inspection remap editor)."""
 
 import pandas as pd
+import pytest
 
 from scanpath_studio.data import (
     compute_keep_columns,
@@ -988,6 +989,17 @@ def _setup_file_editor_app():
     st.session_state["config"] = _editor_setup_config("Lab")
 
 
+def _setup_file_footer_app():
+    """That editor with its footer under it, as the ✏️ Edit dataset screen ends."""
+    import streamlit as st
+
+    from scanpath_studio.tabs import render_dataset_editor_footer
+    from tests.test_remap import _setup_file_editor_app
+
+    _setup_file_editor_app()
+    render_dataset_editor_footer(st.container())
+
+
 def _setup_file_restore_app():
     """A fresh add screen restoring that file over the *original* files: the
     real ``column_mapping_ui`` for each table, its mapping in ``restored``."""
@@ -1179,19 +1191,44 @@ class TestEditorSetupExport:
         )
 
     def test_the_footer_offers_both_halves_of_the_add_screens_pair(self):
-        """Source-level: AppTest reports no download_button, and what must not
-        silently regress is that the editor's last row is the *pair*."""
-        import inspect
+        """The editor's last row is the add screen's pair — ⬇️ Download setup
+        file · ✅ Save changes — in the add screen's column widths, so the two
+        rows line up; what a restore cannot reproduce is said beside it."""
+        from streamlit.testing.v1 import AppTest
 
-        from scanpath_studio.tabs import render_dataset_editor_footer
+        from scanpath_studio.wizard import _FOOTER_ROW_W
+        from tests.conftest import find_keyed, page_nodes
 
-        source = inspect.getsource(render_dataset_editor_footer)
-        assert "f\"{ICONS['download']} Download setup file\"" in source
-        assert "f\"{ICONS['confirm']} Save changes\"" in source
-        assert "_editor_setup_config" in source
-        assert "column_mapping_notes" in source
-        # It borrows the wizard's own column widths so the two rows line up.
-        assert "_FOOTER_ROW_W" in source
+        at = AppTest.from_function(_setup_file_footer_app, default_timeout=30).run()
+        assert not at.exception, at.exception
+        row, _ = find_keyed(at, "wizard_footer_row_edit")
+        columns = [node for node, _ in page_nodes(row) if node.type == "column"]
+        assert [c.weight for c in columns] == pytest.approx(
+            [w / sum(_FOOTER_ROW_W) for w in _FOOTER_ROW_W]
+        )
+        (download,) = [
+            n for n, _ in page_nodes(columns[0]) if n.type == "download_button"
+        ]
+        assert download.key == "remap_setup_download_Lab"
+        assert download.label.endswith(" Download setup file")
+        (save,) = [n for n, _ in page_nodes(columns[1]) if n.type == "button"]
+        assert save.key == "remap_apply_Lab"
+        assert save.label.endswith(" Save changes")
+        assert not [c for c in at.caption if "needs fixing" in c.value]
+
+        # A dataset stored before the app recorded its column names: the
+        # file it saves needs fixing after a restore, and the footer says so.
+        datasets = at.session_state["_datasets"]
+        datasets["Lab"] = {
+            k: v for k, v in datasets["Lab"].items() if k != "column_names"
+        }
+        at.session_state["_datasets"] = datasets
+        at.run()
+        assert not at.exception, at.exception
+        notes = at.session_state["config"]["column_mapping_notes"]
+        assert notes
+        (said,) = [c.value for c in at.caption if "needs fixing" in c.value]
+        assert all(note in said for note in notes)
 
 
 class TestStimulusProvenanceOnRemap:

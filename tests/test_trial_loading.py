@@ -8,14 +8,15 @@ The card is drawn by the page itself (`loading.trial_loading_script`), so
 
 from __future__ import annotations
 
-import inspect
 import json
 import re
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
-from scanpath_studio import app, loading, tabs, tour, utils
+import pytest
+
+from scanpath_studio import loading, tabs, tour, utils
 from scanpath_studio.styles import get_app_css
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,8 +29,9 @@ def _config() -> dict:
     return json.loads(match.group(1))
 
 
-def test_every_page_installs_the_trial_card_once():
-    assert "loading.trial_loading_script()" in inspect.getsource(app.configure_page)
+def test_the_script_installs_the_trial_card_once_per_page_load():
+    # That every view draws the script, once, is checked on the running app in
+    # test_app.py (`test_every_view_installs_each_page_script_once`).
     script = loading.trial_loading_script()
     # Into the Streamlit page's own head, once per page load.
     assert "host.__spsTrialLoadingInstalled" in script
@@ -60,12 +62,26 @@ def test_the_card_is_raised_by_the_trial_controls_and_nothing_else():
     assert config["steps"] == list(loading.TRIAL_STEP_KEYS)
     assert config["pickers"] == list(loading.TRIAL_PICKER_KEYS)
     assert config["stage"] == loading.PLOT_STAGE_SELECTOR == ".st-key-tour_grp_plot"
-    # B's own ◀ ▶ and picker carry these keys (A's are checked on the running app
-    # in test_apptest).
-    source = inspect.getsource(tabs)
-    assert 'key="single_compare_prev"' in source
-    assert 'key="single_compare_next"' in source
     assert utils.COMPARE_TRIAL_KEY in loading.TRIAL_PICKER_KEYS
+
+
+@pytest.mark.timeout(180)
+def test_the_keys_the_card_listens_on_are_the_trial_controls_keys():
+    """A's and B's ◀ ▶ and pickers, read off the running app with a comparison
+    open: a control that moved to another key would change the trial without
+    the card."""
+    from streamlit.testing.v1 import AppTest
+
+    from tests.conftest import APP_SCRIPT
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    at.session_state["tour_seen"] = True
+    at.session_state["single_compare_toggle"] = True
+    at.run()
+    assert not at.exception, at.exception
+    assert set(loading.TRIAL_STEP_KEYS) <= {b.key for b in at.button}
+    assert set(loading.TRIAL_PICKER_KEYS) <= {s.key for s in at.selectbox}
+    assert set(loading.TRIAL_SLIDER_KEYS) <= {s.key for s in at.select_slider}
 
 
 def test_a_figure_tells_the_page_when_it_has_drawn():
@@ -108,9 +124,9 @@ def test_every_guide_card_is_clipped_until_its_stylesheet_applies(monkeypatch):
     )
     tour._guide_card()
     assert calls == [{"key": "tour_card", "height": 1, "border": False}]
-    source = inspect.getsource(tour)
-    assert source.count('key="tour_card"') == 1  # `_guide_card`'s own
-    assert source.count("with _guide_card():") == 3
+    # That the sample replay, a task guide and the setup guide each draw their
+    # card in it is checked on each guide in test_tour.py
+    # (`TestEveryGuideCardFolds`).
     # The stylesheet that pins the card gives it its height back, and its slot.
     card_rule = tour._CARD_CSS[tour._CARD_CSS.index(".st-key-tour_card {") :]
     card_rule = card_rule[: card_rule.index("}")]

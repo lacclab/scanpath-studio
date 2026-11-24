@@ -649,6 +649,20 @@ def _keys_built_inside_a_popover() -> set[str]:
     return keys
 
 
+@pytest.fixture(scope="module")
+def scanpath_page():
+    """The Scanpath view in Full mode, run once and only read by the tests that
+    take it."""
+    from tests.conftest import APP_SCRIPT
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    at.query_params["ui"] = "full"
+    at.session_state["tour_seen"] = True
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
 class TestSpotlightSelectorsResolve:
     """Every spotlight step must point at a container that actually exists.
 
@@ -822,14 +836,26 @@ class TestSpotlightSelectorsResolve:
         """Streamlit draws a popover's panel above the card, so an opened funnel
         covers the card's left edge and cuts the first word off every line
         (measured live at 1440x900). The card outranks it on those steps only."""
-        from scanpath_studio.tour import _CARD_OVER_POPOVER_CSS
+        from scanpath_studio.tour import (
+            _CARD_OVER_POPOVER_CSS,
+            _TUTORIAL_BY_ID,
+            steps_of,
+        )
 
         assert "z-index: 1000070" in _CARD_OVER_POPOVER_CSS
-        import inspect
 
-        from scanpath_studio.tour import render_use_case_tutorial
+        def styles_on(step: int) -> str:
+            at = AppTest.from_function(_use_case_tutorial_app)
+            at.session_state["tutorial_progress"] = {"filter_annotate": step}
+            at.run()
+            assert not at.exception, at.exception
+            return " ".join(m.value for m in at.markdown if "<style>" in m.value)
 
-        assert "_CARD_OVER_POPOVER_CSS" in inspect.getsource(render_use_case_tutorial)
+        steps = steps_of(_TUTORIAL_BY_ID["filter_annotate"])
+        opens = [i for i, step in enumerate(steps) if step.popover]
+        assert opens, "no step of the guide opens a popover"
+        assert _CARD_OVER_POPOVER_CSS in styles_on(opens[0])
+        assert _CARD_OVER_POPOVER_CSS not in styles_on(0)
 
     def test_a_step_without_a_popover_closes_the_one_before_it(self):
         """The panel the previous step opened must not sit over this step's
@@ -839,23 +865,20 @@ class TestSpotlightSelectorsResolve:
         script = _popover_script("")
         assert FUNNEL_TRIGGER in script
 
-    def test_data_source_sits_outside_the_filter_spotlight(self):
-        """Adjacent targets must not be nested inside one highlight."""
-        import inspect
+    def test_data_source_sits_outside_the_filter_spotlight(self, scanpath_page):
+        """Adjacent targets must not be nested inside one highlight: the
+        dataset picker is the picker row's lead cell, and the filters sit in
+        the row's 🔎 popover."""
+        from tests.conftest import keys_around
 
-        from scanpath_studio.tabs import render_single_trial_tab
-
-        source = inspect.getsource(render_single_trial_tab)
-        # The source picker is the picker row's lead cell and the filters sit
-        # inside a 🔎 popover. The two spotlight targets are *siblings*, never
-        # one inside the other. `tour_grp_data_source` is made
-        # by `app.render_data_source_picker` (a second one here would be a
-        # duplicate key), so what this pins is that the dataset cell gets the
-        # renderer straight and the filter group is built somewhere else.
-        assert "def _render_dataset_cell(host)" in source
-        assert "data_source_renderer(host)" in source
-        assert 'box = pop.container(key="tour_grp_narrow_by")' in source
-        assert "leading_renderer=_render_dataset_cell" in source
+        at = scanpath_page
+        source = keys_around(at, "tour_grp_data_source")
+        filters = keys_around(at, "tour_grp_narrow_by")
+        assert "tour_grp_narrow_by" not in source
+        assert "tour_grp_data_source" not in filters
+        assert "tour_grp_trial_picker" in source and "tour_grp_trial_picker" in filters
+        assert "iconpop_filter_trials" in filters
+        assert "tour_grp_data_source" in keys_around(at, "data_source_picker")
 
     def test_filter_group_has_a_dataset_divider(self):
         """The sibling groups retain a visible boundary between them."""
@@ -912,17 +935,20 @@ class TestSpotlightSelectorsResolve:
         assert '[class*="_cell_confirm"] button {' in css
         assert '[class*="_confirm"] button {' not in css
 
-    def test_subtabs_stay_in_the_plot_column(self):
-        """A tall rail cannot push the panels away from a short plot."""
-        import inspect
+    def test_subtabs_stay_in_the_plot_column(self, scanpath_page):
+        """A tall rail cannot push the panels away from a short plot: the
+        subtabs sit in the plot's own column, the rail in the one beside it."""
+        from tests.conftest import find_keyed
 
-        from scanpath_studio.tabs import render_single_trial_tab
-
-        source = inspect.getsource(render_single_trial_tab)
-        assert 'plot_col, rail_col = st.columns([4, 1], gap="large")' in source
-        assert 'subtabs_col, _ = st.columns([4, 1], gap="large")' not in source
-        assert '        subtabs_slot = st.container(key="tour_grp_subtabs")' in source
-        assert "with subtabs_slot:" in source
+        at = scanpath_page
+        _plot, plot_around = find_keyed(at, "tour_grp_plot")
+        _subtabs, subtabs_around = find_keyed(at, "tour_grp_subtabs")
+        _rail, rail_around = find_keyed(at, "scanpath_rail")
+        plot_col, rail_col = plot_around[-1], rail_around[-1]
+        assert plot_col.type == rail_col.type == "column"
+        assert subtabs_around[-1] is plot_col
+        assert rail_col is not plot_col and rail_around[-2] is plot_around[-2]
+        assert plot_col.weight == pytest.approx(4 * rail_col.weight)
 
     def test_visualization_rail_scrolls_on_its_own(self):
         """The rail's column scrolls within the window, never capped at the
@@ -941,40 +967,48 @@ class TestSpotlightSelectorsResolve:
         assert "max-height: calc(100dvh" in column
         assert "100%" not in column
 
-    def test_plot_rail_uses_one_compact_control_header(self):
-        """Modes and visualization settings share one rail heading."""
-        import inspect
+    def test_plot_rail_uses_one_compact_control_header(self, scanpath_page):
+        """Modes and visualization settings share one rail heading, and the
+        view tiles and saved views sit under it."""
+        from tests.conftest import find_keyed, keys_around, page_nodes
 
-        from scanpath_studio import controls
-        from scanpath_studio.tabs import render_single_trial_tab
-
-        tab_source = inspect.getsource(render_single_trial_tab)
-        control_source = inspect.getsource(controls.render_plot_controls)
-
-        assert (
-            "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
-        )
-        assert 'st.markdown("## 🎛️ View modes")' not in tab_source
-        assert 'st.markdown("## 🎨 Visualization")' not in tab_source
-        assert "_render_view_controls(" in control_source
-        assert (
-            '_render_saved_designs(advanced_only(view_body, "rail_designs"))'
-            in inspect.getsource(controls._render_view_controls)
-        )
+        at = scanpath_page
+        headings = [
+            str(node.value)
+            for node, _ in page_nodes(at._tree)
+            if node.type == "markdown" and str(node.value).startswith("## ")
+        ]
+        rail, _ = find_keyed(at, "scanpath_rail")
+        in_rail = [
+            str(node.value)
+            for node, _ in page_nodes(rail)
+            if node.type == "markdown" and str(node.value).startswith("## ")
+        ]
+        assert len(in_rail) == 1 and in_rail[0].endswith(" Plot controls")
+        assert not [h for h in headings if h.endswith(("View modes", "Visualization"))]
+        assert "scanpath_rail" in keys_around(at, "viz_view_heatmap")
+        designs = keys_around(at, "design_shell")
+        assert "scanpath_rail" in designs and "adv_only_rail_designs" in designs
 
     def test_corpus_canvas_controls_stay_inside_the_style_expander(self):
         """The collapsed Corpus style row must own every canvas/font field."""
-        import inspect
+        from scanpath_studio.constants import _VIEW_CORPUS
+        from tests.conftest import APP_SCRIPT, keys_around, pin_view
 
-        from scanpath_studio import controls
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+        pin_view(at, _VIEW_CORPUS)
+        at.run()
+        assert not at.exception, at.exception
+        for key in (
+            "global_bg_choice",
+            "global_line_spacing",
+            "global_base_font_size",
+            "global_text_color",
+        ):
+            assert "corpus_figure_style" in keys_around(at, key), key
 
-        source = inspect.getsource(controls.corpus_style_controls)
-        assert "as style_panel" in source
-        assert "canvas_renderer(style_panel)" in source
-        assert "canvas_renderer(target)" not in source
-
-    def test_reset_closes_the_rail_below_every_control_it_resets(self):
-        """Reset is the last thing in the rail, at full width.
+    def test_reset_closes_the_rail_below_every_control_it_resets(self, scanpath_page):
+        """Reset is the last thing in the rail, in a footer of its own.
 
         The rail is only ~150px wide inside at ordinary desktop widths, not
         enough for the heading and a compact Reset pill side by side. A
@@ -984,32 +1018,30 @@ class TestSpotlightSelectorsResolve:
         of the rail, where its own ``overflow`` clips it — Reset is then
         invisible unless the browser is zoomed far out.
 
-        Two things keep that from happening: the heading row holds a single
-        element, and the reset renders after ``render_plot_controls`` (creation
-        order is what puts it at the foot of the rail's scroll area).
+        Two things keep that from happening: the heading row holds no reset,
+        and the reset is drawn after every control (creation order is what puts
+        it at the foot of the rail's scroll area).
         """
-        import inspect
-
-        from scanpath_studio import controls
         from scanpath_studio.styles import get_app_css
-        from scanpath_studio.tabs import render_single_trial_tab
+        from tests.conftest import find_keyed, keys_in_screen_order, page_nodes
 
-        tab_source = inspect.getsource(render_single_trial_tab)
-        assert (
-            "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
+        rail, _ = find_keyed(scanpath_page, "scanpath_rail")
+        nodes = list(page_nodes(rail))
+        start = next(
+            i
+            for i, (node, _) in enumerate(nodes)
+            if getattr(node, "key", None) == "plot_reset_footer"
         )
-        assert 'st.container(key="plot_reset_footer")' in tab_source
-        assert "render_viz_reset(plot_footer)" in tab_source
-        # No second column in the heading row, and no reset above the controls.
-        assert "rail_heading, rail_reset = st.columns(" not in tab_source
-        assert tab_source.index("render_plot_controls(") < tab_source.index(
-            "render_viz_reset(plot_footer)"
+        footer = nodes[start][0]
+        assert nodes[start + 1 :], "the reset footer is empty"
+        assert all(
+            any(block is footer for block in around) for _, around in nodes[start + 1 :]
         )
-
-        # Full width, one label, no compact pill.
-        reset_source = inspect.getsource(controls.render_viz_reset)
-        assert 'width="stretch"' in reset_source
-        assert "compact" not in reset_source.split('"""')[0]
+        assert "reset_viz_settings_btn" in keys_in_screen_order(footer)
+        header, _ = find_keyed(scanpath_page, "plot_controls_header")
+        assert not {"reset_viz_settings_btn", "plot_reset_footer"} & set(
+            keys_in_screen_order(header)
+        )
 
         # No rail container query may re-stack a row: the preset tiers query
         # the same container (one at 240px) but only resize their buttons;
@@ -1031,18 +1063,13 @@ def test_spotlight_helpers_are_plain_functions_that_return_their_css():
     the highlight outline from both the sample replay and the setup guide, and
     costs the tour its fragment so every Back/Next waits on a full app rerun.
     """
-    import inspect
-
     from scanpath_studio import tour
-
-    for helper in (tour._highlight_css, tour._scroll_into_view_script):
-        assert not inspect.getsource(helper).lstrip().startswith("@"), (
-            f"{helper.__name__} must stay an undecorated pure helper"
-        )
 
     css = tour._highlight_css(".st-key-wiz_part_setup", "#1f77b4")
     assert "tour-pulse" in css and "outline: 3px solid #1f77b4" in css
     assert tour._highlight_css("", "#1f77b4") == ""
+    script = tour._scroll_into_view_script(".st-key-wiz_part_setup")
+    assert script.startswith("<script>") and ".st-key-wiz_part_setup" in script
 
     # Both spotlight renderers must still be fragments (see the module docstring:
     # navigation must never wait for the ~10 s full-app rerun).
@@ -1083,30 +1110,31 @@ def test_the_setup_guide_counts_the_parts_it_names(monkeypatch):
         for number, part in enumerate(parts, start=1):
             assert part["title"].startswith(f"{number} · ")
             assert part["step_id"]
+            assert tour._wizard_guide_progress(number, part) == (
+                f"Part {number} of {expected}"
+            )
         assert tour._wizard_guide_progress(0, intro) == f"Overview · {expected} parts"
     # The closing card is not a fourth part: no number, no wizard part to open.
     assert save["step_id"] is None
     assert not save["title"][0].isdigit()
-    import inspect
-
-    source = inspect.getsource(tour._wizard_guide_progress)
-    assert 'f"Part {step_idx} of {n_parts}"' in source
 
 
 def test_the_setup_guide_ends_on_saving():
     """The guide's last card points at the footer that saves the dataset —
     ✅ Add dataset and ⬇️ Download setup file — not at Recording setup."""
-    from scanpath_studio import tour, wizard
+    from scanpath_studio import app, tour
+    from tests.conftest import APP_SCRIPT, keys_around
 
     save = tour._WIZARD_GUIDE_STEPS[-1]
     assert save["selector"] == ".st-key-wizard_footer_row"
     assert "Add dataset" in save["body"] and "Download setup file" in save["body"]
-    import inspect
-
-    # The selector names the footer's own container key.
-    assert 'container(key="wizard_footer_row")' in inspect.getsource(
-        wizard._wizard_footer
-    )
+    # The selector names the container that holds both buttons on the add screen.
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.run()
+    assert not at.exception, at.exception
+    assert "wizard_footer_row" in keys_around(at, "wizard_finalize")
+    assert "wizard_footer_row" in keys_around(at, "wizard_setup_download")
 
 
 def test_the_setup_guide_progress_names_the_save_step():
@@ -1131,7 +1159,14 @@ class TestEveryGuideCardFolds:
         return {b.key for b in at.button if b.key}
 
     def _folds_and_opens(self, at, kind: str, next_key: str, tab: str) -> None:
+        from tests.conftest import find_keyed, keys_around
+
         assert not at.exception, at.exception
+        # The card is drawn clipped to 1 px until its stylesheet applies
+        # (`tour._guide_card`), so it never shows inline at the top of the page.
+        assert "tour_card" in keys_around(at, next_key)
+        card, _ = find_keyed(at, "tour_card")
+        assert card.proto.height_config.pixel_height == 1
         at.button(key=f"guide_fold_{kind}").click().run()
         assert not at.exception, at.exception
         assert self._keys(at) == {f"guide_unfold_{kind}", f"guide_close_{kind}"}

@@ -25,7 +25,6 @@ test, and this is the guard against that silent break.
 
 from __future__ import annotations
 
-import inspect
 import re
 from pathlib import Path
 
@@ -82,7 +81,6 @@ def test_owner_script_judges_each_panel_by_its_own_trigger() -> None:
     for trigger in ("pointerover", "pointerout", "focusin", "focusout"):
         assert f'"{trigger}"' in script
     assert "MutationObserver" in script
-    assert "_TOOLTIP_OWNER_SCRIPT" in inspect.getsource(app.configure_page)
 
 
 def test_streamlit_bundle_still_has_the_tooltip_dom_this_relies_on() -> None:

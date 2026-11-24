@@ -620,9 +620,21 @@ def test_an_http_answer_is_a_successful_handshake(monkeypatch):
     assert launcher._tls_handshake_failure("https://github.com/") is None
 
 
-def test_the_smoke_test_asks_for_the_handshake():
-    import inspect
+def test_the_smoke_test_asks_for_the_handshake(monkeypatch, tmp_path):
+    """The bundle's selfcheck makes a real TLS handshake only when asked, and
+    the smoke test asks it to, with an https address."""
+    seen = {}
 
-    assert "SCANPATH_SELFCHECK_TLS_URL=TLS_URL" in inspect.getsource(
-        smoke_test._run_selfcheck
-    )
+    class Result:
+        returncode = 0
+        stdout = "selfcheck ok"
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen.update(kwargs)
+        return Result()
+
+    monkeypatch.setattr(smoke_test.subprocess, "run", fake_run)
+    smoke_test._run_selfcheck(tmp_path / "ScanpathStudio")
+    assert seen["env"]["SCANPATH_SELFCHECK_TLS_URL"] == smoke_test.TLS_URL
+    assert smoke_test.TLS_URL.startswith("https://")

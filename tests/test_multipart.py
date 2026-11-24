@@ -564,23 +564,24 @@ def test_screen_steps_live_in_a_railbtn_cluster():
     That key is the whole mechanism behind the alignment: styles.py lays every
     ``[class*="st-key-railbtn_"]`` out as a right-packed flex row with a shared
     pill shape, so the screen row lands on the same edge as the trial picker's
-    ◀ ▶ ⇅ and the Filter-by **More**. No DOM exists under AppTest, so this is
-    pinned structurally — the same approach test_tour.py takes for its CSS hooks.
+    ◀ ▶ ⇅ and the Filter-by **More**. A's navigator and B's each keep their
+    pair together in their own cluster.
     """
-    import inspect
+    from streamlit.testing.v1 import AppTest
 
     from scanpath_studio.styles import get_app_css
-    from scanpath_studio.tabs import _render_screen_navigator
+    from tests.conftest import find_keyed
 
-    source = inspect.getsource(_render_screen_navigator)
-    # The key is prefix-parameterized (A's own "single" default, B's
-    # own "single_compare") rather than the literal "single_screen_trail" —
-    # still a `railbtn_*` name, which is the part the shared CSS rule below
-    # actually matches on.
-    assert 'key=f"railbtn_{key_prefix}_screen_trail"' in source
-    # The steps must be children of that container, not of the columns.
-    assert 'trail.button(\n        f"◀ {spoken(' in source
-    assert 'trail.button(\n        f"▶ {spoken(' in source
+    at = AppTest.from_function(_two_screen_navigators_app).run()
+    assert not at.exception, at.exception
+    for prefix in ("single", "single_compare"):
+        clusters = []
+        for step in ("previous", "next"):
+            _button, around = find_keyed(at, f"{prefix}_screen_{step}")
+            # The steps are the cluster's own children, not a column's.
+            clusters.append(around[-1])
+        assert clusters[0] is clusters[1]
+        assert clusters[0].key.startswith("railbtn_"), clusters[0].key
     # ...and the shared rule must actually match that key.
     assert '[class*="st-key-railbtn_"] {' in get_app_css()
 

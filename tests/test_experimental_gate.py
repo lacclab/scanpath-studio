@@ -450,15 +450,19 @@ class TestComputedMeasuresGate:
         cli.main(["--help"])
         assert "analyze" in capsys.readouterr().out
 
-    def test_the_export_bundle_offers_no_measure_family(self):
-        import inspect
-
-        from scanpath_studio import export
-
-        source = inspect.getsource(export.render_export_options)
-        assert '*(["Computed measures"] if computed_measures_enabled() else [])' in (
-            source
-        )
+    @pytest.mark.timeout(180)
+    @pytest.mark.parametrize("enabled", [False, True], ids=["default", "flag"])
+    def test_the_export_bundle_offers_no_measure_family(self, monkeypatch, enabled):
+        if enabled:
+            monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+        at.session_state["tour_seen"] = True
+        at.session_state[SUBTAB_KEY] = tabs.SUBTAB_EXPORT
+        at.run()
+        assert not at.exception, at.exception
+        offered = at.pills(key="bulk_export_tabular").options
+        assert "Word measures" in offered
+        assert ("Computed measures" in offered) is enabled
 
     @pytest.mark.parametrize(
         ("subtab", "view_key"),

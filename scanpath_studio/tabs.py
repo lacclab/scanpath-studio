@@ -536,6 +536,11 @@ def _render_screen_navigator(
     )
     # Narrow, but its menu opens as wide as the longest screen name.
     widen_menu(id_key, labels.values())
+    # On a phone this line of text stands in for the dropdown (`styles.py`), so
+    # the screen steps fit on the trial's ◀ ▶ line without making it taller.
+    cell.container(key=f"{key_prefix}_screen_brief").markdown(
+        f"<span>{_literal(labels[str(selected)])}</span>", unsafe_allow_html=True
+    )
     # Both steps in ONE keyed `railbtn_*` container, so they take the pill
     # shape and 3px spacing of the ◀ ▶ ⇅ cluster beside them.
     trail = cell.container(key=f"railbtn_{key_prefix}_screen_trail", width="content")

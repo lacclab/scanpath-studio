@@ -407,6 +407,21 @@ def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
 # canonical value is mirrored back into the box *before* either widget renders,
 # so a slider drag, a deep link, a restored config and a Quick-view preset all
 # move the box too — one-way sync each direction, no feedback loop.
+#
+# In shadow mode (``value=``) neither is seeded: the slider and each box are
+# drawn under `shadow_widget_key` names of their own, and each moves to a fresh
+# key when the value changes without it — the boxes after a drag, the slider
+# after a typed value — since Streamlit ignores a new ``value=`` under a key
+# it already holds.
+
+
+def _shadow_stem(widget_key: str) -> str:
+    """The name a `shadow_widget_key` key was made from (``_{name}__w{n}``),
+    or ``widget_key`` itself when it is not one."""
+    name, sep, generation = widget_key.rpartition("__w")
+    if sep and name.startswith("_") and generation.isdigit():
+        return name[1:]
+    return widget_key
 
 
 def _shadow_key_missing(*keys: str) -> bool:
@@ -485,6 +500,10 @@ def _numeric_slider(
         # A shadow (`shadow_widget_key(seed=False)`): both halves take ``value``
         # as their own default and hand a change to ``on_change(new_value)``;
         # neither is seeded through session state (see `shadow_widget_key`).
+        # The box is a shadow of its own, so it moves to a fresh key showing
+        # the new value after a drag.
+        num_key = shadow_widget_key(f"{_shadow_stem(key)}__num", value, seed=False)
+
         def _from(widget_key: str):
             def call() -> None:
                 if _shadow_key_missing(widget_key):
@@ -576,8 +595,13 @@ def _range_slider(
     lead=None,
     field_host=None,
     number_bounds: tuple | None = None,
+    value: tuple | None = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
+
+    ``value`` draws it as a shadow (`shadow_widget_key(seed=False)`), as in
+    `_numeric_slider`: all three take ``value`` as their own default, nothing is
+    seeded through session state, and a change reaches ``on_change(new_range)``.
 
     ``number_bounds`` bounds the two number boxes when it differs from the
     slider's (``None`` on either side = unbounded); a typed value outside the
@@ -598,17 +622,45 @@ def _range_slider(
     """
     disabled, help = _layer_gate(disabled, help)  # greyed while the layer is off
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
-    current = st.session_state.get(key)
-    if isinstance(current, (tuple, list)) and len(current) == 2:
-        st.session_state[lo_key], st.session_state[hi_key] = current
+    slider_change = on_change
+    defaults: dict = {key: {}, lo_key: {}, hi_key: {}}
+    if value is not None:
+        # Each box a shadow of its own endpoint, so a drag moves it to a fresh
+        # key showing the new one.
+        stem = _shadow_stem(key)
+        lo_key = shadow_widget_key(f"{stem}__num_lo", value[0], seed=False)
+        hi_key = shadow_widget_key(f"{stem}__num_hi", value[1], seed=False)
+        defaults = {
+            key: {"value": tuple(value)},
+            lo_key: {"value": value[0]},
+            hi_key: {"value": value[1]},
+        }
 
-    def _apply() -> None:
-        if _shadow_key_missing(lo_key, hi_key):
-            return
-        lo, hi = st.session_state[lo_key], st.session_state[hi_key]
-        st.session_state[key] = (min(lo, hi), max(lo, hi))
-        if on_change is not None:
-            on_change()
+        def slider_change() -> None:
+            if _shadow_key_missing(key):
+                return
+            if on_change is not None:
+                on_change(tuple(st.session_state[key]))
+
+        def _apply() -> None:
+            # A box not yet sent by the browser still shows its default.
+            lo = st.session_state.get(lo_key, value[0])
+            hi = st.session_state.get(hi_key, value[1])
+            if on_change is not None:
+                on_change((min(lo, hi), max(lo, hi)))
+
+    else:
+        current = st.session_state.get(key)
+        if isinstance(current, (tuple, list)) and len(current) == 2:
+            st.session_state[lo_key], st.session_state[hi_key] = current
+
+        def _apply() -> None:
+            if _shadow_key_missing(lo_key, hi_key):
+                return
+            lo, hi = st.session_state[lo_key], st.session_state[hi_key]
+            st.session_state[key] = (min(lo, hi), max(lo, hi))
+            if on_change is not None:
+                on_change()
 
     if field_host is not None:
         weights = [*([2.2] if lead is not None else []), 5, 1.5, 1.5]
@@ -638,11 +690,12 @@ def _range_slider(
         key=key,
         help=help,
         disabled=disabled,
-        on_change=on_change,
+        on_change=slider_change,
         persist_state=persist_state,
         label_visibility=(
             "collapsed" if label_left or field_host is not None else "visible"
         ),
+        **defaults[key],
     )
     fmt = number_format if number_format is not None else slider_format
     num_min, num_max = (
@@ -655,12 +708,17 @@ def _range_slider(
             max_value=num_max,
             step=step,
             format=_number_box_format(
-                fmt, min_value, max_value, step, st.session_state.get(num_key)
+                fmt,
+                min_value,
+                max_value,
+                step,
+                st.session_state.get(num_key, defaults[num_key].get("value")),
             ),
             key=num_key,
             on_change=_apply,
             label_visibility="collapsed",
             disabled=disabled,
+            **defaults[num_key],
         )
 
 
@@ -1262,7 +1320,7 @@ _CUSTOM_VIEW = "custom"
 DESIGN_PRESETS_KEY = _DESIGN_PRESETS_WIRE_KEY
 #: Which saved design the ✏️ button has open for editing, if any.
 _DESIGN_EDIT_KEY = "_design_preset_editing"
-#: Whether the 💾 "Save current view" modal is open.
+#: Whether the 💾 "Save current preset" modal is open.
 _DESIGN_SAVE_PENDING_KEY = "_design_save_pending"
 #: Which saved design the 🗑️ confirmation is asking about, if any.
 _DESIGN_DELETE_PENDING_KEY = "_design_delete_pending"
@@ -1355,7 +1413,7 @@ def delete_design_preset(name: str) -> None:
 
 #: The saved-design file: `{"kind": DESIGNS_FILE_KIND, "designs": {…}}` — the
 #: portable copy of the library, written by *Export* and read by *Import* in
-#: My views.
+#: My presets.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
 #: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
 #: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
@@ -1467,12 +1525,12 @@ def _import_designs() -> None:
         incoming = designs_from_json(uploaded.getvalue().decode("utf-8"), report=report)
     except (ValueError, UnicodeDecodeError):
         st.session_state[_DESIGN_IMPORT_NOTE_KEY] = (
-            "error:Choose a file saved with **My views** → **Export**."
+            "error:Choose a file saved with **My presets** → **Export**."
         )
         return
     st.session_state[DESIGN_PRESETS_KEY] = {**design_presets(), **incoming}
     count = len(incoming)
-    note = f"Imported {count} view{'' if count == 1 else 's'}."
+    note = f"Imported {count} preset{'' if count == 1 else 's'}."
     if report:
         note = f"warning:{note} " + "; ".join(report) + "."
     st.session_state[_DESIGN_IMPORT_NOTE_KEY] = note
@@ -1499,19 +1557,19 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
         key="design_export",
         disabled=not saved,
         width="stretch",
-        help="Download your saved views as a JSON file, to use on another "
+        help="Download your saved presets as a JSON file, to use on another "
         "computer or share.",
     )
     with row.popover("Import", icon=ICONS["upload"], width="stretch"):
         st.file_uploader(
-            "Saved views file (JSON)",
+            "Saved presets file (JSON)",
             type=["json"],
             key=_DESIGN_IMPORT_KEY,
             on_change=_import_designs,
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "Import a file from **My views** → **Export**. A view with the same "
+            "Import a file from **My presets** → **Export**. A preset with the same "
             "name replaces the saved copy."
         )
 
@@ -1949,15 +2007,15 @@ def _render_saved_designs(host) -> None:
     saved = design_presets()
     active = selected_design_name()
     label = (
-        f"{ICONS['designs']} My views ({len(saved)})"
+        f"{ICONS['designs']} My presets ({len(saved)})"
         if saved
-        else f"{ICONS['designs']} My views"
+        else f"{ICONS['designs']} My presets"
     )
     shell = host.container(key="design_shell")
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
         if not saved:
             st.caption(
-                "No saved views yet. Set up the figure, then "
+                "No saved presets yet. Set up the figure, then "
                 f"click {ICONS['save']} to save them here. You can then apply them "
                 "to any trial in one click."
             )
@@ -1982,34 +2040,34 @@ def _render_saved_designs(host) -> None:
             # baseline the platform font decides, which sits them high and unaligned
             # in their buttons. `spoken` names each icon for screen readers.
             cells[1].button(
-                spoken(f"Rename view {name}"),
+                spoken(f"Rename preset {name}"),
                 icon=ICONS["edit"],
                 wrap=True,
                 key=f"design_edit_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Rename this view.",
+                help="Rename this preset.",
                 on_click=_toggle_design_editor,
                 args=(name,),
             )
             cells[2].button(
-                spoken(f"Delete view {name}"),
+                spoken(f"Delete preset {name}"),
                 icon=ICONS["delete"],
                 wrap=True,
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Delete this view.",
+                help="Delete this preset.",
                 on_click=_ask_delete_design,
                 args=(name,),
             )
         _render_design_file_row(st, saved)
     if shell.button(
-        spoken("Save the plot settings as a view"),
+        spoken("Save the plot settings as a preset"),
         icon=ICONS["save"],
         wrap=True,
         key="design_save",
-        help="Save the plot settings on screen now as a named view.",
+        help="Save the plot settings on screen now as a named preset.",
     ):
         st.session_state[_DESIGN_SAVE_PENDING_KEY] = True
         st.session_state[_DESIGN_SAVE_MODE_KEY] = _SAVE_MODE_NEW
@@ -2024,7 +2082,7 @@ def _ask_delete_design(name: str) -> None:
     """🗑️ arms the confirmation instead of deleting.
 
     A design is a handful of choices the user made and cannot get back by
-    undoing anything, so it gets the same confirm step ♻️ Reset visualization
+    undoing anything, so it gets the same confirm step ♻️ Reset
     has — and for the same reason, an `on_click` that only sets a flag, because
     a callback may not open a dialog.
     """
@@ -2037,7 +2095,7 @@ def _close_design_delete_dialog() -> None:
     st.session_state.pop(_DESIGN_DELETE_PENDING_KEY, None)
 
 
-@st.dialog("Delete this view?", on_dismiss=_close_design_delete_dialog)
+@st.dialog("Delete this preset?", on_dismiss=_close_design_delete_dialog)
 @guarded()
 def _design_delete_dialog(name: str) -> None:
     """Confirm forgetting one saved design."""
@@ -2064,11 +2122,11 @@ def _design_delete_dialog(name: str) -> None:
 _DESIGN_NEW_NAME_KEY = "design_new_name"
 _DESIGN_REPLACE_TARGET_KEY = "design_replace_target"
 #: The name the 💾 dialog offers, so saving needs no naming at all.
-_DEFAULT_DESIGN_NAME = "My view {n}"
+_DEFAULT_DESIGN_NAME = "My preset {n}"
 
 
 def next_design_name(taken) -> str:
-    """The first of "My view 1", "My view 2", … that no design in
+    """The first of "My preset 1", "My preset 2", … that no design in
     ``taken`` is called — a number freed by a delete is offered again."""
     taken = set(taken)
     n = 1
@@ -2089,7 +2147,7 @@ def _close_design_save_dialog() -> None:
 # modal in the browser without running a line of the body, so without this the
 # flag would stay armed and the dialog reopen on the very next rerun — clicking
 # a preset, toggling a layer, anything.
-@st.dialog("Save current view", on_dismiss=_close_design_save_dialog)
+@st.dialog("Save current preset", on_dismiss=_close_design_save_dialog)
 @guarded()
 def _design_save_dialog() -> None:
     """Name the settings on screen and keep them.
@@ -2118,7 +2176,7 @@ def _design_save_dialog() -> None:
             "Save the settings on screen as",
             options=(_SAVE_MODE_NEW, _SAVE_MODE_REPLACE),
             format_func=lambda choice: (
-                "A new view"
+                "A new preset"
                 if choice == _SAVE_MODE_NEW
                 else "A replacement for one I saved"
             ),
@@ -2127,22 +2185,22 @@ def _design_save_dialog() -> None:
     with st.form("design_save_form", border=False):
         if mode == _SAVE_MODE_REPLACE:
             name = st.selectbox(
-                "View to replace",
+                "Preset to replace",
                 options=list(saved),
                 key=_DESIGN_REPLACE_TARGET_KEY,
             )
             st.warning(
-                "The chosen view is **overwritten** with the settings on "
+                "The chosen preset is **overwritten** with the settings on "
                 "screen. Its old settings can't be recovered.",
                 icon=ICONS["warning"],
             )
         else:
-            # Filled with the next free "My view N": saving needs no
+            # Filled with the next free "My preset N": saving needs no
             # name thought up, and typing over it is one select-all away.
             # `setdefault`, so a name being typed survives the radio's rerun.
             st.session_state.setdefault(_DESIGN_NEW_NAME_KEY, next_design_name(saved))
             name = st.text_input(
-                "View name",
+                "Preset name",
                 key=_DESIGN_NEW_NAME_KEY,
                 placeholder="e.g. Paper figure",
                 help="Saves every plot setting on screen: layers, colors, "
@@ -2163,7 +2221,7 @@ def _design_save_dialog() -> None:
         st.rerun(scope="app")
     if save:
         if not save_design_preset(name or ""):
-            st.error("Give the view a name first.")
+            st.error("Give the preset a name first.")
         else:
             _close_design_save_dialog()
             st.rerun(scope="app")
@@ -2626,16 +2684,164 @@ def _draw_view_grid(
         )
 
 
+#: The rail's foldable sections, top to bottom.
+RAIL_SECTIONS = ("view", "palette", "modes", "customize")
+#: The sections this browser has folded away, as a set. Seeded once per session
+#: from `RAIL_FOLD_COOKIE`; how the column is laid out, never the figure, so no
+#: link, settings file or saved preset carries it.
+_RAIL_FOLDED_KEY = "_rail_folded_sections"
+#: Set once the reader folds or unfolds a section: only then is the cookie
+#: written, so a browser that never touched a chevron keeps no cookie.
+_RAIL_FOLD_CHOSEN_KEY = "_rail_fold_chosen"
+RAIL_FOLD_COOKIE = "sps_rail_folded"
+_RAIL_FOLD_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+
+def parse_folded_sections(value: object) -> frozenset[str]:
+    """The known section names in a ``RAIL_FOLD_COOKIE`` value (``view.modes``);
+    anything else in it is ignored."""
+    if not isinstance(value, str):
+        return frozenset()
+    return frozenset(part for part in value.split(".") if part in RAIL_SECTIONS)
+
+
+def format_folded_sections(folded) -> str:
+    """The ``RAIL_FOLD_COOKIE`` value for ``folded``, in rail order."""
+    return ".".join(name for name in RAIL_SECTIONS if name in folded)
+
+
+def folded_sections() -> frozenset[str]:
+    """The sections folded in this session, seeded from the browser's cookie."""
+    ss = st.session_state
+    if _RAIL_FOLDED_KEY not in ss:
+        try:
+            cookie = st.context.cookies.get(RAIL_FOLD_COOKIE)
+        except Exception:  # no request behind the run (AppTest, bare mode)
+            cookie = None
+        ss[_RAIL_FOLDED_KEY] = parse_folded_sections(cookie)
+    return frozenset(ss[_RAIL_FOLDED_KEY])
+
+
+def _set_rail_section(name: str, fold: bool) -> None:
+    folded = set(folded_sections())
+    if fold:
+        folded.add(name)
+    else:
+        folded.discard(name)
+    st.session_state[_RAIL_FOLDED_KEY] = frozenset(folded)
+    st.session_state[_RAIL_FOLD_CHOSEN_KEY] = True
+
+
+def render_rail_fold_cookie(host) -> None:
+    """Keep the folded sections in a year-long cookie for the next visit.
+
+    The container is drawn every run and holds the same-origin script only once
+    the reader has used a chevron; the script writes the parent document's
+    cookie, the one place a browser-side preference can live without an account.
+    """
+    box = host.container(key="rail_fold_cookie")
+    if not st.session_state.get(_RAIL_FOLD_CHOSEN_KEY):
+        return
+    from scanpath_studio.html_embed import embed_html_iframe
+
+    with box:
+        embed_html_iframe(rail_fold_cookie_script(folded_sections()), height=0)
+
+
+def rail_fold_cookie_script(folded) -> str:
+    """A same-origin script that keeps ``folded`` in a year-long cookie. Only
+    known section names reach it, so the value needs no escaping."""
+    value = format_folded_sections(folded)
+    return (
+        "<script>window.parent.document.cookie = "
+        f'"{RAIL_FOLD_COOKIE}={value}; max-age={_RAIL_FOLD_COOKIE_MAX_AGE}; '
+        'path=/; SameSite=Lax";</script>'
+    )
+
+
+def rail_section(host, name: str, title: str, current: str = ""):
+    """A rail section's label with a fold chevron, and the body under it.
+
+    The body is always drawn and only hidden by CSS while folded, so its
+    widgets keep their place and state; the folded label names the current
+    pick, so the choice stays readable with the tiles away. While a guide runs
+    every section shows, since its steps point into them; what is stored is
+    left as it is.
+    """
+    folded = name in folded_sections() and not st.session_state.get("tutorial_active")
+    section = host.container(key=f"rail_{name}_section")
+    head = section.container(
+        key=f"rail_{name}_head{'_folded' if folded else ''}",
+        horizontal=True,
+        vertical_alignment="center",
+        gap=None,
+    )
+    shown = f"{title} · {html.escape(current)}" if folded and current else title
+    head.markdown(
+        f'<div class="sps-control-label">{shown}</div>',
+        unsafe_allow_html=True,
+        width="content",
+    )
+    head.button(
+        spoken(f"{'Show' if folded else 'Hide'} {title}"),
+        key=f"rail_{name}_fold",
+        icon=ICONS["menu_arrow" if folded else "menu_arrow_up"],
+        type="tertiary",
+        help=f"{'Show' if folded else 'Hide'} {title}.",
+        on_click=_set_rail_section,
+        args=(name, not folded),
+    )
+    return section.container(key=f"rail_{name}_body")
+
+
+def _folded_preset_label(design: str | None) -> str:
+    """What the folded Presets line names: a saved preset by its own name, a
+    built-in tile by its label, and ``+ Animation`` while the replay is on."""
+    label = (
+        selected_design_name()
+        or _VIEW_TILES.get(design or _CUSTOM_VIEW, ("Custom",))[0]
+    )
+    if st.session_state.get(SINGLE_ANIMATE):
+        label = f"{label} + Animation"
+    return label
+
+
+def modes_summary() -> str:
+    """What the folded Modes line names: the modes switched on, or *Off*."""
+    on = [
+        label
+        for key, label in (
+            (SINGLE_COMPARE_TOGGLE, "Compare"),
+            (SINGLE_ANIMATE, "Playback"),
+        )
+        if st.session_state.get(key)
+    ]
+    return " + ".join(on) or "Off"
+
+
+def _palette_tile_label(name: str) -> str:
+    return {
+        DEFAULT_PALETTE: "Colorblind-safe",
+        "Print / grayscale": "Grayscale",
+    }.get(name, name)
+
+
 def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
     """Render the shared views, playback switch and palette at the top of the rail."""
     design = _active_quick_view()
     st.session_state["_custom_plot_in_use"] = (
         design == _CUSTOM_VIEW or design not in _VIEW_TILES
     )
-    host.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
+    render_rail_fold_cookie(host)
+    view_body = rail_section(
+        host,
+        "view",
+        "Presets",
+        _folded_preset_label(design),
+    )
     draw = partial(
         _draw_view_grid,
-        host.container(key="tour_grp_views"),
+        view_body.container(key="tour_grp_views"),
         design=design,
         has_time=has_time,
     )
@@ -2644,23 +2850,20 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
     else:
         # Wait for the comparison picker to resolve B, including another dataset.
         slots["view_tiles"] = draw
-    _render_saved_designs(advanced_only(host, "rail_designs"))
+    _render_saved_designs(advanced_only(view_body, "rail_designs"))
     palette = _active_palette() or CUSTOM_PALETTE
     st.session_state["global_palette"] = palette
-    host.markdown(
-        '<div class="sps-control-label">Palette</div>', unsafe_allow_html=True
+    palette_body = rail_section(
+        host, "palette", "Palette", _palette_tile_label(palette)
     )
-    grid = host.container(key="rail_palette_tiles")
+    grid = palette_body.container(key="rail_palette_tiles")
     names = list(PALETTES)
     if palette == CUSTOM_PALETTE:
         names.append(CUSTOM_PALETTE)
     for index, name in enumerate(names):
         if index % 2 == 0:
             row = grid.columns(2, gap="small", wrap=False)
-        label = {
-            DEFAULT_PALETTE: "Colorblind-safe",
-            "Print / grayscale": "Grayscale",
-        }.get(name, name)
+        label = _palette_tile_label(name)
         row[index % 2].button(
             f"{label} {spoken('selected')}" if name == palette else label,
             key=palette_tile_key(name),
@@ -4615,9 +4818,9 @@ def _explicit_pair(val) -> tuple | None:
 # The canonical `global_*` key therefore means **explicit**: it is present only
 # when a range was chosen — dragged or typed here, un-ticking *Auto*, or
 # arriving on a Share link / saved config / saved design — and `None` reaches
-# the builders otherwise, i.e. the API's rule, not a copy of it. The slider
-# draws a private *view* key instead, seeded from the canonical value or (auto)
-# the dataset span it is bounded by, so rendering it never pins a number into
+# the builders otherwise, i.e. the API's rule, not a copy of it. The slider is
+# a shadow instead (`_render_color_range`), showing the canonical value or
+# (auto) the dataset span it is bounded by, so rendering it never pins a number into
 # every link, config and bulk export. (Seeding the canonical key with the
 # dataset's span would put the app's heatmap on the dataset's longest single
 # fixation while the headless one used the trial's own per-word values.) The
@@ -4629,13 +4832,13 @@ _COLOR_RANGE_URL_PARAMS = {
 
 
 def _color_range_view_key(state_key: str) -> str:
-    """The private key the rail's slider draws for ``state_key``."""
-    return f"_{state_key.removeprefix('global_')}_view"
+    """The shadow name of ``state_key``'s range slider (`shadow_widget_key`)."""
+    return f"{state_key.removeprefix('global_')}_view"
 
 
 def _color_range_auto_key(state_key: str) -> str:
-    """The private key of ``state_key``'s *Auto* checkbox."""
-    return f"_{state_key.removeprefix('global_')}_auto"
+    """The shadow name of ``state_key``'s *Auto* checkbox (`shadow_widget_key`)."""
+    return f"{state_key.removeprefix('global_')}_auto"
 
 
 def forget_color_range(state_key: str) -> None:
@@ -4652,11 +4855,9 @@ def forget_color_range(state_key: str) -> None:
 
 
 def pin_word_heatmap_range(bounds: tuple[float, float]) -> None:
-    """Use the current word-box legend limits on subsequent readings."""
-    key = "global_heatmap_color_range"
-    st.session_state[key] = bounds
-    write_through(_color_range_view_key(key), bounds)
-    write_through(_color_range_auto_key(key), False)
+    """Use the current word-box legend limits on subsequent readings. The rail's
+    range and *Auto* are shadows of the setting, so they follow it."""
+    st.session_state["global_heatmap_color_range"] = bounds
 
 
 #: The reading's grain, in the order a per-word dwell groups by: one word of one
@@ -4839,8 +5040,6 @@ def _render_color_range(
     endpoint, beyond the observed span too.
     """
     ss = st.session_state
-    view_key = _color_range_view_key(state_key)
-    auto_key = _color_range_auto_key(state_key)
     explicit = _explicit_pair(ss.get(state_key))
     if explicit is None:
         ss.pop(state_key, None)  # a malformed value is not a range
@@ -4848,21 +5047,31 @@ def _render_color_range(
         lo = min(lo, float(math.floor(explicit[0])))
         hi = max(hi, float(math.ceil(explicit[1])))
         hi = hi if hi > lo else lo + 1.0
-    shown = explicit if explicit is not None else (lo, hi)
-    if ss.get(view_key) != shown:
-        ss[view_key] = shown
-    ss[auto_key] = explicit is None
+    shown = (
+        (float(explicit[0]), float(explicit[1]))
+        if explicit is not None
+        else (float(lo), float(hi))
+    )
+    # Shadows (`shadow_widget_key`): *Auto* and the range show the setting and
+    # write it only from their own callbacks. A change made elsewhere (a
+    # settings file, a link, another trial's span) moves them to fresh keys,
+    # so a closed menu's last-shown values have nowhere to land.
+    view_key = shadow_widget_key(_color_range_view_key(state_key), shown, seed=False)
+    auto_key = shadow_widget_key(
+        _color_range_auto_key(state_key), explicit is None, seed=False
+    )
 
-    def _commit_view() -> None:
-        view = ss.get(view_key)
+    def _commit_view(view) -> None:
         if isinstance(view, (tuple, list)) and len(view) == 2:
             ss[state_key] = (float(min(view)), float(max(view)))
 
     def _toggle_auto() -> None:
-        if ss.get(auto_key):
+        if _shadow_key_missing(auto_key):
+            return
+        if ss[auto_key]:
             forget_color_range(state_key)
         else:
-            _commit_view()
+            _commit_view(shown)
 
     auto_text = (
         "Auto (default): the range fits each trial's values; in Compare, A and "
@@ -4877,6 +5086,7 @@ def _render_color_range(
     def _auto(col) -> None:
         col.checkbox(
             "Auto",
+            value=explicit is None,
             key=auto_key,
             on_change=_toggle_auto,
             disabled=auto_disabled,
@@ -4901,6 +5111,7 @@ def _render_color_range(
         # Any endpoint can be typed: the slider spans the data, but a common
         # scale often reaches past this pool's largest value.
         number_bounds=(None, None),
+        value=shown,
     )
 
 
@@ -7280,7 +7491,7 @@ def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
     return box
 
 
-#: The ♻️ Reset visualization button's confirmation flag.
+#: The ♻️ Reset button's confirmation flag.
 _RESET_VIZ_PENDING_KEY = "_reset_viz_pending"
 
 
@@ -7433,13 +7644,13 @@ def render_viz_reset(host) -> None:
             key=f"viz_{action.lower()}",
             help=label if stack else f"No plot change to {action.lower()}.",
             disabled=not stack,
+            width="stretch",
             on_click=_step_plot_history,
             args=(action == "Redo",),
         )
     if row.button(
-        f"{ICONS['reset']} Reset visualization",
+        f"{ICONS['reset']} Reset",
         key="reset_viz_settings_btn",
-        width="stretch",
         help="Reset every plot setting, Filters & highlights included. Annotations, "
         "trial filters, data and the selected trial are kept.",
     ):
@@ -7523,7 +7734,9 @@ def render_plot_controls(
         and (not compare_meta or charts.has_clock(compare_meta["fixations"])),
         slots=slots,
     )
-    viz = rail.container(key="tour_grp_viz_controls")
+    viz = rail_section(
+        rail.container(key="tour_grp_viz_controls"), "customize", "Customize"
+    )
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
     editor = advanced_only(viz, "plot_editor")
     render_setting_finder(editor)
@@ -9279,7 +9492,7 @@ def render_plot_controls(
         if axis_disabled:
             st.caption(axis_help)
         st.selectbox(
-            "Axis preset",
+            "Axis layout",
             list(available),
             key=picker_key,
             placeholder="Custom axes",

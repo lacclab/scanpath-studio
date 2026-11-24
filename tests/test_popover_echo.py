@@ -288,3 +288,44 @@ def test_a_settings_file_holds_against_a_closed_menus_echo(staged, monkeypatch):
     assert not at.exception, at.exception
     assert at.session_state["global_saccade_style"] == "Dashed"
     assert at.session_state["global_saccade_width"] == width + 2
+
+
+@pytest.mark.timeout(180)
+@pytest.mark.parametrize("before", [None, (100.0, 400.0)], ids=["auto", "set"])
+def test_a_colour_range_a_settings_file_sets_holds_against_the_menus_echo(before):
+    """A heatmap range on Auto, or set to another range, and a settings file
+    that sets one. The closed Heatmap menu sends back *Auto* and the range it
+    showed, under the keys the browser knew; the file's range stays."""
+    state = "global_heatmap_color_range"
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
+    at.session_state["global_show_heatmap"] = True
+    if before is not None:
+        at.session_state[state] = before
+    at.run()
+    auto = _shadow(at.checkbox, "heatmap_color_range_auto")
+    view = _shadow(at.slider, "heatmap_color_range_view")
+    assert auto.value is (before is None)
+    shown = {auto.key: auto.value, view.key: tuple(view.value)}
+    at.session_state["plot_config_upload"] = _SettingsFile(
+        {
+            "schema": PLOT_CONFIG_SCHEMA_VERSION,
+            "layers": {"heatmap": True},
+            "coloring": {"heatmap_range": [10, 50]},
+        }
+    )
+    at.run()
+    assert at.session_state[state] == (10.0, 50.0)
+    # The controls whose value the file changed moved to fresh keys: the ones
+    # the browser knew are gone, so what it sends back under them reaches no
+    # widget and no callback. *Auto* moves only when it changed (from Auto).
+    drawn = {w.key for w in (*at.checkbox, *at.slider, *at.number_input)}
+    assert view.key not in drawn
+    assert (auto.key in drawn) is (before is not None)
+    for key, value in shown.items():
+        at.session_state[key] = value
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state[state] == (10.0, 50.0)
+    assert _shadow(at.checkbox, "heatmap_color_range_auto").value is False
+    assert tuple(_shadow(at.slider, "heatmap_color_range_view").value) == (10.0, 50.0)

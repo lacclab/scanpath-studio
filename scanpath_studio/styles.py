@@ -677,6 +677,35 @@ def get_app_css() -> str:
         .stApp { --sps-code-fg: #8fc7f5; }
     }
 
+    /* The "Stopped loading X · Try again" notice (`app._render_cancelled_load_notice`):
+       a light blue banner, since it reports what the user just did rather
+       than something going wrong. Try again is a small bordered button; the
+       ✕ sits at the far end. */
+    .st-key-sps_cancelled_notice {
+        background: var(--sps-accent-soft);
+        border: 1px solid var(--sps-accent-border);
+        border-radius: 0.6rem;
+        padding: 0.3rem 0.4rem 0.3rem 0.85rem;
+    }
+    .st-key-sps_cancelled_notice [data-testid="stMarkdownContainer"] p {
+        margin: 0;
+        font-size: 0.92rem;
+    }
+    .st-key-sps_cancelled_notice [data-testid="stMarkdownContainer"] [data-testid="stIconMaterial"] {
+        color: var(--sps-accent);
+        vertical-align: -0.2em;
+    }
+    .st-key-sps_try_again button {
+        min-height: 1.9rem;
+        padding: 0.1rem 0.65rem;
+        border-color: var(--sps-accent-border);
+        background: var(--sps-page-bg);
+    }
+    .st-key-sps_cancelled_notice_close button {
+        min-height: 1.9rem;
+        padding: 0.1rem 0.4rem;
+    }
+
     /* Empty-state panels — "no trials match" and "this corpus isn't here
        yet": a single amber-tinted card, so the diagnosis visibly belongs to the
        headline above it. Amber (not red) on purpose: nothing is broken, the user
@@ -2054,6 +2083,21 @@ def get_app_css() -> str:
         container-type: inline-size;
         container-name: sps-rail;
     }
+    /* Beside the figure, the rail's column sticks to the top of the page's scroll area and scrolls
+       on its own, as tall as the window and never capped at the plot's height:
+       a long rail stays reachable while the figure stays in view. Phones stack
+       the two columns into one flow (the max-width: 639px block below). */
+    @media (min-width: 640px) {
+        [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail) {
+            position: sticky;
+            top: 0.5rem;
+            align-self: flex-start;
+            max-height: calc(100dvh - 1rem);
+            overflow-y: auto;
+            overscroll-behavior-y: contain;
+            scrollbar-width: thin;
+        }
+    }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
     /* Section dividers default to 32px top+bottom margin — far too airy for the
@@ -2171,7 +2215,8 @@ def get_app_css() -> str:
     }
     .st-key-plot_history_actions {
         display: grid;
-        grid-template-columns: 2rem 2rem minmax(0, 1fr);
+        /* Undo and Redo share the room Reset's short label leaves. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
         align-items: center;
         gap: 0.25rem;
     }
@@ -2180,7 +2225,7 @@ def get_app_css() -> str:
         width: 100%;
         min-width: 0;
         min-height: 2.6rem;
-        padding-inline: 0.2rem;
+        padding-inline: 0.6rem;
     }
     /* Keep the spoken label out of the flex row so its gap doesn't shift the arrow. */
     :is(.st-key-viz_undo, .st-key-viz_redo) button [data-testid="stMarkdownContainer"] {
@@ -2196,7 +2241,7 @@ def get_app_css() -> str:
         width: 100%;
         justify-content: flex-start;
     }
-    /* The rail's expanders (e.g. 🎨 My views). Streamlit gives the
+    /* The rail's expanders (e.g. 🎨 My presets). Streamlit gives the
        expander label `word-break: break-word`, which in a rail this narrow
        snaps the header mid-word — the same defect the nowrap rule above
        prevents for toggle labels. Break at spaces only, and give the label the
@@ -2234,6 +2279,20 @@ def get_app_css() -> str:
     .st-key-scanpath_rail [data-testid="stMarkdownContainer"]:has(> .sps-control-label) {
         margin-bottom: 0;
     }
+    /* Presets, Palette, Modes and Customize fold away (`controls.rail_section`):
+       a small chevron beside the label, and the body hidden — never removed —
+       while folded. */
+    :is(.st-key-rail_view_section, .st-key-rail_palette_section, .st-key-rail_modes_section, .st-key-rail_customize_section):has(:is(.st-key-rail_view_head_folded, .st-key-rail_palette_head_folded, .st-key-rail_modes_head_folded, .st-key-rail_customize_head_folded)) [data-testid="stLayoutWrapper"]:has(> :is(.st-key-rail_view_body, .st-key-rail_palette_body, .st-key-rail_modes_body, .st-key-rail_customize_body)) {
+        display: none !important;
+    }
+    :is(.st-key-rail_view_fold, .st-key-rail_palette_fold, .st-key-rail_modes_fold, .st-key-rail_customize_fold) button {
+        min-height: 1.4rem;
+        padding: 0 0.15rem;
+        opacity: 0.72;
+    }
+    :is(.st-key-rail_view_fold, .st-key-rail_palette_fold, .st-key-rail_modes_fold, .st-key-rail_customize_fold) button:hover { opacity: 1; }
+    /* The script that keeps the folds in a cookie takes no room. */
+    .st-key-rail_fold_cookie { position: absolute; width: 0; height: 0; overflow: hidden; }
     .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) {
         margin-top: 0;
         margin-bottom: 0.05rem;
@@ -2254,7 +2313,7 @@ def get_app_css() -> str:
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
-    /* 🎨 My views. 💾 Save is drawn *into* the expander's own title
+    /* 🎨 My presets. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
        right-hand side is empty (the chevron sits left), so the list underneath
        keeps the full width of the rail instead of losing a fifth of it to one

@@ -32,6 +32,8 @@ NOT_A_DESIGN_SETTING = {
     "plot_setting_finder",
     "plot_filter_readings",
     "plot_editor_tabs",
+    # The rail's fold chevrons: how the column is laid out, not the figure.
+    *(f"rail_{name}_fold" for name in controls.RAIL_SECTIONS),
 }
 
 B_FILTERS = {

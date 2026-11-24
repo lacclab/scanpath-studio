@@ -1,0 +1,1 @@
+Each part of Plot controls (Presets, Palette, Modes, Customize) can be folded away with the chevron beside its label; a folded line names the current choice, and the browser remembers what you folded.

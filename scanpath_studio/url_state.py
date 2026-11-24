@@ -2496,9 +2496,10 @@ def _match_selection(
     return match.iloc[0], ""
 
 
-#: The screen a saved bundled-demo selection means when it names none. Share
-#: names the screen of every multi-screen trial, so a demo link or settings file
-#: without one was saved on a single-screen demo trial, whose screen is this.
+#: The screen a bundled-demo link or settings file opens when it names none.
+#: Share names the screen of every multi-screen trial, so one without a screen
+#: was saved on a single-screen demo trial, whose screen this is; a link made
+#: without `screen=` (`api.app_link`) opens it too.
 DEMO_UNNAMED_SCREEN = "Paragraph"
 
 

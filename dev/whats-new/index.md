@@ -95,6 +95,7 @@
 - A long session, or a server shared by many, no longer keeps every scanpath figure it has drawn in memory: the app keeps the 32 most recent.
 - Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
 - A closed settings menu no longer brings back a value you changed elsewhere for four controls: undoing the replay's Smoothness or a word highlight now holds, a palette set by a settings file stays on Corpus Analysis, and a new dataset gets its own Stimulus & context fields.
+- Editing a dataset's column mapping now keeps the files' own paragraph ids, as adding the files does, and no longer leaves behind a copy of the participant column that a combined Trial ID had used.
 - A colour range set by a settings file, a link or *Use this heatmap range for other trials* now stays, instead of going back to Auto or the old range when the menu showing it had been opened before.
 - Settings restored from a settings file, and an added dataset's own text size and spacing, no longer revert when a menu you had opened before sends back its old values.
 - A stimulus page image replaced on disk at the same path now shows the next time the figure is drawn, instead of the old page until a setting changed.

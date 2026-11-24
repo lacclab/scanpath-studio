@@ -576,8 +576,13 @@ def _range_slider(
     lead=None,
     field_host=None,
     number_bounds: tuple | None = None,
+    value: tuple | None = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
+
+    ``value`` draws it as a shadow (`shadow_widget_key(seed=False)`), as in
+    `_numeric_slider`: all three take ``value`` as their own default, nothing is
+    seeded through session state, and a change reaches ``on_change(new_range)``.
 
     ``number_bounds`` bounds the two number boxes when it differs from the
     slider's (``None`` on either side = unbounded); a typed value outside the
@@ -598,17 +603,40 @@ def _range_slider(
     """
     disabled, help = _layer_gate(disabled, help)  # greyed while the layer is off
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
-    current = st.session_state.get(key)
-    if isinstance(current, (tuple, list)) and len(current) == 2:
-        st.session_state[lo_key], st.session_state[hi_key] = current
+    slider_change = on_change
+    defaults: dict = {key: {}, lo_key: {}, hi_key: {}}
+    if value is not None:
+        defaults = {
+            key: {"value": tuple(value)},
+            lo_key: {"value": value[0]},
+            hi_key: {"value": value[1]},
+        }
 
-    def _apply() -> None:
-        if _shadow_key_missing(lo_key, hi_key):
-            return
-        lo, hi = st.session_state[lo_key], st.session_state[hi_key]
-        st.session_state[key] = (min(lo, hi), max(lo, hi))
-        if on_change is not None:
-            on_change()
+        def slider_change() -> None:
+            if _shadow_key_missing(key):
+                return
+            if on_change is not None:
+                on_change(tuple(st.session_state[key]))
+
+        def _apply() -> None:
+            # A box not yet sent by the browser still shows its default.
+            lo = st.session_state.get(lo_key, value[0])
+            hi = st.session_state.get(hi_key, value[1])
+            if on_change is not None:
+                on_change((min(lo, hi), max(lo, hi)))
+
+    else:
+        current = st.session_state.get(key)
+        if isinstance(current, (tuple, list)) and len(current) == 2:
+            st.session_state[lo_key], st.session_state[hi_key] = current
+
+        def _apply() -> None:
+            if _shadow_key_missing(lo_key, hi_key):
+                return
+            lo, hi = st.session_state[lo_key], st.session_state[hi_key]
+            st.session_state[key] = (min(lo, hi), max(lo, hi))
+            if on_change is not None:
+                on_change()
 
     if field_host is not None:
         weights = [*([2.2] if lead is not None else []), 5, 1.5, 1.5]
@@ -638,11 +666,12 @@ def _range_slider(
         key=key,
         help=help,
         disabled=disabled,
-        on_change=on_change,
+        on_change=slider_change,
         persist_state=persist_state,
         label_visibility=(
             "collapsed" if label_left or field_host is not None else "visible"
         ),
+        **defaults[key],
     )
     fmt = number_format if number_format is not None else slider_format
     num_min, num_max = (
@@ -655,12 +684,17 @@ def _range_slider(
             max_value=num_max,
             step=step,
             format=_number_box_format(
-                fmt, min_value, max_value, step, st.session_state.get(num_key)
+                fmt,
+                min_value,
+                max_value,
+                step,
+                st.session_state.get(num_key, defaults[num_key].get("value")),
             ),
             key=num_key,
             on_change=_apply,
             label_visibility="collapsed",
             disabled=disabled,
+            **defaults[num_key],
         )
 
 
@@ -4629,13 +4663,13 @@ _COLOR_RANGE_URL_PARAMS = {
 
 
 def _color_range_view_key(state_key: str) -> str:
-    """The private key the rail's slider draws for ``state_key``."""
-    return f"_{state_key.removeprefix('global_')}_view"
+    """The shadow name of ``state_key``'s range slider (`shadow_widget_key`)."""
+    return f"{state_key.removeprefix('global_')}_view"
 
 
 def _color_range_auto_key(state_key: str) -> str:
-    """The private key of ``state_key``'s *Auto* checkbox."""
-    return f"_{state_key.removeprefix('global_')}_auto"
+    """The shadow name of ``state_key``'s *Auto* checkbox (`shadow_widget_key`)."""
+    return f"{state_key.removeprefix('global_')}_auto"
 
 
 def forget_color_range(state_key: str) -> None:
@@ -4652,11 +4686,9 @@ def forget_color_range(state_key: str) -> None:
 
 
 def pin_word_heatmap_range(bounds: tuple[float, float]) -> None:
-    """Use the current word-box legend limits on subsequent readings."""
-    key = "global_heatmap_color_range"
-    st.session_state[key] = bounds
-    write_through(_color_range_view_key(key), bounds)
-    write_through(_color_range_auto_key(key), False)
+    """Use the current word-box legend limits on subsequent readings. The rail's
+    range and *Auto* are shadows of the setting, so they follow it."""
+    st.session_state["global_heatmap_color_range"] = bounds
 
 
 #: The reading's grain, in the order a per-word dwell groups by: one word of one
@@ -4839,8 +4871,6 @@ def _render_color_range(
     endpoint, beyond the observed span too.
     """
     ss = st.session_state
-    view_key = _color_range_view_key(state_key)
-    auto_key = _color_range_auto_key(state_key)
     explicit = _explicit_pair(ss.get(state_key))
     if explicit is None:
         ss.pop(state_key, None)  # a malformed value is not a range
@@ -4848,21 +4878,31 @@ def _render_color_range(
         lo = min(lo, float(math.floor(explicit[0])))
         hi = max(hi, float(math.ceil(explicit[1])))
         hi = hi if hi > lo else lo + 1.0
-    shown = explicit if explicit is not None else (lo, hi)
-    if ss.get(view_key) != shown:
-        ss[view_key] = shown
-    ss[auto_key] = explicit is None
+    shown = (
+        (float(explicit[0]), float(explicit[1]))
+        if explicit is not None
+        else (float(lo), float(hi))
+    )
+    # Shadows (`shadow_widget_key`): *Auto* and the range show the setting and
+    # write it only from their own callbacks. A change made elsewhere (a
+    # settings file, a link, another trial's span) moves them to fresh keys,
+    # so a closed menu's last-shown values have nowhere to land.
+    view_key = shadow_widget_key(_color_range_view_key(state_key), shown, seed=False)
+    auto_key = shadow_widget_key(
+        _color_range_auto_key(state_key), explicit is None, seed=False
+    )
 
-    def _commit_view() -> None:
-        view = ss.get(view_key)
+    def _commit_view(view) -> None:
         if isinstance(view, (tuple, list)) and len(view) == 2:
             ss[state_key] = (float(min(view)), float(max(view)))
 
     def _toggle_auto() -> None:
-        if ss.get(auto_key):
+        if _shadow_key_missing(auto_key):
+            return
+        if ss[auto_key]:
             forget_color_range(state_key)
         else:
-            _commit_view()
+            _commit_view(shown)
 
     auto_text = (
         "Auto (default): the range fits each trial's values; in Compare, A and "
@@ -4877,6 +4917,7 @@ def _render_color_range(
     def _auto(col) -> None:
         col.checkbox(
             "Auto",
+            value=explicit is None,
             key=auto_key,
             on_change=_toggle_auto,
             disabled=auto_disabled,
@@ -4901,6 +4942,7 @@ def _render_color_range(
         # Any endpoint can be typed: the slider spans the data, but a common
         # scale often reaches past this pool's largest value.
         number_bounds=(None, None),
+        value=shown,
     )
 
 

@@ -8,6 +8,8 @@ filter narrows it in the app.
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 import pytest
 
@@ -17,8 +19,25 @@ AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
 FIX_KEY = "global_fixation_color_range"
 HEAT_KEY = "global_heatmap_color_range"
-FIX_VIEW = "_fixation_color_range_view"
-HEAT_VIEW = "_heatmap_color_range_view"
+FIX_VIEW = "fixation_color_range_view"
+HEAT_VIEW = "heatmap_color_range_view"
+
+
+def _w(widgets, stem: str):
+    """The widget drawn under a shadow key with this stem
+    (`controls.shadow_widget_key`): the colour range and its *Auto* box."""
+    return next(w for w in widgets if re.fullmatch(rf"_{stem}__w\d+", w.key or ""))
+
+
+def _box(at, stem: str, side: str):
+    """The range's typed ``lo`` / ``hi`` box, beside the slider ``stem``."""
+    return next(
+        w
+        for w in at.number_input
+        if re.fullmatch(rf"_{stem}__w\d+__num_{side}", w.key or "")
+    )
+
+
 CANVAS = (800, 600)
 
 
@@ -173,8 +192,8 @@ class TestAPinnedRangeSurvivesANarrowerPool:
         assert _marker_scales(_static(viz)) == wide == [("Fixations", 100.0, 1000.0)]
         # Auto stays off, and the slider holds the pinned endpoint although no
         # fixation left in the pool reaches it.
-        assert at.checkbox(key="_fixation_color_range_auto").value is False
-        slider = at.slider(key=FIX_VIEW)
+        assert _w(at.checkbox, "fixation_color_range_auto").value is False
+        slider = _w(at.slider, FIX_VIEW)
         assert slider.value == (100.0, 1000.0)
         assert slider.proto.max >= 1000
 
@@ -221,7 +240,7 @@ class TestTheWordHeatmapRangeIsInDwell:
     def test_unticking_auto_pins_the_dwell_span_and_keeps_the_words_apart(self):
         at = _rail(**WORD_HEAT)
         auto_fills = _heat_fills(_static(at.session_state["_viz"]))
-        at.checkbox(key="_heatmap_color_range_auto").uncheck()
+        _w(at.checkbox, "heatmap_color_range_auto").uncheck()
         _rerun(at)
         viz = at.session_state["_viz"]
         # The scale starts at 0, as the figure's auto range does.
@@ -232,11 +251,11 @@ class TestTheWordHeatmapRangeIsInDwell:
 
     def test_an_endpoint_beyond_the_observed_dwell_can_be_typed(self):
         at = _rail(**WORD_HEAT)
-        at.number_input(key=f"{HEAT_VIEW}__num_lo").set_value(0)
-        at.number_input(key=f"{HEAT_VIEW}__num_hi").set_value(900)
+        _box(at, HEAT_VIEW, "lo").set_value(0)
+        _box(at, HEAT_VIEW, "hi").set_value(900)
         _rerun(at)
         assert at.session_state["_viz"]["heatmap_range"] == (0.0, 900.0)
-        slider = at.slider(key=HEAT_VIEW)
+        slider = _w(at.slider, HEAT_VIEW)
         assert slider.value == (0.0, 900.0)
         assert slider.proto.max >= 900
         # Both words keep distinct colours on the wider scale.
@@ -254,11 +273,11 @@ class TestTheWordHeatmapRangeIsInDwell:
     def test_counts_get_a_range_from_zero(self):
         at = _rail(**{**WORD_HEAT, "global_heatmap_metric": "counts"})
         assert at.session_state["_viz"]["heatmap_range"] is None  # auto
-        slider = at.slider(key=HEAT_VIEW)
+        slider = _w(at.slider, HEAT_VIEW)
         assert slider.proto.min == 0
         assert slider.proto.max >= 2
         assert "Fixations per word" in slider.proto.help
-        at.number_input(key=f"{HEAT_VIEW}__num_hi").set_value(20)
+        _box(at, HEAT_VIEW, "hi").set_value(20)
         _rerun(at)
         assert at.session_state["_viz"]["heatmap_range"] == (0.0, 20.0)
 
@@ -299,14 +318,14 @@ class TestASmoothedHeatmapOffersNoRange:
     @pytest.mark.parametrize("style", ["Smoothed"])
     def test_the_range_is_greyed_and_kept(self, style):
         at = _rail(**{**WORD_HEAT, "global_heatmap_style": style, HEAT_KEY: (0, 600)})
-        assert at.slider(key=HEAT_VIEW).proto.disabled
-        assert at.checkbox(key="_heatmap_color_range_auto").proto.disabled
-        assert "figure's peak" in at.slider(key=HEAT_VIEW).proto.help
+        assert _w(at.slider, HEAT_VIEW).proto.disabled
+        assert _w(at.checkbox, "heatmap_color_range_auto").proto.disabled
+        assert "figure's peak" in _w(at.slider, HEAT_VIEW).proto.help
         assert at.session_state[HEAT_KEY] == (0, 600)
         # Back on Word boxes the same range is live again.
         at.session_state["global_heatmap_style"] = "Word boxes"
         _rerun(at)
-        assert not at.slider(key=HEAT_VIEW).proto.disabled
+        assert not _w(at.slider, HEAT_VIEW).proto.disabled
         assert at.session_state["_viz"]["heatmap_range"] == (0.0, 600.0)
 
     def test_compare_draws_word_boxes_so_the_range_stays_live(self):
@@ -314,7 +333,7 @@ class TestASmoothedHeatmapOffersNoRange:
             **{**WORD_HEAT, "global_heatmap_style": "Smoothed", HEAT_KEY: (0, 600)},
             single_compare_toggle=True,
         )
-        assert not at.slider(key=HEAT_VIEW).proto.disabled
+        assert not _w(at.slider, HEAT_VIEW).proto.disabled
 
     def test_the_code_snippet_omits_it_for_a_smoothed_style(self):
         from scanpath_studio.code_snippet import figure_kwargs
@@ -351,14 +370,14 @@ class TestHeatmapBoundsOnlyWhenShown:
         calls = self._counting(monkeypatch)
         at = _rail(**{**WORD_HEAT, "global_show_heatmap": False})
         assert calls == []
-        slider = at.slider(key=HEAT_VIEW)
+        slider = _w(at.slider, HEAT_VIEW)
         assert (slider.proto.min, slider.proto.max) == (0, 300)
 
     def test_on_bounds_it_by_dwell(self, monkeypatch):
         calls = self._counting(monkeypatch)
         at = _rail(**WORD_HEAT)
         assert len(calls) == 1
-        slider = at.slider(key=HEAT_VIEW)
+        slider = _w(at.slider, HEAT_VIEW)
         assert (slider.proto.min, slider.proto.max) == (0, 600)
 
     def test_words_key_the_cache_only_on_the_words_only_fallback(self, monkeypatch):

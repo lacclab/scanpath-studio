@@ -2372,6 +2372,27 @@ def _legend_horizontal(position: str, arrangement: str) -> bool:
     return position.rpartition("-")[0] in _ROW_SPOTS
 
 
+#: Where along a box its anchor sits: Plotly's ``xanchor`` / ``yanchor``.
+_ANCHOR_SHARE = {
+    "left": 0.0,
+    "center": 0.5,
+    "right": 1.0,
+    "bottom": 0.0,
+    "middle": 0.5,
+    "top": 1.0,
+}
+
+
+def _boxes_overlap(a: tuple, b: tuple) -> bool:
+    """Whether two ``(x0, y0, x1, y1)`` px boxes share more than an edge."""
+    return (
+        a[0] < b[2] - 0.5
+        and b[0] < a[2] - 0.5
+        and a[1] < b[3] - 0.5
+        and b[1] < a[3] - 0.5
+    )
+
+
 class _LegendSlots:
     """What each spot around the plot already holds, so the legends and the
     size key that share one stack instead of overlapping.
@@ -2394,6 +2415,8 @@ class _LegendSlots:
         # The first legend's height on each outside edge, which a size key on
         # that edge is centred against.
         self.rows: dict = {}
+        # Every box placed so far, in px from the plot's bottom-left corner.
+        self.boxes: list = []
 
     @classmethod
     def of(cls, fig: go.Figure) -> _LegendSlots:
@@ -2461,7 +2484,7 @@ class _LegendSlots:
                 else:
                     out["yanchor"] = "bottom"
                     out["dy"] = gap + used
-            return out
+            return self._clear(fig, position, out, w, h, gap)
         # The left and right sides: a legend runs down the side, centred.
         out["y"], out["yanchor"] = 0.5, "middle"
         self.used[position] = used + w + gap
@@ -2475,6 +2498,60 @@ class _LegendSlots:
         else:
             out["xanchor"] = edge
             out["dx"] = gap + used if edge == "left" else -(gap + used)
+        return self._clear(fig, position, out, w, h, gap)
+
+    def _clear(
+        self, fig: go.Figure, position: str, out: dict, w: float, h: float, gap: float
+    ) -> dict:
+        """Move a box just placed at ``position`` clear of the boxes placed
+        before it, at other spots too: away from the plot from an outside spot,
+        toward its middle from an inside one. Each spot stacks its own boxes,
+        so two spots on one edge (or round one corner) meet only when a box is
+        wide or tall for the plot; then the later one makes room, and an
+        outside one grows the figure as far as it moved. An inside box that
+        would be carried out of the figure keeps its spot instead."""
+        plot_w, plot_h, _margin = _plot_px(fig)
+        x0 = out["x"] * plot_w + out["dx"] - _ANCHOR_SHARE[out["xanchor"]] * w
+        y0 = out["y"] * plot_h + out["dy"] - _ANCHOR_SHARE[out["yanchor"]] * h
+        edge, _along, outside = _spot_parts(position)
+        away = {"top": (0, 1), "bottom": (0, -1), "left": (-1, 0), "right": (1, 0)}
+        sx, sy = away[edge] if outside else tuple(-v for v in away[edge])
+        moved = 0.0
+        for _ in range(len(self.boxes)):
+            box = (x0, y0, x0 + w, y0 + h)
+            hit = next((b for b in self.boxes if _boxes_overlap(box, b)), None)
+            if hit is None:
+                break
+            if sx:
+                step = (hit[2] + gap - x0) if sx > 0 else (x0 + w - (hit[0] - gap))
+            else:
+                step = (hit[3] + gap - y0) if sy > 0 else (y0 + h - (hit[1] - gap))
+            x0, y0, moved = x0 + sx * step, y0 + sy * step, moved + step
+        if moved and not outside:
+            # An inside box that would be carried out of the figure stays where
+            # its spot put it: overlapping a neighbour beats being clipped.
+            m = _margin
+            beyond = x0 < -m["l"] - 0.5 or y0 < -m["b"] - 0.5
+            far = x0 + w > plot_w + m["r"] + 0.5 or y0 + h > plot_h + m["t"] + 0.5
+            if beyond or far:
+                x0, y0 = x0 - sx * moved, y0 - sy * moved
+                moved = 0.0
+        self.boxes.append((x0, y0, x0 + w, y0 + h))
+        if not moved:
+            return out
+        out = {**out, "dx": out["dx"] + sx * moved, "dy": out["dy"] + sy * moved}
+        self.used[position] = self.used.get(position, 0.0) + moved
+        if outside:
+            margin = _plot_px(fig)[2]
+            if edge == "top":
+                need = y0 + h - plot_h - _free_top_px(fig, margin)
+                _grow(fig, "t", max(0.0, need))
+            elif edge == "bottom":
+                _grow(fig, "b", max(0.0, -y0 - margin["b"]))
+            elif edge == "left":
+                _grow(fig, "l", max(0.0, -x0 - margin["l"]))
+            else:
+                _grow(fig, "r", max(0.0, x0 + w - plot_w - margin["r"]))
         return out
 
 

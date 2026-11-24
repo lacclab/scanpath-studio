@@ -371,6 +371,15 @@ def demo_dataset_app(trial_columns=None, *, words_trials_shifted: bool = False):
     from tests.conftest import APP_SCRIPT, pin_data_view
 
     raw_words, raw_fixations, *_ = load_sample_data()
+    if trial_columns is not None:
+        # A Trial ID from article columns joins a reader's paragraphs into one
+        # trial. On the demo's every screen that trial would hold one Answers
+        # screen per paragraph, which normalization refuses before the verdict
+        # can be drawn, so these readings keep their Paragraph screens only.
+        raw_words, raw_fixations = (
+            frame[frame["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+            for frame in (raw_words, raw_fixations)
+        )
     word_schema = propose_word_schema(raw_words)
     fix_schema = propose_fix_schema(raw_fixations)
     if trial_columns is not None:

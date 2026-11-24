@@ -179,8 +179,10 @@ sps.save_publication(recipe, "figure-2.svg")
 
 A local app keeps the datasets you add, so they are there the next time it
 starts. `add_dataset` adds one from a script: prepare the tables in Python, add
-them, then run `scanpath-studio` and the app opens on them. `remove_dataset`
-takes one off the list again.
+them, then run `scanpath-studio` and the app opens on them. `app_link` writes
+a link that opens the app on one of them, at a reading, with the figure you
+describe in `plot_scanpath`'s options. `remove_dataset` takes one off the list
+again.
 
 ```python
 sps.add_dataset(
@@ -189,9 +191,12 @@ sps.add_dataset(
     fixations="pilot3/fixation_report.csv",
     canvas_size=(1920, 1080),
 )
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
 ```
 
 ::: scanpath_studio.api.add_dataset
+
+::: scanpath_studio.api.app_link
 
 ::: scanpath_studio.api.remove_dataset
 

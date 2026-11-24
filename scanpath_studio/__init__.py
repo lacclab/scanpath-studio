@@ -8,6 +8,7 @@ __all__ = [
     "__version__",
     "add_dataset",
     "animate_scanpath",
+    "app_link",
     "attach_stimulus_images",
     "build_authored_scanpath",
     "cache_status",

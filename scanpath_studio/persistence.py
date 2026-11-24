@@ -2223,6 +2223,41 @@ def restore_local_state(
     return restored_from_cache(session)
 
 
+def stored_dataset_reference(
+    name: str, *, root: Path | None = None
+) -> tuple[str, str | None, str] | None:
+    """How a link names the saved dataset the list shows as ``name``
+    (ignoring case): ``(shown name, share ID, digest of its tables)``, the
+    three params 🔗 Share writes for it, so the app opens it without asking
+    whether it is the sender's data. ``None`` when no saved dataset has the
+    name, or the saved work can't be read.
+
+    The digest is the one the app computes for the dataset once restored,
+    so its tables are read here as a session restores them.
+    """
+    from .data import share_dataset_fingerprint
+
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        return None
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            manifest = _read_manifest_for_update(root)
+            tokens = _stored_tokens(manifest, label)
+            if not tokens:
+                return None
+            token = tokens[0]
+            payload = _read_dataset(root, manifest["datasets"][token])
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return None
+    session = manifest["session"]
+    shown = str(_session_map(session, DATASET_ALIASES_KEY).get(token) or token)
+    share_id = _session_map(session, DATASET_IDS_KEY).get(token)
+    return shown, share_id, share_dataset_fingerprint(payload)
+
+
 def local_state_restored(session) -> bool:
     """Whether this session has had its one restore attempt already.
 

@@ -200,6 +200,27 @@ Without a screen size, the app uses one the data records, or estimates one from
 the extent of the data. To set it later, use :material/edit: **Edit dataset**.
 See [`add_dataset`][scanpath_studio.api.add_dataset] for every option.
 
+To open the app on one reading of it, with the figure you want, write a link.
+It names the dataset, the participant and trial, and the figure in
+`plot_scanpath`'s options or `render`'s flags. From the CLI, `open` opens it in
+your browser, and starts the app first if it isn't running.
+
+=== "Python"
+
+    ```python
+    url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+    ```
+
+=== "CLI"
+
+    ```bash
+    scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap
+    ```
+
+The link is the one :material/share: **Share** → **Link** writes for that view, so
+settings it leaves out keep the values the app has. See
+[`app_link`][scanpath_studio.api.app_link] and [`open`](../../cli.md#open).
+
 To take a dataset off the list again, use
 [`remove_dataset`][scanpath_studio.api.remove_dataset] or
 `scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this

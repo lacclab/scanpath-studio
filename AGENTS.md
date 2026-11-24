@@ -52,6 +52,7 @@ scanpath_studio/
 │  ├─ wizard_shell.py    the wizard's part registry (`STEPS`) and ✏️ Edit dataset's (`EDITOR_STEPS`)
 │  ├─ dataset_table.py   the pure row model behind 📂 Available datasets
 │  ├─ url_state.py       deep links, 🔗 Share (Link · Code · File), settings-file save/restore + migrations
+│  ├─ script_link.py     the link a script writes (`api.app_link`, `open`): figure keywords → link params
 │  ├─ session_keys.py    the session keys / URL params that are a wire format, as constants
 │  ├─ plot_config.py     the settings-file serializer shared by Share and the export bundle
 │  ├─ tour.py            sample invitation, task guides and the optional import walkthrough
@@ -127,7 +128,8 @@ scanpath_studio/
 └─ Headless & distribution
    ├─ api.py             the public Python API (`load_scanpath_data`, `plot_scanpath`, `animate_scanpath`,
    │                     `compare_scanpaths`, `save_figure`, `figure_code`, …)
-   ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `cache`, `version`, `analyze`
+   ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `add`, `remove`, `open`, `cache`,
+   │                     `version`, `analyze`
    ├─ __init__.py        `__release__`, the lazy `__version__`, and lazy re-exports of `api.py`
    ├─ __main__.py, streamlit_entry.py
    │                     `python -m scanpath_studio` → the CLI; the script `run` hands to `streamlit run`

@@ -6621,8 +6621,9 @@ def render_single_trial_tab(
     # Columns FIRST so the rail starts at the very top, beside the selection —
     # built for the everything-beside-the-plot workflow. The selection menus +
     # chips + plot + per-trial subtabs live in the left column. The narrow rail's
-    # column sticks and scrolls on its own (styles.py), as tall as the window,
-    # so a long rail never pushes the subtabs away from the figure.
+    # column sticks and scrolls on its own (styles.py), as tall as the room
+    # under the page's top band, so a long rail never pushes the subtabs away
+    # from the figure.
     with st.container(key="scanpath_workspace"):
         plot_col, rail_col = st.columns([4, 1], gap="large")
     # Rail containers filled after the rail itself (B's filters).

@@ -511,11 +511,14 @@ def dataset_names(session) -> set[str]:
 
 
 def rename_dataset(session, old: str, new: str) -> bool:
-    """A renamed dataset keeps its annotations; whether they moved.
+    """Move ``old``'s annotations to ``new``; whether they moved.
 
-    Refuses — changing nothing — when ``new`` already holds a store of its own,
-    which the rename would otherwise overwrite. ``wizard.rename_dataset`` never
-    asks for such a name (``_safe_dataset_name`` avoids :func:`dataset_names`).
+    Saving a drawn scanpath moves the draft's notes to the dataset it becomes
+    (``app._save_authored_dataset``). Refuses — changing nothing — when ``new``
+    already holds a store of its own, which the move would otherwise
+    overwrite; the saved dataset's key comes from ``wizard._new_dataset_token``,
+    which takes a fresh ``upload-…`` key over any key :func:`dataset_names`
+    holds, so it never does.
     """
     old, new = str(old), str(new)
     if old == new:

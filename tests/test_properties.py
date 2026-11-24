@@ -614,3 +614,23 @@ def test_a_category_keeps_its_colour_in_every_figure_of_its_dataset(vocabulary, 
     if len(vocabulary) <= len(plots._CATEGORY_PALETTE):
         labs = [plots._color_lab(color) for color in colors]
         assert all(plots._delta_e(a, b) >= 23 for a, b in combinations(labs, 2))
+
+
+@given(
+    requested=st.text(min_size=1, max_size=120).filter(str.strip),
+    taken=st.lists(st.text(max_size=90), max_size=8),
+    max_chars=st.integers(min_value=8, max_value=80),
+)
+def test_a_dataset_name_is_free_and_fits(requested, taken, max_chars):
+    """One rule names an upload, a saved drawing and a renamed built-in: the
+    name differs (ignoring case) from every name in use, and fits the field."""
+    from scanpath_studio.dataset_identity import unique_name
+
+    name = unique_name(requested, taken, max_chars=max_chars)
+    assert name.strip()
+    assert len(name) <= max_chars
+    assert name.casefold() not in {t.casefold() for t in taken}
+    if requested.strip()[:max_chars].rstrip().casefold() not in {
+        t.casefold() for t in taken
+    }:
+        assert name == requested.strip()[:max_chars].rstrip()

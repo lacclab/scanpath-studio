@@ -127,6 +127,7 @@ from scanpath_studio.column_names import (
 from scanpath_studio.column_names import active as active_column_names
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
+    COMPARE_SOURCE_RESOLVED_KEY,
     THIS_DATASET,
     SecondaryDataset,
     load_secondary_dataset,
@@ -2683,10 +2684,7 @@ def _compare_source_name() -> str | None:
 #: the user just switched *away* from (see ``_resolve_compare_source``).
 _NO_COMPARE_NARROWING: dict = {"participants": None, "metadata": {}, "ranges": {}}
 
-#: The comparison dataset the last run resolved, so a switch can be told from a
-#: re-render. Not a widget key — the picker's own key is the user's *pick*, and
-#: this is what was actually loaded and filtered against.
-_COMPARE_SOURCE_RESOLVED_KEY = "_compare_source_resolved"
+_COMPARE_SOURCE_RESOLVED_KEY = COMPARE_SOURCE_RESOLVED_KEY
 
 
 def _compare_source_choices() -> tuple[list[str], dict[str, bool], dict[str, str]]:

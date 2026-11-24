@@ -2219,6 +2219,16 @@ _VIEW_MODE_KEYS = frozenset(
 _QUICK_VIEW_DATASET = "_quick_view_dataset"
 
 
+def forget_quick_view_dataset(session, dataset: str) -> None:
+    """Forget that the design baseline was taken on ``dataset`` once it is
+    removed, so whatever opens next retakes it. A marker naming no dataset,
+    not a missing one: `_active_quick_view` reads a missing marker as "the
+    same dataset", which would keep the old baseline and drop the design's
+    highlight on the next change."""
+    if (session.get(_QUICK_VIEW_DATASET) or (None,))[0] == dataset:
+        session[_QUICK_VIEW_DATASET] = (None, None)
+
+
 def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 

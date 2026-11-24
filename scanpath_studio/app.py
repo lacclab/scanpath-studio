@@ -406,7 +406,7 @@ from scanpath_studio.utils import (
     trial_id_layout,
 )
 
-from .dataset_identity import dataset_share_id
+from .dataset_identity import dataset_share_id, unique_name
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -5274,12 +5274,15 @@ def _save_authored_dataset(name_key: str, *, as_copy: bool = False) -> None:
         for key in ("_author_text_for_events", "_authored_events_frame", "author_text"):
             st.session_state.pop(key, None)
     st.session_state.pop(_AUTHOR_EDITING_KEY, None)
-    # The draft's annotations were made on the scanpath being saved,
-    # so they become the saved dataset's. The name is safe, so it holds none.
+    # The draft's annotations and attached tables were made on the scanpath
+    # being saved, so they become the saved dataset's, and the next draft
+    # starts without them. The name is safe, so it holds none of its own.
     if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
         import scanpath_studio.annotations as _annotations
+        from scanpath_studio import metadata as _metadata
 
         _annotations.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
+        _metadata.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
     st.session_state["_pending_source_choice"] = name
     st.session_state["main_nav"] = _VIEW_SCANPATH
     st.session_state["setup_complete"] = True
@@ -5812,15 +5815,11 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     """A non-empty display name that does not duplicate another table row."""
     base = requested.strip()[:DATASET_NAME_MAX_CHARS].rstrip()
     base = base or _dataset_display_name(token)
-    used = {
-        _dataset_display_name(other).casefold() for other in tokens if other != token
-    }
-    candidate = base
-    suffix = 2
-    while candidate.casefold() in used:
-        candidate = f"{base} ({suffix})"
-        suffix += 1
-    return candidate
+    return unique_name(
+        base,
+        (_dataset_display_name(other) for other in tokens if other != token),
+        max_chars=DATASET_NAME_MAX_CHARS,
+    )
 
 
 def _overview_sentence(text: str) -> tuple[str, str]:
@@ -9102,6 +9101,30 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     st.session_state["_trial_filters_raw"] = dict(restored) if restored else {}
     st.session_state["_filters_for"] = source_key
     return preprocessing
+
+
+def forget_source_state(session, token: str) -> None:
+    """Drop what this module keeps for the dataset ``token`` once it is removed.
+
+    Its stashed trial filters, the marker that its filters are the live ones
+    (left in place, the next switch would stash them under ``token`` again),
+    its *Loaded* status and the share selection resolved on it. A dataset that
+    later takes the same token, as the wizard's next "Dataset 1" does, starts
+    without them.
+    """
+    stash = session.get("_filter_stash") or {}
+    if any(key[0] == token for key in stash):
+        session["_filter_stash"] = {k: v for k, v in stash.items() if k[0] != token}
+    if (session.get("_filters_for") or (None,))[0] == token:
+        session.pop("_filters_for", None)
+    loaded = session.get(LOADED_THIS_SESSION_KEY)
+    if loaded and token in loaded:
+        session[LOADED_THIS_SESSION_KEY] = set(loaded) - {token}
+    if session.get("_share_selection_source") == token:
+        session.pop("_share_selection", None)
+        session.pop("_share_selection_source", None)
+    if session.get(LAST_LOADED_SOURCE_KEY) == token:
+        session.pop(LAST_LOADED_SOURCE_KEY, None)
 
 
 #: The last dataset a run left on screen — where Cancel goes back to

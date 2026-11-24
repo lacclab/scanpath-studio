@@ -1383,6 +1383,27 @@ def step_linked_compare(delta: int) -> None:
 _TRIAL_BY_DATASET_KEY = "_trial_by_dataset"
 
 
+def forget_trial_memory(session, dataset: str) -> None:
+    """Drop the readings each picker remembers for ``dataset`` once it is
+    removed. A picker last drawn on ``dataset`` also lets go of the reading it
+    holds, so a dataset that later takes the name opens on its own first trial
+    rather than on one of the removed dataset's readings."""
+    remembered = session.get(_TRIAL_BY_DATASET_KEY) or {}
+    if any(key.partition("|")[2] == dataset for key in remembered):
+        session[_TRIAL_BY_DATASET_KEY] = {
+            key: value
+            for key, value in remembered.items()
+            if key.partition("|")[2] != dataset
+        }
+    notes = f"{_TRIAL_BY_DATASET_KEY}_"
+    for key in [k for k in list(session.keys()) if str(k).startswith(notes)]:
+        if session.get(key) == dataset:
+            prefix = str(key)[len(notes) :]
+            session.pop(key, None)
+            session.pop(f"{prefix}_trial_id", None)
+            session.pop(f"{prefix}_trial_pos", None)
+
+
 def row_tail(column, key_prefix: str, reserve_screen_cell):
     """Lay out a selector row's last cell: the screen navigator, then the menus.
 

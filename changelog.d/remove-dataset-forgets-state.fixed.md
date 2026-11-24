@@ -1,0 +1,1 @@
+Removing a dataset also clears its saved filters, remembered trial and Compare selection, and closes Edit dataset if it was open on it, so a dataset added later under the same name opens unfiltered on its own first trial, and saving the editor cannot rename another dataset.

@@ -111,7 +111,11 @@ from .data import (
     word_ids_set_aside,
     words_with_several_boxes,
 )
-from .dataset_identity import dataset_share_id, forget_dataset_identity
+from .dataset_identity import (
+    dataset_share_id,
+    forget_dataset_identity,
+    unique_name,
+)
 from .experimental_setup import (
     FONT_CHOICES,
     FONT_PT_RANGE,
@@ -291,17 +295,15 @@ def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
     aliases = st.session_state.get(app.DATASET_ALIASES_KEY) or {}
-    existing = {
-        str(aliases.get(key) or key).casefold()
-        for key in _occupied_dataset_tokens()
-        if key != exclude and key is not None
-    }
-    base, n = name, 2
-    while name.casefold() in existing:
-        suffix = f" ({n})"
-        name = base[: DATASET_NAME_MAX_CHARS - len(suffix)].rstrip() + suffix
-        n += 1
-    return name
+    return unique_name(
+        name,
+        (
+            str(aliases.get(key) or key)
+            for key in _occupied_dataset_tokens()
+            if key != exclude and key is not None
+        ),
+        max_chars=DATASET_NAME_MAX_CHARS,
+    )
 
 
 def _new_dataset_token(label: str) -> str:
@@ -473,6 +475,14 @@ def _remove_dataset(name: str) -> None:
     switches back to the bundled demo via ``_pending_source_choice`` (applied
     before the radio re-instantiates, like the wizard finalize/cancel switch).
 
+    **Everything the session keeps for it goes too**, through each owning
+    module's ``forget_*``: the next upload can take the same token ("Dataset
+    1"), and anything left behind would open it filtered, on another
+    dataset's reading, or marked Loaded. `tests/test_dataset_lifecycle.py`
+    opens, filters, compares and edits a dataset, removes it through the real
+    confirmation, and fails on any key that still names it — so a per-dataset
+    key those steps create is caught there when it is added.
+
     **Deleting a dataset drops the computations derived from it.** Every
     figure, table and normalization the app cached for this dataset is dead the
     moment its frames leave the session — keeping them only holds memory and
@@ -504,7 +514,21 @@ def _remove_dataset(name: str) -> None:
     from scanpath_studio import metadata as _metadata
 
     _metadata.forget_dataset(st.session_state, name)
+    # Its filters, Loaded status, remembered readings, design baseline and
+    # place as scanpath B.
+    from scanpath_studio import compare_source, controls, utils
+
+    app.forget_source_state(st.session_state, name)
+    utils.forget_trial_memory(st.session_state, name)
+    controls.forget_quick_view_dataset(st.session_state, name)
+    compare_source.forget_compare_dataset(st.session_state, name)
     if st.session_state.get("data_source_choice") == name:
+        # ✏️ Edit dataset, open on it, closes with it, drafts unsaved: left
+        # open it would sit on the next dataset holding this one's name and
+        # mapping, and ✅ Save changes would apply them there. Nothing of the
+        # removed dataset is restored on the way out.
+        st.session_state.pop(app._EDITOR_SNAPSHOT_KEY, None)
+        app._close_dataset_editor()
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
     app.clear_computation_cache()
 

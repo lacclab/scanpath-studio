@@ -141,8 +141,13 @@ hand.
 - The Scanpath view draws its figures at true scale: `tests/test_true_scale_path.py`.
 - Shapes go into a figure in one assignment: `tests/test_smoke.py`
   (`test_layout_shapes_are_validated_about_once`).
-- Every trace of the scanpath figure is filed under its layer:
+- Every trace of a scanpath or comparison figure is filed under its layer:
   `tests/test_trace_layers.py`.
+- A rail control holds the range a link or settings file is held to, and a
+  link reads back every value a menu offers: `tests/test_widget_bounds.py`,
+  `tests/test_url_garbage.py`.
+- ✏️ Edit dataset gives what ➕ Add dataset gives from the same files and
+  mapping: `tests/test_properties.py`.
 - What a link carries, a settings file carries, and the recovery cache keeps:
   `tests/test_saved_state_contract.py`.
 - Released links, settings files and caches still restore:

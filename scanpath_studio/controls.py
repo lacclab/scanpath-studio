@@ -6792,7 +6792,9 @@ def _collect_viz_settings(
         anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
         anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
-        fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
+        fixation_opacity=float(
+            ss.get("global_fixation_opacity", FIXATION_OPACITY.default)
+        ),
         # Uniform fixation colour + marker shape.
         fixation_color=ss.get("global_fixation_color") or DEFAULT_FIXATION_COLOR,
         fixation_symbol=ss.get("global_fixation_symbol") or DEFAULT_FIXATION_SYMBOL,

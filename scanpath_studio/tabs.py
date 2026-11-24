@@ -151,6 +151,7 @@ from scanpath_studio.constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     FIXATION_LABEL_OPTIONS,
+    FIXATION_OPACITY,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -2167,7 +2168,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             "fixation_snap_position", DEFAULT_SNAP_POSITION
         ),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
-        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
+        fixation_opacity=viz_settings.get("fixation_opacity", FIXATION_OPACITY.default),
         fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
         fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),

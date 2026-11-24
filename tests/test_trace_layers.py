@@ -111,3 +111,13 @@ def test_a_comparisons_layer_switch_takes_away_only_its_own_layer(demo, switch, 
     every = _drawn(_comparison(demo, layout))
     without = _drawn(_comparison(demo, layout, **{switch: False}))
     _only_its_layer(every, without, switch)
+
+
+def test_every_trace_has_a_switch(demo):
+    """With every layer switched off nothing is drawn, so each trace and shape
+    belongs to a switch above, and its layer is checked there."""
+    off = dict.fromkeys(SWITCHES, False)
+    for variant in VARIANTS.values():
+        assert not _drawn(_figure(demo, variant, **off))
+    for layout in ("overlay", "side_by_side"):
+        assert not _drawn(_comparison(demo, layout, **off))

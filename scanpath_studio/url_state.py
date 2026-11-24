@@ -2753,6 +2753,15 @@ class _RestoreContext:
             return None
 
     def put(self, key: str, value) -> None:
+        # A number on a clamped key is held to its control's range whichever
+        # section wrote it: past it, Streamlit resets the control to its
+        # minimum without a word.
+        if key in _URL_BOUNDED:
+            try:
+                value = sanitize_session_value(key, value)
+            except (TypeError, ValueError):
+                self.skipped.append(key)
+                return
         if key.startswith(PREPROC_KEY_PREFIX) and preprocessing_enabled():
             # The 🧹 Preprocessing widgets render before the restore runs, so
             # their keys can't be written now; they're held for the next run, where `app._preprocessing_settings` applies them
@@ -3110,16 +3119,14 @@ def _restore_plot_config(
         put_float(
             coloring["stimulus_image_offset_x"],
             "global_stimulus_image_offset_x",
-            -5000.0,
-            5000.0,
+            *STIMULUS_IMAGE_OFFSET_BOUNDS,
             "stimulus image X offset",
         )
     if "stimulus_image_offset_y" in coloring:
         put_float(
             coloring["stimulus_image_offset_y"],
             "global_stimulus_image_offset_y",
-            -5000.0,
-            5000.0,
+            *STIMULUS_IMAGE_OFFSET_BOUNDS,
             "stimulus image Y offset",
         )
     if "stimulus_image_scale" in coloring:

@@ -69,6 +69,16 @@ def test_texts() -> None:
     assert out.set_index("Text ID")["# Participants"]["a"] == 2
 
 
+def test_texts_show_each_version_readers_saw() -> None:
+    words, fixations = _frames()
+    words.loc[4, "text"] = "dog"
+    texts = _ids_from_data("text", words, fixations, cache_key="versions")
+    row = texts.set_index("Text ID").loc["a"]
+    assert row["Text"] == "[seen by p1] The cat sat [seen by p2] The dog sat"
+    assert row["Differs by reader"] == "2 versions"
+    assert row["# Participants"] == 2
+
+
 def test_gaze_only_readings_supply_participants_trials_and_texts() -> None:
     words, fixations = _frames()
     samples = pd.DataFrame(

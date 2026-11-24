@@ -14185,6 +14185,10 @@ _RECORDING_TABLES = {
         "One row per eye-tracker sample, including samples with missing positions.",
     ),
 }
+
+# The Texts table's column naming the screens its readers saw differently.
+STIMULUS_VERSIONS_COLUMN = "Differs by reader"
+
 _ENTITY_TABLES = {
     "participant": (
         "Participants",
@@ -14382,6 +14386,11 @@ def _render_raw_metadata_tab(
             else f"No {label.lower()} found."
         )
         return
+    if STIMULUS_VERSIONS_COLUMN in derived.columns:
+        description += (
+            " Where readers saw different versions of a text, each version is"
+            " shown with the readers who saw it."
+        )
     st.caption(description)
     names = active_column_names(st.session_state, "fixations")
     st.dataframe(
@@ -14413,12 +14422,19 @@ def _build_stimuli_table_cached(
     screen of a text with more than one opens with its own ``[screen id]``
     marker — naming the screen's kind when the data has one — with a
     *# Screens* column beside.
+
+    Readers need not all have seen the same words (:func:`_reader_versions`):
+    a screen — or a single-screen text — that two readers saw differently is
+    shown once per version, the most-seen first, each marked ``seen by`` its
+    readers, and the *Differs by reader* column names those screens. *# Words*
+    counts the text as most of its readers saw it.
     """
     empty = pd.DataFrame(columns=["Text ID", "# Words", "Text"])
     if _words.empty or "text_id" not in _words.columns or "text" not in _words.columns:
         return empty
 
     multipart = SCREEN_ID in _words.columns
+    reading = [c for c in ("participant_id", "trial_id") if c in _words.columns]
     cols = [
         c
         for c in (
@@ -14434,7 +14450,7 @@ def _build_stimuli_table_cached(
         if c in _words.columns
     ]
     if _reading_texts is None:
-        sub = _words[cols].copy()
+        sub = _words[[*reading, *cols]].copy()
     else:
         # A text table uses the same identity as its participant and trial counts.
         # A default copied from the trial ID may be superseded by another table.
@@ -14467,17 +14483,38 @@ def _build_stimuli_table_cached(
 
     # Collapse identical word rows coming from multiple participants (stimulus
     # AoIs are shared by every reader; per-participant tables repeat them). On
-    # a multipart text a word is only the same word on the same screen.
+    # a multipart text a word is only the same word on the same screen, and of
+    # the same version of it.
     word_key = ["text_id", *([SCREEN_ID] if multipart else [])]
-    if "word_id" in sub.columns:
-        sub = sub.drop_duplicates(subset=[*word_key, "word_id"])
+    # The word as the passage shows it: a blank cell shows nothing.
+    sub["_word"] = sub["text"].astype("string").replace({"": pd.NA, "nan": pd.NA})
+    seen_by = None
+    if "word_id" in sub.columns and reading:
+        sub["_version"], seen_by = _reader_versions(sub, word_key, reading)
     else:
-        sub = sub.drop_duplicates(subset=[c for c in sub.columns if c != SCREEN_INDEX])
+        sub["_version"] = 0
+    if "word_id" in sub.columns:
+        # Of a word id listed twice, keep the first that shows a word — the one
+        # its version was told apart by.
+        shown_first = np.argsort(sub["_word"].isna().to_numpy(), kind="stable")
+        sub = sub.iloc[shown_first].drop_duplicates(
+            subset=[*word_key, "_version", "word_id"]
+        )
+    else:
+        sub = sub.drop_duplicates(
+            subset=[c for c in sub.columns if c not in (SCREEN_INDEX, *reading)]
+        )
+    if seen_by is not None and not seen_by.empty:
+        sub = sub.merge(seen_by, on=[*word_key, "_version"], how="left")
+        sub["_seen_by"] = sub["_seen_by"].fillna("")
+    else:
+        sub["_seen_by"] = ""
 
     screen_sort = ["_screen_order", SCREEN_ID] if multipart else []
     sort_cols = (
         ["text_id"]
         + screen_sort
+        + ["_version"]
         + [c for c in ("line_idx", "word_id") if c in sub.columns]
     )
     sub = sub.sort_values(sort_cols, kind="stable", na_position="last")
@@ -14488,34 +14525,83 @@ def _build_stimuli_table_cached(
         sub["unique_text_id"].astype(str).eq(sub["text_id"].astype(str)).all()
     )
 
-    def _words_of(frame: pd.DataFrame) -> list[str]:
-        return [w for w in frame["text"].astype(str).tolist() if w and w != "nan"]
+    # One part per version of each screen (of each text, without screens), in
+    # reading order, its words joined in one pass over the whole table.
+    part_key = [*word_key, "_version"]
+    kept = sub.dropna(subset=["_word"])
+    # The sort keeps each part's words consecutive: split them where it changes.
+    part_id = kept.groupby(part_key, sort=False).ngroup().to_numpy()
+    starts = np.flatnonzero(np.diff(part_id, prepend=-1))
+    chunks = (
+        np.split(kept["_word"].to_numpy(dtype=object), starts[1:])
+        if starts.size
+        else []
+    )
+    joined = kept.iloc[starts][part_key].assign(
+        _n_words=np.array([len(chunk) for chunk in chunks], dtype=int),
+        _words=np.array([" ".join(chunk) for chunk in chunks], dtype=object),
+    )
+    parts = (
+        sub.drop_duplicates(part_key)[[*part_key, "_seen_by"]]
+        .merge(joined, on=part_key, how="left")
+        .fillna({"_n_words": 0, "_words": ""})
+    )
+    if multipart and "screen_kind" in sub.columns:
+        kinds = sub.groupby(word_key, sort=False)["screen_kind"].agg(
+            ["nunique", "first"]
+        )
+        kinds = kinds["first"].where(kinds["nunique"] == 1).rename("_kind")
+        parts = parts.merge(kinds.reset_index(), on=word_key, how="left")
+    unique_ids = (
+        sub.groupby("text_id", sort=False)["unique_text_id"].agg(
+            lambda ids: ", ".join(ids.dropna().astype(str).unique())
+        )
+        if has_unique
+        else None
+    )
 
-    def _screen_marker(screen_id: str, frame: pd.DataFrame) -> str:
-        label = screen_id or "(no screen id)"
-        if "screen_kind" in frame.columns:
-            kinds = frame["screen_kind"].dropna().astype(str).unique().tolist()
-            if len(kinds) == 1 and kinds[0].lower() not in label.lower():
-                label = f"{label} · {kinds[0]}"
-        return f"[{label}]"
+    def _screen_marker(part: dict) -> str:
+        labels = []
+        if multipart:
+            label = part[SCREEN_ID] or "(no screen id)"
+            kind = part.get("_kind")
+            if pd.notna(kind) and str(kind).lower() not in label.lower():
+                label = f"{label} · {kind}"
+            labels.append(label)
+        if part["_seen_by"]:
+            labels.append(f"seen by {part['_seen_by']}")
+        return f"[{' · '.join(labels)}]"
 
     rows = []
-    for text_id, grp in sub.groupby("text_id", sort=False):
-        words_list = _words_of(grp)
-        n_screens = grp[SCREEN_ID].nunique() if multipart else 1
-        if n_screens > 1:
-            text = " ".join(
-                " ".join([_screen_marker(str(screen), page), *_words_of(page)])
-                for screen, page in grp.groupby(SCREEN_ID, sort=False)
-            )
-        else:
-            text = " ".join(words_list)
-        row = {"Text ID": text_id, "# Words": len(words_list), "Text": text}
+    # `sub` is sorted by text first, so each text's parts are consecutive.
+    records = parts.to_dict("records")
+    for text_id, text_parts in itertools.groupby(records, key=lambda p: p["text_id"]):
+        screens: dict[str | None, list[dict]] = {}
+        for part in text_parts:
+            screens.setdefault(part[SCREEN_ID] if multipart else None, []).append(part)
+        pieces, differing = [], []
+        for screen, versions in screens.items():
+            if len(versions) > 1:
+                count = f"{len(versions)} versions"
+                if len({part["_words"] for part in versions}) < len(versions):
+                    count += "; some differ only in word ids"
+                where = None if screen is None else screen or "(no screen id)"
+                differing.append(count if where is None else f"{where} ({count})")
+            for part in versions:
+                marked = len(screens) > 1 or bool(part["_seen_by"])
+                marker = _screen_marker(part) if marked else ""
+                pieces.append(" ".join(p for p in (marker, part["_words"]) if p))
+        row = {
+            "Text ID": text_id,
+            # The text as most of its readers saw it: each screen's version 0.
+            "# Words": sum(int(v[0]["_n_words"]) for v in screens.values()),
+            STIMULUS_VERSIONS_COLUMN: ", ".join(differing),
+            "Text": " ".join(pieces),
+        }
         if multipart:
-            row["# Screens"] = n_screens
-        if has_unique:
-            uniques = grp["unique_text_id"].dropna().astype(str).unique().tolist()
-            row["Unique Text ID"] = ", ".join(uniques)
+            row["# Screens"] = len(screens)
+        if unique_ids is not None:
+            row["Unique Text ID"] = unique_ids[text_id]
         rows.append(row)
 
     result = pd.DataFrame(rows)
@@ -14524,8 +14610,97 @@ def _build_stimuli_table_cached(
         ordered.append("Unique Text ID")
     if multipart:
         ordered.append("# Screens")
-    ordered += ["# Words", "Text"]
+    ordered.append("# Words")
+    if result[STIMULUS_VERSIONS_COLUMN].ne("").any():
+        ordered.append(STIMULUS_VERSIONS_COLUMN)
+    ordered.append("Text")
     return result[[c for c in ordered if c in result.columns]]
+
+
+def _reader_versions(
+    sub: pd.DataFrame, unit: list[str], reading: list[str]
+) -> tuple[np.ndarray, pd.DataFrame]:
+    """Each word row's version of its ``unit`` (a text, or one screen of it).
+
+    A reading's version is the set of its ``(word id, word)`` pairs, taking
+    the words the passage shows (``_word``: no blank cells, the first word of an
+    id listed twice): readings that saw the same words under the same ids share
+    one, while an answer order drawn per reader, or feedback on the reader's own
+    answer, makes another. Returns the version's rank within its unit for every
+    row of ``sub`` — 0 for the one the most participants saw, then by the first
+    reader's name — and, for each unit with more than one version, who saw each:
+    one row per ``unit`` and ``_version``, with ``_seen_by`` naming the
+    participants, or the trial where a reading has no participant id (a
+    words-only table's placeholder is blank). A participant who read the unit
+    more than once and saw more than one version is named with the trial of each.
+    """
+    reading_id = (
+        sub.groupby([*unit, *reading], sort=False, dropna=False).ngroup().to_numpy()
+    )
+    word_hash = pd.util.hash_pandas_object(
+        sub[["word_id", "_word"]], index=False
+    ).to_numpy()
+    # Each reading's first shown word per word id; the uint64 sum wraps, so it
+    # names the set whatever the row order.
+    shown = np.flatnonzero(sub["_word"].notna().to_numpy())
+    repeated = pd.DataFrame(
+        {"r": reading_id[shown], "w": sub["word_id"].to_numpy()[shown]}
+    ).duplicated()
+    once = np.zeros(len(sub), dtype="uint64")
+    once[shown[~repeated.to_numpy()]] = 1
+    signature = (
+        pd.Series(word_hash * once).groupby(reading_id).transform("sum").to_numpy()
+    )
+    # One row per reading from here on; ngroup numbers them 0, 1, ….
+    first = np.flatnonzero(~pd.Series(reading_id).duplicated().to_numpy())
+    readings = sub.iloc[first][unit].reset_index(drop=True)
+    readings["_reading"] = reading_id[first]
+    readings["_signature"] = signature[first]
+    n_versions = readings.groupby(unit, dropna=False)["_signature"].transform("nunique")
+    differs = (n_versions > 1).to_numpy()
+    version = np.zeros(len(first), dtype=int)
+    if not differs.any():
+        return version[reading_id], pd.DataFrame(
+            columns=[*unit, "_version", "_seen_by"]
+        )
+    readings = readings[differs].reset_index(drop=True)
+    picked = first[differs]
+
+    def _names(column: str) -> pd.Series:
+        names = sub[column].iloc[picked].astype("string").reset_index(drop=True)
+        return names.mask(names.str.strip().eq("").fillna(True))
+
+    participant = _names(reading[0])
+    trial = _names(reading[-1]).fillna("(no id)")
+    readings["_person"] = participant.fillna(trial)
+    readings["_reader"] = readings["_person"]
+    if len(reading) > 1:
+        again = (
+            readings.groupby([*unit, "_person"], dropna=False)["_signature"]
+            .transform("nunique")
+            .gt(1)
+            & participant.notna()
+        )
+        readings.loc[again, "_reader"] = (participant + " (" + trial + ")")[again]
+    seen = (
+        readings[[*unit, "_signature", "_reader", "_person"]]
+        .drop_duplicates()
+        .sort_values("_reader", kind="stable")
+        .groupby([*unit, "_signature"], sort=False, dropna=False)
+        .agg(
+            _seen_by=("_reader", ", ".join),
+            _first=("_reader", "first"),
+            _n=("_person", "nunique"),
+        )
+        .reset_index()
+        .sort_values(
+            ["_n", "_first", "_seen_by"], ascending=[False, True, True], kind="stable"
+        )
+    )
+    seen["_version"] = seen.groupby(unit, dropna=False).cumcount()
+    readings = readings.merge(seen, on=[*unit, "_signature"])
+    version[readings["_reading"].to_numpy()] = readings["_version"].to_numpy()
+    return version[reading_id], seen[[*unit, "_version", "_seen_by"]]
 
 
 def _render_data_provenance() -> None:

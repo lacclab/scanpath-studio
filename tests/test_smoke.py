@@ -355,27 +355,208 @@ class TestStimuliTable:
         table = self._build(words)
         first_id = table.iloc[0]["Text ID"]
         # Each screen opens with its marker, in the order the reader saw them,
-        # and holds the text column joined in line and word order.
-        src = words[words["text_id"] == first_id].drop_duplicates(
-            subset=["screen_id", "word_id"]
+        # and holds the text column joined in line and word order. A screen the
+        # two readers saw differently is shown once per reader.
+        src = words[words["text_id"] == first_id].sort_values(
+            ["screen_index", "line_idx", "word_id"]
         )
-        src = src.sort_values(["screen_index", "line_idx", "word_id"])
-        expected = " ".join(
-            " ".join([f"[{screen}]", *page["text"].astype(str)])
-            for screen, page in src.groupby("screen_id", sort=False)
-        )
+        pieces = []
+        for screen, page in src.groupby("screen_id", sort=False):
+            seen = {
+                reader: " ".join(own["text"].astype(str))
+                for reader, own in page.groupby("participant_id")
+            }
+            if len(set(seen.values())) == 1:
+                pieces.append(f"[{screen}] {next(iter(seen.values()))}")
+            else:
+                pieces += [f"[{screen} · seen by {r}] {t}" for r, t in seen.items()]
         row = table[table["Text ID"] == first_id].iloc[0]
-        assert row["Text"] == expected
-        assert re.findall(r"\[(\w+)\]", row["Text"]) == [
+        assert row["Text"] == " ".join(pieces)
+        assert re.findall(r"\[(\w+)[\] ]", row["Text"]) == [
             "Title",
             "Question_Preview",
             "Paragraph",
             "Questions",
             "Answers",
+            "Answers",
             "Feedback",
         ]
         assert row["# Screens"] == 6
-        assert row["# Words"] == len(src)
+        assert row["# Words"] == len(src.drop_duplicates(["screen_id", "word_id"]))
+
+    def test_readers_answers_and_feedback_are_shown_as_each_saw_them(
+        self, normalized_demo
+    ):
+        words, _ = normalized_demo
+        table = self._build(words).set_index("Text ID")
+        # Each reader saw this text's four answers in their own order, and one
+        # of them answered wrong: the same word ids name different words.
+        row = table.loc["2_1_3_Adv"]
+        assert row["Differs by reader"] == "Answers (2 versions), Feedback (2 versions)"
+        text = row["Text"]
+        assert text.count("[Paragraph]") == 1
+        assert "[Feedback · seen by l37_273] INCORRECT" in text
+        assert "[Feedback · seen by l7_183] CORRECT" in text
+        for reader in ("l37_273", "l7_183"):
+            answers = words[
+                (words["text_id"] == "2_1_3_Adv")
+                & (words["screen_id"] == "Answers")
+                & (words["participant_id"] == reader)
+            ].sort_values(["line_idx", "word_id"])
+            seen = " ".join(answers["text"].astype(str))
+            assert f"[Answers · seen by {reader}] {seen}" in text
+        # The demo's two readers disagree on 15 of its 62 text screens.
+        assert table["Differs by reader"].str.count("versions").sum() == 15
+
+    def test_readers_who_agree_share_one_version_and_the_most_seen_comes_first(
+        self,
+    ):
+        words = self._paged_words(readers=("p1", "p2", "p3"))
+        # p2 saw page-2 with its words the other way round.
+        swapped = (words["participant_id"] == "p2") & (words["screen_id"] == "page-2")
+        words.loc[swapped, "text"] = words.loc[swapped, "text"].iloc[::-1].to_numpy()
+        row = self._build(words).iloc[0]
+        assert row["Text"] == (
+            "[page-10] First page "
+            "[page-2 · seen by p1, p3] Second page "
+            "[page-2 · seen by p2] page Second"
+        )
+        assert row["Differs by reader"] == "page-2 (2 versions)"
+        # The words of the text as most readers saw it.
+        assert row["# Words"] == 4
+
+    def test_a_reader_with_an_extra_word_saw_another_version(self):
+        import pandas as pd
+
+        words = self._paged_words(readers=("p1", "p2"))
+        extra = words.iloc[[0]].assign(participant_id="p2", word_id=3, text="too")
+        row = self._build(pd.concat([words, extra], ignore_index=True)).iloc[0]
+        assert row["Text"] == (
+            "[page-10] First page "
+            "[page-2 · seen by p1] Second page "
+            "[page-2 · seen by p2] Second page too"
+        )
+
+    def test_a_single_screen_text_names_who_saw_each_version(self):
+        import pandas as pd
+
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3 + ["p2"] * 3,
+                "trial_id": ["t1"] * 6,
+                "text_id": ["a"] * 6,
+                "word_id": [1, 2, 3] * 2,
+                "line_idx": [0] * 6,
+                "text": ["The", "cat", "sat", "The", "dog", "sat"],
+            }
+        )
+        row = self._build(words).iloc[0]
+        assert row["Text"] == "[seen by p1] The cat sat [seen by p2] The dog sat"
+        assert row["Differs by reader"] == "2 versions"
+        assert row["# Words"] == 3
+
+    @staticmethod
+    def _one_text(readings, texts):
+        import pandas as pd
+
+        # One single-screen text "a" of three words; `readings` are
+        # (participant, trial) pairs and `texts` their middle words.
+        return pd.DataFrame(
+            [
+                {
+                    "participant_id": reader,
+                    "trial_id": trial,
+                    "text_id": "a",
+                    "word_id": position,
+                    "line_idx": 0,
+                    "text": word,
+                }
+                for (reader, trial), middle in zip(readings, texts, strict=True)
+                for position, word in enumerate(["The", middle, "sat"], start=1)
+            ]
+        )
+
+    def test_a_reader_who_saw_two_versions_is_named_with_each_trial(self):
+        words = self._one_text(
+            [("p1", "t1"), ("p1", "t2"), ("p2", "t3")], ["cat", "dog", "cat"]
+        )
+        expected = "[seen by p1 (t1), p2] The cat sat [seen by p1 (t2)] The dog sat"
+        assert self._build(words).iloc[0]["Text"] == expected
+        # Two versions with one reading each come in the same order either way.
+        tied = self._one_text([("p1", "t1"), ("p1", "t2")], ["dog", "cat"])
+        backwards = tied.iloc[::-1].reset_index(drop=True)
+        for frame in (tied, backwards):
+            row = self._build(frame).iloc[0]
+            assert row["Text"] == (
+                "[seen by p1 (t1)] The dog sat [seen by p1 (t2)] The cat sat"
+            )
+
+    def test_the_version_most_participants_saw_comes_first(self):
+        # p1 saw "cat" twice; "dog" was seen by p1 once and by p2.
+        words = self._one_text(
+            [("p1", "t1"), ("p1", "t2"), ("p1", "t3"), ("p2", "t4")],
+            ["cat", "cat", "dog", "dog"],
+        )
+        assert self._build(words).iloc[0]["Text"] == (
+            "[seen by p1 (t3), p2] The dog sat [seen by p1 (t1), p1 (t2)] The cat sat"
+        )
+
+    def test_a_words_only_table_names_each_reading_by_its_trial(self):
+        from scanpath_studio.data import STIMULUS_PARTICIPANT
+
+        words = self._one_text(
+            [(STIMULUS_PARTICIPANT, "t1"), (STIMULUS_PARTICIPANT, "t2")],
+            ["cat", "dog"],
+        )
+        assert self._build(words).iloc[0]["Text"] == (
+            "[seen by t1] The cat sat [seen by t2] The dog sat"
+        )
+
+    def test_versions_alike_but_for_their_word_ids_are_called_so(self):
+        words = self._one_text([("p1", "t1"), ("p2", "t2")], ["cat", "cat"])
+        # p2's words are numbered from 2.
+        words.loc[words["participant_id"] == "p2", "word_id"] += 1
+        row = self._build(words).iloc[0]
+        assert row["Differs by reader"] == "2 versions; some differ only in word ids"
+
+    def test_versions_differ_only_in_the_words_the_passage_shows(self):
+        import pandas as pd
+
+        words = self._one_text([("p1", "t1"), ("p2", "t2")], ["cat", "cat"])
+        # p2's table also lists a blank word and a second word under id 2.
+        extra = pd.DataFrame(
+            {
+                "participant_id": ["p2", "p2"],
+                "trial_id": ["t2", "t2"],
+                "text_id": ["a", "a"],
+                "word_id": [4, 2],
+                "line_idx": [0, 0],
+                "text": ["", "dog"],
+            }
+        )
+        row = self._build(pd.concat([words, extra], ignore_index=True)).iloc[0]
+        assert row["Text"] == "The cat sat"
+        assert "Differs by reader" not in row.index
+
+    def test_a_screen_without_an_id_is_named_in_the_version_column(self):
+        words = self._paged_words(readers=("p1", "p2"))
+        words["screen_id"] = words["screen_id"].replace("page-2", "")
+        swapped = (words["participant_id"] == "p2") & (words["screen_id"] == "")
+        words.loc[swapped, "text"] = "Other"
+        row = self._build(words).iloc[0]
+        assert row["Differs by reader"] == "(no screen id) (2 versions)"
+        assert "[(no screen id) · seen by p2] Other Other" in row["Text"]
+
+    def test_a_text_without_word_text_is_an_empty_passage(self):
+        words = self._paged_words(text=["", "", "nan", ""])
+        row = self._build(words).iloc[0]
+        assert row["Text"] == "[page-10] [page-2]"
+        assert row["# Words"] == 0
+
+    def test_texts_every_reader_saw_alike_have_no_version_column(self):
+        table = self._build(self._paged_words(readers=("p1", "p2")))
+        assert "Differs by reader" not in table.columns
+        assert "seen by" not in table.iloc[0]["Text"]
 
     @staticmethod
     def _paged_words(readers=("p1",), **extra):

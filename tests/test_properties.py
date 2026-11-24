@@ -782,6 +782,97 @@ def test_a_mapping_written_into_a_command_reads_back(schema):
         assert cli._parse_schema_arg(getattr(args, attr), attr) == schema
 
 
+@given(
+    st.dictionaries(
+        st.tuples(st.sampled_from(["p1", "p2", "p3"]), st.sampled_from(["t1", "t2"])),
+        st.dictionaries(
+            st.sampled_from(["s1", "s2"]),
+            st.lists(st.sampled_from(["a", "b", "c", ""]), min_size=1, max_size=4),
+            min_size=1,
+        ),
+        min_size=1,
+    ),
+    st.integers(min_value=0, max_value=2**32 - 1),
+)
+def test_the_stimuli_table_shows_each_screen_as_each_reader_saw_it(seen, seed):
+    """Every reading's own words of a screen are in the passage: once, when all
+    its readings saw the same words under the same ids, else once per version
+    under the participants who saw it — the one most of them saw first, and a
+    participant who saw two versions named with each trial. Blank cells show
+    nothing and tell no versions apart. The order of the word rows changes
+    nothing."""
+    import uuid
+
+    from scanpath_studio.tabs import (
+        STIMULUS_VERSIONS_COLUMN,
+        _build_stimuli_table_cached,
+    )
+
+    words = pd.DataFrame(
+        [
+            {
+                "participant_id": reader,
+                "trial_id": trial,
+                "text_id": "x",
+                "screen_id": screen,
+                "screen_index": int(screen[1]),
+                "word_id": position,
+                "line_idx": 0,
+                "text": word,
+            }
+            for (reader, trial), screens in seen.items()
+            for screen, words in screens.items()
+            for position, word in enumerate(words, start=1)
+        ]
+    )
+
+    def build(frame: pd.DataFrame) -> pd.DataFrame:
+        # A fresh cache key: the second call must compute, not recall the first.
+        return _build_stimuli_table_cached(frame, cache_key=str(uuid.uuid4()))
+
+    table = build(words)
+    shuffled = words.sample(frac=1, random_state=seed).reset_index(drop=True)
+    pd.testing.assert_frame_equal(table, build(shuffled))
+
+    screens = sorted({screen for own in seen.values() for screen in own})
+    pieces, differing, n_words = [], [], 0
+    for screen in screens:
+        # A version: the shown words of a reading, keyed by their ids.
+        version_of = {
+            reading: tuple((i, w) for i, w in enumerate(own[screen], start=1) if w)
+            for reading, own in seen.items()
+            if screen in own
+        }
+        versions = set(version_of.values())
+        split = {
+            reader
+            for reader, _ in version_of
+            if len({v for (r, _), v in version_of.items() if r == reader}) > 1
+        }
+        ranked = []
+        for version in versions:
+            readings = [r for r, v in version_of.items() if v == version]
+            labels = sorted({f"{r} ({t})" if r in split else r for r, t in readings})
+            ranked.append((-len({r for r, _ in readings}), labels[0], labels, version))
+        ranked.sort(key=lambda item: (item[0], item[1], ", ".join(item[2])))
+        texts = [" ".join(w for _, w in version) for *_, version in ranked]
+        if len(versions) > 1:
+            note = (
+                "; some differ only in word ids" if len(set(texts)) < len(texts) else ""
+            )
+            differing.append(f"{screen} ({len(versions)} versions{note})")
+        n_words += len(ranked[0][3])
+        for (_, _, labels, _), text in zip(ranked, texts, strict=True):
+            label = [screen, f"seen by {', '.join(labels)}"][: 1 + (len(versions) > 1)]
+            marked = len(screens) > 1 or len(versions) > 1
+            marker = f"[{' · '.join(label)}]" if marked else ""
+            pieces.append(" ".join(p for p in (marker, text) if p))
+    row = table.iloc[0]
+    assert row["Text"] == " ".join(pieces)
+    assert row["# Words"] == n_words
+    assert row.get(STIMULUS_VERSIONS_COLUMN, "") == ", ".join(differing)
+
+
 # --- ✏️ Edit dataset gives what ➕ Add dataset gives -----------------------------
 
 #: A reader's two fixations tables' worth of columns, and the Words table of a

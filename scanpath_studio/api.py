@@ -94,6 +94,13 @@ from .multipart import (  # noqa: E402
     screen_canvas_size,
     screen_rows,
 )
+
+# Re-exported: what `add_dataset` and `remove_dataset` raise for a name that
+# is already saved, or that is not.
+from .persistence import (  # noqa: E402, F401
+    StoredDatasetExistsError,
+    StoredDatasetNotFoundError,
+)
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     COMPARISON_FIGURE_OPTIONS,
@@ -853,6 +860,7 @@ def load_scanpath_data(
     names: str = NAMES_SOURCE,
     include_source_cells: bool = False,
     _row_counts: dict | None = None,
+    _schemas: dict | None = None,
 ) -> ScanpathData:
     """Load and normalize a Words table, a Fixations table, or both.
 
@@ -1019,6 +1027,9 @@ def load_scanpath_data(
     else:
         fixations_norm = _data.empty_fixations_frame()
 
+    if _schemas is not None:
+        _schemas["words"] = word_schema if words is not None else None
+        _schemas["fixations"] = fix_schema if fixations is not None else None
     words_norm, fixations_norm, _join, rewrites = _data.harmonize_frames_reporting(
         words_norm, fixations_norm
     )
@@ -1379,6 +1390,7 @@ def load_raw_gaze(
     raw_gaze_schema: dict | None = None,
     names: str = NAMES_SOURCE,
     _row_counts: dict | None = None,
+    _schemas: dict | None = None,
 ) -> pd.DataFrame:
     """Load and normalize a raw, sample-level gaze table, for ``raw_gaze=``.
 
@@ -1424,11 +1436,13 @@ def load_raw_gaze(
     normalized = _data.normalize_raw_gaze(frame, schema)
     if _row_counts is not None:
         _row_counts["raw_gaze"] = _data.input_row_counts(frame, schema, len(normalized))
+    names_map = _cn.from_schema("raw_gaze", schema, frame.columns)
+    if _schemas is not None:
+        _schemas["raw_gaze"] = schema
+        _schemas["raw_gaze_names"] = names_map
     if names == NAMES_CANONICAL:
         return normalized
-    return _cn.attach(
-        normalized, "raw_gaze", _cn.from_schema("raw_gaze", schema, frame.columns)
-    )
+    return _cn.attach(normalized, "raw_gaze", names_map)
 
 
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
@@ -4732,6 +4746,265 @@ def clear_cache() -> dict:
 
     clear_local_state()
     return cache_status()
+
+
+def add_dataset(
+    name: str,
+    words: TablesLike | None = None,
+    fixations: TablesLike | None = None,
+    *,
+    raw_gaze: TablesLike | None = None,
+    word_schema: dict | None = None,
+    fix_schema: dict | None = None,
+    raw_gaze_schema: dict | None = None,
+    trial_parts_manifest: dict | None = None,
+    keep_columns: Iterable[str] | None = None,
+    canvas_size: tuple[int, int] | None = None,
+    setup: SetupSnapshot | None = None,
+    description: str | None = None,
+    select: bool = True,
+    replace: bool = False,
+) -> str:
+    """Add a dataset to the app's dataset list from a script.
+
+    The tables load as [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]
+    and [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze] load them, and the
+    dataset is saved where a local app keeps the datasets added with ➕ **Add
+    dataset** (the recovery cache, see
+    [`cache_status`][scanpath_studio.api.cache_status]). Start the app with
+    ``scanpath-studio`` and it is in the list, opened unless ``select=False``. An
+    app already open shows it once its browser tab is reloaded. The same as
+    ``scanpath-studio add``.
+
+    It works for a local app only: the app on this computer, the desktop app, or a
+    ``scanpath-studio run`` on this machine. A hosted app keeps no saved datasets.
+
+    Args:
+        name: The name the dataset list shows. A built-in source's name is refused.
+        words: The Words table, in any form ``load_scanpath_data`` takes.
+        fixations: The Fixations table, in the same forms.
+        raw_gaze: The Raw gaze table, in the same forms. Any one of the three tables
+            is enough.
+        word_schema: The Words table's column mapping, replacing auto-detection, as
+            ``load_scanpath_data`` takes it. The app shows it as the dataset's
+            mapping, and ✏️ **Edit dataset** starts from it.
+        fix_schema: The same for the Fixations table.
+        raw_gaze_schema: The same for the Raw gaze table, as ``load_raw_gaze`` takes
+            it.
+        trial_parts_manifest: As ``load_scanpath_data`` takes it.
+        keep_columns: As ``load_scanpath_data`` takes it.
+        canvas_size: The recording's screen, ``(width, height)`` px. Without it, the
+            screen a table records is used, else one estimated from the extent of
+            the data, as ➕ **Add dataset** suggests it. With ``replace``, leaving
+            out both this and ``setup`` keeps the saved dataset's setup.
+        setup: The full recording setup, an `experimental_setup.SetupSnapshot`
+            (screen, monitor width, text size), in place of ``canvas_size``.
+        description: The sentence the 🗂️ **Data** page shows under its name.
+        select: Open the app on this dataset next time it starts.
+        replace: Replace the tables of the saved dataset with this name, keeping its
+            annotations, metadata tables, share links, and its description and
+            recording setup unless new ones are given. Without it, a name already
+            saved is an error.
+
+    Returns:
+        The name the dataset was saved under.
+
+    Raises:
+        ValueError: No table was given, a table can't be loaded (as
+            ``load_scanpath_data`` raises), the name is empty, too long or a built-in
+            source's, or the saved work can't be read or was written by another
+            version. Nothing is saved then.
+        StoredDatasetExistsError: A dataset with this name is already saved and
+            ``replace`` is off. A ``ValueError``.
+        TypeError: ``setup`` is not a ``SetupSnapshot``.
+        RuntimeError: Saving is turned off (``SCANPATH_STUDIO_PERSIST=0``).
+
+    Examples:
+        ```python
+        sps.add_dataset(
+            "Pilot 3",
+            words="pilot3/ia_report.csv",
+            fixations="pilot3/fixation_report.csv",
+            canvas_size=(1920, 1080),
+        )
+        ```
+        Then run ``scanpath-studio`` and the app opens on *Pilot 3*. Reload a tab
+        that is already open right away: changes made in it after the dataset was
+        added are not saved, as when two tabs change the same saved work.
+    """
+    from . import persistence as _persistence
+
+    if not _persistence.persistence_enabled("http://localhost"):
+        raise RuntimeError(
+            f"Saving is turned off ({_persistence.PERSIST_ENV_VAR}=0), so the app "
+            "would not see the dataset. Unset it to add one."
+        )
+    if words is None and fixations is None and raw_gaze is None:
+        raise ValueError("Provide at least one of words=, fixations= or raw_gaze=.")
+    if setup is not None and canvas_size is not None:
+        raise ValueError("Pass setup= or canvas_size=, not both.")
+    if setup is not None and not isinstance(setup, SetupSnapshot):
+        raise TypeError(
+            "setup must be an experimental_setup.SetupSnapshot, got "
+            f"{type(setup).__name__}."
+        )
+    schemas: dict = {}
+    if words is not None or fixations is not None:
+        loaded = load_scanpath_data(
+            words,
+            fixations,
+            word_schema=word_schema,
+            fix_schema=fix_schema,
+            trial_parts_manifest=trial_parts_manifest,
+            keep_columns=keep_columns,
+            names=NAMES_CANONICAL,
+            _schemas=schemas,
+        )
+        words_df, fixations_df = loaded
+        names = {
+            table: names_map.to_payload()
+            for table, names_map in loaded.column_names.items()
+            if schemas.get(table)
+        }
+    else:
+        words_df, fixations_df = (
+            _data.empty_words_frame(),
+            _data.empty_fixations_frame(),
+        )
+        names = {}
+        schemas = {"words": None, "fixations": None}
+    raw_gaze_df = pd.DataFrame()
+    schemas["raw_gaze"] = None
+    if raw_gaze is not None:
+        raw_gaze_df = load_raw_gaze(
+            raw_gaze,
+            raw_gaze_schema=raw_gaze_schema,
+            names=NAMES_CANONICAL,
+            _schemas=schemas,
+        )
+        names["raw_gaze"] = schemas.pop("raw_gaze_names").to_payload()
+    keep_setup = setup is None and canvas_size is None
+    if setup is None:
+        extent_fixations = fixations_df if not fixations_df.empty else raw_gaze_df
+        setup = _compare_setup(
+            None, canvas_size, words_df, extent_fixations, side="setup"
+        )
+    # A Trial ID mapped to several columns is a composite id: the app keeps
+    # which, read from the tables in the order `app._normalize_pair` reads them.
+    trial_columns: list = []
+    for table in ("words", "fixations", "raw_gaze"):
+        schema = schemas.get(table)
+        if schema and schema.get("trial"):
+            trial_columns = _data.trial_mapping_columns(schema["trial"])
+            break
+    # How a script loads the files, in their own column names: a table given as
+    # a frame this API already named was mapped under the internal names.
+    recipe = _cn.stored_source_recipe({"schemas": schemas, "column_names": names})
+    recipe["steps"] = ["trial_parts_manifest"] if trial_parts_manifest else []
+    recipe["derived"] = []
+    payload = {
+        "words": words_df,
+        "fixations": fixations_df,
+        "raw_gaze": raw_gaze_df,
+        "filter_fields": _condition_fields(
+            {"words": words_df, "fixations": fixations_df}, schemas
+        ),
+        "composite_trial_columns": list(trial_columns)
+        if len(trial_columns) > 1
+        else [],
+        "schemas": schemas,
+        "source_recipe": recipe,
+        "dropped_columns": {},
+        "setup": setup.to_dict(),
+        "column_names": names,
+    }
+    _persistence.store_dataset(
+        payload,
+        name,
+        description=description,
+        select=select,
+        replace=replace,
+        keep_setup=keep_setup,
+    )
+    return str(name).strip()
+
+
+def remove_dataset(name: str, *, missing_ok: bool = False) -> bool:
+    """Remove a dataset from the app's dataset list from a script.
+
+    The counterpart of [`add_dataset`][scanpath_studio.api.add_dataset], and the
+    same as the dataset's **Remove** on the 🗂️ **Data** page: its tables go, with
+    its annotations, metadata tables, description and share ID. Any dataset you
+    added counts, in the app or from a script; the built-in and public datasets
+    can't be removed. When the app last had it open, it next opens on its default
+    dataset. Reload a tab that is already open right away: changes made in it
+    after the removal are not saved. The same as ``scanpath-studio remove``.
+
+    Args:
+        name: The name the dataset list shows, ignoring case.
+        missing_ok: Return ``False`` when no dataset has the name, instead of
+            raising.
+
+    Returns:
+        Whether a dataset was removed.
+
+    Raises:
+        StoredDatasetNotFoundError: No saved dataset has this name, and
+            ``missing_ok`` is off. A ``LookupError``.
+        ValueError: The saved work can't be read or was written by another
+            version. Nothing is removed then.
+        RuntimeError: Saving is turned off (``SCANPATH_STUDIO_PERSIST=0``).
+
+    Examples:
+        ```python
+        sps.remove_dataset("Pilot 3")
+        ```
+    """
+    from . import persistence as _persistence
+
+    if not _persistence.persistence_enabled("http://localhost"):
+        raise RuntimeError(
+            f"Saving is turned off ({_persistence.PERSIST_ENV_VAR}=0), so the app "
+            "keeps no datasets to remove. Unset it to remove one."
+        )
+    try:
+        _persistence.remove_stored_dataset(name)
+    except StoredDatasetNotFoundError:
+        if missing_ok:
+            return False
+        raise
+    return True
+
+
+def _condition_fields(frames: dict, schemas: dict) -> list[str]:
+    """The trial conditions a dataset offers as filters, as ➕ Add dataset
+    picks them: every column the optional-field registry calls a trial-level
+    "meta" field that the tables kept and the mapping did not use."""
+    mapped = {
+        str(column)
+        for schema in schemas.values()
+        if schema
+        for value in schema.values()
+        if value
+        for column in (value if isinstance(value, (list, tuple)) else [value])
+    }
+    fields: list[str] = []
+    for registry, table in (
+        (_data.WORD_OPTIONAL_FIELDS, "words"),
+        (_data.FIX_OPTIONAL_FIELDS, "fixations"),
+    ):
+        frame = frames.get(table)
+        if frame is None:
+            continue
+        for source, dest, _kind, category in registry:
+            if (
+                category == "meta"
+                and source not in mapped
+                and dest in frame.columns
+                and dest not in fields
+            ):
+                fields.append(dest)
+    return fields
 
 
 def version_info() -> BuildInfo:

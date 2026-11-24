@@ -133,6 +133,8 @@ def _parsers() -> dict:
         "corpus": cli._corpus_parser,
         "recipe": cli._recipe_parser,
         "check": cli._check_parser,
+        "add": cli._add_parser,
+        "remove": cli._remove_parser,
         "cache": cli._cache_parser,
         "version": cli._version_parser,
         "cite": cli._cite_parser,

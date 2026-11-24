@@ -26,6 +26,7 @@ from scanpath_studio.column_names import encode_field_list
 from scanpath_studio.constants import (
     LEGEND_ARRANGEMENTS,
     LEGEND_POSITIONS,
+    RESERVED_SOURCE_NAMES,
 )
 from scanpath_studio.utils import extract_trial
 
@@ -847,3 +848,49 @@ def test_different_figure_settings_never_share_a_cache_key(first, other, look_al
         assert _figure_input_key(frame, frame, {"option": first}) != (
             _figure_input_key(frame, frame, {"option": second})
         )
+
+
+_DATASET_NAME = st.text(min_size=1, max_size=80).filter(
+    lambda name: (
+        name.strip()
+        and name.strip().casefold()
+        not in {reserved.casefold() for reserved in RESERVED_SOURCE_NAMES}
+    )
+)
+
+
+@settings(max_examples=40, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    st.lists(
+        _DATASET_NAME,
+        min_size=1,
+        max_size=4,
+        unique_by=lambda name: name.strip().casefold(),
+    )
+)
+def test_datasets_added_from_a_script_restore_under_their_names(names):
+    """Every name a script adds a dataset under is the name the app's list
+    shows after a restore, each with its own tables, whatever the text."""
+    import tempfile
+    from pathlib import Path
+
+    from scanpath_studio import persistence
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        for index, name in enumerate(names):
+            payload = {
+                "words": pd.DataFrame({"trial_id": ["t"], "word_id": [index]}),
+                "fixations": pd.DataFrame(),
+                "raw_gaze": pd.DataFrame(),
+            }
+            persistence.store_dataset(payload, name, root=root)
+        session: dict = {}
+        assert persistence.restore_state(session, root)
+        aliases = session.get(DATASET_ALIASES_KEY) or {}
+        shown = {
+            aliases.get(token, token): int(entry["words"]["word_id"].iloc[0])
+            for token, entry in session["_datasets"].items()
+        }
+        assert shown == {name.strip(): index for index, name in enumerate(names)}

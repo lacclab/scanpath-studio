@@ -917,6 +917,24 @@ ONESTOP_REGIME_SOURCE_TOKENS = {
 }
 ONESTOP_LEGACY_SOURCE_TOKEN = "onestop_public"
 
+#: Every built-in data-source label, which no added dataset may take: the
+#: fixed sources and every public corpus. ``app.reserved_source_names`` reads
+#: the same set from the live registry; this copy is for callers that must not
+#: import the app (`api.add_dataset`), and a test holds the two equal.
+RESERVED_SOURCE_NAMES = frozenset(
+    {
+        UPLOAD_CHOICE,
+        AUTHOR_CHOICE,
+        MANUAL_SAMPLE_CHOICE,
+        DEMO_CHOICE,
+        SYNTHETIC_CHOICE,
+        PUBLIC_DATASETS_CHOICE,
+        POTEC_CHOICE,
+        ONESTOP_CHOICE,
+        *ONESTOP_REGIME_CHOICES.values(),
+    }
+)
+
 
 def onestop_regime_for_choice(choice: str | None) -> str | None:
     """The regime a OneStop dataset label names, else ``None``."""

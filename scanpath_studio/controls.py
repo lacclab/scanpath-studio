@@ -2194,14 +2194,19 @@ def _capture_quick_view_state() -> dict[str, object]:
 
 
 #: `global_*` keys that *mirror* a setting rather than hold one, so
-#: they are left out of the drift check below. The highlight-span pair is
-#: re-derived from `global_critical_span_style` on every run the Stimulus
-#: popover draws, and each `__num*` key is the typed box beside a slider,
-#: registered the first time its popover renders — neither is anything the user
-#: set apart from the canonical key, which the check does compare.
+#: they are left out of the drift check below. The highlight-span pair mirrored
+#: `global_critical_span_style`; no widget draws them, but a saved design or a
+#: recovery cache can still hold them. Each `__num*` key is the typed box beside
+#: a slider, registered the first time its popover renders. Neither is anything
+#: the user set apart from the canonical key, which the check does compare.
 _DRIFT_MIRROR_KEYS = frozenset(
     {"global_highlight_span_on", "global_highlight_span_mode"}
 )
+#: The highlight styles, in the order the Style control lists them.
+_SPAN_STYLES = ("Mark text", "Mark border", "Underline")
+#: The style the Style control shows while the highlight is off: the last one
+#: in use, so switching the highlight back on keeps it.
+_SPAN_STYLE_SHOWN_KEY = "_highlight_span_style_shown"
 _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
@@ -4845,6 +4850,7 @@ def _check_row(
     on_change=None,
     args: tuple = (),
     persist_state: str | None = None,
+    value: bool | None = None,
 ):
     """A ``label | ☑ Show | …`` row; return ``(value, rest)``.
 
@@ -4854,7 +4860,9 @@ def _check_row(
     hiding them. The help goes on the title's tooltip, not the checkbox, so the
     row carries no ``?`` icon. ``persist_state`` is forwarded to the checkbox,
     and every caller on a wire-format key spells out ``"session"`` —
-    `test_widget_value_sync` checks for it at the call site.
+    `test_widget_value_sync` checks for it at the call site. ``value`` is for a
+    shadow (`shadow_widget_key` with ``seed=False``), which takes its value as
+    its own default; a wire-format key never passes one.
     """
     disabled, help = _layer_gate(disabled, help)
     label_w = _label_w()
@@ -4873,6 +4881,7 @@ def _check_row(
             on_change=on_change,
             args=args,
             persist_state=persist_state,
+            **({} if value is None else {"value": value}),
         ),
         rest_col,
     )
@@ -8366,34 +8375,39 @@ def render_plot_controls(
         with detail_section("Word highlights", key="plot_detail_stim_highlight"):
             # "Highlight a span": the canonical value lives in
             # `global_critical_span_style` (the chosen style or "None"),
-            # which is what deep links / Share / restore carry — the on/off and the
-            # mode widgets are derived from it each run, and their callbacks write
-            # it back on interaction.
+            # which is what deep links / Share / restore carry. The on/off and
+            # the style are shadows of it (`shadow_widget_key`): Undo, a design
+            # or a settings file changes it without them, and under fixed keys
+            # a closed menu would send back the switch and style it last
+            # showed, and their callbacks would write that old style back.
             canonical = st.session_state.get("global_critical_span_style", "None")
+            if canonical in _SPAN_STYLES:
+                st.session_state[_SPAN_STYLE_SHOWN_KEY] = canonical
+            span_style = st.session_state.get(_SPAN_STYLE_SHOWN_KEY, _SPAN_STYLES[0])
+            on_key = shadow_widget_key(
+                "highlight_span_on", canonical != "None", seed=False
+            )
+            mode_key = shadow_widget_key("highlight_span_mode", span_style, seed=False)
 
             def _on_span_toggle():
+                if on_key not in st.session_state:
+                    return  # the menu was not drawn: no change to apply
                 st.session_state["global_critical_span_style"] = (
-                    st.session_state.get("global_highlight_span_mode", "Mark text")
-                    if st.session_state["global_highlight_span_on"]
-                    else "None"
+                    span_style if st.session_state[on_key] else "None"
                 )
 
             def _on_span_mode():
-                st.session_state["global_critical_span_style"] = st.session_state[
-                    "global_highlight_span_mode"
-                ]
-
-            st.session_state["global_highlight_span_on"] = canonical != "None"
-            if canonical in ("Mark text", "Mark border", "Underline"):
-                st.session_state["global_highlight_span_mode"] = canonical
-            else:
-                st.session_state.setdefault("global_highlight_span_mode", "Mark text")
+                if mode_key not in st.session_state:
+                    return
+                chosen = st.session_state[mode_key]
+                st.session_state[_SPAN_STYLE_SHOWN_KEY] = chosen
+                st.session_state["global_critical_span_style"] = chosen
 
             span_on, span_rest = _check_row(
                 "Highlight words",
-                key="global_highlight_span_on",
+                key=on_key,
+                value=canonical != "None",
                 disabled=not has_words or not highlight_options,
-                persist_state="session",
                 on_change=_on_span_toggle,
                 help="Mark the words where the chosen true/false column is true "
                 "(e.g. a target span).",
@@ -8432,10 +8446,10 @@ def render_plot_controls(
             )
             span_mode = mode_col.radio(
                 "Style",
-                options=["Mark text", "Mark border", "Underline"],
+                options=list(_SPAN_STYLES),
+                index=_SPAN_STYLES.index(span_style),
                 horizontal=True,
-                key="global_highlight_span_mode",
-                persist_state="session",
+                key=mode_key,
                 on_change=_on_span_mode,
                 disabled=span_off_disabled,
                 label_visibility="collapsed",

@@ -2,7 +2,7 @@
 
 Every URL param that feeds a min/max-bounded widget is clamped on the way in
 (`url_state._URL_BOUNDED`), every colour param is read as ``#rrggbb`` or
-dropped with the "Ignored bad URL param" warning (`_parse_hex_color`), and
+dropped with the "Ignored the link's invalid …" notice (`_parse_hex_color`), and
 every param whose control offers a closed set of options is checked against
 that set (`_CHOICE_STATE_PARSERS`, the recovery cache's rule too). Without
 a bound, ``?raw_gaze_opacity=5`` would crash the slider; read as any string,

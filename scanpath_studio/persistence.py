@@ -94,6 +94,7 @@ from .session_keys import (
     SINGLE_FIX_RANGE,
     SINGLE_PLAYBACK_SPEED,
     SINGLE_SCREEN_ID,
+    SINGLE_SHOW_CHIPS,
     SINGLE_TRIAL_CHOSEN,
     compare_state_keys,
     keep_legacy_marker_scale,
@@ -220,6 +221,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     EXPORT_FIGURE_WIDTH,
     EXPORT_FIGURE_WIDTH_UNIT,
     EXPORT_FIGURE_DPI,
+    # Two view preferences a link carries: whether the trial summary shows
+    # above the plot, and "keep this fixation range across trials".
+    SINGLE_SHOW_CHIPS,
+    "single_fix_range_all_trials",
     # The descriptions the user wrote: their own words, like the design
     # library. A plain session key so editing one never touches the stored
     # frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
@@ -248,14 +253,19 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
 }
 _FIXATION_WINDOW = (
     "The fixation window belongs to the reading it was drawn on. A settings "
-    "file restores it only after checking it against that reading's fixations "
-    "(url_state._restore_window); the cache restores keys unchecked, so it "
-    "leaves the window to be drawn afresh."
+    "file restores it only once its reading is found in the open data "
+    "(url_state._restore_selection); the cache would put it on whatever "
+    "reading opens first, where the slider clamps it and silently hides "
+    "fixations."
 )
-#: Settings-file keys the cache leaves out, each with the reason. Any other key
-#: a settings file restores must be in `_SESSION_KEYS`:
+#: Keys a link or a settings file restores that the cache leaves out, each with
+#: the reason. Any other such key must be in `_SESSION_KEYS`:
 #: `tests/test_saved_state_contract.py` fails on one that is in neither.
 NOT_CACHED: dict[str, str] = {
+    "global_word_hover_measure": (
+        "Superseded by global_word_hover_fields, which the cache keeps: the app "
+        "draws word hover from that list."
+    ),
     PENDING_COMPARE_STATE_KEY: (
         "A one-shot handoff that B's picker resolves on the next run; the cache "
         "keeps what it resolves to, B's dataset and identity."
@@ -266,7 +276,6 @@ NOT_CACHED: dict[str, str] = {
     ),
     SINGLE_FIX_RANGE: _FIXATION_WINDOW,
     "single_fix_range_user_set": _FIXATION_WINDOW,
-    "single_fix_range_all_trials": _FIXATION_WINDOW,
     SINGLE_COMPARE_FIX_RANGE: _FIXATION_WINDOW,
     "single_compare_fix_range_user_set": _FIXATION_WINDOW,
 }

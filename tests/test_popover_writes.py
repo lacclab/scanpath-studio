@@ -108,16 +108,6 @@ ALLOWED = {
         "heals an invalid saccade style on every run before its control draws; "
         "an echo can only send a valid one, and the control has no callback",
     ),
-    "controls._render_view_controls": (
-        {"global_palette"},
-        "derives the palette from the colours on every run, on the Scanpath "
-        "view, where the palette is a row of tiles and no widget holds this key",
-    ),
-    "controls._on_palette_change": (
-        {"global_palette"},
-        "a palette tile's callback, on the Scanpath view, where no widget holds "
-        "this key; the colours it applies go through `write_through`",
-    ),
     "plot_navigation._open_setting": (
         {"plot_filter_readings"},
         "the setting finder's callback opens the menu and section holding the "
@@ -141,35 +131,11 @@ ALLOWED = {
 }
 
 #: Plain writes the echo can undo, or whose widget's ``on_change`` can act on
-#: the echo before the write: bugs found in review, each with how it shows. They
-#: are listed so this check still stops new ones; fixing one leaves its entry
-#: stale, which fails below until the entry is dropped.
-ECHO_HAZARDS = {
-    "tabs.render_single_trial_tab": (
-        {"global_anim_quality"},
-        "re-inferred from the frame grid every run, but the Smoothness control's "
-        "on_change runs first on a closed popover's echo and writes the echoed "
-        "preset's grid back: Fine, then Undo to Standard, comes back as Fine "
-        "(reproduced in AppTest)",
-    ),
-    "controls.render_plot_controls": (
-        {"global_highlight_span_on", "global_highlight_span_mode"},
-        "derived from the canonical span style every run, but their callbacks "
-        "run first on an echo and write the echoed style back; a settings-file "
-        "restore, which holds nothing, then reverts",
-    ),
-    "controls.corpus_style_controls": (
-        {"global_palette"},
-        "derived every run before Corpus Analysis's palette menu, whose "
-        "on_change can act on an echo the same way (not reproduced)",
-    ),
-    "tabs._stimulus_fields": (
-        {"stimulus_span_fields", "stimulus_qa_fields"},
-        "re-seeded once when the dataset's columns change; a browser that had "
-        "the Fields menu open sends the previous dataset's columns back, which "
-        "the new dataset lacks, and the panel shows none (not browser-checked)",
-    ),
-}
+#: the echo before the write: known bugs, each with how it shows. A hazard
+#: found in review is listed here until it is fixed, so this check still stops
+#: new ones; fixing one leaves its entry stale, which fails below until the
+#: entry is dropped.
+ECHO_HAZARDS: dict[str, tuple[set[str], str]] = {}
 
 
 def _listed(where: str) -> set[str]:
@@ -287,8 +253,9 @@ def test_a_write_to_a_popover_widget_holds_against_its_echo():
     through `write_through`."""
     popover = _popover_keys()
     # A broken walk would find no keys and pass everything below.
-    assert {"global_saccade_style", "global_anim_quality"} <= popover
+    assert "global_saccade_style" in popover
     assert any(key.startswith("cmp0_") for key in popover)
+    assert any(key.startswith("_anim_quality__w") for key in popover)
 
     writes = _direct_writes(popover)
     unlisted = {

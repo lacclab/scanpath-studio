@@ -2244,7 +2244,7 @@ def _read_by_extension(
                 reopen=reopen,
             )
         # First sheet.
-        with pd.ExcelFile(buf) as book:
+        with pd.ExcelFile(buf, engine=EXCEL_ENGINE) as book:
             sheet = book.sheet_names[0]
             frame = pd.read_excel(
                 book, sheet_name=sheet, **_excel_na_kwargs(book, plan)
@@ -2387,12 +2387,17 @@ def _peek(file_like_or_path, size: int = 8) -> bytes:
 def _is_workbook(buf, name: str) -> bool:
     """Whether an Excel-named file is a real workbook pandas can open.
 
-    A zip container is an .xlsx (openpyxl) and an OLE2 container is a legacy
-    Excel 97–2003 workbook (xlrd); anything else is delimited text
-    wearing an Excel extension.
+    A zip container is an .xlsx and an OLE2 container is a legacy Excel
+    97–2003 workbook, both read by `EXCEL_ENGINE`; anything else is delimited
+    text wearing an Excel extension.
     """
     head = _peek(buf)
     return head.startswith((_ZIP_MAGIC, _OLE2_MAGIC))
+
+
+#: The pandas engine for every workbook, .xls and .xlsx alike: the one pandas
+#: is moving its own defaults to (from xlrd, now deprecated, and openpyxl).
+EXCEL_ENGINE = "calamine"
 
 
 def _can_reread(buf) -> bool:
@@ -3963,7 +3968,9 @@ def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[st
                 _rewind(file_like_or_path)
                 return list(feather.read_table(file_like_or_path).schema.names)
         if name.endswith((".xlsx", ".xls")) and _is_workbook(file_like_or_path, name):
-            return list(pd.read_excel(file_like_or_path, nrows=0).columns)
+            return list(
+                pd.read_excel(file_like_or_path, nrows=0, engine=EXCEL_ENGINE).columns
+            )
         if name.endswith((".tsv", ".tab", ".csv", ".txt", ".xls", ".xlsx")):
             return _header(file_like_or_path, _sniff_delimiter(file_like_or_path, name))
         # Rewound afterwards too (the `finally`): the caller reads the table

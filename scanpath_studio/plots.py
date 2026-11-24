@@ -11494,6 +11494,10 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "heatmap_range",
         "heatmap_colorscale",
         "show_raw_gaze",
+        # The replay draws no raw gaze, so none of its style either.
+        "raw_gaze_color",
+        "raw_gaze_marker_size",
+        "raw_gaze_opacity",
         "saccade_color_mode",
         "saccade_class_colors",
         "saccade_type_legend",
@@ -11501,8 +11505,14 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_render_mode",
         "fixation_snap_to_line",
         "fixation_snap_position",
-        # The replay draws no heatmap.
+        # The replay draws no heatmap, so no heatmap colour bar either.
         "heatmap_opacity",
+        "show_heatmap_colorbar",
+        "heatmap_colorbar_length",
+        "heatmap_colorbar_orientation",
+        "heatmap_colorbar_thickness",
+        "heatmap_colorbar_tickangle",
+        "heatmap_colorbar_tickfont_size",
         "word_heatmap_col",
         "word_heatmap_title",
         "show_connectors",

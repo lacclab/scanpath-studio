@@ -216,6 +216,7 @@ from scanpath_studio.controls import (
     compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
+    echoes_a_held_write,
     field_help,
     format_filter_item,
     has_active_trial_filters,
@@ -3784,8 +3785,15 @@ def _stimulus_fields(trial_words: pd.DataFrame) -> tuple[list[str], list[str]]:
         or _STIMULUS_QA_KEY not in st.session_state
     ):
         st.session_state[_STIMULUS_SIG_KEY] = signature
-        st.session_state[_STIMULUS_SPAN_KEY] = _detect_span_columns(trial_words)
-        st.session_state[_STIMULUS_QA_KEY] = _detect_question_columns(trial_words)
+        # Held (`write_through`): a browser that had the ⚙ Fields menu open
+        # sends back the previous dataset's columns, which this one lacks, and
+        # the panel would show none of its own.
+        write_through(
+            _STIMULUS_SPAN_KEY, _detect_span_columns(trial_words), in_callback=False
+        )
+        write_through(
+            _STIMULUS_QA_KEY, _detect_question_columns(trial_words), in_callback=False
+        )
     spans = [
         c for c in st.session_state.get(_STIMULUS_SPAN_KEY, []) if c in span_options
     ]
@@ -6995,8 +7003,11 @@ def render_single_trial_tab(
                 # count, which is what export size and render time are made of —
                 # so the user sets it, and `_render_anim_info` says when the
                 # frame limit coarsened it.
-                def _apply_anim_quality() -> None:
-                    quality = st.session_state.get("global_anim_quality")
+                def _apply_anim_quality(widget_key: str) -> None:
+                    if widget_key not in st.session_state:
+                        return  # the menu was not drawn: no pick to apply
+                    quality = st.session_state[widget_key]
+                    st.session_state["global_anim_quality"] = quality
                     if quality == "Custom":
                         st.session_state["plot_detail_frame_timing"] = True
                     elif quality in _ANIM_QUALITY_PRESETS:
@@ -7032,15 +7043,24 @@ def render_single_trial_tab(
                     f"{name} uses a {step} ms interval with up to {cap} frames."
                     for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
                 )
+                # A shadow of the quality worked out above: Undo, Reset, a
+                # design or a settings file changes the grid, and with it the
+                # quality, without this control. Under one fixed key, a closed
+                # menu would send its last-shown quality back, and the callback
+                # would apply that preset's grid over the change.
+                quality_options = [*_ANIM_QUALITY_PRESETS, "Custom"]
+                quality = st.session_state["global_anim_quality"]
+                quality_key = shadow_widget_key("anim_quality", quality, seed=False)
                 _labeled(
                     st,
                     "selectbox",
                     "Animation smoothness",
                     display="Smoothness",
-                    options=[*_ANIM_QUALITY_PRESETS, "Custom"],
-                    key="global_anim_quality",
-                    persist_state="session",
+                    options=quality_options,
+                    index=quality_options.index(quality),
+                    key=quality_key,
                     on_change=_apply_anim_quality,
+                    args=(quality_key,),
                     disabled=anim_disabled,
                     help="More frames give smoother motion and take longer to build. "
                     + presets_help,
@@ -7048,7 +7068,11 @@ def render_single_trial_tab(
                 anim_frames_slot = st.container() if animate else None
 
                 def _mark_anim_quality_custom() -> None:
-                    write_through("global_anim_quality", "Custom")
+                    if echoes_a_held_write(
+                        "global_anim_grid_step_ms", "global_anim_max_frames"
+                    ):
+                        return  # a closed menu's echo, not a change to the grid
+                    st.session_state["global_anim_quality"] = "Custom"
 
                 # Both values remain mounted inside the disclosure, including
                 # when a preset changes them or a settings file restores them.

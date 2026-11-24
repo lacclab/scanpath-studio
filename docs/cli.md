@@ -15,6 +15,8 @@ check data and manage saved work without opening the app:
 | [`corpus`](#corpus) | Render a corpus figure from a tidy CSV you already have |
 | [`recipe`](#recipe) | Recreate a cohort profile CSV from its saved recipe |
 | [`check`](#check) | Run the Data checks on your tables |
+| [`add`](#add) | Add your tables to the app's dataset list |
+| [`remove`](#remove) | Remove a dataset you added from that list |
 | [`cache`](#cache) | Show or clear the recovery cache |
 | [`version`](#version) | Show the build, and whether a newer release is out |
 | [`cite`](#cite) | Print how to cite Scanpath Studio |
@@ -381,6 +383,53 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 from docs_support import cli_reference
 
 print(cli_reference("check"))
+```
+
+## add
+
+`add` adds your tables to the app's dataset list, as **Add dataset** does,
+without opening the app. Run `scanpath-studio` afterwards and the app opens on
+the new dataset. If the app is already open, reload its browser tab right away:
+changes you make in it before the reload are not saved. It works for an app on
+your own computer, not a hosted one.
+
+```bash
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+scanpath-studio add "Pilot 3" --fixations fixations_v2.csv --replace
+```
+
+A name that is already saved is an error unless you pass `--replace`, which
+swaps the dataset's tables and keeps its annotations, metadata tables, share
+links, description and recording setup (unless you give a new description or
+`--canvas`). Without `--canvas`, the app uses a screen the data records, or
+estimates one from the extent of the data. In Python, use
+[`add_dataset`][scanpath_studio.api.add_dataset].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("add"))
+```
+
+## remove
+
+`remove` takes a dataset you added, in the app or with `add`, off the app's
+dataset list. Its annotations, metadata tables and description go with it, as
+its **Remove** on the **:material/database: Data Management** page does. Built-in
+and public datasets can't be removed. If the app last had it open, it next
+opens on its default dataset.
+
+```bash
+scanpath-studio remove "Pilot 3"
+scanpath-studio remove "Pilot 3" --missing-ok   # no error if it isn't there
+```
+
+In Python, use [`remove_dataset`][scanpath_studio.api.remove_dataset].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("remove"))
 ```
 
 ## cache

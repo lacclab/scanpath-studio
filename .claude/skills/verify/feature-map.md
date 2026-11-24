@@ -98,4 +98,5 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Input counts | Check a header-only and an all-unkeyed fixation file with `--json-report`. The findings-only `--json` still returns a list. |
 | Cohort recipe | `recipe profile.recipe.json --sample -o profile.csv` reproduces the CSV downloaded for a demo Per text cohort profile |
 | CLI | `scanpath-studio render --sample -o out.html` writes a figure; `--list-trials` lists 24 |
+| Add a dataset from a script | With `SCANPATH_STUDIO_STATE_DIR` set to a scratch folder, `add_dataset("Pilot 3", words, fixations)` or `scanpath-studio add`, then launch the app on that folder: it opens on *Pilot 3* and draws its first reading. Adding the same name again fails unless `--replace`, which keeps its annotations and setup. `remove_dataset` / `scanpath-studio remove` then takes it off the list, and the next launch opens on the default dataset with no saved key naming it. |
 | API | `load_sample_data()` → `plot_scanpath(..., participant=, trial=)` → `save_figure` |

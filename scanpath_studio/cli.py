@@ -4235,6 +4235,180 @@ def corpus(argv: list[str]) -> None:
     print(f"Wrote {out}")
 
 
+def _add_parser() -> argparse.ArgumentParser:
+    """The `add` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio add",
+        description="Add a dataset to the app's dataset list from your tables, "
+        "as the app's Add dataset does, without opening the app. It is saved "
+        "where a local run keeps its added datasets (see `cache`); the next "
+        "`scanpath-studio` opens on it, and an app already open shows it once "
+        "its browser tab is reloaded. Same as api.add_dataset.",
+    )
+    parser.add_argument("name", help="The name the dataset list shows.")
+    parser.add_argument(
+        "--words", nargs="+", metavar="PATH", help="Words table(s), as for render."
+    )
+    parser.add_argument(
+        "--fixations",
+        nargs="+",
+        metavar="PATH",
+        help="Fixations table(s), as for render.",
+    )
+    parser.add_argument(
+        "--raw-gaze",
+        nargs="+",
+        metavar="PATH",
+        help="The Raw gaze table, as for render.",
+    )
+    parser.add_argument(
+        "--raw-gaze-schema",
+        metavar="JSON",
+        help="Column mapping for the --raw-gaze table, replacing "
+        "auto-detection, in the form --fix-schema takes.",
+    )
+    parser.add_argument(
+        "--trial-parts-manifest",
+        metavar="PATH",
+        help="JSON manifest assigning source rows to ordered screens.",
+    )
+    parser.add_argument(
+        "--canvas",
+        metavar="WxH",
+        help="The recording's screen in px, e.g. 1920x1080. Without it, a "
+        "screen the data records is used, else one estimated from the extent "
+        "of the data; with --replace, the saved dataset's setup is kept.",
+    )
+    parser.add_argument(
+        "--description",
+        metavar="TEXT",
+        help="The sentence the Data Management page shows under its name.",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Replace the tables of the saved dataset with this name, keeping "
+        "its annotations, metadata tables, share links, and its description and "
+        "recording setup unless --description or --canvas gives new ones. "
+        "Without it, a name already saved is an error.",
+    )
+    parser.add_argument(
+        "--no-select",
+        action="store_true",
+        help="Add it to the list without opening the app on it next time.",
+    )
+    _add_schema_flags(parser)
+    return parser
+
+
+def add(argv: list[str]) -> None:
+    """Add a dataset to the app's saved datasets (`api.add_dataset`)."""
+    args = _add_parser().parse_args(argv)
+    if not (args.words or args.fixations or args.raw_gaze):
+        raise SystemExit(
+            "Nothing to add: pass --words and/or --fixations (and/or --raw-gaze)."
+        )
+    if args.raw_gaze_schema and not args.raw_gaze:
+        raise SystemExit(
+            "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
+        )
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
+    raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+    canvas = _parse_canvas(args.canvas)
+
+    from . import api
+
+    saved = {
+        str(row["name"]).casefold()
+        for key in ("datasets", "damaged")
+        for row in api.cache_status().get(key) or ()
+    }
+    replacing = args.replace and args.name.strip().casefold() in saved
+    try:
+        name = api.add_dataset(
+            args.name,
+            args.words,
+            args.fixations,
+            raw_gaze=args.raw_gaze,
+            word_schema=word_schema,
+            fix_schema=fix_schema,
+            raw_gaze_schema=raw_gaze_schema,
+            trial_parts_manifest=_trial_parts_manifest(args.trial_parts_manifest),
+            keep_columns=args.keep_columns,
+            canvas_size=canvas,
+            description=args.description,
+            select=not args.no_select,
+            replace=args.replace,
+        )
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
+    except (ValueError, OSError) as exc:
+        message = str(exc)
+        if not isinstance(exc, api.StoredDatasetExistsError):
+            message = _load_error_message(exc)
+        raise SystemExit(message.replace("replace=True (--replace)", "--replace"))
+    print(f"{'Replaced' if replacing else 'Added'} {name!r}.")
+    if args.no_select:
+        print("Run `scanpath-studio` to open the app; it is in the dataset list.")
+    else:
+        print("Run `scanpath-studio` to open the app on it.")
+    print(
+        "If the app is already open, reload its browser tab now: changes made "
+        "in it from here on are not saved until you do."
+    )
+
+
+def _remove_parser() -> argparse.ArgumentParser:
+    """The `remove` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio remove",
+        description="Remove a dataset you added (in the app or with `add`) from "
+        "the app's dataset list, with its annotations, metadata tables and "
+        "description, as its Remove on the Data Management page does. Built-in "
+        "and public datasets can't be removed. Same as api.remove_dataset.",
+    )
+    parser.add_argument(
+        "name", help="The name the dataset list shows (case does not matter)."
+    )
+    parser.add_argument(
+        "--missing-ok",
+        action="store_true",
+        help="Exit quietly when no dataset has the name, instead of with an error.",
+    )
+    return parser
+
+
+def remove(argv: list[str]) -> None:
+    """Remove a saved dataset (`api.remove_dataset`)."""
+    args = _remove_parser().parse_args(argv)
+
+    from . import api
+
+    wanted = args.name.strip()
+    shown = next(
+        (
+            str(row["name"])
+            for key in ("datasets", "damaged")
+            for row in api.cache_status().get(key) or ()
+            if str(row["name"]).casefold() == wanted.casefold()
+        ),
+        wanted,
+    )
+    try:
+        removed = api.remove_dataset(wanted, missing_ok=args.missing_ok)
+    except (RuntimeError, LookupError, ValueError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+    if not removed:
+        print(f"No dataset named {wanted!r} is saved; nothing removed.")
+        return
+    print(f"Removed {shown!r}.")
+    print(
+        "If the app is already open, reload its browser tab now: changes made "
+        "in it from here on are not saved until you do."
+    )
+
+
 def _cache_parser() -> argparse.ArgumentParser:
     """The `cache` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4635,6 +4809,8 @@ usage:
   scanpath-studio recipe …         reproduce a cohort or difference profile CSV from its recipe
   scanpath-studio publication …    render a publication figure recipe
   scanpath-studio check …          run the Data checks on your tables
+  scanpath-studio add NAME …       add your tables to the app's dataset list
+  scanpath-studio remove NAME      remove a dataset you added from that list
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
                                    show this build and how it was installed;
@@ -4661,6 +4837,8 @@ _COMMANDS = (
     "recipe",
     "publication",
     "check",
+    "add",
+    "remove",
     "cache",
     "version",
     "cite",
@@ -4793,6 +4971,10 @@ def main(argv: list[str] | None = None) -> None:
         corpus(argv[1:])
     elif argv[0] == "check":
         check(argv[1:])
+    elif argv[0] == "add":
+        add(argv[1:])
+    elif argv[0] == "remove":
+        remove(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
     elif argv[0] == "version":

@@ -177,6 +177,24 @@ sps.save_publication(recipe, "figure-2.svg")
 
 ## Recovery cache
 
+A local app keeps the datasets you add, so they are there the next time it
+starts. `add_dataset` adds one from a script: prepare the tables in Python, add
+them, then run `scanpath-studio` and the app opens on them. `remove_dataset`
+takes one off the list again.
+
+```python
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+::: scanpath_studio.api.add_dataset
+
+::: scanpath_studio.api.remove_dataset
+
 ::: scanpath_studio.api.cache_status
 
 ::: scanpath_studio.api.clear_cache

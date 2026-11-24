@@ -2526,6 +2526,34 @@ def _cached_comparison_figure(
         )
 
 
+@st.cache_data(show_spinner=False, max_entries=48)
+def _cached_panel_figure(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _options: dict,
+    fig_key,
+):
+    """Build + cache one panel of a grid of readings, as
+    `_cached_scanpath_figure` does for the main figure. Enough entries for a
+    few pages of `_GEN_PAGE_SIZE` panels, so paging back draws nothing new."""
+    with timed(
+        "build grid panel (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_scanpath_figure(_words, _fixations, **_options)
+
+
+def _panel_figure(words: pd.DataFrame, fixations: pd.DataFrame, options: dict):
+    """A grid panel's static figure, keyed on its frames and every option."""
+    return _cached_panel_figure(
+        words,
+        fixations,
+        options,
+        fig_key=_figure_input_key(words, fixations, options),
+    )
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _cached_scanpath_animation(
     _words: pd.DataFrame,
@@ -13075,19 +13103,21 @@ def render_alignment_comparison_tab(
         if connectors is not None:
             kwargs["show_connectors"] = True
             kwargs["connector_y"] = tuple(pd.to_numeric(connectors, errors="coerce"))
-        return make_scanpath_figure(
+        return _panel_figure(
             trial_words,
             fix,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            x_field="x",
-            y_field="y",
-            column_labels=active_figure_labels(
-                st.session_state, words=trial_words.columns, fixations=fix.columns
-            ),
-            **kwargs,
+            {
+                "canvas_width": int(canvas_width),
+                "canvas_height": int(canvas_height),
+                "base_font_size": int(base_font_size),
+                "font_family": font_family,
+                "x_field": "x",
+                "y_field": "y",
+                "column_labels": active_figure_labels(
+                    st.session_state, words=trial_words.columns, fixations=fix.columns
+                ),
+                **kwargs,
+            },
         )
 
     # Naive baseline (nearest-line) to count how many fixations each algorithm
@@ -13701,20 +13731,22 @@ def render_multiple_comparison_tab(
     panel_settings = _comparison_panel_settings(base_settings)
 
     def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
-        return make_scanpath_figure(
+        return _panel_figure(
             words,
             fix,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            x_field="x",
-            y_field="y",
-            column_labels=active_figure_labels(
-                st.session_state, words=words.columns, fixations=fix.columns
-            ),
-            color_categories=color_categories,
-            **settings,
+            {
+                "canvas_width": int(canvas_width),
+                "canvas_height": int(canvas_height),
+                "base_font_size": int(base_font_size),
+                "font_family": font_family,
+                "x_field": "x",
+                "y_field": "y",
+                "column_labels": active_figure_labels(
+                    st.session_state, words=words.columns, fixations=fix.columns
+                ),
+                "color_categories": color_categories,
+                **settings,
+            },
         )
 
     with st.container():

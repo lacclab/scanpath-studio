@@ -141,12 +141,7 @@ VIEWS = {
 
 #: Work that runs on every rerun of a view today, each with why. It must keep
 #: running there, so an entry is dropped once it stops.
-UNCACHED = {
-    "scanpath · Comparisons": {
-        "make_scanpath_figure": "the Comparisons subtab draws its grid of matching "
-        "readings uncached: one static figure per match, about 30 ms each",
-    },
-}
+UNCACHED: dict[str, dict[str, str]] = {}
 
 #: The caches a figure is drawn through: a plot setting misses them by design.
 FIGURE_CACHES = (
@@ -154,6 +149,7 @@ FIGURE_CACHES = (
     "_cached_comparison_figure",
     "_cached_scanpath_animation",
     "_cached_replay_view",
+    "_cached_panel_figure",
 )
 
 
@@ -284,7 +280,9 @@ def test_a_rerun_that_changes_nothing_does_no_work(view, work):
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize("view", ["scanpath", "replay", "compare"])
+@pytest.mark.parametrize(
+    "view", ["scanpath", "replay", "compare", "scanpath · Comparisons"]
+)
 def test_a_plot_setting_only_redraws_the_figure(view, work):
     at = _drawn(*VIEWS[view])
     work.reset()

@@ -2642,6 +2642,7 @@
 <li><code>render</code> now stops with a message when <code>--compare-words</code>, <code>--compare-fixations</code> or their mapping flags are given without <code>--compare-with</code>, which they need; before, it ignored them.</li>
 <li>animate_scanpath refuses the raw-gaze style and heatmap colour-bar options by name, which the replay never draws, instead of accepting and ignoring them.</li>
 <li>Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.</li>
+<li>A scanpath figure or replay built directly with the plotting module (FigureSettings, make_scanpath_figure, make_scanpath_animation) now draws fixations at the app's, the API's and the CLI's default opacity, 0.7, not 1.0.</li>
 </ul>
 <h3 id="exec-13--removed">Removed<a class="headerlink" href="#exec-13--removed" title="Permanent link">&para;</a></h3>
 <ul>

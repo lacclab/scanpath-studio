@@ -2433,3 +2433,69 @@ def reproduction_code(
         cli_unsupported=tuple(unsupported),
         caveats=tuple(state_caveats(source, state)) + tuple(extra_caveats),
     )
+
+
+#: The settings file's record of the figure in the API's vocabulary
+#: (``plot_scanpath(settings=…)``, ``render --settings``). Its own version, so
+#: a reader can tell a record it understands from one a newer build wrote.
+SETTINGS_FILE_CALLS_VERSION = 1
+
+
+def settings_file_calls(state: FigureState) -> dict:
+    """The figure on screen, as the keywords each API builder would take.
+
+    What a settings file carries for ``plot_scanpath(…, settings=…)`` and
+    ``render --settings``: the reading, scanpath B when the figure compares
+    two, and one keyword set per kind the figure can be drawn as — the same
+    keywords Share → Code writes (`_call_kwargs` + `figure_kwargs`), in full
+    (``explicit``), so a later change of the API's defaults does not change the
+    figure a file describes. The reading and screen are kept apart from the
+    keywords: a script may draw the same look on another reading.
+
+    A stimulus image held only in the page (an uploaded file) has no path to
+    record and is left out; one read from a folder is kept as its path.
+    """
+    state = _with_own_pages(state)
+    compare = state.compare if state.compare and state.compare.trial else None
+    calls: dict[str, dict] = {}
+    for kind in KINDS:
+        if kind == "comparison" and compare is None:
+            continue
+        # B rides on a co-animation only when the figure was one; a static
+        # figure's replay is A's alone.
+        target = compare if kind == "comparison" or state.kind != "static" else None
+        drawn = replace(state, kind=kind, compare=target)
+        keywords = dict(_call_kwargs(drawn, explicit=True))
+        keywords.pop("screen", None)
+        keywords.pop("screen_b", None)
+        keywords.update(
+            figure_kwargs(drawn.settings, kind, explicit=True, compare=target)
+        )
+        if kind == "comparison":
+            keywords["layout"] = target.layout
+            keywords["compare_stimulus"] = target.compare_stimulus
+            if target.labels:
+                keywords["labels"] = list(target.labels)
+        calls[kind] = {
+            key: value
+            for key, value in keywords.items()
+            if not (isinstance(value, str) and _is_data_uri(value))
+        }
+    return {
+        "version": SETTINGS_FILE_CALLS_VERSION,
+        "kind": state.kind,
+        "participant": state.participant or None,
+        "trial": state.trial or None,
+        "screen": state.screen,
+        "compare": (
+            {
+                "participant": compare.participant,
+                "trial": compare.trial,
+                "screen": compare.screen,
+                "dataset": compare.dataset or None,
+            }
+            if compare is not None
+            else None
+        ),
+        "calls": calls,
+    }

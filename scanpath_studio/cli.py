@@ -710,6 +710,16 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Screen ID within a multipart trial (default: the first screen).",
     )
     parser.add_argument(
+        "--settings",
+        metavar="PATH",
+        help="Draw the figure a settings file describes, saved in the app with "
+        "Share → File: every figure option comes from the file, and so do the "
+        "reading, screen and canvas unless -p/-t/--screen/--canvas name them. "
+        "Any flag on the line wins over the file. The kind of figure is this "
+        "command's: add --animate or --compare-with for a replay or a "
+        "comparison. Same as settings= in api.plot_scanpath.",
+    )
+    parser.add_argument(
         "--list-trials",
         action="store_true",
         help="Print every trial with its participant, trial and text IDs, then "
@@ -2886,6 +2896,70 @@ def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
     return screens
 
 
+def _given_dests(parser: argparse.ArgumentParser, argv: list[str]) -> set[str]:
+    """The options ``argv`` actually sets, as their ``dest`` names.
+
+    A flag's default is not a choice the user made: with ``--settings`` only
+    what was typed may override the file. Parsed once more with every default
+    swapped for a marker, so a flag given at its default value still counts.
+    """
+    marker = object()
+    saved = [(action, action.default) for action in parser._actions]
+    saved_defaults = dict(parser._defaults)
+    try:
+        for action, default in saved:
+            if default is not argparse.SUPPRESS:
+                action.default = marker
+        parser._defaults = dict.fromkeys(saved_defaults, marker)
+        namespace = parser.parse_args(argv)
+    finally:
+        for action, default in saved:
+            action.default = default
+        parser._defaults = saved_defaults
+    return {dest for dest, value in vars(namespace).items() if value is not marker}
+
+
+#: The builder keyword each `render` flag outside the figure options sets,
+#: named by the flag's ``dest``. With ``--settings`` such a keyword is passed
+#: only when its flag was typed, so the file's value stands otherwise.
+_SETTINGS_FLAG_OF = {
+    "canvas_size": "canvas",
+    "setup": "canvas",
+    "base_font_size": "font_size",
+    "font_family": "font_family",
+    "title": "title",
+    "caption": "caption",
+    "drift_correction": "drift_correction",
+    "drift_connectors": "drift_connectors",
+    "fix_index_range": "fix_index_range",
+    "fix_index_range_b": "compare_fix_index_range",
+    "illustration_label": "illustration_label",
+    "playback_speed": "playback_speed",
+    "autoplay": "autoplay",
+    "anim_grid_step_ms": "anim_grid_step_ms",
+    "anim_max_frames": "anim_max_frames",
+    "layout": "compare_layout",
+    "compare_stimulus": "compare_stimulus",
+    "labels": "label_a",
+    "label_a": "label_a",
+    "label_b": "label_a",
+}
+
+
+def _with_settings_file(args, given: set[str], keywords: dict) -> dict:
+    """A builder call's keywords with ``--settings``: the file, plus what the
+    line typed. Unchanged without it."""
+    if not args.settings:
+        return keywords
+    kept = {
+        key: value
+        for key, value in keywords.items()
+        if key not in _SETTINGS_FLAG_OF or _SETTINGS_FLAG_OF[key] in given
+    }
+    kept["settings"] = args.settings
+    return kept
+
+
 def render(argv: list[str]) -> None:
     parser = _render_parser()
     args = parser.parse_args(argv)
@@ -3132,6 +3206,48 @@ def render(argv: list[str]) -> None:
         )
 
     from . import api
+
+    given = _given_dests(parser, argv)
+    settings_record = None
+    if args.settings:
+        if args.all_screens or args.screens:
+            raise SystemExit(
+                "--settings draws one figure; drop --all-screens / --screens, or "
+                "name the screen with --screen."
+            )
+        if args.print_code:
+            raise SystemExit(
+                "--print-code writes the command for the flags on the line; with "
+                "--settings the file holds the figure. Drop one of them."
+            )
+        try:
+            settings_record = api._read_settings_file(args.settings)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"--settings: {exc}") from None
+        # The reading the file was saved on, unless the line names one.
+        if args.participant is None and args.trial is None:
+            args.participant = settings_record.get("participant") or None
+            args.trial = settings_record.get("trial") or None
+            if args.screen is None and settings_record.get("screen"):
+                args.screen = str(settings_record["screen"])
+        saved_kind = settings_record.get("kind")
+        drawn_kind = (
+            "animation"
+            if args.animate
+            else "comparison"
+            if args.compare_with is not None
+            else "static"
+        )
+        if saved_kind in ("animation", "comparison") and saved_kind != drawn_kind:
+            print(
+                f"Note: this settings file was saved from a {saved_kind}; "
+                + (
+                    "add --animate to draw the replay."
+                    if saved_kind == "animation"
+                    else "add --compare-with PARTICIPANT:TRIAL to draw the comparison."
+                ),
+                file=sys.stderr,
+            )
 
     # `render` works in the internal names, which the metadata joins,
     # the trial checks and every option below are written against, and keeps
@@ -3704,7 +3820,7 @@ def render(argv: list[str]) -> None:
                         participant,
                         trial,
                         screen=args.screen,
-                        **animation_options,
+                        **_with_settings_file(args, given, animation_options),
                     )
                 except IncomparableScreensError as exc:
                     # The API's way out is Python. Dropping --animate alone lands
@@ -3754,41 +3870,42 @@ def render(argv: list[str]) -> None:
             # what skips the namespacing.
             words_b = loaded_b if cross_dataset else None
             fixations_b = loaded_fix_b if cross_dataset else None
+            compare_options = dict(
+                # One screen per scanpath, each picked in its own trial.
+                screen=args.screen,
+                screen_b=args.compare_screen,
+                words_b=words_b,
+                fixations_b=fixations_b,
+                dataset_b=args.compare_dataset_name,
+                layout=args.compare_layout,
+                illustration_label=args.illustration_label,
+                compare_stimulus=args.compare_stimulus,
+                labels=_compare_labels(args),
+                setup=_compare_setup_snapshot(canvas),
+                setup_b=_compare_setup_snapshot(
+                    _parse_canvas(args.compare_canvas, "--compare-canvas")
+                ),
+                drift_correction=args.drift_correction,
+                # A builder parameter, like the drift correction beside it,
+                # so it has to be named here — it is not in `overrides`.
+                # Left out, a windowed comparison would draw both whole
+                # trials while the `--print-code` recipe said otherwise.
+                fix_index_range=_parse_fix_index_range(args.fix_index_range),
+                # B's own window, when given.
+                fix_index_range_b=_parse_fix_index_range(args.compare_fix_index_range),
+                # Each reading's samples under its scanpath.
+                raw_gaze=raw_gaze,
+                raw_gaze_b=raw_gaze_b,
+                **overrides,
+                **common,  # carries canvas_size / fonts / title / caption
+            )
             try:
                 fig = api.compare_scanpaths(
                     words,
                     fixations,
                     (participant, trial),
                     (compare_participant, compare_trial),
-                    # One screen per scanpath, each picked in its own trial.
-                    screen=args.screen,
-                    screen_b=args.compare_screen,
-                    words_b=words_b,
-                    fixations_b=fixations_b,
-                    dataset_b=args.compare_dataset_name,
-                    layout=args.compare_layout,
-                    illustration_label=args.illustration_label,
-                    compare_stimulus=args.compare_stimulus,
-                    labels=_compare_labels(args),
-                    setup=_compare_setup_snapshot(canvas),
-                    setup_b=_compare_setup_snapshot(
-                        _parse_canvas(args.compare_canvas, "--compare-canvas")
-                    ),
-                    drift_correction=args.drift_correction,
-                    # A builder parameter, like the drift correction beside it,
-                    # so it has to be named here — it is not in `overrides`.
-                    # Left out, a windowed comparison would draw both whole
-                    # trials while the `--print-code` recipe said otherwise.
-                    fix_index_range=_parse_fix_index_range(args.fix_index_range),
-                    # B's own window, when given.
-                    fix_index_range_b=_parse_fix_index_range(
-                        args.compare_fix_index_range
-                    ),
-                    # Each reading's samples under its scanpath.
-                    raw_gaze=raw_gaze,
-                    raw_gaze_b=raw_gaze_b,
-                    **overrides,
-                    **common,  # carries canvas_size / fonts / title / caption
+                    **_with_settings_file(args, given, compare_options),
                 )
             except IncomparableScreensError as exc:
                 # The API's way out is Python (`layout='side_by_side'`), which
@@ -3829,7 +3946,7 @@ def render(argv: list[str]) -> None:
                     participant,
                     trial,
                     screen=args.screen,
-                    **static_options,
+                    **_with_settings_file(args, given, static_options),
                 )
         if args.all_screens:
             target = Path(args.output)

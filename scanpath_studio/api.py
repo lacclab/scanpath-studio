@@ -25,9 +25,11 @@ is the task-oriented guide to this module for scripted / agent use.
 from __future__ import annotations
 
 import difflib
+import functools
+import inspect
 import json
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -2715,6 +2717,167 @@ def _check_canvas_size(canvas_size) -> None:
         )
 
 
+#: What a settings file's ``api`` record names each builder's figure by.
+_SETTINGS_KIND = {
+    "plot_scanpath": "static",
+    "animate_scanpath": "animation",
+    "compare_scanpaths": "comparison",
+}
+
+
+def _read_settings_file(settings: str | Path | Mapping) -> dict:
+    """A settings file's ``api`` record: from a path, a JSON string's file, or
+    the parsed dict."""
+    if isinstance(settings, Mapping):
+        config = dict(settings)
+    else:
+        path = Path(settings).expanduser()
+        try:
+            config = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise FileNotFoundError(f"No settings file at {path}.") from None
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"The settings file {path} can't be read: {exc}") from exc
+    record = config.get("api") if isinstance(config, Mapping) else None
+    if not isinstance(record, Mapping) or not isinstance(record.get("calls"), Mapping):
+        raise ValueError(
+            "This settings file does not describe the figure for scripts: it was "
+            "saved before Scanpath Studio wrote that, or it is not a settings "
+            "file. Open it in the app (🔗 Share → File → Load), then save it "
+            "again with 🔗 Share → File."
+        )
+    from .code_snippet import SETTINGS_FILE_CALLS_VERSION
+
+    try:
+        version = int(record.get("version", 1))
+    except (TypeError, ValueError):
+        version = SETTINGS_FILE_CALLS_VERSION + 1
+    if version > SETTINGS_FILE_CALLS_VERSION:
+        logging.getLogger(__name__).warning(
+            "This settings file was saved by a newer version of Scanpath Studio; "
+            "options this version doesn't know are left out."
+        )
+    return dict(record)
+
+
+def _from_json(value: Any) -> Any:
+    """A JSON value back in the form the builders take: a pair of numbers is a
+    tuple (a range, a size, an origin), as the app hands it over."""
+    if (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(
+            isinstance(item, (int, float)) and not isinstance(item, bool)
+            for item in value
+        )
+    ):
+        return tuple(value)
+    return value
+
+
+def _settings_keywords(settings, function: str, accepted: set, given: dict) -> dict:
+    """The keywords a settings file gives ``function``, for every argument the
+    call did not give itself (``given``).
+
+    The figure options and the call's own (canvas, fonts, window, title …),
+    then the reading the file was saved on unless the call names one. A file
+    saved in another mode still draws: a static file drawn as a replay takes the
+    options the replay has. A keyword this build's builder does not take (a
+    newer file) is left out with a warning.
+    """
+    record = _read_settings_file(settings)
+    kind = _SETTINGS_KIND[function]
+    calls = record["calls"]
+    call = calls.get(kind) or calls.get("static") or {}
+    values = {key: _from_json(value) for key, value in dict(call).items()}
+    compare = (
+        record.get("compare") if isinstance(record.get("compare"), Mapping) else None
+    )
+    reading = (record.get("participant"), record.get("trial"))
+    if kind == "comparison":
+        if "trial_a" not in given and all(reading):
+            values["trial_a"] = (str(reading[0]), str(reading[1]))
+        if "trial_b" not in given:
+            if compare is None:
+                raise ValueError(
+                    "This settings file was not saved from a comparison, so it "
+                    "names no scanpath B. Pass trial_a= and trial_b=."
+                )
+            values["trial_b"] = (str(compare["participant"]), str(compare["trial"]))
+            if compare.get("screen"):
+                values.setdefault("screen_b", str(compare["screen"]))
+    else:
+        if "participant" not in given and reading[0]:
+            values["participant"] = str(reading[0])
+        if "trial" not in given and reading[1]:
+            values["trial"] = str(reading[1])
+        co_animation = (
+            kind == "animation"
+            and compare is not None
+            and record.get("kind") != "static"
+        )
+        if co_animation and "trial_b" not in given:
+            values["trial_b"] = (str(compare["participant"]), str(compare["trial"]))
+            if compare.get("screen"):
+                values.setdefault("screen_b", str(compare["screen"]))
+    if record.get("screen") and "screen" not in given:
+        values["screen"] = str(record["screen"])
+    b_elsewhere = (
+        compare is not None
+        and compare.get("dataset")
+        and "trial_b" in values
+        and "trial_b" not in given
+        and not {"words_b", "fixations_b"} & set(given)
+    )
+    if b_elsewhere:
+        raise ValueError(
+            f"This settings file's scanpath B is from the dataset "
+            f"{compare['dataset']!r}. Load it and pass words_b= / fixations_b=, "
+            "or pass trial_b= to compare with a reading of this dataset."
+        )
+    options = set(figure_options(kind))
+    unknown = sorted(set(values) - accepted - options)
+    if unknown:
+        logging.getLogger(__name__).warning(
+            "The settings file sets options %s draws without: %s.",
+            function,
+            ", ".join(unknown),
+        )
+    return {key: value for key, value in values.items() if key not in unknown}
+
+
+def _takes_settings_file(func):
+    """Let ``func`` draw the figure a settings file describes (``settings=``).
+
+    Every argument the call passes itself wins over the file's; the rest come
+    from the file. The wrapped function keeps its own signature, ``settings``
+    included, so the reference documents it where it is used.
+    """
+    signature = inspect.signature(func)
+    variadic = next(
+        (
+            name
+            for name, parameter in signature.parameters.items()
+            if parameter.kind is inspect.Parameter.VAR_KEYWORD
+        ),
+        None,
+    )
+    accepted = set(signature.parameters) - {variadic, "settings"}
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        settings = kwargs.pop("settings", None)
+        if settings is None:
+            return func(*args, **kwargs)
+        given = dict(signature.bind_partial(*args, **kwargs).arguments)
+        given.update(given.pop(variadic, None) or {})
+        values = _settings_keywords(settings, func.__name__, accepted, given)
+        return func(**{**values, **given})
+
+    return wrapper
+
+
+@_takes_settings_file
 def plot_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2734,6 +2897,7 @@ def plot_scanpath(
     title: str = "",
     caption: str = "",
     column_names: dict | None = None,
+    settings: str | Path | Mapping | None = None,
     **figure_overrides: Any,
 ) -> go.Figure:
     """Build one trial's scanpath figure, by default in the app's Scanpath design.
@@ -2789,6 +2953,11 @@ def plot_scanpath(
         column_names: The column map for frames loaded with ``names="canonical"``
             (``data.column_names``). The options then take the dataset's names too, and
             the figure's text uses them.
+        settings: A settings file saved with the app's 🔗 **Share → File** (its path,
+            or the dict read from it): draw the figure it describes. Every option
+            comes from the file, and so do the reading, the screen and the canvas
+            unless this call names them; any argument passed here wins over the
+            file. ``render --settings`` does the same.
         **figure_overrides: Any figure option, in place of the app's default. Three take
             a word of explanation:
 
@@ -2957,6 +3126,7 @@ def plot_scanpath(
     return fig
 
 
+@_takes_settings_file
 def animate_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2980,6 +3150,7 @@ def animate_scanpath(
     dataset_b: str | None = None,
     setup: SetupSnapshot | None = None,
     setup_b: SetupSnapshot | None = None,
+    settings: str | Path | Mapping | None = None,
     **animation_overrides: Any,
 ) -> go.Figure:
     """Build the animated replay of one trial's scanpath, or of two on one clock.
@@ -3043,6 +3214,11 @@ def animate_scanpath(
             trial, which rarely spans the whole screen, so state both when you know
             them.
         setup_b: B's.
+        settings: A settings file saved with the app's 🔗 **Share → File** (its path,
+            or the dict read from it): draw the figure it describes. Every option
+            comes from the file, and so do the reading, the screen and the canvas
+            unless this call names them; any argument passed here wins over the
+            file. ``render --settings`` does the same.
         **animation_overrides: Any figure option the replay takes. Also:
 
             - ``words_b`` / ``fixations_b``: B's frames. Without ``trial_b`` they must
@@ -3642,11 +3818,12 @@ def _compare_setup(
     )
 
 
+@_takes_settings_file
 def compare_scanpaths(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: tuple[str, str],
-    trial_b: tuple[str, str],
+    trial_a: tuple[str, str] | None = None,
+    trial_b: tuple[str, str] | None = None,
     *,
     screen: str | None = None,
     screen_b: str | None = None,
@@ -3672,6 +3849,7 @@ def compare_scanpaths(
     caption: str = "",
     illustration_label: str = "auto",
     column_names: dict | None = None,
+    settings: str | Path | Mapping | None = None,
     **figure_overrides: Any,
 ) -> go.Figure:
     """Build a figure comparing two scanpaths: the app's **Compare** mode.
@@ -3721,8 +3899,10 @@ def compare_scanpaths(
     Args:
         words: The words frame holding both trials, or A's when ``words_b`` is given.
         fixations: The fixations frame, likewise.
-        trial_a: A's ``(participant, trial)``.
-        trial_b: B's ``(participant, trial)``.
+        trial_a: A's ``(participant, trial)``. Required unless ``settings`` names
+            it.
+        trial_b: B's ``(participant, trial)``. Required unless ``settings`` names
+            it.
         screen: A's screen of a multipart trial. Left out, its first recorded screen, as
             in [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         screen_b: B's screen, looked up in B's own frames, so it may be a later page or
@@ -3761,6 +3941,11 @@ def compare_scanpaths(
         column_names: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath]. A's
             names, or ``column_names``, name the options and the figure's text; either
             dataset's frames may come under their own names.
+        settings: A settings file saved with the app's 🔗 **Share → File** (its path,
+            or the dict read from it): draw the figure it describes. Every option
+            comes from the file, and so do the reading, the screen and the canvas
+            unless this call names them; any argument passed here wins over the
+            file. ``render --settings`` does the same.
         **figure_overrides: Any figure option a comparison takes
             (``figure_options("comparison")``). Some act per scanpath:
 
@@ -3785,7 +3970,13 @@ def compare_scanpaths(
             ``screen`` / ``screen_b`` the trial does not have or that names a screen of
             a single-screen trial.
         TypeError: An unknown keyword. The message names the closest valid ones.
+        TypeError: No ``trial_a`` / ``trial_b``, and no ``settings`` naming them.
     """
+    if trial_a is None or trial_b is None:
+        raise TypeError(
+            "compare_scanpaths needs trial_a= and trial_b=, each a "
+            "(participant, trial) pair, or a settings= file saved from a comparison."
+        )
     _check_canvas_size(canvas_size)
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import (

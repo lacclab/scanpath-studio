@@ -111,6 +111,7 @@ from scanpath_studio.code_snippet import (
     UNPUBLISHED_SETTINGS,
     CompareTarget,
     FigureState,
+    settings_file_calls,
 )
 from scanpath_studio.column_names import EMPTY as EMPTY_NAMES
 from scanpath_studio.column_names import (
@@ -4547,7 +4548,14 @@ def _build_studio_config(
     from scanpath_studio.plot_config import build_plot_config
 
     snapshot = active_setup_snapshot()
+    # The figure as Share → Code states it, for `plot_scanpath(settings=…)`.
+    published = st.session_state.get(SNIPPET_STATE_KEY)
     return build_plot_config(
+        calls=(
+            settings_file_calls(published)
+            if isinstance(published, FigureState)
+            else None
+        ),
         selected_participant=selected_participant,
         selected_trial=selected_trial,
         canvas_width=canvas_width,

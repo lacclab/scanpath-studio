@@ -88,6 +88,7 @@ def build_plot_config(
     setup_provenance: dict | None = None,
     print_size: dict | None = None,
     raw_gaze_synthesized: bool = False,
+    calls: dict | None = None,
 ) -> dict:
     """Build the 🔗 Share → **File** settings JSON (pure — no Streamlit).
 
@@ -446,6 +447,11 @@ def build_plot_config(
             # The A/B legend, the one compare setting that is a switch.
             "legend": bool(viz_settings.get("show_compare_legend", True)),
         },
+        # The same figure in the API's vocabulary, which the app does not read:
+        # what `plot_scanpath(settings=…)` and `render --settings` draw from
+        # (`code_snippet.settings_file_calls`). Additive, so older files simply
+        # lack it and the schema version stays put.
+        **({"api": calls} if calls else {}),
     }
 
 
@@ -539,7 +545,41 @@ def render_plot_config(
     for name, value in (settings.get("preprocessing") or {}).items():
         key = "blink_adjacent" if name == "discard_blink_adjacent" else name
         state[f"global_preproc_{key}"] = value
+    from .code_snippet import CompareTarget, FigureState, settings_file_calls
+
+    algorithm = str(settings.get("align_algorithm") or "Off")
+    calls = settings_file_calls(
+        FigureState(
+            kind="comparison" if comparison is not None else "static",
+            settings=dict(values),
+            participant=str(participant),
+            trial=str(trial),
+            screen=None if screen_id in (None, "") else str(screen_id),
+            canvas=(int(canvas_width), int(canvas_height)),
+            base_font_size=int(base_font_size),
+            font_family=str(font_family),
+            illustration_label=str(settings.get("illustration_label", "Auto")).lower(),
+            drift_correction=None if algorithm == "Off" else algorithm,
+            drift_connectors=bool(settings.get("align_connectors")),
+            compare=(
+                CompareTarget(
+                    participant=str(comparison.get("participant_id") or ""),
+                    trial=str(comparison.get("trial_id") or ""),
+                    layout=str(
+                        settings.get("layout")
+                        or settings.get("compare_layout")
+                        or "overlay"
+                    ),
+                    compare_stimulus=str(figure.compare_stimulus),
+                    screen=comparison.get("screen_id") or None,
+                )
+                if comparison is not None
+                else None
+            ),
+        )
+    )
     config = build_plot_config(
+        calls=calls,
         selected_participant=participant,
         selected_trial=trial,
         canvas_width=canvas_width,

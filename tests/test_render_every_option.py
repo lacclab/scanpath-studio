@@ -389,6 +389,61 @@ def test_each_static_flag_reaches_its_keyword(monkeypatch, flags, kwarg, expecte
     assert cs._comparable(seen[kwarg]) == cs._comparable(expected)
 
 
+_BUILDER_FOR_KIND = {
+    "static": "plot_scanpath",
+    "animation": "animate_scanpath",
+    "comparison": "compare_scanpaths",
+}
+#: A value the command writes and the builder receives in another spelling of
+#: the same meaning.
+_SAME_MEANING = {"heatmap_metric": (None, "counts")}
+
+
+@pytest.mark.parametrize("kind", cs.KINDS)
+def test_every_option_the_command_writes_reaches_the_builder(
+    kind, monkeypatch, tmp_path
+):
+    """Run the 🔗 Share → Code command for every option changed, and check each
+    option it writes arrives at the builder with its value.
+
+    Parsing the command (above) proves each flag exists; a flag also has to be
+    handed on (`cli._DIRECT_OPTION_FLAGS`, `_SWITCH_OPTION_FLAGS` or its own
+    code), or `render` accepts it and draws the default. Options the command
+    leaves out (a layer that is off takes no styling) are not checked."""
+    monkeypatch.chdir(tmp_path)
+    for name in ("page.png", "page_b.png"):
+        (tmp_path / name).write_bytes(_PNG_1x1)
+    state = _maximal_state(kind)
+    if kind == "animation":
+        # `render` refuses a replay with both fixations and saccades off.
+        state.settings["show_fixations"] = True
+    command, _ = cs.cli_snippet(DEMO, state)
+    argv = shlex.split(command.replace(" \\\n", " "))[1:]
+    if "-o" in argv:
+        index = argv.index("-o")
+        del argv[index : index + 2]
+    seen = _spy(monkeypatch, _BUILDER_FOR_KIND[kind])
+    cli.main([*argv, "-o", "out.html"])
+
+    def written(flags: list[str]) -> bool:
+        n = len(flags)
+        return n > 0 and any(argv[i : i + n] == flags for i in range(len(argv)))
+
+    checked, wrong = 0, []
+    for key, value in state.settings.items():
+        emit = cs._CLI_EMITTERS.get(key)
+        if emit is None or not written(emit(value)):
+            continue
+        checked += 1
+        got = seen.get(key, "<not passed>")
+        if _SAME_MEANING.get(key) == (value, got):
+            continue
+        if cs._comparable(got) != cs._comparable(value):
+            wrong.append(f"{key}: wrote {value!r}, builder got {got!r}")
+    assert checked >= 60, f"only {checked} options written — the table shrank?"
+    assert not wrong, wrong
+
+
 def test_a_bare_render_passes_none_of_them(monkeypatch):
     """A flag left off must leave the builder its own default — the switches
     in particular are passed only when flipped."""

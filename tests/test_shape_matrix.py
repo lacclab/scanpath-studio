@@ -75,11 +75,20 @@ class Shape:
 _READING = ["participant_id", "unique_trial_id"]
 
 
+def _paragraph_screen(name: str) -> pd.DataFrame:
+    """One bundled demo table as a single-screen file: the paragraph screen of
+    each reading, without the columns that name its screen."""
+    frame = pd.read_parquet(SAMPLE / f"{name}.parquet")
+    frame = frame[frame["part"] == "Paragraph"]
+    return frame.drop(columns=["part", "screen_index"]).reset_index(drop=True)
+
+
 def _standard() -> Shape:
-    """Two readings of the bundled demo by one reader, with their gaze."""
-    words = pd.read_parquet(SAMPLE / "ia.parquet")
-    fixations = pd.read_parquet(SAMPLE / "fixations.parquet")
-    raw_gaze = pd.read_parquet(SAMPLE / "raw_gaze.parquet")
+    """Two readings of the bundled demo by one reader, with their gaze, each
+    one screen: the paragraph. Several screens are the multipart shape's."""
+    words = _paragraph_screen("ia")
+    fixations = _paragraph_screen("fixations")
+    raw_gaze = _paragraph_screen("raw_gaze")
     reader = fixations["participant_id"].iloc[0]
     trials = fixations.loc[fixations["participant_id"] == reader, _READING[1]]
     kept = trials.drop_duplicates().iloc[:2].tolist()

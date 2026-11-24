@@ -366,8 +366,10 @@ class TestFieldPickerSurvivesAViewSwitch:
         from tests.conftest import APP_SCRIPT
 
         at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
-        # The panel renders only while its tab is open.
+        # The panel renders only while its tab is open. The Paragraph screen
+        # carries the demo's spans; its first screen, the title, has none.
         at.session_state["single_subtab"] = tabs.SUBTAB_STIMULUS
+        at.query_params["screen"] = "Paragraph"
         at.run()
         assert not at.exception, at.exception
         before_spans = list(at.session_state["stimulus_span_fields"])

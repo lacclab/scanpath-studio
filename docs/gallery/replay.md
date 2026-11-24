@@ -31,7 +31,7 @@ print(gallery_figure("replay"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_273 -t l37_273_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
       --animate --fix-index-range 1:40 --playback-speed 2 \
       --highlight-column '' \
       -o replay.html

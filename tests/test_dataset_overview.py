@@ -83,7 +83,7 @@ class TestThePage:
         text = " ".join(str(m.value) for m in (*at.markdown, *at.caption))
         assert "Where the coordinates come from" not in text
         assert "Published figures." not in text
-        assert "EyeLink recordings for all 24 paragraph readings" in text
+        assert "EyeLink recordings for every screen" in text
 
 
 class TestTheSpreadMetrics:

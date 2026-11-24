@@ -747,11 +747,15 @@ class TestResolveCompareSource:
 
 @pytest.fixture(scope="module")
 def _synthetic_vs_demo():
-    """A = the synthetic trial, B = the Bundled demo's raw-gaze trial, with the
-    gaze-sample chip on and every other setting at its default."""
+    """A = the synthetic trial, B = the paragraph screen of a Bundled demo
+    reading with raw gaze, with the gaze-sample chip on and every other setting
+    at its default."""
     import re
 
-    from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+    from scanpath_studio.session_keys import (
+        COMPARE_SOURCE_STATE_KEY,
+        SINGLE_COMPARE_SCREEN_ID,
+    )
     from tests.conftest import APP_SCRIPT
 
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
@@ -762,6 +766,7 @@ def _synthetic_vs_demo():
     at.run()
     at.session_state["single_compare_trial"] = "l37_273_2_2_2_Adv"
     at.session_state["single_compare_pos"] = "l37_273_2_2_2_Adv"
+    at.session_state[SINGLE_COMPARE_SCREEN_ID] = "Paragraph"
     at.run()
     assert not at.exception, at.exception
     texts = [

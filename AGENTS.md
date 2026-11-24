@@ -317,8 +317,10 @@ uv run --extra test python scripts/verify_change.py  # see a change work (/verif
 uv run --extra lint ruff check .
 uv run --extra lint ruff format .
 
-# Regenerate the bundled L1 demo from the OneStop Full paragraph reports and raw ASC files
-uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc
+# Regenerate the bundled L1 demo from the OneStop Full per-part reports, the raw ASC
+# files and the Experiment Builder project the readers ran (its DataViewer draw lists
+# and runtime images give each screen's stimulus)
+uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc --experiment-dir /path/to/ose_2p_l1_l60_tower_st
 
 # Standalone desktop bundle (needs `pip install . pyinstaller` — non-editable)
 # Output: dist/ScanpathStudio.app on macOS, dist/ScanpathStudio/ elsewhere.
@@ -526,9 +528,10 @@ here fails when its rule is broken.
   (`data.stamp_source` / `adopt_source`, `frame_cache`, `assign_derived`), never
   sampled. A new large per-rerun frame needs one, or it is hashed every run.
 - The bundled `raw_gaze.parquet` (Parquet only: no CSV copy in the wheel)
-  carries the two L1 readers' recorded EyeLink gaze positions for all 24
-  readings. Extract samples within the fixation report's paragraph interest
-  period and subtract its trial start time to share the fixation clock. Keep
+  carries the two L1 readers' recorded EyeLink gaze positions for every screen
+  of all 24 readings. Extract samples within each screen's interest period in
+  its fixation report and subtract the trial start time to share the fixation
+  clock; the samples carry the screen's `part` and `screen_index`. Keep
   every recorded tick, including missing x/y values, pupil area in tracker
   units and the tracked eye. A sample without a position has a missing pupil
   value, not EyeLink's 0 (`update_sample_data.without_lost_pupil`).

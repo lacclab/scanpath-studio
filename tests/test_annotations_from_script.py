@@ -33,7 +33,13 @@ def cache_dir(tmp_path, monkeypatch) -> Path:
 
 @pytest.fixture(scope="module")
 def sample():
-    return read_sample_tables()
+    """The demo's paragraph screens, as a dataset of one screen per reading.
+
+    Multi-screen datasets have their own tests below."""
+    return tuple(
+        frame[frame["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+        for frame in read_sample_tables()
+    )
 
 
 @pytest.fixture

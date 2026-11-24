@@ -661,6 +661,10 @@ class TestDriftCorrectionReachesEveryPath:
     def test_static_animation_and_comparison_all_move(self, monkeypatch):
         seen = self._spy(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
+        # The demo's paragraph screens: a correction needs two text lines to
+        # snap between, and a title has one.
+        at.session_state["single_screen_id"] = "Paragraph"
+        at.session_state["single_compare_screen_id"] = "Paragraph"
         at.run(timeout=90)
         assert not at.exception, at.exception
 

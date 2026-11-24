@@ -26,7 +26,7 @@ class Example:
 def _scanpath() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
     return locals()
 
 
@@ -38,6 +38,7 @@ def _heatmap() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         show_heatmap=True,
         heatmap_style="Smoothed",
         show_fixations=False,
@@ -49,7 +50,9 @@ def _heatmap() -> dict:
 def _text_lines() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-    fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, screen="Paragraph", color_by_line=True
+    )
     return locals()
 
 
@@ -61,6 +64,7 @@ def _saccade_types() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         saccade_color_mode="By type",
         saccade_type_legend=False,
     )
@@ -141,6 +145,8 @@ def _comparison() -> dict:
         fixations,
         (pid, tid),
         ("l7_183", "l7_183_2_2_4_Ele"),
+        screen="Paragraph",
+        screen_b="Paragraph",
         labels=("Participant A", "Participant B"),
         fit_to_monitor=False,
         crop_margin=50,
@@ -166,6 +172,7 @@ def _raw_gaze() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         raw_gaze=raw_gaze,
         fixation_opacity=0.35,
         show_saccades=False,
@@ -181,6 +188,7 @@ def _replay() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         fix_index_range=(1, 40),
         playback_speed=2.0,
     )
@@ -195,6 +203,7 @@ def _word_boxes() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         show_heatmap=True,
         heatmap_style="Word boxes",
         show_fixations=False,
@@ -211,6 +220,7 @@ def _highlighted_text() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         highlight_column="is_in_aspan",
         critical_span_style="Mark text",
         show_saccades=False,
@@ -221,7 +231,9 @@ def _highlighted_text() -> dict:
 def _redacted_text() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-    fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, screen="Paragraph", redact_text=True
+    )
     return locals()
 
 
@@ -233,6 +245,7 @@ def _title_caption_legend() -> dict:
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         saccade_color_mode="By type",
         title="One participant, one article",
         title_font_size=34,
@@ -255,7 +268,9 @@ def _across_experiment() -> dict:
     from scanpath_studio.plots import make_trend_figure
 
     words, fixations = sps.load_sample_data(names="canonical")
-    reader = words[words["participant_id"] == "l37_273"].copy()
+    reader = words[
+        (words["participant_id"] == "l37_273") & (words["screen_id"] == "Paragraph")
+    ].copy()
     reader["trial_index"] = derive_trial_index(reader)
     trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
     fig = make_trend_figure(

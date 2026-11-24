@@ -578,7 +578,7 @@ def load_potec(
 # interest-area (word) + fixation reports, split by reading **regime** and by
 # trial **part** (which screen of a trial — title / question preview /
 # paragraph / questions / answers / QA / feedback). The reports share the
-# bundled demo's schema (the demo is a 3-pid subset of the Paragraph part), so
+# bundled demo's schema (the demo is a small subset of these parts), so
 # the generic auto-detect → normalize pipeline handles every part with no
 # part-specific column mapping — this loader only fetches, reads, and (when more
 # than one part is loaded) folds the part into the trial identity so the parts

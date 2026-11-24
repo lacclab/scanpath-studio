@@ -530,9 +530,20 @@ def _render_screen_navigator(
         key=id_key,
         format_func=labels.get,
         help="Which screen of this trial to draw. The trial stays selected.",
+        # The navigator is drawn only on the Scanpath view; a trip to another
+        # view must not drop the screen the reader was on.
+        persist_state="session",
     )
     # Narrow, but its menu opens as wide as the longest screen name.
     widen_menu(id_key, labels.values())
+    # On a phone this line of text stands in for the dropdown (`styles.py`), so
+    # the screen steps fit on the trial's ◀ ▶ line without making it taller.
+    # The dropdown's label leaves with it, so a screen reader hears it here.
+    whose = "Screen B" if key_prefix == "single_compare" else "Screen"
+    cell.container(key=f"{key_prefix}_screen_brief").markdown(
+        f'<span class="sps-sr-only">{whose} </span>{md_literal(labels[str(selected)])}',
+        unsafe_allow_html=True,
+    )
     # Both steps in ONE keyed `railbtn_*` container, so they take the pill
     # shape and 3px spacing of the ◀ ▶ ⇅ cluster beside them.
     trail = cell.container(key=f"railbtn_{key_prefix}_screen_trail", width="content")
@@ -4188,6 +4199,7 @@ def _render_paragraph_panel(
     trial_words: pd.DataFrame,
     *,
     trial_fixations: pd.DataFrame | None = None,
+    reading_words: pd.DataFrame | None = None,
     expanded: bool = True,
     bare: bool = False,
 ) -> None:
@@ -4200,7 +4212,13 @@ def _render_paragraph_panel(
     and span colours. Each span is annotated
     with whether it was fixated when ``trial_fixations`` is given. Skips silently
     when no word text is available. ``bare=True`` drops the expander wrapper so
-    the panel can sit directly inside a subtab."""
+    the panel can sit directly inside a subtab.
+
+    ``reading_words`` is the whole reading when ``trial_words`` is one screen
+    of it. Which columns the panel offers and picks by default is decided on
+    the whole reading, so a screen none of whose words is in a span (a title)
+    neither drops the reader's span choice nor leaves the later screens without
+    one."""
     if "text" not in trial_words.columns or trial_words.empty:
         if bare:
             # The subtab is on screen, so an empty body reads as broken.
@@ -4213,7 +4231,9 @@ def _render_paragraph_panel(
         return
     # The name-hint detection supplies the defaults; the ⚙️ Fields popover
     # is what lets a corpus whose columns are named differently use the panel.
-    span_cols, qa_cols, span_options, qa_options = _stimulus_fields(trial_words)
+    span_cols, qa_cols, span_options, qa_options = _stimulus_fields(
+        trial_words if reading_words is None or reading_words.empty else reading_words
+    )
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
 
     container = (
@@ -8394,7 +8414,10 @@ def render_single_trial_tab(
             # and a trial whose context it cannot render costs only this tab.
             if tab_stim.open:
                 _render_paragraph_panel(
-                    trial_words, trial_fixations=trial_fixations, bare=True
+                    trial_words,
+                    trial_fixations=trial_fixations,
+                    reading_words=parent_words,
+                    bare=True,
                 )
     with tab_compare if tab_compare is not None else contextlib.nullcontext():
         # Only the selected tab's body runs (see the st.tabs call).

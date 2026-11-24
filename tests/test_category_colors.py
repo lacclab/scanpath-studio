@@ -28,10 +28,13 @@ _PALETTE_GAP = 23
 
 @pytest.fixture(scope="module")
 def demo() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The demo, each fixation carrying its word's part-of-speech tags so the
-    figure can be coloured by them (31 Penn Treebank tags, more than the
-    palette; 15 universal ones)."""
+    """The demo's paragraph screens, each fixation carrying its word's
+    part-of-speech tags so the figure can be coloured by them (31 Penn Treebank
+    tags, more than the palette; 15 universal ones). One screen per reading, so
+    every reading's figure draws all of its fixations and a word ID names one
+    word."""
     words, fixations = api.load_sample_data(names="canonical")
+    words, fixations = (f[f["screen_id"] == "Paragraph"] for f in (words, fixations))
     tags = words[[*_KEYS, "universal_pos", "ptb_pos"]].drop_duplicates(_KEYS)
     return words, fixations.merge(tags, on=_KEYS, how="left")
 

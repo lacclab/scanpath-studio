@@ -277,7 +277,7 @@ def test_overview_opens_the_right_table_and_all_six_stay_on_the_page(app_url, br
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
         page.goto(f"{app_url}/data?source=demo")
-        page.get_by_role("button", name=re.compile(r"^Words 2,614")).click()
+        page.get_by_role("button", name=re.compile(r"^Words 4,004")).click()
         sync_api.expect(
             page.get_by_role("heading", name="Words", exact=True)
         ).to_be_in_viewport()

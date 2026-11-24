@@ -36,12 +36,17 @@ def test_plot_scanpath_numbers_timestamped_samples(demo):
         words,
         fixations,
         *TRIAL,
+        screen="Paragraph",
         raw_gaze=samples,
         x_field=SAMPLE_INDEX,
         y_field="x",
     )
+    # The reading spans several screens, and each screen's samples are numbered
+    # from 1.
     trial = samples[
-        (samples.participant_id == TRIAL[0]) & (samples.trial_id == TRIAL[1])
+        (samples.participant_id == TRIAL[0])
+        & (samples.trial_id == TRIAL[1])
+        & (samples.screen_id == "Paragraph")
     ]
     numbers = list(_sample_trace(fig).x)
     assert numbers and numbers == sorted(numbers)

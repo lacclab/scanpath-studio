@@ -723,7 +723,8 @@ class TestTheHighlightNote:
 
         words, fixations = sps.load_sample_data()
         p, t = sps.list_trials(words, fixations).iloc[0].tolist()
-        kwargs = dict(highlight_column="is_in_aspan")
+        # The highlighted span is on the paragraph screen.
+        kwargs = dict(highlight_column="is_in_aspan", screen="Paragraph")
         drawn = sps.plot_scanpath(words, fixations, p, t, **kwargs)
         hidden = sps.plot_scanpath(
             words, fixations, p, t, show_highlight_legend=False, **kwargs

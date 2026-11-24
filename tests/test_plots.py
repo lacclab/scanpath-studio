@@ -2468,6 +2468,7 @@ class TestPlotEnhancements:
         trial = words[
             (words["participant_id"] == first_trial["participant_id"])
             & (words["trial_id"] == first_trial["trial_id"])
+            & (words["screen_id"] == "Paragraph")
         ]
         fig = go.Figure()
         plots._add_word_label_trace(fig, trial, base_font_size=12, font_family="mono")

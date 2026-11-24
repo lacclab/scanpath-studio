@@ -3108,15 +3108,18 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "Participants": 2,
             "Texts": 12,
             "Trials": 24,
-            "Words": 2614,
-            "Fixations": 1894,
-            "Gaze points": 401_200,
+            "Screens": 124,
+            "Words": 4004,
+            "Fixations": 3020,
+            "Gaze points": 640_441,
         },
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
         ),
-        reading_note="Raw gaze comes from the EyeLink recordings for all 24 paragraph readings. "
-        "Gaps mark samples without a recorded position.",
+        reading_note="Each reading keeps every screen the reader saw, from the "
+        "article's title to the answer feedback, each with the experiment's own "
+        "stimulus image. Raw gaze comes from the EyeLink recordings for every "
+        "screen. Gaps mark samples without a recorded position.",
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",

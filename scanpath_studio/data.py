@@ -5181,10 +5181,10 @@ def resolve_stimulus_image_paths(
 def read_sample_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Read bundled demo IA and fixation tables (prefer Parquet).
 
-    The tables ship per-trial stimulus-image references (``image_path`` +
-    ``image_x``/``image_y`` origin) pointing at the rendered paragraph PNGs
+    The tables ship per-screen stimulus-image references (``image_path`` +
+    ``image_x``/``image_y`` origin) pointing at the experiment's screen images
     under ``sample_data/images/``; the relative paths are resolved to absolute
-    here so the optional stimulus-image background layer renders the page
+    here so the optional stimulus-image background layer renders each screen
     behind the scanpath (aligned to the 2560x1440 OneStop monitor)."""
     words = _resolve_sample_image_paths(_load_bundled("ia"))
     fixations = _resolve_sample_image_paths(_load_bundled("fixations"))

@@ -540,8 +540,9 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled demo, from OneStop: 2 participants, 12 trials each "
-        "(--list-trials shows them).",
+        help="Use the bundled demo, from OneStop: 2 participants, 12 trials each, "
+        "every screen of a trial from title to feedback (--list-trials shows "
+        "them; --screen picks one).",
     )
     src.add_argument(
         "--authoring",

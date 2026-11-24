@@ -130,8 +130,11 @@ class TestBundledSample:
 
         words, fixations = api.load_sample_data(names="canonical")
         trial = "l37_273_2_2_1_Adv"
-        tw = words[words["trial_id"] == trial]
-        tf = fixations[fixations["trial_id"] == trial].sort_values("order_in_trial")
+        tw, tf = (
+            frame[(frame["trial_id"] == trial) & (frame["screen_id"] == "Paragraph")]
+            for frame in (words, fixations)
+        )
+        tf = tf.sort_values("order_in_trial")
         assert detect_word_id_offset(tw, tf) == 0
         assert tw["word_id"].min() == tf["word_id"].min() == 1
         assert float(tf["word_id"].max()) <= float(tw["word_id"].max())

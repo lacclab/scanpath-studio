@@ -118,7 +118,11 @@ def test_an_unknown_scale_is_refused():
 
 @pytest.fixture(scope="module")
 def sample():
-    return api.load_sample_data(names="canonical")
+    """The demo's paragraph screens, so each reading draws its paragraph."""
+    words, fixations = api.load_sample_data(names="canonical")
+    return tuple(
+        frame[frame["screen_id"] == "Paragraph"] for frame in (words, fixations)
+    )
 
 
 def _trial(fixations, pid, tid):
@@ -602,6 +606,8 @@ def test_the_cli_draws_what_the_api_draws(monkeypatch, sample, contrasting_trial
             pid,
             "-t",
             tid,
+            "--screen",
+            "Paragraph",
             "--marker-size-scale",
             "log",
             "--marker-duration-range",

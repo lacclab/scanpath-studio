@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,6 @@ from scanpath_studio.data import (
     normalize_fixations,
     normalize_words,
 )
-from scanpath_studio.measures import cluster_word_lines
 from scanpath_studio.plots import (
     make_comparison_figure,
     make_scanpath_animation,
@@ -43,6 +43,13 @@ def normalized_demo():
     words = normalize_words(words_raw, word_schema)
     fixations = normalize_fixations(fixations_raw, fix_schema)
     return words, fixations
+
+
+@pytest.fixture(scope="module")
+def paragraph_demo(normalized_demo):
+    """The demo's Paragraph screens: one coordinate space per reading, as a
+    comparison draws each scanpath."""
+    return tuple(frame[frame["screen_id"] == "Paragraph"] for frame in normalized_demo)
 
 
 class TestSampleDataPipeline:
@@ -218,7 +225,7 @@ class TestPipelineFigures:
 
     @pytest.mark.parametrize("compare", [False, True])
     def test_layout_shapes_are_validated_about_once(
-        self, normalized_demo, monkeypatch, compare
+        self, paragraph_demo, monkeypatch, compare
     ):
         """Plotly re-validates every layout shape on each addition — an
         `add_shape`, or `update_layout(shapes=existing + new)`, which also
@@ -227,7 +234,7 @@ class TestPipelineFigures:
         each shape five or six times: 1.3 s for a PoTeC page with both layers
         on, 5 s for a comparison. The builders set them in one go; the size
         key, added after the figure is laid out, costs one more pass."""
-        words, fixations = normalized_demo
+        words, fixations = paragraph_demo
         trials = list(
             fixations.groupby(["participant_id", "trial_id"]).size().index[:2]
         )
@@ -285,8 +292,8 @@ class TestPipelineFigures:
         # long reading is bounded to the grid cap rather than the fixation count.
         assert 1 <= len(fig.frames) <= 360, "Animation should have grid frames"
 
-    def test_comparison_figure(self, normalized_demo):
-        words, fixations = normalized_demo
+    def test_comparison_figure(self, paragraph_demo):
+        words, fixations = paragraph_demo
         participants = sorted(words["participant_id"].unique())
         if len(participants) < 2:
             pytest.skip("Need >=2 participants for comparison")
@@ -347,16 +354,28 @@ class TestStimuliTable:
         words, _ = normalized_demo
         table = self._build(words)
         first_id = table.iloc[0]["Text ID"]
-        # The reconstruction is just the text column joined in word order.
+        # Each screen opens with its marker, in the order the reader saw them,
+        # and holds the text column joined in line and word order.
         src = words[words["text_id"] == first_id].drop_duplicates(
-            subset=["text_id", "word_id"]
+            subset=["screen_id", "word_id"]
         )
-        src = src.sort_values(["line_idx", "word_id"])
-        expected = " ".join(w for w in src["text"].astype(str) if w and w != "nan")
+        src = src.sort_values(["screen_index", "line_idx", "word_id"])
+        expected = " ".join(
+            " ".join([f"[{screen}]", *page["text"].astype(str)])
+            for screen, page in src.groupby("screen_id", sort=False)
+        )
         row = table[table["Text ID"] == first_id].iloc[0]
         assert row["Text"] == expected
-        assert row["Text"].strip() != ""
-        assert row["# Words"] > 0
+        assert re.findall(r"\[(\w+)\]", row["Text"]) == [
+            "Title",
+            "Question_Preview",
+            "Paragraph",
+            "Questions",
+            "Answers",
+            "Feedback",
+        ]
+        assert row["# Screens"] == 6
+        assert row["# Words"] == len(src)
 
     @staticmethod
     def _paged_words(readers=("p1",), **extra):
@@ -417,11 +436,9 @@ class TestStimuliTable:
         text = self._build(words).iloc[0]["Text"]
         assert text == "[page-10 · reading] First page [page-2 · question] Second page"
 
-    def test_single_screen_texts_have_no_markers_or_screen_column(
-        self, normalized_demo
-    ):
-        words, _ = normalized_demo
-        table = self._build(words)
+    def test_single_screen_texts_have_no_markers_or_screen_column(self, paragraph_demo):
+        words, _ = paragraph_demo
+        table = self._build(words.drop(columns=["screen_id", "screen_index"]))
         assert "# Screens" not in table.columns
         assert not table["Text"].str.startswith("[").any()
 
@@ -457,92 +474,64 @@ class TestPerWordMetricsOnSample:
         assert canonical_present
 
 
-def _png_text_lines(path: str) -> list[tuple[int, int]]:
-    """Vertical (top, bottom) pixel bands of each text line in a paragraph PNG —
-    runs of rows that carry ink (dark pixels)."""
-    gray = np.asarray(Image.open(path).convert("L"))
-    has_ink = (gray < 128).sum(axis=1) > 1
-    bands: list[tuple[int, int]] = []
-    start: int | None = None
-    for row, inked in enumerate(has_ink):
-        if inked and start is None:
-            start = row
-        elif not inked and start is not None:
-            bands.append((start, row - 1))
-            start = None
-    if start is not None:
-        bands.append((start, len(has_ink) - 1))
-    return bands
-
-
-def _png_first_ink_col(path: str) -> int:
-    """Leftmost column carrying ink (the left edge of the rendered text)."""
-    gray = np.asarray(Image.open(path).convert("L"))
-    return int(np.argmax((gray < 128).sum(axis=0) > 0))
+def _ink(path: str) -> np.ndarray:
+    """Where a stimulus PNG carries ink: any channel well below its white
+    background, so the coloured feedback word counts as well as black text."""
+    return np.asarray(Image.open(path).convert("RGB")).min(axis=2) < 128
 
 
 class TestStimulusImageAlignment:
-    """The bundled demo ships per-trial stimulus PNGs placed at data
-    (``image_x``, ``image_y``). Each rendered PNG's text lines align with the
-    recorded word boxes when the sample builder places it at the correct origin.
+    """Each demo screen's stimulus PNG sits under its word boxes.
 
-    Correct origin for the OneStop demo is ``(image_x=368, image_y=186)`` — where
-    the experiment's own Experiment Builder drew the paragraph image (its
-    ``.vcl`` view commands). Each word box is then centred on its
-    word: half a space of margin on each side, and the line centers coincide.
+    The builder places each image where the experiment's DataViewer draw list
+    drew it (``image_x``, ``image_y``). OneStop's word boxes are centred on
+    their words — half a space of margin left and right, the line's leading
+    above and below — so on a correctly placed image the ink inside each box
+    has about as much margin on one side as on the other. An image placed a
+    few pixels off shifts that balance for every box on its screen: a 5 px
+    shift sideways or a 36 px shift down, or the flush-left origin (358), fails.
     """
 
-    def test_image_origin_aligns_page_to_word_boxes(self, normalized_demo):
+    def test_every_screen_has_its_image(self, normalized_demo):
+        words, fixations = normalized_demo
+        assert set(words["screen_id"]) == {
+            "Title",
+            "Question_Preview",
+            "Paragraph",
+            "Questions",
+            "Answers",
+            "Feedback",
+        }
+        for frame in (words, fixations):
+            assert frame["image_path"].notna().all()
+            assert frame["image_path"].map(os.path.exists).all()
+
+    def test_every_word_sits_centred_on_its_box(self, normalized_demo):
         words, _ = normalized_demo
-        assert "image_path" in words.columns, "demo lost its stimulus-image columns"
-
-        checked = 0
+        skews = []
         for image_path, group in words.groupby("image_path", sort=True):
-            if not isinstance(image_path, str) or not os.path.exists(image_path):
-                continue
-            # One set of boxes per paragraph (identical across readers) → dedupe.
-            boxes = group.drop_duplicates(subset=["x", "y", "width", "height"]).copy()
-            image_x = float(boxes["image_x"].iloc[0])
-            image_y = float(boxes["image_y"].iloc[0])
-
-            # Box line centers (visual lines inferred from box-y clustering).
-            boxes["_line"] = cluster_word_lines(boxes)
-            box_centers = sorted(
-                boxes.groupby("_line")
-                .apply(lambda g: float((g["y"] + g["height"] / 2).mean()))
-                .tolist()
-            )
-            # PNG line centers mapped into data coords via the image origin.
-            bands = _png_text_lines(image_path)
-            png_centers = sorted(image_y + (top + bot) / 2 for top, bot in bands)
-
-            assert len(png_centers) == len(box_centers), (
-                f"{os.path.basename(image_path)}: PNG has {len(png_centers)} text "
-                f"lines but the boxes cluster into {len(box_centers)}"
-            )
-            diffs = [abs(p - b) for p, b in zip(png_centers, box_centers)]
-            # A correct origin lands every line within a few px; a 36 px
-            # misplacement (or any regen drift) blows past this.
-            assert max(diffs) < 12.0, (
-                f"{os.path.basename(image_path)}: stimulus image misaligned "
-                f"vertically (max line-center diff {max(diffs):.1f}px, image_y={image_y})"
-            )
-
-            # Horizontal: the boxes are centred on their words, so the page's
-            # left ink edge sits half a space inside the leftmost box —
-            # image_x + first-ink-col ≈ min box x + advance / 2. A flush-left
-            # origin (358) lands ~10 px off and fails.
-            first = boxes.loc[boxes["x"].idxmin()]
-            half_space = float(first["width"]) / (len(str(first["text"])) + 1) / 2
-            left_edge = image_x + _png_first_ink_col(image_path)
-            expected = float(boxes["x"].min()) + half_space
-            assert abs(left_edge - expected) < 5.0, (
-                f"{os.path.basename(image_path)}: stimulus image misaligned "
-                f"horizontally (left edge {left_edge:.1f}, expected {expected:.1f})"
-            )
-            checked += 1
-
-        assert checked >= 1, "no bundled stimulus images were available to check"
+            ink = _ink(image_path)
+            name = os.path.basename(image_path)
+            boxes = group.drop_duplicates(subset=["x", "y", "width", "height"])
+            for box in boxes.itertuples(index=False):
+                x0, y0 = int(box.x - box.image_x), int(box.y - box.image_y)
+                x1, y1 = x0 + int(box.width), y0 + int(box.height)
+                region = ink[max(y0, 0) : max(y1, 0), max(x0, 0) : max(x1, 0)]
+                assert region.any(), f"{name}: no ink under the box of {box.text!r}"
+                columns = np.flatnonzero(region.any(axis=0)) + max(x0, 0) - x0
+                rows = np.flatnonzero(region.any(axis=1)) + max(y0, 0) - y0
+                horizontal = columns[0] - (x1 - x0 - 1 - columns[-1])
+                vertical = rows[0] - (y1 - y0 - 1 - rows[-1])
+                skews.append((name, box.text, horizontal, vertical))
+        table = pd.DataFrame(skews, columns=["image", "word", "horizontal", "vertical"])
+        # Glyph shapes tip single words a few pixels either way ('lone-wolf
+        # leans right, work. left); a misplaced image moves the whole screen.
+        worst = table[["horizontal", "vertical"]].abs()
+        assert worst["horizontal"].max() <= 10, table.loc[worst["horizontal"].idxmax()]
+        assert worst["vertical"].max() <= 16, table.loc[worst["vertical"].idxmax()]
+        medians = table.groupby("image")[["horizontal", "vertical"]].median().abs()
+        assert (medians["horizontal"] <= 3).all(), medians.nlargest(3, "horizontal")
+        assert (medians["vertical"] <= 6).all(), medians.nlargest(3, "vertical")
 
 
 def test_true_scale_html_carries_zoom_transform() -> None:

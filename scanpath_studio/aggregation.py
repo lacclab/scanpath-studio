@@ -1176,7 +1176,9 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                     row["mean_forward_saccade_px"] = float(forward.mean())
             if "is_regression" in fx.columns:
                 row["regression_rate"] = float(
-                    pd.to_numeric(fx["is_regression"], errors="coerce").mean()
+                    pd.to_numeric(fx["is_regression"], errors="coerce")
+                    .astype("float64")
+                    .mean()
                 )
             reading = _trial_reading_time_ms(fx)
             if not reading.empty:
@@ -1195,13 +1197,19 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                     .sum()
                 )
         if not wd.empty:
+            # As float64: a flag column of a nullable dtype whose values are all
+            # missing (a one-word screen) has a mean of NA, which float() refuses.
             if "skip_flag" in wd.columns:
                 row["skip_rate"] = float(
-                    pd.to_numeric(wd["skip_flag"], errors="coerce").mean()
+                    pd.to_numeric(wd["skip_flag"], errors="coerce")
+                    .astype("float64")
+                    .mean()
                 )
             if "regression_in_flag" in wd.columns:
                 row["regression_in_rate"] = float(
-                    pd.to_numeric(wd["regression_in_flag"], errors="coerce").mean()
+                    pd.to_numeric(wd["regression_in_flag"], errors="coerce")
+                    .astype("float64")
+                    .mean()
                 )
         if "regression_in_rate" not in row and "regression_rate" in row:
             row["regression_in_rate"] = row["regression_rate"]

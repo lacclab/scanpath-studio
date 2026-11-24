@@ -632,7 +632,11 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
 
 @pytest.mark.parametrize("all_trials", [False, True], ids=["per-trial", "all-trials"])
 def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
-    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    # The Paragraph screen has room for an eight-fixation window. Its
+    # fixations are numbered after the earlier screens' in the reading.
+    at.query_params["screen"] = "Paragraph"
+    at.run()
     next(box for box in at.selectbox if box.label == "Axis layout").set_value(
         "Elapsed time by fixation index"
     ).run()
@@ -642,7 +646,8 @@ def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     window = next(
         slider for slider in at.slider if slider.label == "Fixation index range"
     )
-    window.set_range(5, 12).run()
+    picked = (window.min + 4, window.min + 11)
+    window.set_range(*picked).run()
     at.button(key="design_save").click().run()
     at.text_input(key="design_new_name").set_value("Reading clock")
     at.button(key="design_save_go").click().run()
@@ -656,17 +661,15 @@ def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     check_clock()
     trial = at.selectbox(key="single_trial_id").value
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
-    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    assert tuple(at.session_state["single_fix_range"]) == picked
     at.button(key="single_next_trial").click().run()
     other_trial = at.selectbox(key="single_trial_id").value
     assert other_trial != trial
     check_clock()
-    full_window = (
-        1,
-        next(s for s in at.slider if s.label == "Fixation index range").max,
-    )
+    other_window = next(s for s in at.slider if s.label == "Fixation index range")
+    full_window = (other_window.min, other_window.max)
     assert tuple(at.session_state["single_fix_range"]) == (
-        (5, 12) if all_trials else full_window
+        picked if all_trials else full_window
     )
     at.button(key="hidden_note_to_advanced").click().run()
     at.button(key="viz_view_illustration").click().run()
@@ -674,12 +677,12 @@ def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     assert at.checkbox(key="global_fixation_snap_to_line").value
     at.button(key="design_apply_Reading clock").click().run()
     check_clock()
-    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    assert tuple(at.session_state["single_fix_range"]) == picked
 
     at.button(key="reset_viz_settings_btn").click().run()
     at.button(key="reset_viz_cancel").click().run()
     check_clock()
-    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    assert tuple(at.session_state["single_fix_range"]) == picked
     at.button(key="reset_viz_settings_btn").click().run()
     at.button(key="reset_viz_confirm").click().run()
     assert not at.exception
@@ -691,7 +694,7 @@ def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     assert tuple(at.session_state["single_fix_range"]) == full_window
     at.button(key="design_apply_Reading clock").click().run()
     check_clock()
-    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    assert tuple(at.session_state["single_fix_range"]) == picked
 
 
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])

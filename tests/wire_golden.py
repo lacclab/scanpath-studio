@@ -513,6 +513,11 @@ FIGURE_CASES: dict[str, tuple[str, dict[str, Any]]] = {
 }
 
 
+#: The screen every pinned figure draws: each demo trial has several, and the
+#: pinned figures are of its paragraph.
+SCREEN = "Paragraph"
+
+
 def build_figure(kind: str, options: Mapping[str, Any]):
     """One pinned figure, through the public API on the bundled demo."""
     from scanpath_studio import api
@@ -520,7 +525,11 @@ def build_figure(kind: str, options: Mapping[str, Any]):
     words, fixations = api.load_sample_data()
     if kind == "static":
         raw_gaze = api.load_sample_raw_gaze()
-        return api.plot_scanpath(words, fixations, *TRIAL, raw_gaze=raw_gaze, **options)
+        return api.plot_scanpath(
+            words, fixations, *TRIAL, screen=SCREEN, raw_gaze=raw_gaze, **options
+        )
     if kind == "animation":
-        return api.animate_scanpath(words, fixations, *TRIAL, **options)
-    return api.compare_scanpaths(words, fixations, TRIAL, OTHER, **options)
+        return api.animate_scanpath(words, fixations, *TRIAL, screen=SCREEN, **options)
+    return api.compare_scanpaths(
+        words, fixations, TRIAL, OTHER, screen=SCREEN, screen_b=SCREEN, **options
+    )

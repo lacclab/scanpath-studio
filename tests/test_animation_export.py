@@ -536,16 +536,20 @@ class TestRealTimeClip:
 
         words, fixations = api.load_sample_data(names="canonical")
         captured = self._capture(monkeypatch, "mp4")
-        for (pid, tid), trial in fixations.groupby(["participant_id", "trial_id"]):
-            fig = api.animate_scanpath(words, fixations, pid, tid)
+        # Each screen of a multi-screen reading is its own replay, timed from
+        # that screen's first fixation.
+        for (pid, tid, screen), part in fixations.groupby(
+            ["participant_id", "trial_id", "screen_id"]
+        ):
+            fig = api.animate_scanpath(words, fixations, pid, tid, screen=screen)
             export_animation(fig, fmt="mp4")
             times = fig.layout.meta["scanpath_frame_times_ms"]
-            onsets = trial["timestamp_ms"].sort_values().to_numpy()
+            onsets = part["timestamp_ms"].sort_values().to_numpy()
             onsets = onsets - onsets[0]
             shown_at_end = np.searchsorted(
                 onsets, times[captured["indices"][-1]], side="right"
             )
-            assert shown_at_end == len(onsets), (pid, tid)
+            assert shown_at_end == len(onsets), (pid, tid, screen)
 
 
 class TestEndToEnd:

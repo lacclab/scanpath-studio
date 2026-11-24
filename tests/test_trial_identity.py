@@ -175,7 +175,9 @@ class TestOnTheBundledDemo:
     """The bundled demo, mapped correctly and under-specified."""
 
     @staticmethod
-    def _normalized(trial_columns=None):
+    def _normalized(trial_columns=None, *, paragraphs_only=False):
+        """``paragraphs_only`` keeps the Paragraph screen of each reading and
+        maps no screen fields, so the demo reads as single-screen data."""
         from scanpath_studio.data import (
             harmonize_frames,
             load_sample_data,
@@ -186,8 +188,14 @@ class TestOnTheBundledDemo:
         )
 
         raw_words, raw_fixations, *_ = load_sample_data()
+        if paragraphs_only:
+            raw_words = raw_words[raw_words["part"].eq("Paragraph")]
+            raw_fixations = raw_fixations[raw_fixations["part"].eq("Paragraph")]
         word_schema = propose_word_schema(raw_words)
         fix_schema = propose_fix_schema(raw_fixations)
+        if paragraphs_only:
+            for schema in (word_schema, fix_schema):
+                schema["screen_id"] = schema["screen_index"] = None
         if trial_columns is not None:
             word_schema["trial"] = list(trial_columns)
             fix_schema["trial"] = list(trial_columns)
@@ -203,8 +211,14 @@ class TestOnTheBundledDemo:
     def test_an_under_specified_mapping_is_caught(self):
         """Drop the columns that separate the readings from the Trial ID —
         a composite mapping, which `_disambiguate_repeated_readings` treats as
-        authoritative and does *not* rescue — and every signal lights up."""
-        words, fixations = self._normalized(["article_id", "article_batch"])
+        authoritative and does *not* rescue — and every signal lights up.
+
+        With the screens mapped, the merge never gets that far: each merged
+        trial holds one Screen ID at several screen positions."""
+        merged = ["article_id", "article_batch"]
+        with pytest.raises(ValueError, match="two `screen_index` values"):
+            self._normalized(merged)
+        words, fixations = self._normalized(merged, paragraphs_only=True)
         report = diagnose_trial_identity(words, fixations)
         assert report["duplicate_word_rows"] > 0
         assert report["repeated_fixation_id_trials"] > 0

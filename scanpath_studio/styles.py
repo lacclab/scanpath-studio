@@ -1329,6 +1329,68 @@ def get_app_css() -> str:
         width: auto !important;
         min-width: 0 !important;
     }
+    /* The screen named in a line of text: a phone's stand-in for the
+       dropdown, hidden (wrapper and all, so it leaves no gap) wherever the
+       dropdown fits. */
+    [class*="_screen_cell"] > [data-testid="stLayoutWrapper"]:has(
+        > [class*="_screen_brief"]) {
+        display: none !important;
+    }
+    /* On a phone the trial's ◀ ▶ and the screen cell (with the row's menus)
+       share one line, as ◀ ▶ and the menus do on a trial without screens, so
+       a multi-screen trial does not push the figure's view choices down a
+       row. The cell drops its dropdown and label for the line of text above;
+       its own ◀ ▶ step the screens, and the dropdown is back on a wider
+       window. The text ellipsises, so a long screen name cannot wrap the
+       line either. */
+    @media (max-width: 639px) {
+        [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="_row_tail"]) {
+            column-gap: 0.5rem !important;
+            justify-content: flex-end;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="_trail_steps"]),
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="_row_tail"]) {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: 100%;
+        }
+        [class*="_screen_cell"] > [class*="st-key-"][class*="_screen_id"] {
+            display: none !important;
+        }
+        /* Without its dropdown the cell is only as wide as what it holds,
+           and it and the menus sit close, so the line holds ◀ ▶ too. */
+        [class*="_row_tail"] > [data-testid="stLayoutWrapper"]:has(
+            [class*="screen_picker"]) {
+            flex: 0 1 auto !important;
+        }
+        [class*="_row_tail"], [class*="_screen_cell"] {
+            column-gap: 0.25rem !important;
+        }
+        [class*="_screen_cell"] > [data-testid="stLayoutWrapper"]:has(
+            > [class*="_screen_brief"]) {
+            display: flex !important;
+            flex: 0 1 auto !important;
+            width: auto !important;
+            max-width: 4.25rem;
+            min-width: 0 !important;
+            align-self: center;
+        }
+        [class*="_screen_brief"] :is([data-testid="stMarkdownContainer"], p) {
+            margin: 0 !important;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.85rem;
+            line-height: 1.2;
+        }
+    }
     /* A slider's end labels stay on one line. The trial scrubber's
        labels are `1/24 · <trial id>`, and a long id would otherwise wrap onto a
        second line under the slider, where the chip strip below covers it. Each

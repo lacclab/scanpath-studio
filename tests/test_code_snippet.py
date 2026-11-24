@@ -1971,8 +1971,12 @@ def test_render_reads_bs_raw_gaze_under_its_mapping(
             participant,
             "-t",
             trial,
+            "--screen",
+            "Paragraph",
             "--compare-with",
             f"{participant}:{trial}",
+            "--compare-screen",
+            "Paragraph",
             "--compare-words",
             b_words,
             "--compare-word-schema",
@@ -1993,7 +1997,8 @@ def test_render_reads_bs_raw_gaze_under_its_mapping(
     )
     (fig,) = figures
     samples = [t for t in fig.data if t.name and t.name.endswith("raw gaze")]
-    assert [len(t.x) for t in samples] == [len(gaze)]
+    # The reading spans several screens; B draws the samples of the one named.
+    assert [len(t.x) for t in samples] == [int((gaze["part"] == "Paragraph").sum())]
 
 
 def test_figure_code_reads_bs_options_strictly():

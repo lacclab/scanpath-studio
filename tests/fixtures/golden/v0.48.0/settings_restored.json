@@ -202,10 +202,6 @@
   "single_compare_layout": "Overlay",
   "single_compare_stimulus": "Both",
   "single_compare_toggle": false,
-  "single_fix_range": [
-   1,
-   92
-  ],
   "single_fix_range_all_trials": false,
   "single_fix_range_user_set": false,
   "single_playback_speed": 1.0,
@@ -415,10 +411,6 @@
   "single_compare_layout": "Overlay",
   "single_compare_stimulus": "Both",
   "single_compare_toggle": false,
-  "single_fix_range": [
-   1,
-   92
-  ],
   "single_fix_range_all_trials": false,
   "single_fix_range_user_set": false,
   "single_playback_speed": 1.0,

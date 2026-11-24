@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 import pytest
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
 
 from scanpath_studio import plots
+from scanpath_studio.constants import LEGEND_POSITIONS
 from scanpath_studio.plots import (
     apply_legend_layout,
     legend_spec_text,
@@ -754,3 +757,85 @@ def test_a_compare_legend_that_wraps_grows_its_band_instead_of_covering_the_text
     # text has room for every row.
     room = long.layout.margin.t + plots._content_top_inset(long)
     assert room >= plots._default_legend_height(long)
+
+
+# --- no two placed boxes overlap ----------------------------------------------
+
+_SPOTS = [p for p in LEGEND_POSITIONS if p != "auto"]
+
+
+def _placed_boxes(placements, plot_w: float, plot_h: float):
+    """Each placement's content box, in px from the plot's bottom-left corner,
+    as `_LegendSlots.place` puts it; a box's ``pad`` is empty space inside it."""
+    fig = go.Figure(
+        layout={
+            "width": plot_w + 100,
+            "height": plot_h + 110,
+            "margin": {"l": 50, "r": 50, "t": 60, "b": 50},
+        }
+    )
+    slots = plots._LegendSlots(fig, top_start=0.0, inset=0.0)
+    boxes = []
+    for position, w, h, pad in placements:
+        at = slots.place(fig, position, w, h, gap=plots._LEGEND_GAP_PX, pad=pad)
+        width, height, _margin = plots._plot_px(fig)
+        x0 = at["x"] * width + at["dx"] - plots._ANCHOR_SHARE[at["xanchor"]] * w
+        y0 = at["y"] * height + at["dy"] - plots._ANCHOR_SHARE[at["yanchor"]] * h
+        boxes.append((position, (x0 + pad, y0 + pad, x0 + w - pad, y0 + h - pad)))
+    return boxes, (0.0, 0.0, width, height)
+
+
+@settings(max_examples=300)
+# Spots that meet: two inside a corner, two on the top edge outside, a side
+# box below a corner's stack.
+@example(
+    placements=[
+        ("left-inside", 20.0, 96.0, 0.0),
+        ("bottom-left-inside", 20.0, 95.0, 0.0),
+    ],
+    plot=(400, 300),
+)
+@example(
+    placements=[
+        ("top-left-outside", 191.0, 16.0, 0.0),
+        ("top-center-outside", 20.0, 16.0, 0.0),
+    ],
+    plot=(400, 300),
+)
+@example(
+    placements=[
+        ("top-right-inside", 20.0, 16.0, 0.0),
+        ("top-right-inside", 20.0, 96.0, 0.0),
+        ("right-inside", 20.0, 46.0, 0.0),
+    ],
+    plot=(400, 300),
+)
+@given(
+    placements=st.lists(
+        st.tuples(
+            st.sampled_from(_SPOTS),
+            st.floats(20, 300),
+            st.floats(16, 120),
+            st.sampled_from([0.0, 8.0]),
+        ),
+        min_size=2,
+        max_size=4,
+    ),
+    plot=st.sampled_from([(800, 600), (400, 300), (1600, 900)]),
+)
+def test_no_two_legends_or_keys_overlap_wherever_they_are_placed(placements, plot):
+    """The legends, the size key and the highlight key each go to a spot of
+    their own, and each spot stacks its own boxes; two spots on one edge, or
+    round one corner, still meet when a box is wide or tall for the plot. No
+    two boxes overlap, and none placed outside the plot covers it."""
+    boxes, plot_box = _placed_boxes(placements, *plot)
+    for i, (position, box) in enumerate(boxes):
+        if position.endswith("-outside"):
+            assert not plots._boxes_overlap(box, plot_box), (position, box)
+        for other_position, other in boxes[i + 1 :]:
+            assert not plots._boxes_overlap(box, other), (
+                position,
+                box,
+                other_position,
+                other,
+            )

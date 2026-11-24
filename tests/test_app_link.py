@@ -418,3 +418,50 @@ def test_a_saved_dataset_is_named_as_its_list_shows_it(cache_dir):
     query = _query(sps.app_link("pilot 3"))
     assert query["dataset"] == "Pilot 3"
     assert set(query) == {"dataset", "dataset_id", "dataset_digest"}
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Bundled demo", {"source": "demo"}),
+        ("bundled DEMO", {"source": "demo"}),
+        ("PoTeC", {"source": "corpus", "corpus": "potec"}),
+        (
+            "PoTeC — Potsdam Textbook Corpus",
+            {"source": "corpus", "corpus": "potec"},
+        ),
+        ("OneStop · Ordinary reading", {"source": "onestop_ordinary"}),
+        ("onestop · repeated reading", {"source": "onestop_repeated"}),
+    ],
+)
+def test_a_dataset_the_app_ships_is_named_as_share_names_it(name, expected):
+    """The app reads ``?dataset=`` as one someone added, so the demo and the
+    public corpora travel as ``?source=``, as 🔗 Share writes them. A name is
+    the one the list shows: a public corpus's short name."""
+    assert _query(sps.app_link(name)) == expected
+
+
+def test_a_renamed_dataset_the_app_ships_is_found_by_its_new_name():
+    renamed = {"Bundled demo": "Wolf pilot"}
+    assert script_link.builtin_source_params("wolf PILOT", renamed) == {
+        "source": "demo"
+    }
+    assert script_link.builtin_source_params("Wolf pilot") is None
+
+
+def test_the_saved_names_reach_the_link(cache_dir):
+    """A built-in renamed in the app is saved as an alias in the session, and
+    the link finds it by that name."""
+    import json
+
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+
+    words, fixations = sps.load_sample_data(names="canonical")
+    sps.add_dataset("Pilot 3", words, fixations, select=False)
+    manifest_path = cache_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["session"][DATASET_ALIASES_KEY] = {"Bundled demo": "Wolf pilot"}
+    manifest_path.write_text(json.dumps(manifest))
+
+    assert persistence.stored_dataset_aliases() == {"Bundled demo": "Wolf pilot"}
+    assert _query(sps.app_link("Wolf pilot")) == {"source": "demo"}

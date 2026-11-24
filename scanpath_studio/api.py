@@ -5195,8 +5195,9 @@ def app_link(
     **Share → Link** writes the same view. Open it in a browser while the app runs
     on this computer (``scanpath-studio`` serves it at ``localhost:8501``), or let
     ``scanpath-studio open`` start the app and open it. The dataset is one added in
-    the app or with [`add_dataset`][scanpath_studio.api.add_dataset]. The same as
-    ``scanpath-studio open --print``.
+    the app or with [`add_dataset`][scanpath_studio.api.add_dataset], or one the
+    app has itself: the bundled demo or a public corpus, named as its list shows
+    it. The same as ``scanpath-studio open --print``.
 
     For a dataset saved on this computer the link also carries its share ID and
     a digest of its tables, as Share's does, so the app checks it is the same
@@ -5205,8 +5206,7 @@ def app_link(
     nothing from it, and says which dataset is missing.
 
     Args:
-        dataset: The dataset's name in the app's dataset list, ignoring case for
-            one saved on this computer.
+        dataset: The dataset's name in the app's dataset list, ignoring case.
         participant: The participant ID. Without it, a trial ID that only one
             participant has still opens that reading.
         trial: The trial ID. Without it, the app opens the participant's first
@@ -5228,7 +5228,7 @@ def app_link(
             its own patterns.
 
     Returns:
-        The link, ``http://localhost:<port>/?dataset=…``.
+        The link, ``http://localhost:<port>/?…``.
 
     Raises:
         TypeError: An option a link can't carry, or no figure option at all.
@@ -5253,11 +5253,8 @@ def app_link(
     if "palette" in options:
         options["palette"] = resolve_palette(options["palette"])
     _check_colorscales(options)
-    reference = (
-        _persistence.stored_dataset_reference(dataset)
-        if _persistence.persistence_enabled("http://localhost")
-        else None
-    )
+    saving = _persistence.persistence_enabled("http://localhost")
+    reference = _persistence.stored_dataset_reference(dataset) if saving else None
     shown, share_id, digest = reference or (dataset, None, None)
     query = link_query(
         shown,
@@ -5268,6 +5265,7 @@ def app_link(
         options=options,
         share_id=share_id,
         digest=digest,
+        aliases=_persistence.stored_dataset_aliases() if saving else None,
     )
     return local_url(query, port)
 

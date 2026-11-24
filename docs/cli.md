@@ -436,7 +436,8 @@ print(cli_reference("remove"))
 
 ## open
 
-`open` opens the app on a dataset you added, at one reading, with the figure set
+`open` opens the app on a dataset you added, or one the app has itself (the
+bundled demo, a public corpus), at one reading, with the figure set
 by the same flags [`render`](#render-flags) takes. If the app is running on this
 computer, the link opens in your browser. Otherwise `open` starts the app and
 opens the link once it is up. `--print` prints the link instead.
@@ -447,8 +448,8 @@ scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --pr
 ```
 
 The link is the one :material/share: **Share** → **Link** writes for the same view.
-Settings it leaves out keep the values the app has. It names the dataset, so it
-opens only where that dataset was added. A link carries no file: `render`'s
+Settings it leaves out keep the values the app has. It names the dataset, so a
+dataset you added opens only where it was added. A link carries no file: `render`'s
 input, output and `--stimulus-image` flags are refused, and
 `--show-stimulus-image` draws the dataset's own pages. In Python, use
 [`app_link`][scanpath_studio.api.app_link].

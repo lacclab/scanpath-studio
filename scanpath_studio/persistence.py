@@ -2258,6 +2258,23 @@ def stored_dataset_reference(
     return shown, share_id, share_dataset_fingerprint(payload)
 
 
+def stored_dataset_aliases(*, root: Path | None = None) -> dict[str, str]:
+    """The names the saved session gives datasets in its list, renamed ones
+    the app has itself included: ``{source: name}``. Empty when nothing is
+    saved or the saved work can't be read."""
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        return {}
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            manifest = _read_manifest_for_update(root)
+            aliases = _session_map(manifest["session"], DATASET_ALIASES_KEY)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return {}
+    return {str(token): str(alias) for token, alias in aliases.items() if alias}
+
+
 def local_state_restored(session) -> bool:
     """Whether this session has had its one restore attempt already.
 

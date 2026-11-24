@@ -280,8 +280,8 @@ uv run streamlit run streamlit_app.py --server.address 127.0.0.1
 uv run scanpath-studio                       # binds 127.0.0.1 itself
 
 # Tests
-uv run --extra test pytest -n auto                   # the full suite, as CI runs it
-uv run --extra test pytest tests/test_measures.py    # one file
+uv run --extra test pytest -n auto tests/test_measures.py  # the tests for what you changed
+uv run --extra test pytest -n auto                   # the full suite (CI runs it on every PR)
 uv run --extra test pytest --cov                     # coverage; floor in pyproject.toml
 uv run --extra test python scripts/verify_change.py  # see a change work (/verify)
 
@@ -310,11 +310,15 @@ printed example output, CLI and figure-option references, and the Cite page are
 generated at build time by `exec="true"` fences calling
 `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
-CI (GitHub Actions) runs pytest on Python 3.11–3.15, ruff lint + format checks,
-`mkdocs build --strict`, and one `pytest --cov` leg that fails below
-`[tool.coverage.report] fail_under` in `pyproject.toml`. The HTML coverage
-report and the README badge are published with the docs site for each release
-tag.
+CI (GitHub Actions) runs, on every PR and every merge to `main`: the whole
+suite once, on Python 3.12, split over four jobs (`Tests k/4`, by
+`SCANPATH_TEST_SHARD` in `tests/conftest.py`), whose coverage the `Coverage`
+job adds up and fails below `[tool.coverage.report] fail_under` in
+`pyproject.toml`; ruff lint + format checks; `mkdocs build --strict`; a browser
+smoke test; and a Windows export check. Every supported Python (3.11–3.15) runs
+weekly, on each `v*` tag, and by hand (`gh workflow run ci.yml --ref <branch>`,
+which `/release` does before tagging). The HTML coverage report and the README
+badge are published with the docs site for each release tag.
 
 ## Code style
 

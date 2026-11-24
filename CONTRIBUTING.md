@@ -30,10 +30,17 @@ an old server holds the port (`lsof -nP -iTCP:8501 -sTCP:LISTEN`).
 ## Before you open a PR
 
 ```bash
-uv run --extra test pytest -n auto
+uv run --extra test pytest -n auto tests/test_<module>.py   # the tests for what you changed
 uv run --extra lint ruff check .
 uv run --extra lint ruff format .
 ```
+
+- **Run the tests for what you changed**, not the whole suite: CI runs the
+  whole suite on every PR, split over four jobs. Pick `tests/test_<module>.py`
+  for each module you touched and every test file that names a function you
+  changed. Run the full suite (`pytest -n auto`) yourself only when a change
+  reaches machinery most tests go through, such as `tests/conftest.py` or
+  normalization.
 
 - **Use the project's toolchain** (`uv run`), not a bare `python`/`ruff` on
   `PATH`: CI resolves the newest pandas the bounds allow and pins ruff exactly,

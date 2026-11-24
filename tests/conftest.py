@@ -1,5 +1,7 @@
 """Pytest configuration and fixtures for scanpath visualization tests."""
 
+import os
+import zlib
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +17,31 @@ from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 #: it, not the process CWD, so ``"streamlit_app.py"`` would look for
 #: ``tests/streamlit_app.py``. Always pass this constant.
 APP_SCRIPT = str(Path(__file__).resolve().parents[1] / "streamlit_app.py")
+
+#: ``k/n``: run only the k-th of n disjoint shares of the suite, so CI can
+#: split one run over n machines. Each test goes to the share its node id hashes
+#: to, the same in every process (xdist workers collect independently), and
+#: the n shares together are the whole suite.
+SHARD_ENV = "SCANPATH_TEST_SHARD"
+
+
+def shard_of(nodeid: str, total: int) -> int:
+    """The 1-based share of ``total`` that the test ``nodeid`` belongs to."""
+    return zlib.crc32(nodeid.encode("utf-8")) % total + 1
+
+
+def pytest_collection_modifyitems(config, items):
+    spec = os.environ.get(SHARD_ENV)
+    if not spec:
+        return
+    index, total = (int(part) for part in spec.split("/"))
+    if not 1 <= index <= total:
+        raise pytest.UsageError(f"{SHARD_ENV}={spec}: expected k/n with 1 <= k <= n")
+    kept = [item for item in items if shard_of(item.nodeid, total) == index]
+    config.hook.pytest_deselected(
+        items=[item for item in items if shard_of(item.nodeid, total) != index]
+    )
+    items[:] = kept
 
 
 @pytest.fixture(autouse=True, scope="session")

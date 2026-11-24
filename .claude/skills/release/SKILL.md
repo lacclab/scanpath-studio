@@ -61,8 +61,11 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    settings files and recovery cache) and refreshes the figure digests.
    `tests/test_wire_golden.py` then keeps every release's captures restoring,
    which is how a later refactor learns it broke a link users hold.
-7. **Full test run** — `pytest -n auto`. Stop and report failures; do not
-   release a failing tree.
+7. **Every supported Python** — push the release branch and run CI's
+   all-versions job on it: `gh workflow run ci.yml --ref <branch>`, then wait
+   for that run (`gh run watch`, in the background). PRs test one Python only,
+   so this is where 3.11–3.15 are checked before anything is published. Stop
+   and report failures; do not release a failing tree.
 8. **Commit + PR** — commit the changes (the three files, the golden captures and the deleted fragments) with message `Release v<version>`
    (no AI co-author trailer — repo rule), push the branch, and open a PR to
    `main`, and turn on auto-merge so it lands once CI is green. Do not tag the

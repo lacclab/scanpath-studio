@@ -16,11 +16,15 @@ output). Fix trivial failures (formatting) directly; report anything else.
 2. **Format** — `uv run --extra lint ruff format .` (CI gates on both; this
    one rewrites files — if it changed anything, say which files). Run these
    even for "docs-only" changes — repo rule.
-3. **Tests** — `pytest -n auto`, in the project's environment (e.g.
-   `uv run --extra test pytest -n auto` — not a bare `pytest` from `PATH`, which
-   may be another interpreter and another pandas). If the diff is small and clearly scoped,
-   you may first run the affected test files for fast feedback, but the full
-   suite is the gate.
+3. **Tests** — the tests for what the diff touches, in the project's
+   environment (`uv run --extra test pytest -n auto <files>` — not a bare
+   `pytest` from `PATH`, which may be another interpreter and another pandas):
+   `tests/test_<module>.py` for each changed module, every test file that names
+   a changed function (`grep -l`), and `tests/test_properties.py` when a link,
+   settings file or migration changed. CI runs the whole suite on the PR, so
+   don't run it here as well — except when the diff changes machinery most
+   tests go through (`conftest.py`, the session-state holds in `controls.py`,
+   normalization in `data.py`, `plots.FigureSettings`).
 4. **Changelog** — `git diff` + `git status` to see the pending work; if it
    is user-visible or a bug fix, it needs a fragment
    `changelog.d/<issue>.<group>.md` (or `<slug>.<group>.md` when there is no

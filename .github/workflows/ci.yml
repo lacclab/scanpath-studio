@@ -1,5 +1,10 @@
 name: CI
 
+# The whole suite runs once per change: on Python 3.12, split over four
+# machines, with coverage. That is what a PR waits for. Every supported Python
+# (3.11–3.15) runs weekly and on each release tag: a failure on one version
+# but not the others has been rare enough that running five on every PR cost
+# far more time than it caught.
 on:
   pull_request:
     branches: [main]
@@ -7,11 +12,14 @@ on:
   # own can break it together, and nothing else runs the suite there.
   push:
     branches: [main]
+    tags: ["v*"]
   # Weekly, on whatever versions resolve that day. The install is unpinned, so
   # a dependency release can turn main red with no code change; this finds it
   # before the next unrelated PR does.
   schedule:
     - cron: "41 4 * * 1"
+  # By hand: every supported Python on any branch, e.g. a release branch
+  # before it is tagged (`gh workflow run ci.yml --ref <branch>`).
   workflow_dispatch:
 
 # Least privilege for the default GITHUB_TOKEN: every job here checks out,
@@ -26,8 +34,106 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  # The suite in four shares (`SCANPATH_TEST_SHARD` in tests/conftest.py), each
+  # measuring its own coverage; the Coverage job below adds them up.
+  tests:
+    name: Tests ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      # uv resolves + installs the wheel-heavy stack far faster than pip, and
+      # its restored cache makes repeat runs near-instant. --system targets the
+      # setup-python interpreter.
+      - name: Install package + test deps
+        run: uv pip install --system -e ".[test]"
+
+      - name: Render the bundled sample from the installed wheel
+        if: matrix.shard == 1
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
+          uv venv --python 3.12 "$RUNNER_TEMP/wheel-env"
+          uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" "$RUNNER_TEMP"/wheel/*.whl
+          cd "$RUNNER_TEMP"
+          wheel-env/bin/scanpath-studio render --sample -o sample.html
+          test -s sample.html
+
+      # -n auto fans the share across the runner's cores; the Streamlit AppTest
+      # integration tests are CPU-bound app boots and dominate the runtime.
+      # One share's coverage is far below the floor, so the floor is checked
+      # once the shares are combined; `[tool.coverage.run] core = "sysmon"`
+      # keeps measuring cheap on 3.12.
+      - name: Run pytest (share ${{ matrix.shard }} of 4)
+        env:
+          SCANPATH_TEST_SHARD: ${{ matrix.shard }}/4
+          COVERAGE_FILE: .coverage.share${{ matrix.shard }}
+        run: pytest -q -n auto --cov --cov-report= --cov-fail-under=0
+
+      - name: Keep this share's coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.shard }}
+          path: .coverage.share${{ matrix.shard }}
+          include-hidden-files: true
+          retention-days: 1
+
+  # The floor lives in pyproject.toml ([tool.coverage.report] fail_under), so
+  # this job and a local `pytest --cov` gate on the same value.
+  coverage:
+    name: Coverage
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage
+        run: pip install "coverage>=7.9"
+
+      - name: Collect the shares
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Combine
+        run: coverage combine
+
+      # The number in the PR, without needing a third-party service: the Docs
+      # workflow publishes the browsable report + the README badge with each
+      # release. The report exits non-zero below the floor.
+      - name: Check the floor
+        run: |
+          echo '## Coverage' >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+  # Every supported Python, weekly and on release tags (or by hand).
+  versions:
     name: Test on Python ${{ matrix.python-version }}
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+      || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,26 +154,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
 
-      # uv resolves + installs the wheel-heavy stack far faster than pip, and
-      # its restored cache makes repeat runs near-instant. --system targets the
-      # setup-python interpreter for this matrix leg.
       - name: Install package + test deps
         run: uv pip install --system -e ".[test]"
 
-      - name: Render the bundled sample from the installed wheel
-        if: matrix.python-version == '3.12'
-        run: |
-          uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
-          uv venv --python 3.12 "$RUNNER_TEMP/wheel-env"
-          uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" "$RUNNER_TEMP"/wheel/*.whl
-          cd "$RUNNER_TEMP"
-          wheel-env/bin/scanpath-studio render --sample -o sample.html
-          test -s sample.html
-
       - name: Run pytest
-        # -n auto fans the suite across the runner's cores; the Streamlit
-        # AppTest integration tests are CPU-bound app boots and dominate the
-        # runtime, so this is a ~3x wall-clock win.
         run: pytest -q -n auto
 
   windows-export:
@@ -87,44 +177,6 @@ jobs:
           python -m pytest -q
           tests/test_export_naming.py::test_extract_portable_bundle_preserves_original_ids
           tests/test_persistence.py::test_two_processes_cannot_replace_the_same_annotation_snapshot
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: pyproject.toml
-
-      - name: Install package + test deps
-        run: uv pip install --system -e ".[test]"
-
-      # One leg only: the number does not vary by interpreter, and --cov costs
-      # tracing overhead on top of the matrix above. The floor lives in
-      # pyproject.toml ([tool.coverage.report] fail_under), so this step and a
-      # local `pytest --cov` gate on the same value. So does the measurement
-      # core: `[tool.coverage.run] core = "sysmon"` is what keeps this leg near
-      # the plain ones on 3.12 instead of 2.7x slower.
-      - name: Run pytest with coverage
-        run: pytest -q -n auto --cov
-
-      # The number in the PR, without needing a third-party service: the Docs
-      # workflow publishes the browsable report + the README badge with each
-      # release.
-      - name: Summarize
-        if: always()
-        run: |
-          echo '## Coverage' >> "$GITHUB_STEP_SUMMARY"
-          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
 
   # The app in a real browser (tests/test_browser_smoke.py): it loads, the
   # true-scale figure draws, a rail popover opens. AppTest runs no frontend, so

@@ -64,7 +64,8 @@ reproduce it; `tests/test_render_every_option.py` fails on one it cannot.
 ## Close-out checklist (verify each, report each)
 
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
-- [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
+- [ ] Tests added (`tests/`); the tests for what changed pass (`/preflight`
+      check 3), and CI runs the whole suite on the PR
 - [ ] Seen working on all four surfaces: `/verify` with the option's spelling
       on each (`scripts/verify_change.py --query … --render-args … --api-kwargs …`),
       and a screenshot when it is visible

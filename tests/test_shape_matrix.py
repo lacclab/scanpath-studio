@@ -1,11 +1,15 @@
-"""Every shape of data the app reads, through every surface that lists, draws,
-measures or exports it.
+"""Every shape of data the app reads, through every surface that lists, draws
+or exports it.
 
 A new shape — raw gaze as the only table, trials over several screens, Word
 IDs spelt as text, a trial ID composed of two columns — has repeatedly reached
 some consumers and not others. Each cell loads one shape the way a user's files
-arrive and runs one surface on it. A cell that is not meant to work is in
-`UNSUPPORTED`, with the reason; every other cell must work.
+arrive and runs one surface on it. What a cell expects is stated with the shape,
+from its input files or as constants, never read back from what the code under
+test loaded: so breaking a shape's defining feature (the escaping in a
+composite id, the matching of text keys, the choice of one screen) fails its
+cells. A cell that is not meant to work is in `UNSUPPORTED`, with the reason it
+is refused for.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ import pandas as pd
 import pytest
 
 import scanpath_studio
-from scanpath_studio import api, cli
+from scanpath_studio import api, cli, plots
 from scanpath_studio.export import ExportOptions, bulk_export
 from scanpath_studio.synthetic import make_multipart_synthetic_data
 
@@ -29,12 +33,20 @@ SAMPLE = Path(scanpath_studio.__file__).parent / "sample_data"
 
 @dataclass(frozen=True)
 class Shape:
-    """One shape's tables as the user's files hold them, and their mappings."""
+    """One shape's tables as the user's files hold them, their mappings, and
+    what every surface should make of them."""
 
     words: pd.DataFrame | None
     fixations: pd.DataFrame | None
     raw_gaze: pd.DataFrame | None = None
     schemas: dict = field(default_factory=dict)
+    #: Each reading the trial pool lists, with the fixations its figure draws
+    #: (its first screen's, on a multipart trial).
+    readings: dict = field(default_factory=dict)
+    #: The figures the export bundle writes: one per reading, one per screen.
+    figures: int = 1
+    #: Where the first reading's fixations land, when the shape fixes it.
+    fixation_x: tuple | None = None
 
     def load(self) -> tuple:
         """``(words, fixations, raw_gaze)`` as the API loads them."""
@@ -55,31 +67,60 @@ class Shape:
         return words, fixations, raw_gaze
 
 
+_READING = ["participant_id", "unique_trial_id"]
+
+
 def _standard() -> Shape:
-    """One reading of the bundled demo, with its recorded gaze."""
+    """Two readings of the bundled demo by one reader, with their gaze."""
     words = pd.read_parquet(SAMPLE / "ia.parquet")
     fixations = pd.read_parquet(SAMPLE / "fixations.parquet")
     raw_gaze = pd.read_parquet(SAMPLE / "raw_gaze.parquet")
-    reading = fixations[["participant_id", "unique_trial_id"]].iloc[0].tolist()
+    reader = fixations["participant_id"].iloc[0]
+    trials = fixations.loc[fixations["participant_id"] == reader, _READING[1]]
+    kept = trials.drop_duplicates().iloc[:2].tolist()
 
-    def one(frame: pd.DataFrame) -> pd.DataFrame:
-        keys = frame[["participant_id", "unique_trial_id"]]
-        return frame[(keys == reading).all(axis=1)].reset_index(drop=True)
+    def two(frame: pd.DataFrame) -> pd.DataFrame:
+        mask = (frame["participant_id"] == reader) & frame[_READING[1]].isin(kept)
+        return frame[mask].reset_index(drop=True)
 
-    return Shape(one(words), one(fixations), one(raw_gaze))
+    fixations = two(fixations)
+    counts = fixations.groupby(_READING).size()
+    return Shape(
+        two(words),
+        fixations,
+        two(raw_gaze),
+        readings={(str(p), str(t)): int(n) for (p, t), n in counts.items()},
+        figures=2,
+    )
 
 
 def _raw_gaze_only() -> Shape:
-    return Shape(None, None, _standard().raw_gaze)
+    raw_gaze = _standard().raw_gaze
+    pairs = raw_gaze[_READING].drop_duplicates().itertuples(index=False)
+    return Shape(
+        None,
+        None,
+        raw_gaze,
+        readings={(str(p), str(t)): 0 for p, t in pairs},
+        figures=2,
+    )
 
 
 def _multipart() -> Shape:
+    """One trial over two screens; its figure is its first screen, "intro"."""
     words, fixations = make_multipart_synthetic_data()
-    return Shape(words, fixations)
+    first = int((fixations["screen_id"] == "intro").sum())
+    return Shape(
+        words,
+        fixations,
+        readings={("synthetic", "multipart_demo"): first},
+        figures=2,
+    )
 
 
 def _text_word_ids() -> Shape:
-    """Word IDs spelt as text, and fixations placed by them alone (no x/y)."""
+    """Word IDs spelt as text, and fixations placed by them alone (no x/y):
+    each lands on the centre of the word with exactly its key."""
     ids = ("Hello_1", "big_2", "world_3")
     words = pd.DataFrame(
         {
@@ -117,11 +158,14 @@ def _text_word_ids() -> Shape:
             },
             "fix_schema": common | {"word_id": "fix_ia", "duration": "duration"},
         },
+        readings={("r1", "t1"): 3},
+        fixation_x=(25.0, 225.0, 125.0),
     )
 
 
 def _composite_trial_id() -> Shape:
-    """A trial named by two columns whose parts contain the separator."""
+    """A trial named by two columns whose parts hold the separator: two readings,
+    which joining the parts plainly would merge into one."""
     words, fixations = [], []
     for (session, item), x in ((("block_A", "B"), 100), (("block", "A_B"), 400)):
         reading = {"participant_id": "r1", "session": session, "item": item}
@@ -155,6 +199,8 @@ def _composite_trial_id() -> Shape:
             "word_schema": api.propose_schema(words, "words") | trial,
             "fix_schema": api.propose_schema(fixations, "fixations") | trial,
         },
+        readings={("r1", "block\\_A_B"): 1, ("r1", "block_A\\_B"): 1},
+        figures=2,
     )
 
 
@@ -167,63 +213,59 @@ SHAPES = {
 }
 
 
-def _first_reading(words, fixations, raw_gaze) -> tuple[str, str]:
+def _pool(words, fixations, raw_gaze) -> list[tuple[str, str]]:
     trials = api.list_trials(words, fixations, raw_gaze=raw_gaze)
-    return str(trials.iloc[0, 0]), str(trials.iloc[0, 1])
+    return [(str(p), str(t)) for p, t in trials.iloc[:, :2].itertuples(index=False)]
 
 
 # --- The surfaces --------------------------------------------------------------
 
 
 def _trial_pool(shape: Shape, tmp_path: Path) -> None:
-    words, fixations, raw_gaze = shape.load()
-    trials = api.list_trials(words, fixations, raw_gaze=raw_gaze)
-    assert len(trials) >= 1
+    assert sorted(_pool(*shape.load())) == sorted(shape.readings)
 
 
-def _draws_the_reading(fig, shape: Shape) -> None:
-    """The figure's fixation markers are exactly the first reading's fixations,
-    of its first screen when the trial has several: no screen pooled into
-    another, no reading's fixations lost."""
-    words, fixations, raw_gaze = shape.load()
-    participant, trial = _first_reading(words, fixations, raw_gaze)
-    expected = 0
-    if fixations is not None:
-        rows = fixations[
-            (fixations["participant_id"].astype(str) == participant)
-            & (fixations["trial_id"].astype(str) == trial)
-        ]
-        if "screen_id" in rows:
-            first = rows.sort_values("screen_index")["screen_id"].iloc[0]
-            rows = rows[rows["screen_id"] == first]
-        expected = len(rows)
+def _drawn_fixations(fig) -> list[int]:
+    """The fixation markers each scanpath of a figure draws."""
+    return [
+        len(trace.x)
+        for trace in fig.data
+        if plots._trace_layer(trace) == "fixations"
+        and "markers" in (trace.mode or "")
+        and not (trace.name or "").endswith("raw gaze")
+    ]
+
+
+def _draws_the_reading(fig, shape: Shape, reading: tuple[str, str]) -> None:
     markers = [trace for trace in fig.data if trace.name == "Fixations"]
     drawn = sum(len(trace.x) for trace in markers)
+    expected = shape.readings[reading]
     assert drawn == expected, f"drew {drawn} fixations, the reading has {expected}"
+    if shape.fixation_x is not None:
+        assert tuple(markers[0].x) == shape.fixation_x, "fixations on the wrong words"
 
 
 def _static(shape: Shape, tmp_path: Path) -> None:
     words, fixations, raw_gaze = shape.load()
-    p, t = _first_reading(words, fixations, raw_gaze)
-    fig = api.plot_scanpath(words, fixations, p, t, raw_gaze=raw_gaze)
-    assert fig.data, "the figure drew nothing"
-    _draws_the_reading(fig, shape)
+    reading = _pool(words, fixations, raw_gaze)[0]
+    fig = api.plot_scanpath(words, fixations, *reading, raw_gaze=raw_gaze)
+    _draws_the_reading(fig, shape, reading)
 
 
 def _replay(shape: Shape, tmp_path: Path) -> None:
     words, fixations, raw_gaze = shape.load()
-    p, t = _first_reading(words, fixations, raw_gaze)
-    fig = api.animate_scanpath(words, fixations, p, t)
-    assert fig.frames, "the replay has no frames"
+    reading = _pool(words, fixations, raw_gaze)[0]
+    fig = api.animate_scanpath(words, fixations, *reading)
+    # The last frame shows every fixation of the replay, as its first trace.
+    assert len(fig.frames[-1].data[0].x) == shape.readings[reading]
 
 
 def _compare(shape: Shape, tmp_path: Path) -> None:
     words, fixations, raw_gaze = shape.load()
-    trials = api.list_trials(words, fixations, raw_gaze=raw_gaze)
-    a = tuple(map(str, trials.iloc[0, :2]))
-    b = tuple(map(str, trials.iloc[-1, :2]))
+    pool = _pool(words, fixations, raw_gaze)
+    a, b = pool[0], pool[-1]
     fig = api.compare_scanpaths(words, fixations, a, b, raw_gaze=raw_gaze)
-    assert fig.data, "the comparison drew nothing"
+    assert _drawn_fixations(fig) == [shape.readings[a], shape.readings[b]]
 
 
 def _render(shape: Shape, tmp_path: Path, *extra: str) -> None:
@@ -253,8 +295,18 @@ def _render(shape: Shape, tmp_path: Path, *extra: str) -> None:
         )
         cli.main([*argv, *extra, "-o", str(out)])
     assert out.stat().st_size > 0
-    if not extra:  # the static figure: the same reading the API draws
-        _draws_the_reading(saved[0], shape)
+    if not extra:  # the static figure, of the first reading `render` lists
+        reading = _pool(*shape.load())[0]
+        _draws_the_reading(saved[0], shape, reading)
+
+
+def _render_replay(shape: Shape, tmp_path: Path) -> None:
+    _render(shape, tmp_path, "--animate")
+
+
+def _render_compare(shape: Shape, tmp_path: Path) -> None:
+    participant, trial = _pool(*shape.load())[-1]
+    _render(shape, tmp_path, "--compare-with", f"{participant}:{trial}")
 
 
 def _export(shape: Shape, tmp_path: Path) -> None:
@@ -283,22 +335,13 @@ def _export(shape: Shape, tmp_path: Path) -> None:
     )
     assert not progress.errors and not progress.figures_failed, progress.errors
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-        assert any(name.endswith(".html") for name in archive.namelist())
+        figures = [n for n in archive.namelist() if n.endswith("/figure.html")]
+    assert len(figures) == shape.figures, figures
 
 
 def _data_checks(shape: Shape, tmp_path: Path) -> None:
     words, fixations, raw_gaze = shape.load()
     assert isinstance(api.check_data_health(words, fixations, raw_gaze), pd.DataFrame)
-
-
-def _render_replay(shape: Shape, tmp_path: Path) -> None:
-    _render(shape, tmp_path, "--animate")
-
-
-def _render_compare(shape: Shape, tmp_path: Path) -> None:
-    trials = api.list_trials(*shape.load()[:2], raw_gaze=shape.load()[2])
-    participant, trial = map(str, trials.iloc[-1, :2])
-    _render(shape, tmp_path, "--compare-with", f"{participant}:{trial}")
 
 
 SURFACES = {
@@ -313,20 +356,23 @@ SURFACES = {
     "data checks": _data_checks,
 }
 
-#: The cells that are not meant to work, each with why. Each is refused with a
-#: message (a `ValueError`, or `render`'s exit), never a crash.
-UNSUPPORTED: dict[tuple[str, str], str] = {
+#: The cells that are not meant to work: what the refusal must say, and why.
+UNSUPPORTED: dict[tuple[str, str], tuple[str, str]] = {
     ("raw gaze only", "replay"): (
-        "a replay plays fixations, and nothing derives fixations from samples"
+        "no fixations to replay",
+        "a replay plays fixations, and nothing derives fixations from samples",
     ),
     ("raw gaze only", "compare"): (
-        "a comparison draws two readings' fixations, which raw gaze alone lacks"
+        "compares two readings' fixations",
+        "a comparison draws two readings' fixations, which raw gaze alone lacks",
     ),
     ("raw gaze only", "render replay"): (
-        "a replay plays fixations, and nothing derives fixations from samples"
+        "fixation",
+        "a replay plays fixations, and nothing derives fixations from samples",
     ),
     ("raw gaze only", "render compare"): (
-        "a comparison draws two readings' fixations, which raw gaze alone lacks"
+        "fixation",
+        "a comparison draws two readings' fixations, which raw gaze alone lacks",
     ),
 }
 
@@ -345,10 +391,13 @@ def test_every_shape_reaches_every_surface(cell, tmp_path):
 
 
 @pytest.mark.parametrize("cell", UNSUPPORTED, ids=" / ".join)
-def test_an_unsupported_cell_is_refused_with_a_reason(cell, tmp_path):
-    """Refused, not crashed: the user is told why. An entry that starts
-    working fails here too, so it is dropped and the table stays the truth."""
+def test_an_unsupported_cell_is_refused_with_its_reason(cell, tmp_path):
+    """Refused, not crashed, and the message is the reason given here. An
+    entry that starts working fails too, so the table stays the truth."""
     shape, surface = cell
     with pytest.raises((ValueError, SystemExit)) as refused:
         SURFACES[surface](SHAPES[shape](), tmp_path)
-    assert str(refused.value).strip(), "refused without saying why"
+    if isinstance(refused.value, SystemExit):
+        assert isinstance(refused.value.code, str), "an exit code, not a message"
+    said, _why = UNSUPPORTED[cell]
+    assert said in str(refused.value), str(refused.value)

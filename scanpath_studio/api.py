@@ -3071,6 +3071,12 @@ def animate_scanpath(
             "Scanpath Studio does not detect fixations from gaze samples. Draw the "
             "samples with plot_scanpath(..., raw_gaze=...) instead."
         )
+    if fixations is None:
+        raise ValueError(
+            "This dataset has no fixations to replay (one recorded as raw gaze "
+            "alone) — the replay is built from fixations. Draw its samples with "
+            "plot_scanpath(..., raw_gaze=...); they are not turned into fixations."
+        )
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
     animation_overrides = _expand_palette(
@@ -3759,8 +3765,8 @@ def compare_scanpaths(
         The Plotly figure.
 
     Raises:
-        ValueError: ``fixations`` is ``None``: a dataset recorded as raw gaze alone, or
-            one with words only, has no scanpath to compare.
+        ValueError: ``fixations`` is ``None``: a dataset recorded as raw gaze alone
+            has no scanpath to compare.
         ValueError: An overlay of two different screens (see the overlay gate), or a
             ``screen`` / ``screen_b`` the trial does not have or that names a screen of
             a single-screen trial.
@@ -3789,9 +3795,9 @@ def compare_scanpaths(
     if fixations is None:
         raise ValueError(
             "compare_scanpaths compares two readings' fixations, and this dataset "
-            "has none (one recorded as raw gaze alone, or one with words only). "
-            "Scanpath Studio does not detect fixations from gaze samples; draw each "
-            "reading's samples with plot_scanpath(..., raw_gaze=...)."
+            "has none (one recorded as raw gaze alone). Scanpath Studio does not "
+            "detect fixations from gaze samples; draw each reading's samples with "
+            "plot_scanpath(..., raw_gaze=...)."
         )
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,

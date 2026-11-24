@@ -1733,6 +1733,7 @@ _MOUNTED_VIEW_KEYS = frozenset(
 def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
     """The body of `_apply_view_preset`: write the chosen design's state."""
     ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
+    forget_set_aside_values(ss)
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
@@ -4400,6 +4401,71 @@ def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     return cols
 
 
+#: The rail's choices of a dataset's own columns (colour by, the highlight
+#: column, the hover fields) held while the current data lacks them, by session
+#: key: ``{"held": value, "fallback": what the control shows instead}``. A trip
+#: to another dataset and back keeps the choice (`_hold_unavailable`); a choice
+#: made in between, a reset, a design or a settings file replaces it
+#: (`forget_set_aside_values`).
+_SET_ASIDE_KEY = "_set_aside_values"
+
+
+def forget_set_aside_values(session=None) -> None:
+    """Forget every held choice: what was just applied decides the rail."""
+    (st.session_state if session is None else session).pop(_SET_ASIDE_KEY, None)
+
+
+def _hold_unavailable(
+    state_key: str, options: list, held: dict, *, multi: bool = False
+) -> None:
+    """`_drop_stale` (or `_drop_stale_multi`) for one of the rail's column
+    choices: bring back a value held earlier that ``options`` offer again, then
+    drop what they don't, noting it in ``held`` for `_set_aside`."""
+    _bring_back(state_key, options, multi=multi)
+    before = deepcopy(st.session_state.get(state_key))
+    (_drop_stale_multi if multi else _drop_stale)(state_key, options)
+    if before is not None and st.session_state.get(state_key) != before:
+        held[state_key] = before
+
+
+def _set_aside(held: dict) -> None:
+    """Hold what `_hold_unavailable` dropped, each with the fallback seeding has
+    put in its place by now — the value a later choice is told apart from."""
+    if not held:
+        return
+    ss = st.session_state
+    aside = ss.setdefault(_SET_ASIDE_KEY, {})
+    for state_key, value in held.items():
+        aside[state_key] = {"held": value, "fallback": deepcopy(ss.get(state_key))}
+
+
+def _bring_back(state_key: str, options: list, *, multi: bool) -> None:
+    """Restore a held value once ``options`` offer it again, while the control
+    still shows its fallback; anything else there is a newer choice, and the
+    held value is forgotten. Written through, as the controls sit in popovers
+    the browser may still be echoing the fallback from."""
+    ss = st.session_state
+    aside = ss.get(_SET_ASIDE_KEY) or {}
+    entry = aside.get(state_key)
+    if entry is None:
+        return
+    current = ss.get(state_key)
+    if current != entry["fallback"]:
+        aside.pop(state_key, None)
+        return
+    held = entry["held"]
+    if multi:
+        restored = [item for item in held if item in options]
+        if restored != current:
+            write_through(state_key, restored, in_callback=False)
+            entry["fallback"] = list(restored)
+        if len(restored) == len(held):
+            aside.pop(state_key, None)
+    elif held in options:
+        write_through(state_key, held, in_callback=False)
+        aside.pop(state_key, None)
+
+
 def _drop_stale(state_key: str, options: list) -> None:
     """Clear a persisted selectbox value that isn't valid for the current
     ``options`` (e.g. after switching datasets, or restoring a config built on
@@ -6260,8 +6326,10 @@ def _seed_viz_state(
         _pin(_key, _default)
     _seed_compare_styles()
 
+    # Column choices the current data lacks, set aside at the end of seeding.
+    held: dict = {}
     color_fields = color_field_options(trial_fixations)
-    _drop_stale("global_color_by", color_fields)
+    _hold_unavailable("global_color_by", color_fields, held)
     # One flat colour by default — see `color_field_options`.
     _pin("global_color_by", UNIFORM_COLOR_FIELD)
 
@@ -6296,7 +6364,7 @@ def _seed_viz_state(
     # styling popover isn't rendered this run) so a restored config on data with
     # no boolean columns can't carry a dangling pick.
     highlight_options = highlight_column_options(words)
-    _drop_stale("global_highlight_column", highlight_options)
+    _hold_unavailable("global_highlight_column", highlight_options, held)
     # A column the app seeded is re-derived for each dataset; only the user's own
     # pick survives a switch. Only the bundled demo is seeded (its answer span),
     # so ticking **Highlight words** there marks it at once; the switch itself
@@ -6322,8 +6390,10 @@ def _seed_viz_state(
     # explicit lists.
     word_hover_options = hover_field_options(words, words=True)
     fix_hover_options = hover_field_options(trial_fixations)
-    _drop_stale_multi("global_word_hover_fields", word_hover_options)
-    _drop_stale_multi("global_fixation_hover_fields", fix_hover_options)
+    _hold_unavailable("global_word_hover_fields", word_hover_options, held, multi=True)
+    _hold_unavailable(
+        "global_fixation_hover_fields", fix_hover_options, held, multi=True
+    )
     if "global_word_hover_fields" not in st.session_state:
         legacy = st.session_state.get(
             "global_word_hover_measure", "total_fixation_duration_ms"
@@ -6344,6 +6414,7 @@ def _seed_viz_state(
                 if field in fix_hover_options
             ],
         )
+    _set_aside(held)
     before_reset = ss.pop("_viz_before_reset", None)
     if before_reset is not None:
         _hold_view_writes(ss, before_reset, defaults_pending=False, in_callback=False)
@@ -9774,6 +9845,7 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
+    forget_set_aside_values()
     # And the raw-gaze layer's dataset default, the same way.
     _forget_raw_gaze_default(st.session_state)
     for param in (*_sk.URL_PRESET_PARAMS, *_sk.LEGEND_PARAMS):

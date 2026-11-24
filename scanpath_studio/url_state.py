@@ -12,7 +12,7 @@ import copy
 import json
 import math
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from urllib.parse import urlencode
@@ -1260,17 +1260,15 @@ def _apply_url_legends(qp) -> None:
             st.session_state.setdefault(key, value)
 
 
-def _legend_query(params: dict) -> None:
+def _legend_query(params: dict, state: Mapping) -> None:
     """Write ``legend_<kind>`` for each legend moved off Auto (the inverse)."""
     from .plots import _legend_is_moved, legend_spec_text, normalize_legend_layout
 
     layout = {
         kind: {
-            "position": st.session_state.get(f"global_legend_{kind}_position")
-            or "auto",
-            "arrangement": st.session_state.get(f"global_legend_{kind}_arrangement")
-            or "auto",
-            "size": st.session_state.get(f"global_legend_{kind}_size"),
+            "position": state.get(f"global_legend_{kind}_position") or "auto",
+            "arrangement": state.get(f"global_legend_{kind}_arrangement") or "auto",
+            "size": state.get(f"global_legend_{kind}_size"),
         }
         for kind in LEGEND_PARAMS.values()
     }
@@ -3895,6 +3893,56 @@ def _toast_restored(applied: int, any_skipped: bool) -> None:
         st.toast("The settings file had no recognized settings.", icon=ICONS["warning"])
 
 
+def settings_params(state: Mapping) -> dict[str, str]:
+    """The link params for the figure settings in ``state`` (session keys →
+    values), as Share → Link writes them.
+
+    The settings half of `_build_share_query`, with nothing in it that needs a
+    running app, so `script_link.link_query` writes a link from a script with
+    the same code. Settings a link carries only beside a comparison, a trial
+    or a source are pruned by the caller, which knows whether it has one.
+    """
+    params: dict[str, str] = {}
+    # Visualization toggles — emit an explicit 0/1 so a layer the user turned
+    # *off* is shared as off (the URL coercion reads "0" as False).
+    for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
+            continue  # gated off
+        if state_key in state:
+            params[url_key] = "1" if state[state_key] else "0"
+    # Strings / choices / colours / numbers — emit only when set.
+    for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
+            continue  # don't put a gated setting on a link
+        value = state.get(state_key)
+        if value not in (None, ""):
+            if url_key in {"word_hover_fields", "fixation_hover_fields"} and isinstance(
+                value, (list, tuple)
+            ):
+                fields, as_json = encode_field_list(value)
+                params[f"{url_key}_json" if as_json else url_key] = fields
+                continue
+            params[url_key] = (
+                ",".join(str(item) for item in value)
+                if isinstance(value, (list, tuple))
+                else str(value)
+            )
+    for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
+        value = state.get(state_key)
+        if value is not None:
+            params[url_key] = str(value)
+    # Two-element ranges → "lo,hi".
+    for url_key, state_key in {
+        **_SHARE_INT_RANGE_PARAMS,
+        **_SHARE_FLOAT_RANGE_PARAMS,
+    }.items():
+        value = state.get(state_key)
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            params[url_key] = f"{value[0]},{value[1]}"
+    _legend_query(params, state)
+    return params
+
+
 def _build_share_query(
     data_choice: str,
     *,
@@ -4076,42 +4124,7 @@ def _build_share_query(
         if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
             params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 
-    # Visualization toggles — emit an explicit 0/1 so a layer the user turned
-    # *off* is shared as off (the URL coercion reads "0" as False).
-    for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
-        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
-            continue  # gated off
-        if state_key in st.session_state:
-            params[url_key] = "1" if st.session_state[state_key] else "0"
-    # Strings / choices / colours / numbers — emit only when set.
-    for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
-        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
-            continue  # don't put a gated setting on a link
-        value = st.session_state.get(state_key)
-        if value not in (None, ""):
-            if url_key in {"word_hover_fields", "fixation_hover_fields"} and isinstance(
-                value, (list, tuple)
-            ):
-                fields, as_json = encode_field_list(value)
-                params[f"{url_key}_json" if as_json else url_key] = fields
-                continue
-            params[url_key] = (
-                ",".join(str(item) for item in value)
-                if isinstance(value, (list, tuple))
-                else str(value)
-            )
-    for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
-        value = st.session_state.get(state_key)
-        if value is not None:
-            params[url_key] = str(value)
-    # Two-element ranges → "lo,hi".
-    for url_key, state_key in {
-        **_SHARE_INT_RANGE_PARAMS,
-        **_SHARE_FLOAT_RANGE_PARAMS,
-    }.items():
-        value = st.session_state.get(state_key)
-        if isinstance(value, (list, tuple)) and len(value) == 2:
-            params[url_key] = f"{value[0]},{value[1]}"
+    params.update(settings_params(st.session_state))
     # The two compare-view params describe a comparison, so they only travel
     # when one does. Both widgets carry `persist_state="session"`, so the
     # generic value sweep above would otherwise stamp `cmp_layout`/`cmp_stimulus`
@@ -4205,7 +4218,6 @@ def _build_share_query(
         )
         if orphaned or restated:
             params.pop(url_key)
-    _legend_query(params)
     # The print size travels only while a width is set; without
     # one the PNG is drawn at the screen size, which needs nothing said.
     if not st.session_state.get(EXPORT_PARAMS["export_width"]):

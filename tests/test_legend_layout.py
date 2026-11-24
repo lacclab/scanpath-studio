@@ -422,7 +422,7 @@ def _link_round_trip_app():
     for key, value in st.session_state["_given"].items():
         st.session_state[key] = value
     params: dict = {}
-    _legend_query(params)
+    _legend_query(params, st.session_state)
     st.session_state["_params"] = params
     for key in list(st.session_state["_given"]):
         del st.session_state[key]

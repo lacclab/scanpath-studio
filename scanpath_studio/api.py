@@ -2715,6 +2715,24 @@ def _check_canvas_size(canvas_size) -> None:
         )
 
 
+#: What ``illustration=True`` sets: the app's *Illustration* design. An
+#: option given beside it wins.
+ILLUSTRATION_PRESET = {
+    "show_words": False,
+    "show_word_labels": True,
+    "show_fixations": True,
+    "show_order": False,
+    "show_saccades": True,
+    "show_saccade_arrows": False,
+    "show_heatmap": False,
+    "color_by": UNIFORM_COLOR_FIELD,
+    "saccade_color_mode": "One color",
+    "saccade_render_mode": "Arc",
+    "fixation_snap_to_line": True,
+    "fixation_opacity": 1.0,
+}
+
+
 def plot_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2821,21 +2839,7 @@ def plot_scanpath(
             PNG). The figure draws none.
     """
     if illustration:
-        figure_overrides = {
-            "show_words": False,
-            "show_word_labels": True,
-            "show_fixations": True,
-            "show_order": False,
-            "show_saccades": True,
-            "show_saccade_arrows": False,
-            "show_heatmap": False,
-            "color_by": UNIFORM_COLOR_FIELD,
-            "saccade_color_mode": "One color",
-            "saccade_render_mode": "Arc",
-            "fixation_snap_to_line": True,
-            "fixation_opacity": 1.0,
-            **figure_overrides,
-        }
+        figure_overrides = {**ILLUSTRATION_PRESET, **figure_overrides}
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
@@ -4974,6 +4978,102 @@ def remove_dataset(name: str, *, missing_ok: bool = False) -> bool:
             return False
         raise
     return True
+
+
+def app_link(
+    dataset: str,
+    participant: str | None = None,
+    trial: str | None = None,
+    *,
+    screen: str | None = None,
+    port: int = 8501,
+    animate: bool = False,
+    illustration: bool = False,
+    **figure_options: Any,
+) -> str:
+    """A link that opens the local app on a dataset, a reading and a figure.
+
+    The link names the dataset as the app's dataset list shows it, the reading by
+    its participant and trial IDs, and the figure by the options
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] takes, written as 🔗
+    **Share → Link** writes the same view. Open it in a browser while the app runs
+    on this computer (``scanpath-studio`` serves it at ``localhost:8501``), or let
+    ``scanpath-studio open`` start the app and open it. The dataset is one added in
+    the app or with [`add_dataset`][scanpath_studio.api.add_dataset]. The same as
+    ``scanpath-studio open --print``.
+
+    For a dataset saved on this computer the link also carries its share ID and
+    a digest of its tables, as Share's does, so the app checks it is the same
+    data; its tables are read to compute it. Settings the link leaves out keep
+    the values the app has. A link whose dataset the app doesn't have opens
+    nothing from it, and says which dataset is missing.
+
+    Args:
+        dataset: The dataset's name in the app's dataset list, ignoring case for
+            one saved on this computer.
+        participant: The participant ID. Without it, a trial ID that only one
+            participant has still opens that reading.
+        trial: The trial ID. Without it, the app opens the participant's first
+            trial, or the reading it last showed.
+        screen: The screen ID of a trial recorded over several screens.
+        port: The port the app listens on.
+        animate: Open the replay instead of the static figure.
+        illustration: The *Illustration* design, as ``plot_scanpath`` takes it;
+            an option given beside it wins.
+        **figure_options: Figure options, as ``plot_scanpath`` takes them, with
+            its ``fix_index_range`` and ``illustration_label``, plus ``palette``
+            and the replay's ``anim_grid_step_ms``, ``anim_max_frames``,
+            ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
+            value, except where it is a choice of its own (``heatmap_metric``
+            counts fixations, ``fixation_flags`` turns them off). A link carries
+            no file, so ``background_image`` and its size and origin are
+            refused (``show_stimulus_image=True`` draws the dataset's own
+            pages), and no ``title`` or ``caption``, which the app writes from
+            its own patterns.
+
+    Returns:
+        The link, ``http://localhost:<port>/?dataset=…``.
+
+    Raises:
+        TypeError: An option a link can't carry, or no figure option at all.
+        ValueError: An empty dataset name, a screen without a trial, a port
+            outside 1–65535, or a value the app would ignore or clamp.
+
+    Examples:
+        ```python
+        sps.add_dataset("Pilot 3", words="ia.csv", fixations="fixations.csv")
+        url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+        import webbrowser; webbrowser.open(url)
+        ```
+    """
+    from . import persistence as _persistence
+    from .script_link import link_query, local_url
+
+    options = (
+        {**ILLUSTRATION_PRESET, **figure_options}
+        if illustration
+        else dict(figure_options)
+    )
+    if "palette" in options:
+        options["palette"] = resolve_palette(options["palette"])
+    _check_colorscales(options)
+    reference = (
+        _persistence.stored_dataset_reference(dataset)
+        if _persistence.persistence_enabled("http://localhost")
+        else None
+    )
+    shown, share_id, digest = reference or (dataset, None, None)
+    query = link_query(
+        shown,
+        participant,
+        trial,
+        screen=screen,
+        animate=animate,
+        options=options,
+        share_id=share_id,
+        digest=digest,
+    )
+    return local_url(query, port)
 
 
 def _condition_fields(frames: dict, schemas: dict) -> list[str]:

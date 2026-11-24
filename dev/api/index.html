@@ -2924,6 +2924,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.app_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;app_link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.remove_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3857,6 +3868,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.app_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;app_link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.remove_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4221,6 +4243,10 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a></td>
 <td>Add a dataset to the app's dataset list from a script.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;app_link&lt;/span&gt;" href="#scanpath_studio.api.app_link"><code>app_link</code></a></td>
+<td>A link that opens the local app on a dataset, a reading and a figure.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a></td>
@@ -9241,14 +9267,17 @@ dot. <code>svg</code> and <code>pdf</code> are vector and the best to edit; <cod
 </div><h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
 <p>A local app keeps the datasets you add, so they are there the next time it
 starts. <code>add_dataset</code> adds one from a script: prepare the tables in Python, add
-them, then run <code>scanpath-studio</code> and the app opens on them. <code>remove_dataset</code>
-takes one off the list again.</p>
+them, then run <code>scanpath-studio</code> and the app opens on them. <code>app_link</code> writes
+a link that opens the app on one of them, at a reading, with the figure you
+describe in <code>plot_scanpath</code>'s options. <code>remove_dataset</code> takes one off the list
+again.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sps</span><span class="o">.</span><span class="n">add_dataset</span><span class="p">(</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">"Pilot 3"</span><span class="p">,</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">words</span><span class="o">=</span><span class="s2">"pilot3/ia_report.csv"</span><span class="p">,</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">fixations</span><span class="o">=</span><span class="s2">"pilot3/fixation_report.csv"</span><span class="p">,</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1920</span><span class="p">,</span> <span class="mi">1080</span><span class="p">),</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">url</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">app_link</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">,</span> <span class="s2">"p07"</span><span class="p">,</span> <span class="s2">"t12"</span><span class="p">,</span> <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
 
 
@@ -9508,6 +9537,184 @@ version. Nothing is saved then.</p>
 Then run <code>scanpath-studio</code> and the app opens on <em>Pilot 3</em>. Reload a tab
 that is already open right away: changes made in it after the dataset was
 added are not saved, as when two tabs change the same saved work.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.app_link" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">app_link</span>
+
+
+<a href="#scanpath_studio.api.app_link" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">app_link</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">dataset</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">participant</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">trial</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">screen</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">port</span><span class="o">=</span><span class="mi">8501</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">animate</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">illustration</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="o">**</span><span class="n">figure_options</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>A link that opens the local app on a dataset, a reading and a figure.</p>
+<p>The link names the dataset as the app's dataset list shows it, the reading by
+its participant and trial IDs, and the figure by the options
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a> takes, written as 🔗
+<strong>Share → Link</strong> writes the same view. Open it in a browser while the app runs
+on this computer (<code>scanpath-studio</code> serves it at <code>localhost:8501</code>), or let
+<code>scanpath-studio open</code> start the app and open it. The dataset is one added in
+the app or with <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>. The same as
+<code>scanpath-studio open --print</code>.</p>
+<p>For a dataset saved on this computer the link also carries its share ID and
+a digest of its tables, as Share's does, so the app checks it is the same
+data; its tables are read to compute it. Settings the link leaves out keep
+the values the app has. A link whose dataset the app doesn't have opens
+nothing from it, and says which dataset is missing.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>dataset</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The dataset's name in the app's dataset list, ignoring case for
+one saved on this computer.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>participant</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The participant ID. Without it, a trial ID that only one
+participant has still opens that reading.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>trial</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The trial ID. Without it, the app opens the participant's first
+trial, or the reading it last showed.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>screen</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The screen ID of a trial recorded over several screens.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>port</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code>, default:
+                  <code>8501</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The port the app listens on.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>animate</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Open the replay instead of the static figure.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>illustration</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The <em>Illustration</em> design, as <code>plot_scanpath</code> takes it;
+an option given beside it wins.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>**figure_options</code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;typing.Any&lt;/code&gt;" href="https://docs.python.org/3/library/typing.html#typing.Any">Any</a></code>, default:
+                  <code>{}</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Figure options, as <code>plot_scanpath</code> takes them, with
+its <code>fix_index_range</code> and <code>illustration_label</code>, plus <code>palette</code>
+and the replay's <code>anim_grid_step_ms</code>, <code>anim_max_frames</code>,
+<code>playback_speed</code> and <code>autoplay</code>. <code>None</code> leaves the app's own
+value, except where it is a choice of its own (<code>heatmap_metric</code>
+counts fixations, <code>fixation_flags</code> turns them off). A link carries
+no file, so <code>background_image</code> and its size and origin are
+refused (<code>show_stimulus_image=True</code> draws the dataset's own
+pages), and no <code>title</code> or <code>caption</code>, which the app writes from
+its own patterns.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>
+          –
+          <div class="doc-md-description">
+            <p>The link, <code>http://localhost:&lt;port&gt;/?dataset=…</code>.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#TypeError">TypeError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>An option a link can't carry, or no figure option at all.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>An empty dataset name, a screen without a trial, a port
+outside 1–65535, or a value the app would ignore or clamp.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.app_link--__codelineno-0-1" name="scanpath_studio.api.app_link--__codelineno-0-1" href="#scanpath_studio.api.app_link--__codelineno-0-1"></a><span class="n">sps</span><span class="o">.</span><span class="n">add_dataset</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">,</span> <span class="n">words</span><span class="o">=</span><span class="s2">"ia.csv"</span><span class="p">,</span> <span class="n">fixations</span><span class="o">=</span><span class="s2">"fixations.csv"</span><span class="p">)</span>
+<a id="scanpath_studio.api.app_link--__codelineno-0-2" name="scanpath_studio.api.app_link--__codelineno-0-2" href="#scanpath_studio.api.app_link--__codelineno-0-2"></a><span class="n">url</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">app_link</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">,</span> <span class="s2">"p07"</span><span class="p">,</span> <span class="s2">"t12"</span><span class="p">,</span> <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="scanpath_studio.api.app_link--__codelineno-0-3" name="scanpath_studio.api.app_link--__codelineno-0-3" href="#scanpath_studio.api.app_link--__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">webbrowser</span><span class="p">;</span> <span class="n">webbrowser</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</code></pre></div>
 
 
     </div>

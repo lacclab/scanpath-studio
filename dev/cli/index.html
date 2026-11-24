@@ -2640,6 +2640,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        open
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3150,6 +3161,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        open
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3292,6 +3314,10 @@ check data and manage saved work without opening the app:</p>
 <tr>
 <td><a href="#remove"><code>remove</code></a></td>
 <td>Remove a dataset you added from that list</td>
+</tr>
+<tr>
+<td><a href="#open"><code>open</code></a></td>
+<td>Open the app on a dataset you added, at a reading and figure</td>
 </tr>
 <tr>
 <td><a href="#cache"><code>cache</code></a></td>
@@ -5545,15 +5571,101 @@ opens on its default dataset.</p>
 </tbody>
 </table>
 </div>
+<h2 id="open">open<a class="headerlink" href="#open" title="Permanent link">&para;</a></h2>
+<p><code>open</code> opens the app on a dataset you added, at one reading, with the figure set
+by the same flags <a href="#render-flags"><code>render</code></a> takes. If the app is running on this
+computer, the link opens in your browser. Otherwise <code>open</code> starts the app and
+opens the link once it is up. <code>--print</code> prints the link instead.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>open<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-p<span class="w"> </span>p07<span class="w"> </span>-t<span class="w"> </span>t12
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>open<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-p<span class="w"> </span>p07<span class="w"> </span>-t<span class="w"> </span>t12<span class="w"> </span>--heatmap<span class="w"> </span>--saccade-style<span class="w"> </span>dash<span class="w"> </span>--print
+</code></pre></div>
+<p>The link is the one <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Link</strong> writes for the same view.
+Settings it leaves out keep the values the app has. It names the dataset, so it
+opens only where that dataset was added. A link carries no file: <code>render</code>'s
+input, output and <code>--stimulus-image</code> flags are refused, and
+<code>--show-stimulus-image</code> draws the dataset's own pages. In Python, use
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;app_link&lt;/span&gt;" href="../api/#scanpath_studio.api.app_link"><code>app_link</code></a>.</p>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The dataset's name in the app's list.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-p</code><br><code>--participant</code></td>
+<td><code>PARTICIPANT</code></td>
+<td>—</td>
+<td>Participant ID.</td>
+</tr>
+<tr>
+<td><code>-t</code><br><code>--trial</code></td>
+<td><code>TRIAL</code></td>
+<td>—</td>
+<td>Trial ID (without it, the participant's first trial).</td>
+</tr>
+<tr>
+<td><code>--screen</code></td>
+<td><code>SCREEN</code></td>
+<td>—</td>
+<td>Screen ID within a trial recorded over several screens.</td>
+</tr>
+<tr>
+<td><code>--animate</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Open the replay of the reading.</td>
+</tr>
+<tr>
+<td><code>--port</code></td>
+<td><code>PORT</code></td>
+<td><code>8501</code></td>
+<td>The port the app listens on, or is started on (default: 8501).</td>
+</tr>
+<tr>
+<td><code>--print</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Print the link and exit, without opening or starting anything.</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="cache">cache<a class="headerlink" href="#cache" title="Permanent link">&para;</a></h2>
 <p>A local or desktop run saves your session on your computer, so a refresh or a
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5617,8 +5729,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5654,9 +5766,9 @@ app, open <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></s
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>

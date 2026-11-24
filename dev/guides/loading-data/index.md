@@ -117,6 +117,18 @@ scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 
 
 The tables load as `load_scanpath_data` loads them, and the dataset is saved with your other [saved work](https://lacclab.github.io/scanpath-studio/dev/cli/#cache). Adding again under the same name is an error unless you pass `replace=True` (`--replace`). That swaps the tables and keeps the dataset's annotations, metadata tables, share links, description and recording setup, unless you give a new description or screen. Without a screen size, the app uses one the data records, or estimates one from the extent of the data. To set it later, use **Edit dataset**. See add_dataset for every option.
 
+To open the app on one reading of it, with the figure you want, write a link. It names the dataset, the participant and trial, and the figure in `plot_scanpath`'s options or `render`'s flags. From the CLI, `open` opens it in your browser, and starts the app first if it isn't running.
+
+```
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+```
+
+```
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap
+```
+
+The link is the one **Share** → **Link** writes for that view, so settings it leaves out keep the values the app has. See app_link and [`open`](https://lacclab.github.io/scanpath-studio/dev/cli/#open).
+
 To take a dataset off the list again, use remove_dataset or `scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this way, with its annotations and metadata tables, as its **Remove** on the Data Management page does.
 
 ## Manage datasets

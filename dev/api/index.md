@@ -60,6 +60,7 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                            |
 | **Recovery cache**                            |                                                                                       |
 | add_dataset                                   | Add a dataset to the app's dataset list from a script.                                |
+| app_link                                      | A link that opens the local app on a dataset, a reading and a figure.                 |
 | remove_dataset                                | Remove a dataset from the app's dataset list from a script.                           |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
 | clear_cache                                   | Delete the recovery cache.                                                            |
@@ -1451,7 +1452,7 @@ Returns:
 
 ## Recovery cache
 
-A local app keeps the datasets you add, so they are there the next time it starts. `add_dataset` adds one from a script: prepare the tables in Python, add them, then run `scanpath-studio` and the app opens on them. `remove_dataset` takes one off the list again.
+A local app keeps the datasets you add, so they are there the next time it starts. `add_dataset` adds one from a script: prepare the tables in Python, add them, then run `scanpath-studio` and the app opens on them. `app_link` writes a link that opens the app on one of them, at a reading, with the figure you describe in `plot_scanpath`'s options. `remove_dataset` takes one off the list again.
 
 ```
 sps.add_dataset(
@@ -1460,6 +1461,7 @@ sps.add_dataset(
     fixations="pilot3/fixation_report.csv",
     canvas_size=(1920, 1080),
 )
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
 ```
 
 ### add_dataset
@@ -1530,6 +1532,56 @@ sps.add_dataset(
 ```
 
 Then run `scanpath-studio` and the app opens on *Pilot 3*. Reload a tab that is already open right away: changes made in it after the dataset was added are not saved, as when two tabs change the same saved work.
+
+### app_link
+
+```
+app_link(
+    dataset,
+    participant=None,
+    trial=None,
+    *,
+    screen=None,
+    port=8501,
+    animate=False,
+    illustration=False,
+    **figure_options,
+)
+```
+
+A link that opens the local app on a dataset, a reading and a figure.
+
+The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset. The same as `scanpath-studio open --print`.
+
+For a dataset saved on this computer the link also carries its share ID and a digest of its tables, as Share's does, so the app checks it is the same data; its tables are read to compute it. Settings the link leaves out keep the values the app has. A link whose dataset the app doesn't have opens nothing from it, and says which dataset is missing.
+
+Parameters:
+
+- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case for one saved on this computer.
+- **`participant`** (`str | None`, default: `None` ) – The participant ID. Without it, a trial ID that only one participant has still opens that reading.
+- **`trial`** (`str | None`, default: `None` ) – The trial ID. Without it, the app opens the participant's first trial, or the reading it last showed.
+- **`screen`** (`str | None`, default: `None` ) – The screen ID of a trial recorded over several screens.
+- **`port`** (`int`, default: `8501` ) – The port the app listens on.
+- **`animate`** (`bool`, default: `False` ) – Open the replay instead of the static figure.
+- **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
+- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
+
+Returns:
+
+- `str` – The link, http://localhost:<port>/?dataset=….
+
+Raises:
+
+- `TypeError` – An option a link can't carry, or no figure option at all.
+- `ValueError` – An empty dataset name, a screen without a trial, a port outside 1–65535, or a value the app would ignore or clamp.
+
+Examples:
+
+```
+sps.add_dataset("Pilot 3", words="ia.csv", fixations="fixations.csv")
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+import webbrowser; webbrowser.open(url)
+```
 
 ### remove_dataset
 

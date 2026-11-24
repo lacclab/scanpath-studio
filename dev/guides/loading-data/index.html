@@ -2897,6 +2897,25 @@ description and recording setup, unless you give a new description or screen.
 Without a screen size, the app uses one the data records, or estimates one from
 the extent of the data. To set it later, use <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong>.
 See <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="../../api/#scanpath_studio.api.add_dataset"><code>add_dataset</code></a> for every option.</p>
+<p>To open the app on one reading of it, with the figure you want, write a link.
+It names the dataset, the participant and trial, and the figure in
+<code>plot_scanpath</code>'s options or <code>render</code>'s flags. From the CLI, <code>open</code> opens it in
+your browser, and starts the app first if it isn't running.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Python</label><label for="__tabbed_3_2">CLI</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">url</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">app_link</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">,</span> <span class="s2">"p07"</span><span class="p">,</span> <span class="s2">"t12"</span><span class="p">,</span> <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>open<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-p<span class="w"> </span>p07<span class="w"> </span>-t<span class="w"> </span>t12<span class="w"> </span>--heatmap
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>The link is the one <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Link</strong> writes for that view, so
+settings it leaves out keep the values the app has. See
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;app_link&lt;/span&gt;" href="../../api/#scanpath_studio.api.app_link"><code>app_link</code></a> and <a href="../../cli/#open"><code>open</code></a>.</p>
 <p>To take a dataset off the list again, use
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="../../api/#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a> or
 <code>scanpath-studio remove "Pilot 3"</code>. Any dataset you added can be removed this

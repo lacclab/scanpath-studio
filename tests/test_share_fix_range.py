@@ -192,14 +192,16 @@ class TestTheContract:
         assert sk.SHARE_INT_RANGE_PARAMS[sk.FIX_RANGE_PARAM] == sk.SINGLE_FIX_RANGE
 
     def test_the_window_now_reaches_every_surface(self):
-        """The four-surface rule: UI slider · link · CLI flag · API argument."""
+        """The four-surface rule: UI slider · link · CLI flag · API argument.
+
+        The slider writing ``single_fix_range`` is driven in
+        test_axes_gating.py (`test_hidden_markers_leave_window_for_fixation_
+        derived_layers`), the flag in test_cli.py
+        (`test_render_forwards_the_fixation_index_window`)."""
         import inspect
 
-        from scanpath_studio import api, cli
-        from scanpath_studio.controls import _render_fix_range_slider
+        from scanpath_studio import api
         from scanpath_studio.url_state import _SHARE_INT_RANGE_PARAMS
 
-        assert "single_fix_range" in inspect.getsource(_render_fix_range_slider)
         assert "fix_range" in _SHARE_INT_RANGE_PARAMS
-        assert "--fix-index-range" in inspect.getsource(cli)
         assert "fix_index_range" in inspect.signature(api.plot_scanpath).parameters

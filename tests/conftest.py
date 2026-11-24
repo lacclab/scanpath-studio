@@ -270,6 +270,53 @@ def pin_data_view(at, *, section: str | None = None) -> None:
         at.session_state[DATA_WORKSPACE_REQUEST] = section
 
 
+def page_nodes(node, around: tuple = ()):
+    """Every element and block under ``node`` in screen order, each as
+    ``(node, around)``: the blocks it sits in, outermost first.
+
+    Pass ``at._tree`` for the whole page. A keyed container's node carries
+    its key, which is how a test finds the parts of a layout that ``AppTest``
+    has no accessor for.
+    """
+    children = getattr(node, "children", None) or {}
+    for index in sorted(children):
+        child = children[index]
+        yield child, around
+        yield from page_nodes(child, (*around, child))
+
+
+def find_keyed(at, key: str):
+    """The one node keyed ``key`` on the page, with the blocks around it."""
+    found = [
+        (node, around)
+        for node, around in page_nodes(at._tree)
+        if getattr(node, "key", None) == key
+    ]
+    assert len(found) == 1, f"{key!r} is drawn {len(found)} times"
+    return found[0]
+
+
+def keys_around(at, key: str) -> list[str]:
+    """The keys of the keyed containers around the node keyed ``key``,
+    outermost first."""
+    _node, around = find_keyed(at, key)
+    return [k for block in around if (k := getattr(block, "key", None))]
+
+
+def keys_in_screen_order(node) -> list[str]:
+    """The key of every keyed node under ``node``, in screen order."""
+    return [k for child, _ in page_nodes(node) if (k := getattr(child, "key", None))]
+
+
+def iframe_sources(node) -> list[str]:
+    """The document of every ``st.iframe`` under ``node``, in screen order."""
+    return [
+        child.proto.srcdoc
+        for child, _ in page_nodes(node)
+        if getattr(child, "type", None) == "iframe"
+    ]
+
+
 def picked_trial_id(value) -> str | None:
     """The trial id in the trial picker's value (``single_trial_id``), which
     names a reading — participant and trial."""

@@ -9,7 +9,14 @@ from scanpath_studio import session_keys as sk
 from scanpath_studio import tabs, ui_mode
 from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
-from tests.conftest import APP_SCRIPT, pin_view
+from tests.conftest import (
+    APP_SCRIPT,
+    find_keyed,
+    iframe_sources,
+    keys_around,
+    page_nodes,
+    pin_view,
+)
 
 SWITCH = "ui_mode_switch"
 SYNTHETIC_SOURCE = "Synthetic test trial"
@@ -261,15 +268,15 @@ def test_the_cookie_script_takes_no_room_in_the_switch_box():
     )
     assert rule in ui_mode.switch_css(True)
     assert rule in ui_mode.switch_css(False)
-    import inspect
-
-    source = inspect.getsource(ui_mode.render_switch)
-    assert "box.container(key=COOKIE_BOX_KEY)" in source
-    assert "with cookie:" in source
     at = _boot()
+    # In the switch's box on every run, empty until the switch is used.
+    assert keys_around(at, ui_mode.COOKIE_BOX_KEY)[-1] == ui_mode.SWITCH_BOX_KEY
+    cookie, _ = find_keyed(at, ui_mode.COOKIE_BOX_KEY)
+    assert not list(page_nodes(cookie))
     at.segmented_control(key=SWITCH).set_value("full").run()
     assert not at.exception
-    assert _has_cookie_embed(at)
+    cookie, _ = find_keyed(at, ui_mode.COOKIE_BOX_KEY)
+    assert any("sps_ui_mode" in doc for doc in iframe_sources(cookie))
 
 
 def test_switch_is_hidden_outside_scanpath():
@@ -604,47 +611,36 @@ def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
     assert _lit_tiles(at) == ["illustration"]
 
 
-def test_rail_wrappers_are_keyed_for_the_mode_css():
-    """Every Full-only rail part sits in an ``adv_only_*`` container, and the
-    Essentials parts in ``simple_only_*`` ones, so `mode_css` hides them."""
-    import inspect
-    import re
+#: A control in each mode-only part of the Scanpath view → the container that
+#: holds the part: the rail's and the trial picker's Full-only parts, then the
+#: ＋ More lists that stand in for them in Essentials.
+_MODE_ONLY_PARTS = {
+    "single_animate": "adv_only_rail_animation",
+    "reset_viz_settings_btn": "adv_only_rail_reset",
+    "design_shell": "adv_only_rail_designs",
+    "plot_setting_finder": "adv_only_plot_editor",
+    "iconpop_filter_trials": "adv_only_trial_filters",
+    "iconpop_chip_fields": "adv_only_chip_fields",
+    "tour_grp_chips": f"adv_only_{ui_mode.TRIAL_CHIPS}",
+    "iconpop_sort_trial_single": f"adv_only_{ui_mode.TRIAL_SORT}",
+    "single_trial_pos": f"adv_only_{ui_mode.TRIAL_SLIDER}",
+    "iconpop_more_rail": "simple_only_rail_more",
+    "iconpop_more_picker": "simple_only_picker_more",
+}
 
-    from scanpath_studio import controls, tabs
 
-    rail = inspect.getsource(tabs.render_single_trial_tab)
-    for name in ("rail_animation", "rail_reset"):
-        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
-    source = inspect.getsource(controls.render_plot_controls) + inspect.getsource(
-        controls._render_view_controls
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_mode_only_parts_sit_in_the_containers_mode_css_hides(mode):
+    """Each mode-only part is drawn in both modes, inside the container whose
+    key `mode_css` hides in the other mode — so a switch changes what shows,
+    never what is drawn, and no widget loses its value."""
+    at = _boot(mode=mode)
+    for control, container in _MODE_ONLY_PARTS.items():
+        assert container in keys_around(at, control), control
+    other = "simple_only_" if mode == "full" else "adv_only_"
+    assert f'[class*="st-key-{other}"] {{ display: none !important; }}' in (
+        ui_mode.mode_css(mode)
     )
-    for name in ("rail_designs", "plot_editor"):
-        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', source), name
-    assert 'simple_only(viz, "rail_more")' in source
-
-
-def test_picker_wrappers_are_keyed_for_the_mode_css():
-    """The trial picker's Full-only parts (the filter funnel, the chips'
-    menu, the summary table, the sort popover and the slider) each sit in an
-    ``adv_only_*`` container, and the ＋ More list in a ``simple_only_*`` one."""
-    import inspect
-    import re
-
-    from scanpath_studio import tabs, utils
-
-    picker = inspect.getsource(tabs.render_single_trial_tab)
-    for name in ('"trial_filters"', '"chip_fields"', r"ui_mode\.TRIAL_CHIPS"):
-        assert re.search(rf"ui_mode\.advanced_only\(\s*\w+,\s*{name}\s*\)", picker), (
-            name
-        )
-    assert re.search(r'ui_mode\.simple_only\(\s*host,\s*"picker_more"\s*\)', picker)
-    trials = inspect.getsource(utils._select_trial_none_mode)
-    for name in ("TRIAL_SORT", "TRIAL_SLIDER"):
-        assert re.search(
-            rf"_advanced_part\(\s*\w+,\s*ui_mode\.{name},\s*key_prefix\s*\)", trials
-        ), name
-    helper = inspect.getsource(utils._advanced_part)
-    assert "ui_mode.advanced_only(host, name)" in helper
 
 
 def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "essentials") -> AppTest:

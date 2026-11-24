@@ -18,7 +18,7 @@ from urllib.parse import parse_qsl
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
 
 from scanpath_studio import data, measures, plots, url_state
@@ -426,23 +426,38 @@ def test_settings_migration_is_pure_and_idempotent(config):
 
 
 @given(_CONFIG)
+@example({"layers": {"fixations": None}, "mode": {"animate": True}})
+@example({"layers": {"fixations": False}, "mode": {"animate": True, "x": 1}})
 def test_a_replay_saved_while_it_always_drew_fixations_draws_them(config):
     """A schema-9 file that saved a replay opens it with fixations, as that
-    version drew it, and nothing else in the file changes."""
+    version drew it, and marks them on for the replay only (in the in-memory
+    ``mode``); nothing else in the file changes."""
     config = {**config, "schema": 9}
     migrated, note = url_state._migrate_plot_config(config)
     assert note is None
     mode, layers = config.get("mode"), config.get("layers")
     replay = isinstance(mode, dict) and mode.get("animate") is True
+    turned_on = (
+        replay
+        and isinstance(layers, dict)
+        and "fixations" in layers
+        and not layers["fixations"]
+    )
     if replay and isinstance(layers, dict) and "fixations" in layers:
         assert migrated["layers"]["fixations"]
     if isinstance(layers, dict):
-        if not replay or "fixations" not in layers or layers["fixations"]:
-            assert migrated["layers"] == layers
-        else:
+        if turned_on:
             assert migrated["layers"] == {**layers, "fixations": True}
-    assert {k: v for k, v in migrated.items() if k not in ("layers", "schema")} == {
-        k: v for k, v in config.items() if k not in ("layers", "schema")
+        else:
+            assert migrated["layers"] == layers
+    if turned_on:
+        assert migrated["mode"] == {**mode, url_state._REPLAY_ONLY_FIXATIONS: True}
+    else:
+        assert ("mode" in migrated) == ("mode" in config)
+        assert migrated.get("mode") == mode
+    untouched = ("layers", "schema", "mode")
+    assert {k: v for k, v in migrated.items() if k not in untouched} == {
+        k: v for k, v in config.items() if k not in untouched
     }
 
 

@@ -57,13 +57,13 @@ dependencies = [
     # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
     # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
     # absent.
-    "watchdog>=7.1.0",
+    "watchdog>=7.1.1",
     # Drag-to-reorder the trial chip fields (the chips popover).
     "streamlit-sortables>=0.3.1",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
     "pillow>=13.0",
-    "imageio[ffmpeg]>=2.38",
+    "imageio[ffmpeg]>=2.38.2",
     # pandas' .xlsx engine. Not optional in practice: the upload path reads
     # spreadsheets (`data._read_one`), and MultiplEYE's comprehension questions
     # come as a workbook.
@@ -78,16 +78,16 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.0.0",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
     # Parallelize the AppTest-heavy suite (`pytest -n auto`).
-    "pytest-xdist>=3.0.0",
+    "pytest-xdist>=3.8.0",
     # Registers the `@pytest.mark.timeout` marker the AppTest tests rely on;
     # required for collection under `--strict-markers`.
-    "pytest-timeout>=2.1.0",
+    "pytest-timeout>=2.4.0",
     # Property tests (`tests/test_properties.py`): invariants checked against
     # generated inputs rather than hand-picked examples.
-    "hypothesis>=6.140.0",
+    "hypothesis>=6.170.0",
 ]
 # The linter, pinned to exactly what CI runs (.github/workflows/ci.yml). An
 # unpinned ruff means a local run and CI can disagree — a new release lands new
@@ -100,14 +100,14 @@ lint = [
 # except git-revision-date and llmstxt is one Zensical also runs.
 docs = [
     # `imaging` is the social-card renderer, switched on in CI only (mkdocs.yml).
-    "mkdocs-material[imaging]>=9.7.7",
-    "mkdocstrings[python]>=1.0.6",
+    "mkdocs-material[imaging]>=9.8.2",
+    "mkdocstrings[python]>=1.0.8",
     # Executes the pages' `exec="true"` fences: the gallery, the printed
     # outputs, the generated references.
-    "markdown-exec>=1.12.3",
+    "markdown-exec>=1.14.0",
     "mkdocs-redirects>=1.2.3",
-    "mkdocs-git-revision-date-localized-plugin>=1.6.0",
-    "mkdocs-llmstxt>=0.5.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.7.0",
+    "mkdocs-llmstxt>=0.5.1",
     # mkdocstrings wraps the API reference's signatures with it. Pinned with
     # the `lint` extra's, so the two extras resolve together.
     "ruff==0.17.6",

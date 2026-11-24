@@ -21,11 +21,12 @@ pytestmark = pytest.mark.timeout(180)
 
 
 def _app(**state) -> AppTest:
-    at = AppTest.from_file(APP_SCRIPT)
+    # Every run, not only the first: a later one may load the whole demo as B.
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     for key, value in state.items():
         at.session_state[key] = value
-    at.run(timeout=60)
+    at.run()
     assert not at.exception, at.exception
     return at
 

@@ -10654,15 +10654,19 @@ def _run_app() -> None:
                 excluded_tags=trial_filters["excluded_tags"],
             )
         )
+        kept_digest = set_digest(kept)  # once: the set can be the whole corpus
         words_df, fixations_df = filter_to_keys_cached(
-            words_df, fixations_df, kept, slot="annotation_filter"
+            words_df, fixations_df, kept, slot="annotation_filter", digest=kept_digest
         )
         if not sample_trials.issubset(kept):
             raw_gaze_scoped = frame_cache(
                 "raw_gaze_annotations",
-                (sample_key, hashable_key(kept)),
+                (sample_key, kept_digest),
                 lambda: filter_frame_to_keys(raw_gaze_df, kept),
             )
+        else:
+            # Every sample's reading is kept: no copy of the samples to hold.
+            forget_frame_cache("raw_gaze_annotations")
     else:
         # The filtered copies of the pool are not kept once the filter is off.
         for slot in ANNOTATION_FILTER_SLOTS:

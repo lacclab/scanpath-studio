@@ -8443,6 +8443,7 @@ def filter_to_keys_cached(
     keys,
     *,
     slot: str,
+    digest: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """`filter_to_keys` over a pool, worked out once per change of the frames
     or of the readings it keeps.
@@ -8451,11 +8452,17 @@ def filter_to_keys_cached(
     is kept in the `frame_cache` ``slot`` (one per narrowing step and pool)
     and the new frames are named by their inputs. With ``keys`` of ``None`` the
     frames come back as they are and the slot is emptied.
+
+    The kept readings enter the key and the name as their `set_digest`, worked
+    out once (or passed as ``digest`` by a caller that has it): on a full
+    corpus the set holds tens of thousands of readings, and hashing it is the
+    cost of a rerun this step exists to save.
     """
     if keys is None:
         forget_frame_cache(slot)
         return words, fixations
     keys = set(keys)
+    digest = digest or set_digest(keys)
     pool = (words, fixations)
 
     def _build() -> tuple:
@@ -8464,10 +8471,10 @@ def filter_to_keys_cached(
 
     narrowed = frame_cache(
         slot,
-        (frame_fingerprint(words), frame_fingerprint(fixations), hashable_key(keys)),
+        (frame_fingerprint(words), frame_fingerprint(fixations), digest),
         _build,
     )
-    assign_derived(narrowed, "filter_to_keys", pool, keys)
+    assign_derived(narrowed, "filter_to_keys", pool, digest)
     return narrowed
 
 

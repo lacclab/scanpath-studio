@@ -2459,7 +2459,7 @@ def _dataset_color_categories(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=32)
 def _cached_scanpath_figure(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -2471,7 +2471,9 @@ def _cached_scanpath_figure(
 
     Frames and settings are passed un-hashed; ``fig_key`` (from
     ``_figure_input_key``) is the cache key, so a rerun with the same trial and
-    settings reuses the figure instead of rebuilding all its traces/shapes."""
+    settings reuses the figure instead of rebuilding all its traces/shapes.
+    The cache is shared by every session of the server, so it keeps the most
+    recent 32 figures, not every trial and setting ever drawn."""
     # The single most expensive thing a rerun can do, and invisible from
     # outside — a cache hit and a miss look identical on screen. The line only
     # appears on a miss, which is what makes it worth reading.
@@ -2898,6 +2900,7 @@ def _resolve_compare_source(
             source = load_secondary_dataset(chosen)
         _release_compare_task(task_key)
     if source is None:
+        _forget_compare_narrowing()
         return (
             None,
             f"{ICONS['warning']} Couldn't load **{md_literal(_dataset_label(chosen))}** "
@@ -3013,6 +3016,22 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
         host=box,
         names=across_tables(source.column_names),
     )
+
+
+#: The `frame_cache` slots `_narrow_secondary` keeps its copies of B's pool in.
+COMPARE_NARROWING_SLOTS = (
+    "cmp_trial_filters",
+    "cmp_trial_metadata_filter",
+    "cmp_annotation_filter_readings",
+    "cmp_annotation_filter",
+)
+
+
+def _forget_compare_narrowing() -> None:
+    """Drop B's narrowed copies of its pool once nothing narrows B: Compare is
+    off, or B's dataset did not load."""
+    for slot in COMPARE_NARROWING_SLOTS:
+        forget_frame_cache(slot)
 
 
 def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
@@ -6853,8 +6872,9 @@ def render_single_trial_tab(
             )
     else:
         # Compare off loads no second dataset — stop the one an
-        # earlier run left loading for B.
+        # earlier run left loading for B — and keeps no copy of B's pool.
         _abandon_compare_task()
+        _forget_compare_narrowing()
         compare_words_pool = words_filtered
         compare_fixations_pool = fixations_filtered
 

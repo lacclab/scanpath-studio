@@ -80,9 +80,10 @@ cheaper than a reviewer and never forgets.
     **Why:** BUG-103 / #314 (sampled keys served stale results); #342.
 13. **Trigger:** a step that narrows a pool every rerun: a filter on the
     app's trial pool (`app._run_app`) or B's (`tabs._narrow_secondary`).
-    **Check:** it goes through `data.select_trials_cached` or
-    `data.filter_to_keys_cached`, whose slot is emptied once the filter is
-    off, and a `tests/test_rerun_work.py` case turns that filter on.
+    **Check:** its result is kept in a `frame_cache` slot (as
+    `data.select_trials_cached` and `data.filter_to_keys_cached` keep theirs),
+    the slot is emptied once the filter is off, and a
+    `tests/test_rerun_work.py` case turns that filter on.
     **Why:** #586 — the annotation filter, the trial-metadata filter and B's
     annotation filter each re-filtered the whole dataset on every click.
 14. **Trigger:** a new slow step (a loop over trials, a file read, a build).

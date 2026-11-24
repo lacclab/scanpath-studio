@@ -66,8 +66,8 @@ FIGURE_WORK = [
     (plots, "make_comparison_figure"),
 ]
 #: The most rows a figure builder's tables, or the data work it does, may hold:
-#: a few trials' worth, far below the bundled demo's whole corpus (about 1,700
-#: fixations, 2,400 words).
+#: a few trials' worth, far below the bundled demo's whole corpus (1,894
+#: fixations, 2,614 words).
 TRIAL_ROWS = 1000
 #: The most gaze samples a builder may be handed: Compare's two readings (the
 #: demo's longest has about 25,500), far below the demo's 401,200.
@@ -121,6 +121,10 @@ VIEWS = {
     ),
     "replay": (_VIEW_SCANPATH, {"single_animate": True}),
     "compare": (_VIEW_SCANPATH, {"single_compare_toggle": True}),
+    "compare · raw gaze": (
+        _VIEW_SCANPATH,
+        {"single_compare_toggle": True, "global_show_raw_gaze": True},
+    ),
     "compare · B filtered": (
         _VIEW_SCANPATH,
         {
@@ -276,14 +280,29 @@ def test_a_rerun_that_changes_nothing_does_no_work(view, work):
     assert not redone, f"a rerun with nothing changed redid: {redone}"
     stopped = set(known) - set(work)
     assert not stopped, f"no longer redone on a rerun; drop from UNCACHED: {stopped}"
-    work.check_drawn_sizes()
+
+
+#: The views a plot setting redraws: each builder, and the narrowed pools.
+REDRAWN = [
+    "scanpath",
+    "replay",
+    "compare",
+    "compare · raw gaze",
+    "scanpath · Comparisons",
+    "scanpath · trial metadata filter",
+    "compare · B filtered",
+]
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize(
-    "view", ["scanpath", "replay", "compare", "scanpath · Comparisons"]
-)
+@pytest.mark.parametrize("view", REDRAWN)
 def test_a_plot_setting_only_redraws_the_figure(view, work):
+    from scanpath_studio import tabs
+
+    # The figure caches outlive a test, so one drawn earlier in this process
+    # could answer this redraw from memory and measure nothing.
+    for name in FIGURE_CACHES:
+        getattr(tabs, name).clear()
     at = _drawn(*VIEWS[view])
     work.reset()
     at.session_state["global_saccade_width"] = 3.5

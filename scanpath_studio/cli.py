@@ -4462,7 +4462,8 @@ def _open_parser() -> argparse.ArgumentParser:
         prog="scanpath-studio open",
         # `--stimulus-image` must not pass for `--stimulus-image-opacity`.
         allow_abbrev=False,
-        description="Open the app on a dataset you added, at one reading, with "
+        description="Open the app on a dataset you added, or one the app has "
+        "itself (the bundled demo, a public corpus), at one reading, with "
         "the figure set by the same flags render takes. If the app is running "
         "on this computer the link opens in its browser; otherwise the app is "
         "started first. Same as api.app_link.",

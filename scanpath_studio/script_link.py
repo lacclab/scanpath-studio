@@ -454,19 +454,22 @@ def link_query(
     options: Mapping | None = None,
     share_id: str | None = None,
     digest: str | None = None,
+    aliases: Mapping[str, str] | None = None,
 ) -> str:
     """The query string of a link to ``dataset``'s reading, URL-encoded, no ``?``.
 
     The params are the ones 🔗 Share → Link writes for the same view: the
     dataset by name (with its share ID and the digest of its tables, when
-    given), the reading, then the figure settings.
+    given; a dataset the app has itself by its ``?source=``, see
+    `builtin_source_params`), the reading, then the figure settings.
     """
     from .url_state import settings_params
 
     name = str(dataset or "").strip()
     if not name:
         raise ValueError("Name the dataset the link opens.")
-    params = {PARAM_DATASET: name}
+    builtin = None if share_id or digest else builtin_source_params(name, aliases)
+    params = builtin or {PARAM_DATASET: name}
     if share_id:
         params[PARAM_DATASET_ID] = str(share_id)
     if digest:
@@ -495,6 +498,44 @@ def link_query(
         if params.get("show_fixations") == "0":
             params[REPLAY_FIXATIONS_PARAM] = "0"
     return urlencode(params)
+
+
+def builtin_source_params(
+    name: str, aliases: Mapping[str, str] | None = None
+) -> dict[str, str] | None:
+    """The params 🔗 Share writes for a dataset the app ships or downloads
+    itself, named as its list shows it (ignoring case), or ``None``.
+
+    The app reads ``?dataset=`` as a dataset someone added, so a link naming the
+    bundled demo or a public corpus that way finds nothing of that name. These
+    sources travel as ``?source=`` instead (``?source=corpus&corpus=…`` for a
+    public corpus), as Share writes them. The list shows a public corpus by its
+    short name (``PoTeC``) and a renamed one by its new name, from ``aliases``
+    (``{source: name}``); its full registry label is accepted too.
+    """
+    from .app import picker_name_for, public_dataset_registry
+    from .url_state import (
+        _SHAREABLE_SOURCES,
+        CORPUS_SOURCE_TOKEN,
+        PARAM_CORPUS,
+        registry_corpus_slugs,
+    )
+
+    registry = public_dataset_registry()
+    aliases = aliases or {}
+    wanted = name.casefold()
+
+    def named(choice: str) -> bool:
+        shown = (choice, picker_name_for(choice, registry), aliases.get(choice))
+        return any(str(n).casefold() == wanted for n in shown if n)
+
+    for choice, token in _SHAREABLE_SOURCES.items():
+        if named(choice):
+            return {"source": token}
+    for label, slug in registry_corpus_slugs().items():
+        if named(label):
+            return {"source": CORPUS_SOURCE_TOKEN, PARAM_CORPUS: slug}
+    return None
 
 
 def _id_text(value) -> str:

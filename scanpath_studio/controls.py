@@ -1694,12 +1694,72 @@ def _hold_view_writes(
             pending.pop(key)
 
 
-#: Design keys no widget draws, which `_hold_view_writes` leaves alone. The
+def design_state() -> dict:
+    """The plot settings a design records (`_is_design_key`), as they are now:
+    what `hold_script_writes` compares against."""
+    ss = st.session_state
+    return {key: deepcopy(ss[key]) for key in list(ss) if _is_design_key(key)}
+
+
+def hold_script_writes(before: dict, *, rerun_follows: bool = False) -> None:
+    """Hold the plot settings the script changed since ``before`` (a
+    `design_state`) against a closed popover's echo (see `write_through`).
+
+    For writes made in the script before the widgets draw, such as a settings
+    file's. By then `reassert_pending_writes` has put back any held value, so
+    the browser shows what an earlier hold recorded, not what ``before`` has;
+    a key the script left as it was keeps its hold. The browser answers on the
+    next run, unless the script reruns itself first (``rerun_follows``), and
+    then every hold waits one run more (`keep_holds_through_rerun`). Keys no
+    widget draws, and keys drawn outside every popover, are written plainly,
+    as in `_hold_view_writes`.
+    """
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY) or {}
+    for key, old in before.items():
+        if key in _UNDRAWN_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
+            continue
+        if _write_match_key(ss[key]) == _write_match_key(old):
+            continue
+        earlier = pending.get(key)
+        shown = earlier.stale_echo if earlier is not None else old
+        write_through(key, ss[key], shown=shown, in_callback=False)
+    if rerun_follows:
+        keep_holds_through_rerun()
+
+
+def keep_holds_through_rerun() -> None:
+    """Keep every held write through a rerun the script starts itself.
+
+    `reassert_pending_writes` reads a held key that still has its written value
+    as the browser having taken it, and ends the hold. A rerun the script
+    starts (`st.rerun()`) brings no values from the browser, so every hold
+    would read that way and end before the browser's echo arrives. Marked
+    fresh, each waits for the run after, which is the browser's."""
+    for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
+        write.fresh = True
+
+
+#: Design keys no widget draws, which `_hold_view_writes` and
+#: `hold_script_writes` write plainly, never held. The
 #: palette name is derived from the colours (the rail's tiles hold no value);
-#: the highlight style and the replay's quality are shown through shadows
-#: (`shadow_widget_key`), whose own keys move instead.
+#: the highlight style, the replay's quality and the typeface are shown through
+#: shadows (`shadow_widget_key`), whose own keys move instead; the screen's
+#: size and geometry come from the dataset's recording setup, which no widget
+#: on the rail edits. `tests/test_viz_palette.py` checks that no widget draws
+#: them.
 _UNDRAWN_VIEW_KEYS = frozenset(
-    {"global_palette", "global_critical_span_style", "global_anim_quality"}
+    {
+        "global_palette",
+        "global_critical_span_style",
+        "global_anim_quality",
+        "global_font_family",
+        "global_canvas_width",
+        "global_canvas_height",
+        "global_monitor_width_mm",
+        "global_viewing_distance_mm",
+        "global_display_dpi",
+    }
 )
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a

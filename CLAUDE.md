@@ -64,6 +64,12 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
   can observe: `scripts/verify_change.py` boots the app headless and renders
   through the CLI and the API, and a visible change gets looked at in a browser.
   Tests passing is not the same as the feature working.
+- **Run the tests for what you changed; CI runs the rest.** Locally, run the
+  test files for the modules you touched and the files that name the functions
+  you changed (`/preflight` check 3). CI runs the whole suite on every PR in
+  about five minutes, and every supported Python weekly and before a release.
+  Running the whole suite locally too doubles the wait for nothing, except when
+  a change reaches machinery most tests go through.
 - **Three rounds, then ask.** If a check still fails after three attempts at
   fixing it, stop and tell the user what fails, what you tried, and what you
   suspect.

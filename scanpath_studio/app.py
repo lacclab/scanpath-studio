@@ -210,7 +210,9 @@ from scanpath_studio.data import (
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
+    filter_to_keys_cached,
     filter_trials,
+    forget_frame_cache,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
@@ -9410,6 +9412,14 @@ def main() -> None:
         _run_app()
 
 
+#: The `frame_cache` slots the annotation filter keeps its copies of the pool in.
+ANNOTATION_FILTER_SLOTS = (
+    "annotation_filter_readings",
+    "annotation_filter",
+    "raw_gaze_annotations",
+)
+
+
 def _run_app() -> None:
     """One script run, top to bottom (``main`` wraps it in a loading scope).
 
@@ -10619,10 +10629,9 @@ def _run_app() -> None:
         if samples_only_dataset
         else None,
     )
-    if trialmeta_keys is not None:
-        pool = (words_df, fixations_df)
-        words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
-        assign_derived((words_df, fixations_df), "filter_to_keys", pool, trialmeta_keys)
+    words_df, fixations_df = filter_to_keys_cached(
+        words_df, fixations_df, trialmeta_keys, slot="trial_metadata_filter"
+    )
     # The raw-gaze samples table has to travel through the same annotation
     # filter as words + fixations, or a sample row for an unstarred trial
     # survives "⭐ Favorites only" — which would also keep the all-three-empty
@@ -10638,7 +10647,14 @@ def _run_app() -> None:
         # union all three so every frame's trials get judged by the filter.
         sample_key = frame_fingerprint(raw_gaze_df)
         sample_trials = raw_gaze_trial_keys(raw_gaze_df, cache_key=sample_key)
-        present_keys = trial_keys(words_df) | trial_keys(fixations_df) | sample_trials
+        # Both steps read every row of both frames, so each is kept until its
+        # inputs change: a click elsewhere must not mask the corpus again.
+        pool_key = (frame_fingerprint(words_df), frame_fingerprint(fixations_df))
+        present_keys = frame_cache(
+            "annotation_filter_readings",
+            (*pool_key, sample_key),
+            lambda: trial_keys(words_df) | trial_keys(fixations_df) | sample_trials,
+        )
         kept = set(
             filter_keys(
                 list(present_keys),
@@ -10647,15 +10663,23 @@ def _run_app() -> None:
                 excluded_tags=trial_filters["excluded_tags"],
             )
         )
-        pool = (words_df, fixations_df)
-        words_df, fixations_df = filter_to_keys(words_df, fixations_df, kept)
-        assign_derived((words_df, fixations_df), "filter_to_keys", pool, kept)
+        kept_digest = set_digest(kept)  # once: the set can be the whole corpus
+        words_df, fixations_df = filter_to_keys_cached(
+            words_df, fixations_df, kept, slot="annotation_filter", digest=kept_digest
+        )
         if not sample_trials.issubset(kept):
             raw_gaze_scoped = frame_cache(
                 "raw_gaze_annotations",
-                (sample_key, hashable_key(kept)),
+                (sample_key, kept_digest),
                 lambda: filter_frame_to_keys(raw_gaze_df, kept),
             )
+        else:
+            # Every sample's reading is kept: no copy of the samples to hold.
+            forget_frame_cache("raw_gaze_annotations")
+    else:
+        # The filtered copies of the pool are not kept once the filter is off.
+        for slot in ANNOTATION_FILTER_SLOTS:
+            forget_frame_cache(slot)
 
     # Apply filters (participant/trial/text selection). For a raw-gaze-only
     # dataset (no words/fixations) derive the participant/trial options from the

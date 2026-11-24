@@ -8444,6 +8444,47 @@ def select_trials_cached(
     return TrialFilterResult(*frame_cache(slot, key, _build))
 
 
+def filter_to_keys_cached(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    keys,
+    *,
+    slot: str,
+    digest: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """`filter_to_keys` over a pool, worked out once per change of the frames
+    or of the readings it keeps.
+
+    Both tables are read in full, so, as in `select_trials_cached`, the answer
+    is kept in the `frame_cache` ``slot`` (one per narrowing step and pool)
+    and the new frames are named by their inputs. With ``keys`` of ``None`` the
+    frames come back as they are and the slot is emptied.
+
+    The kept readings enter the key and the name as their `set_digest`, worked
+    out once (or passed as ``digest`` by a caller that has it): on a full
+    corpus the set holds tens of thousands of readings, and hashing it is the
+    cost of a rerun this step exists to save.
+    """
+    if keys is None:
+        forget_frame_cache(slot)
+        return words, fixations
+    keys = set(keys)
+    digest = digest or set_digest(keys)
+    pool = (words, fixations)
+
+    def _build() -> tuple:
+        progress.report()  # a miss is work: a gated card over it may show
+        return filter_to_keys(words, fixations, keys)
+
+    narrowed = frame_cache(
+        slot,
+        (frame_fingerprint(words), frame_fingerprint(fixations), digest),
+        _build,
+    )
+    assign_derived(narrowed, "filter_to_keys", pool, digest)
+    return narrowed
+
+
 def select_readings(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,

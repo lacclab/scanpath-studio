@@ -389,6 +389,8 @@ def test_app_co_animation_wears_the_rail_styles_and_static_gets_them_back(
     monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
     tabs._cached_replay_view.clear()
     monkeypatch.setattr(tabs, "make_comparison_figure", compare)
+    # A cache hit would never reach the spied builder.
+    tabs._cached_comparison_figure.clear()
 
     at = AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)

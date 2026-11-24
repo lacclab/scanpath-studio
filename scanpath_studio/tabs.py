@@ -260,7 +260,7 @@ from scanpath_studio.data import (
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
-    filter_to_keys,
+    filter_to_keys_cached,
     forget_frame_cache,
     frame_cache,
     frame_fingerprint,
@@ -2415,7 +2415,8 @@ def _figure_input_key(
         if isinstance(v, pd.DataFrame):
             parts.append((k, frame_fingerprint(v)))
         elif isinstance(v, dict):
-            parts.append((k, tuple(sorted((str(a), str(b)) for a, b in v.items()))))
+            # `repr`, not `str`: `{1: …}` and `{"1": …}` must not share a key.
+            parts.append((k, tuple(sorted((repr(a), repr(b)) for a, b in v.items()))))
         elif isinstance(v, (list, tuple)):
             parts.append((k, tuple(v)))
         else:
@@ -2459,7 +2460,7 @@ def _dataset_color_categories(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=32)
 def _cached_scanpath_figure(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -2471,7 +2472,9 @@ def _cached_scanpath_figure(
 
     Frames and settings are passed un-hashed; ``fig_key`` (from
     ``_figure_input_key``) is the cache key, so a rerun with the same trial and
-    settings reuses the figure instead of rebuilding all its traces/shapes."""
+    settings reuses the figure instead of rebuilding all its traces/shapes.
+    The cache is shared by every session of the server, so it keeps the most
+    recent 32 figures, not every trial and setting ever drawn."""
     # The single most expensive thing a rerun can do, and invisible from
     # outside — a cache hit and a miss look identical on screen. The line only
     # appears on a miss, which is what makes it worth reading.
@@ -2483,6 +2486,75 @@ def _cached_scanpath_figure(
         return make_scanpath_figure(
             _words, _fixations, settings=_settings, raw_gaze=_raw_gaze
         )
+
+
+def _comparison_figure_key(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    settings: FigureSettings,
+    raw_gaze: pd.DataFrame | None,
+    trials: tuple,
+) -> tuple:
+    """Cache key for a comparison figure: both readings' frames, the two
+    trials, the samples, and every field of its settings. Every field, not the
+    comparison's own options: its layout, both styles, B's screen and page and
+    the per-render overrides all live in the settings."""
+    inputs = {
+        field.name: getattr(settings, field.name)
+        for field in dataclass_fields(settings)
+    }
+    return _figure_input_key(
+        words, fixations, {**inputs, "raw_gaze": raw_gaze, "trials": trials}
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _cached_comparison_figure(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _trials: tuple,
+    _settings: FigureSettings,
+    _raw_gaze: pd.DataFrame | None,
+    fig_key,
+):
+    """Build + cache a comparison figure, as `_cached_scanpath_figure` does for
+    the static one, so a click that changes nothing in it reuses it."""
+    with timed(
+        "build comparison figure (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_comparison_figure(
+            _words, _fixations, *_trials, settings=_settings, raw_gaze=_raw_gaze
+        )
+
+
+@st.cache_data(show_spinner=False, max_entries=48)
+def _cached_panel_figure(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _options: dict,
+    fig_key,
+):
+    """Build + cache one panel of a grid of readings, as
+    `_cached_scanpath_figure` does for the main figure. Enough entries for a
+    few pages of `_GEN_PAGE_SIZE` panels, so paging back draws nothing new."""
+    with timed(
+        "build grid panel (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_scanpath_figure(_words, _fixations, **_options)
+
+
+def _panel_figure(words: pd.DataFrame, fixations: pd.DataFrame, options: dict):
+    """A grid panel's static figure, keyed on its frames and every option."""
+    return _cached_panel_figure(
+        words,
+        fixations,
+        options,
+        fig_key=_figure_input_key(words, fixations, options),
+    )
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -2803,6 +2875,7 @@ def _resolve_compare_source(
         return None, ""
     if not ready_by_name.get(chosen, False):
         _abandon_compare_task()
+        _forget_compare_narrowing()
         return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
     if loading_slot is None:
         source = load_secondary_dataset(chosen)
@@ -2829,6 +2902,7 @@ def _resolve_compare_source(
             source = load_secondary_dataset(chosen)
         _release_compare_task(task_key)
     if source is None:
+        _forget_compare_narrowing()
         return (
             None,
             f"{ICONS['warning']} Couldn't load **{md_literal(_dataset_label(chosen))}** "
@@ -2946,6 +3020,22 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     )
 
 
+#: The `frame_cache` slots `_narrow_secondary` keeps its copies of B's pool in.
+COMPARE_NARROWING_SLOTS = (
+    "cmp_trial_filters",
+    "cmp_trial_metadata_filter",
+    "cmp_annotation_filter_readings",
+    "cmp_annotation_filter",
+)
+
+
+def _forget_compare_narrowing() -> None:
+    """Drop B's narrowed copies of its pool once nothing narrows B: Compare is
+    off, or B's dataset did not load."""
+    for slot in COMPARE_NARROWING_SLOTS:
+        forget_frame_cache(slot)
+
+
 def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
     """Apply B's own (``cmp``-prefixed) trial filters to a comparison source.
 
@@ -2968,17 +3058,20 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         (source.words, source.fixations),
         trial_filter_params(filters),
     )
-    selected_keys = filters.get("trial_keys")
-    if selected_keys is not None:
-        pool = (words, fixations)
-        words, fixations = filter_to_keys(words, fixations, set(selected_keys))
-        assign_derived((words, fixations), "filter_to_keys", pool, set(selected_keys))
+    words, fixations = filter_to_keys_cached(
+        words, fixations, filters.get("trial_keys"), slot="cmp_trial_metadata_filter"
+    )
+    kept = None
     if (
         filters.get("favorites_only")
         or filters.get("required_tags")
         or filters.get("excluded_tags")
     ):
-        present = trial_keys(words) | trial_keys(fixations)
+        present = frame_cache(
+            "cmp_annotation_filter_readings",
+            (frame_fingerprint(words), frame_fingerprint(fixations)),
+            lambda: trial_keys(words) | trial_keys(fixations),
+        )
         kept = set(
             filter_keys(
                 list(present),
@@ -2988,9 +3081,11 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
                 prefix=_COMPARE_FILTER_PREFIX,
             )
         )
-        pool = (words, fixations)
-        words, fixations = filter_to_keys(words, fixations, kept)
-        assign_derived((words, fixations), "filter_to_keys", pool, kept)
+    else:
+        forget_frame_cache("cmp_annotation_filter_readings")
+    words, fixations = filter_to_keys_cached(
+        words, fixations, kept, slot="cmp_annotation_filter"
+    )
     if fixations is source.fixations and words is source.words:
         return source
     combos, _, _ = build_combo_options_for(fixations, source.composite_trial_columns)
@@ -6786,8 +6881,9 @@ def render_single_trial_tab(
             )
     else:
         # Compare off loads no second dataset — stop the one an
-        # earlier run left loading for B.
+        # earlier run left loading for B — and keeps no copy of B's pool.
         _abandon_compare_task()
+        _forget_compare_narrowing()
         compare_words_pool = words_filtered
         compare_fixations_pool = fixations_filtered
 
@@ -8299,6 +8395,9 @@ def render_single_trial_tab(
                         viz_settings.get("color_by"), fixations_all
                     ),
                 )
+        else:
+            # Closed, the subtab keeps no copy of its matches.
+            forget_frame_cache("comparison_matches")
 
     # Absent entirely while drift correction is gated off.
     with tab_align if tab_align is not None else contextlib.nullcontext():
@@ -9161,13 +9260,19 @@ def _render_comparison_figure(
             overrides["heatmap_metric"] = "duration_ms"
     comparison_settings = settings.with_overrides(**overrides)
     _amend_snippet_settings(comparison_settings, "comparison")
-    fig_compare = make_comparison_figure(
-        words_filtered,
-        fixations_filtered,
+    trials = (
         (selected_participant, selected_trial),
         (frame_participant_b, compare_trial),
-        settings=comparison_settings,
-        raw_gaze=raw_gaze,
+    )
+    fig_compare = _cached_comparison_figure(
+        words_filtered,
+        fixations_filtered,
+        trials,
+        comparison_settings,
+        raw_gaze,
+        fig_key=_comparison_figure_key(
+            words_filtered, fixations_filtered, comparison_settings, raw_gaze, trials
+        ),
     )
     add_illustration_label(
         fig_compare,
@@ -13046,19 +13151,21 @@ def render_alignment_comparison_tab(
         if connectors is not None:
             kwargs["show_connectors"] = True
             kwargs["connector_y"] = tuple(pd.to_numeric(connectors, errors="coerce"))
-        return make_scanpath_figure(
+        return _panel_figure(
             trial_words,
             fix,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            x_field="x",
-            y_field="y",
-            column_labels=active_figure_labels(
-                st.session_state, words=trial_words.columns, fixations=fix.columns
-            ),
-            **kwargs,
+            {
+                "canvas_width": int(canvas_width),
+                "canvas_height": int(canvas_height),
+                "base_font_size": int(base_font_size),
+                "font_family": font_family,
+                "x_field": "x",
+                "y_field": "y",
+                "column_labels": active_figure_labels(
+                    st.session_state, words=trial_words.columns, fixations=fix.columns
+                ),
+                **kwargs,
+            },
         )
 
     # Naive baseline (nearest-line) to count how many fixations each algorithm
@@ -13241,6 +13348,13 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
     return sorted(cols, key=_rank)
 
 
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_generation_column_options(_fixations: pd.DataFrame, fixations_key) -> list:
+    """`_generation_column_options`, once per pool: it groups the whole pool
+    by reading for every field, so a rerun must not repeat it."""
+    return _generation_column_options(_fixations)
+
+
 #: The two Match choices that come before the dataset's fields.
 _MATCH_SAME_TEXT = "@same_text"
 _MATCH_SAME_PARTICIPANT = "@same_participant"
@@ -13276,7 +13390,7 @@ def _match_options(fixations: pd.DataFrame, names: ColumnNames) -> list[str]:
         options += [_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT]
     seen: set[str] = set()
     text_col = _match_text_column(fixations)
-    for column in _generation_column_options(fixations):
+    for column in _c_generation_column_options(fixations, frame_fingerprint(fixations)):
         if column in _MATCH_NOT_A_CONDITION or column == text_col:
             continue
         label = names.field_label(column)
@@ -13648,13 +13762,26 @@ def render_multiple_comparison_tab(
     )
     gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
-    candidates = _collect_generations(
-        fixations_filtered,
-        trial_fixations,
-        gen_col,
-        selected_participant,
-        selected_trial,
-        differ_col,
+    # Masks and groups the whole pool, so the matches are kept until the pool,
+    # the selected reading or the Match choice changes.
+    candidates = frame_cache(
+        "comparison_matches",
+        (
+            frame_fingerprint(fixations_filtered),
+            frame_fingerprint(trial_fixations),
+            gen_col,
+            str(selected_participant),
+            str(selected_trial),
+            differ_col,
+        ),
+        lambda: _collect_generations(
+            fixations_filtered,
+            trial_fixations,
+            gen_col,
+            selected_participant,
+            selected_trial,
+            differ_col,
+        ),
     )
     if not candidates:
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
@@ -13672,20 +13799,22 @@ def render_multiple_comparison_tab(
     panel_settings = _comparison_panel_settings(base_settings)
 
     def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
-        return make_scanpath_figure(
+        return _panel_figure(
             words,
             fix,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            x_field="x",
-            y_field="y",
-            column_labels=active_figure_labels(
-                st.session_state, words=words.columns, fixations=fix.columns
-            ),
-            color_categories=color_categories,
-            **settings,
+            {
+                "canvas_width": int(canvas_width),
+                "canvas_height": int(canvas_height),
+                "base_font_size": int(base_font_size),
+                "font_family": font_family,
+                "x_field": "x",
+                "y_field": "y",
+                "column_labels": active_figure_labels(
+                    st.session_state, words=words.columns, fixations=fix.columns
+                ),
+                "color_categories": color_categories,
+                **settings,
+            },
         )
 
     with st.container():

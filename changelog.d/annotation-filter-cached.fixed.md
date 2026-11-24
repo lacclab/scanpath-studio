@@ -1,0 +1,1 @@
+With Favorites only, a tag filter or a trial-metadata filter on, for the scanpath or for Compare's second one, a click no longer re-filters the whole dataset: the filtered trials are kept until the data, the filter or your stars and tags change (about 0.5 s a click on a full OneStop corpus).

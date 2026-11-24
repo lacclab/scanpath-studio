@@ -168,6 +168,40 @@ class TestFrameCache:
         assert frame_cache("t_bare", "k", lambda: built) is built
 
 
+class TestFilterToKeysCached:
+    """A narrowing step reads both tables in full, so it is worked out once per
+    change of the frames or of the readings it keeps, and its slot is emptied
+    once there is nothing to narrow."""
+
+    @staticmethod
+    def _pool() -> tuple[pd.DataFrame, pd.DataFrame]:
+        words = pd.DataFrame(
+            {"participant_id": ["p", "p", "q"], "trial_id": ["1", "2", "1"]}
+        )
+        return words, words.assign(x=1.0)
+
+    def test_the_same_readings_give_the_same_frames_back(self):
+        from scanpath_studio.data import filter_to_keys_cached
+
+        words, fixations = self._pool()
+        first = filter_to_keys_cached(words, fixations, {("p", "1")}, slot="t_keys")
+        again = filter_to_keys_cached(words, fixations, [("p", "1")], slot="t_keys")
+        assert again[0] is first[0] and again[1] is first[1]
+        assert first[1][["participant_id", "trial_id"]].values.tolist() == [["p", "1"]]
+        other = filter_to_keys_cached(words, fixations, {("q", "1")}, slot="t_keys")
+        assert other[1]["participant_id"].tolist() == ["q"]
+
+    def test_no_readings_to_keep_hands_the_pool_back_and_empties_the_slot(self):
+        from scanpath_studio.data import filter_to_keys_cached
+
+        words, fixations = self._pool()
+        filter_to_keys_cached(words, fixations, {("p", "1")}, slot="t_keys_off")
+        assert "t_keys_off" in st.session_state[data_module._FRAME_CACHE_KEY]
+        back = filter_to_keys_cached(words, fixations, None, slot="t_keys_off")
+        assert back[0] is words and back[1] is fixations
+        assert "t_keys_off" not in st.session_state[data_module._FRAME_CACHE_KEY]
+
+
 class TestClearFrameCache:
     """`clear_computation_cache` must reach it, or a deleted dataset's frames
     outlive the delete — the thing that function exists to prevent."""

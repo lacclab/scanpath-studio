@@ -20,11 +20,12 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 import scanpath_studio
-from scanpath_studio import api, cli, plots
+from scanpath_studio import aggregation, api, cli, plots
 from scanpath_studio.export import ExportOptions, bulk_export
 from scanpath_studio.synthetic import make_multipart_synthetic_data
 
@@ -47,6 +48,10 @@ class Shape:
     figures: int = 1
     #: Where the first reading's fixations land, when the shape fixes it.
     fixation_x: tuple | None = None
+    #: The Words column holding dwell time, and the input columns that name a
+    #: reading: what Corpus Analysis's overview is checked against.
+    dwell: str | None = None
+    reading_columns: tuple[str, ...] = ()
 
     def load(self) -> tuple:
         """``(words, fixations, raw_gaze)`` as the API loads them."""
@@ -91,6 +96,8 @@ def _standard() -> Shape:
         two(raw_gaze),
         readings={(str(p), str(t)): int(n) for (p, t), n in counts.items()},
         figures=2,
+        dwell="IA_DWELL_TIME",
+        reading_columns=tuple(_READING),
     )
 
 
@@ -107,14 +114,18 @@ def _raw_gaze_only() -> Shape:
 
 
 def _multipart() -> Shape:
-    """One trial over two screens; its figure is its first screen, "intro"."""
+    """One trial over two screens; its figure is its first screen, "intro".
+    The overview counts it as one reading, its dwell averaged over both."""
     words, fixations = make_multipart_synthetic_data()
+    words = words.assign(IA_DWELL_TIME=[120.0, 180.0, 240.0, 400.0, 600.0])
     first = int((fixations["screen_id"] == "intro").sum())
     return Shape(
         words,
         fixations,
         readings={("synthetic", "multipart_demo"): first},
         figures=2,
+        dwell="IA_DWELL_TIME",
+        reading_columns=("participant_id", "trial_id"),
     )
 
 
@@ -132,6 +143,7 @@ def _text_word_ids() -> Shape:
             "y": 0.0,
             "width": 50.0,
             "height": 20.0,
+            "dwell": [180.0, 200.0, 220.0],
         }
     )
     fixations = pd.DataFrame(
@@ -155,11 +167,14 @@ def _text_word_ids() -> Shape:
                 "y": "y",
                 "width": "width",
                 "height": "height",
+                "measure_tfd": "dwell",
             },
             "fix_schema": common | {"word_id": "fix_ia", "duration": "duration"},
         },
         readings={("r1", "t1"): 3},
         fixation_x=(25.0, 225.0, 125.0),
+        dwell="dwell",
+        reading_columns=("reader", "trial"),
     )
 
 
@@ -167,7 +182,10 @@ def _composite_trial_id() -> Shape:
     """A trial named by two columns whose parts hold the separator: two readings,
     which joining the parts plainly would merge into one."""
     words, fixations = [], []
-    for (session, item), x in ((("block_A", "B"), 100), (("block", "A_B"), 400)):
+    for (session, item), x, dwell in (
+        (("block_A", "B"), 100, 200.0),
+        (("block", "A_B"), 400, 400.0),
+    ):
         reading = {"participant_id": "r1", "session": session, "item": item}
         words.append(
             reading
@@ -178,6 +196,7 @@ def _composite_trial_id() -> Shape:
                 "y": 100,
                 "width": 50,
                 "height": 20,
+                "dwell_time": dwell,
             }
         )
         fixations.append(
@@ -196,11 +215,15 @@ def _composite_trial_id() -> Shape:
         words,
         fixations,
         schemas={
-            "word_schema": api.propose_schema(words, "words") | trial,
+            "word_schema": api.propose_schema(words, "words")
+            | trial
+            | {"measure_tfd": "dwell_time"},
             "fix_schema": api.propose_schema(fixations, "fixations") | trial,
         },
         readings={("r1", "block\\_A_B"): 1, ("r1", "block_A\\_B"): 1},
         figures=2,
+        dwell="dwell_time",
+        reading_columns=("participant_id", "session", "item"),
     )
 
 
@@ -344,6 +367,41 @@ def _data_checks(shape: Shape, tmp_path: Path) -> None:
     assert isinstance(api.check_data_health(words, fixations, raw_gaze), pd.DataFrame)
 
 
+def _expected_overview(shape: Shape) -> dict[str, tuple]:
+    """Each participant's readings, and the mean and range of their per-reading
+    dwell, worked out from the input table: a reading is what its input
+    columns name, however many screens it spans."""
+    words = shape.words
+    dwell = pd.to_numeric(words[shape.dwell], errors="coerce")
+    dwell = dwell.where(np.isfinite(dwell))
+    per_reading = dwell.groupby([words[c] for c in shape.reading_columns]).mean()
+    # A reading with no finite dwell has no mean, and the overview counts it out.
+    per_reading = per_reading.dropna()
+    return {
+        str(participant): (len(means), means.mean(), means.min(), means.max())
+        for participant, means in per_reading.groupby(level=0)
+    }
+
+
+def _corpus_overview(shape: Shape, tmp_path: Path) -> None:
+    """Corpus Analysis's overview by participant, on the dataset's own dwell."""
+    words, _fixations, _raw_gaze = shape.load()
+    table = aggregation.corpus_overview(
+        pd.DataFrame() if words is None else words,
+        aggregation.MEASURES["tfd"],
+        "participant",
+    )
+    got = {
+        str(row.participant_id): (row.n_readings, row.value, row.lo, row.hi)
+        for row in table.itertuples()
+    }
+    expected = _expected_overview(shape)
+    assert got.keys() == expected.keys()
+    for participant, (readings, *stats) in expected.items():
+        assert got[participant][0] == readings, participant
+        assert got[participant][1:] == pytest.approx(tuple(stats)), participant
+
+
 SURFACES = {
     "trial pool": _trial_pool,
     "static": _static,
@@ -354,6 +412,7 @@ SURFACES = {
     "render compare": _render_compare,
     "export bundle": _export,
     "data checks": _data_checks,
+    "corpus overview": _corpus_overview,
 }
 
 #: The cells that are not meant to work: what the refusal must say, and why.
@@ -373,6 +432,11 @@ UNSUPPORTED: dict[tuple[str, str], tuple[str, str]] = {
     ("raw gaze only", "render compare"): (
         "fixation",
         "a comparison draws two readings' fixations, which raw gaze alone lacks",
+    ),
+    ("raw gaze only", "corpus overview"): (
+        "needs a mapped word-level measure",
+        "the overview summarises a measure the Words table brings, and raw gaze "
+        "alone has no Words table",
     ),
 }
 

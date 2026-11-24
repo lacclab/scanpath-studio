@@ -822,3 +822,31 @@ def test_an_edited_words_mapping_gives_what_adding_with_it_gives(trial, text, te
         _EDIT_WORDS, first, second, {"item", "label"}, "words"
     )
     _same_dataset(added, edited, trial)
+
+
+_SETTING_SCALARS = st.one_of(
+    st.none(),
+    st.booleans(),
+    st.integers(-3, 3),
+    st.floats(allow_nan=False, width=16),
+    st.text(max_size=3),
+)
+_SETTING_DICTS = st.dictionaries(
+    st.one_of(st.integers(-3, 3), st.text(max_size=3)), _SETTING_SCALARS, max_size=3
+)
+
+
+@given(first=_SETTING_DICTS, other=_SETTING_DICTS, look_alike=st.booleans())
+def test_different_figure_settings_never_share_a_cache_key(first, other, look_alike):
+    """A figure cached for one setting is never shown for another: two inputs
+    may differ in key while equal (an extra miss), never share one while not.
+    Half the time the second setting is the first one written as text, the
+    pair a key that stringifies would mix up."""
+    from scanpath_studio.tabs import _figure_input_key
+
+    second = {str(k): str(v) for k, v in first.items()} if look_alike else other
+    frame = pd.DataFrame({"x": [1.0]})
+    if first != second:
+        assert _figure_input_key(frame, frame, {"option": first}) != (
+            _figure_input_key(frame, frame, {"option": second})
+        )

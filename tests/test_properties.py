@@ -763,15 +763,12 @@ def _edited_and_added(raw, first, second, kept, kind):
 
 
 def _same_dataset(added: pd.DataFrame, edited: pd.DataFrame, trial) -> None:
-    """Every column both have holds the same values. The edit may add the
-    `unique_*` ids (equal to `trial_id` / `text_id`), and an add keeps a
-    composite id's parts under their files' names, which the edit holds under
-    their stored ones; no other column may be in one and not the other."""
+    """Every column both have holds the same values, and the edit has no
+    column the add lacks. An add keeps a composite id's parts under their
+    files' names, which the edit holds under their stored ones; no other
+    column may be in the add and not the edit."""
     parts = set(trial) if isinstance(trial, list) else set()
-    assert set(edited.columns) - set(added.columns) <= {
-        "unique_trial_id",
-        "unique_text_id",
-    }
+    assert set(edited.columns) <= set(added.columns)
     assert set(added.columns) - set(edited.columns) <= parts
     shared = sorted(set(added.columns) & set(edited.columns))
     pd.testing.assert_frame_equal(added[shared], edited[shared], check_dtype=False)

@@ -14974,7 +14974,11 @@ def _apply_remap() -> None:
         schema = pending[table_key]
         try:
             new_entry[table_key] = remap_normalized_frame(
-                frame, schema, kind=table_key, repeat_of=repeat_of
+                frame,
+                schema,
+                kind=table_key,
+                repeat_of=repeat_of,
+                stored_schema=(stored.get("schemas") or {}).get(table_key),
             )
         except Exception as exc:
             # A complete mapping the data does not fit (a Screen ID that maps

@@ -103,6 +103,7 @@
 - A stimulus page image replaced on disk at the same path now shows the next time the figure is drawn, instead of the old page until a setting changed.
 - A setting changed by a view tile, Undo, Reset or a settings file no longer goes back to its old value when the app reruns itself right after, for example when a dialog closes or a Help page opens.
 - Choosing participants no longer brings back readings a condition leaves out: a condition only the Words table carries now still applies when the chosen readers have no Words rows.
+- Legends placed at neighbouring spots (along one edge, or round one corner) no longer overlap each other when one is wide or tall for the figure: the later one moves aside, unless that would carry it out of the figure.
 - The Plot controls rail stays below the header and inside the window, so its last controls show without scrolling the page.
 - On multi-screen trials the experimental per-word reading measures (`compute_word_metrics`, behind `SCANPATH_EXPERIMENTAL=1`) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.
 

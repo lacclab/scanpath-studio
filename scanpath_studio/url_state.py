@@ -2825,6 +2825,10 @@ def _restore_plot_config(
     config, migration_note = _migrate_plot_config(config)
     if migration_note:
         st.toast(migration_note, icon=ICONS["warning"])
+    # The file decides the rail, not a choice held from another dataset.
+    from scanpath_studio.controls import forget_set_aside_values
+
+    forget_set_aside_values()
 
     restore = _RestoreContext(config)
     section = restore.section

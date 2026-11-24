@@ -243,6 +243,8 @@ def test_saving_a_drawing_takes_its_annotations_and_metadata_along(monkeypatch):
     assert session[metadata.SESSION_KEY].source_name == "readers.csv"
     metadata.activate_dataset(session, AUTHOR_CHOICE)
     assert metadata.SESSION_KEY not in session, "the next draft inherits the table"
+
+
 def _other_study() -> dict:
     """A one-reader upload with none of the demo's measure columns."""
     words, fixations = api.build_authored_scanpath("A different study entirely")
@@ -302,3 +304,103 @@ def test_a_choice_made_on_the_other_dataset_wins():
     at.run()
     _switch(at, "Bundled demo")
     assert at.session_state["global_word_hover_fields"] == ["word_id"]
+
+
+# --- The held choices, on a plain session --------------------------------------
+
+
+@pytest.fixture()
+def rail(monkeypatch):
+    """`_seed_viz_state` on a plain dict session, as each dataset's run seeds
+    the rail: ``rail.seed("demo")`` / ``rail.seed("other")``."""
+    from scanpath_studio import controls
+
+    session: dict = {}
+    monkeypatch.setattr(controls.st, "session_state", session)
+    demo = api.load_sample_data(names="canonical")
+    other = _other_study()
+    other["words"] = other["words"].assign(is_target=True)
+    frames = {"demo": demo, "other": (other["words"], other["fixations"])}
+
+    class Rail:
+        state = session
+
+        @staticmethod
+        def seed(dataset: str) -> None:
+            session["data_source_choice"] = (
+                "Bundled demo" if dataset == "demo" else "Other"
+            )
+            words, fixations = frames[dataset]
+            controls._seed_viz_state(fixations, 16, words)
+
+    return Rail
+
+
+def test_a_choice_made_away_wins_over_a_fallback_of_nothing(rail):
+    """The highlight column falls back to no column on a dataset without it.
+    A column picked there is a newer choice, and the held one stays gone."""
+    from scanpath_studio import controls
+
+    rail.seed("demo")
+    held = next(
+        c
+        for c in controls.highlight_column_options(api.load_sample_data()[0])
+        if c != "is_in_aspan"
+    )
+    rail.state["global_highlight_column"] = held
+    rail.seed("demo")
+    rail.seed("other")
+    assert rail.state.get("global_highlight_column") is None
+    rail.state["global_highlight_column"] = "is_target"
+    rail.seed("other")
+    rail.seed("demo")
+    assert rail.state.get("global_highlight_column") != held
+
+
+def test_a_held_choice_comes_back_written_through(rail):
+    """The controls sit in popovers, so the restore is held against a browser
+    still echoing the fallback (`write_through`)."""
+    from scanpath_studio import controls
+
+    rail.seed("demo")
+    rail.state["global_color_by"] = "next_saccade_amplitude_deg"
+    rail.seed("other")
+    rail.seed("demo")
+    assert rail.state["global_color_by"] == "next_saccade_amplitude_deg"
+    assert "global_color_by" in rail.state.get(controls._PENDING_WRITES_KEY, {})
+    assert not rail.state.get(controls._SET_ASIDE_KEY)
+
+
+@pytest.mark.parametrize("applied", ["reset", "design"])
+def test_what_is_applied_while_away_replaces_a_held_choice(rail, applied):
+    """A reset or a design applied on the other dataset decides the rail: the
+    held colour does not come back over it, even though the colour it sets is
+    the fallback's."""
+    from scanpath_studio import controls
+
+    rail.seed("demo")
+    rail.state["global_color_by"] = "next_saccade_amplitude_deg"
+    rail.seed("other")
+    assert rail.state[controls._SET_ASIDE_KEY]
+    if applied == "reset":
+        controls.reset_viz_settings()
+    else:
+        controls._apply_view_preset_state(rail.state, "scanpath", {})
+    rail.seed("other")
+    rail.seed("demo")
+    assert rail.state["global_color_by"] != "next_saccade_amplitude_deg"
+
+
+def test_other_pickers_drop_what_their_options_lack(rail):
+    """Only the rail's column choices are held. The participant, text and
+    Corpus Analysis pickers change options with every filter, so theirs are
+    dropped, as before."""
+    from scanpath_studio import controls
+
+    rail.state["pgrp_view"] = "gone"
+    controls._drop_stale("pgrp_view", ["kept"])
+    rail.state["corpus_fields"] = ["kept", "gone"]
+    controls._drop_stale_multi("corpus_fields", ["kept"])
+    assert "pgrp_view" not in rail.state
+    assert rail.state["corpus_fields"] == ["kept"]
+    assert controls._SET_ASIDE_KEY not in rail.state

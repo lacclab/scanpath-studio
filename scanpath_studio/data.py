@@ -17,7 +17,7 @@ import weakref
 import zipfile
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -8365,6 +8365,19 @@ def select_trials(
     carries is ignored.
     """
     w, f = words, fixations
+    # The conditions are decided on the whole pool, before the participants
+    # narrow it: which tables decide a condition must not depend on the other
+    # filters, or picking readers whose Words rows are none would leave a
+    # Words-only condition no table to decide it, and adding a filter would
+    # bring back a reading the condition alone leaves out.
+    resolved = _resolve_trial_filters(w, f, metadata, ranges, drop_unknown)
+    selection = None
+    if resolved is not None:
+        selection, (word_mask, fix_mask) = resolved
+        if word_mask is not None and not word_mask.all():
+            w = w[word_mask]
+        if fix_mask is not None and not fix_mask.all():
+            f = f[fix_mask]
     # `None` is "no constraint"; an **empty list is a constraint that nothing
     # satisfies** and must empty the pool. The metadata narrowing intersects
     # sets and can legitimately land on zero readers — a falsy test would
@@ -8372,19 +8385,29 @@ def select_trials(
     # the *whole* corpus.
     if participants is not None:
         # participant_id is already string after normalization (as the metadata
-        # filters below also assume), so skip a full-column .astype(str) recast.
+        # filters also assume), so skip a full-column .astype(str) recast.
         keep = set(map(str, participants))
         w = w[w["participant_id"].isin(keep)]
         f = f[f["participant_id"].isin(keep)]
-    resolved = _resolve_trial_filters(w, f, metadata, ranges, drop_unknown)
-    if resolved is None:
+        if selection is not None:
+            selection = _selection_of_readers(selection, keep)
+    if selection is None:
         return TrialFilterResult(w, f)
-    selection, (word_mask, fix_mask) = resolved
-    if word_mask is not None and not word_mask.all():
-        w = w[word_mask]
-    if fix_mask is not None and not fix_mask.all():
-        f = f[fix_mask]
     return TrialFilterResult(w, f, selection)
+
+
+def _selection_of_readers(selection: TrialSelection, readers: set) -> TrialSelection:
+    """``selection`` with only the readings of ``readers``: what it kept, and
+    the conflicts the caller reports."""
+    conflicts = {
+        column: tuple(key for key in keys if key[0] in readers)
+        for column, keys in selection.conflicts.items()
+    }
+    return replace(
+        selection,
+        kept=frozenset(key for key in selection.kept if key[0] in readers),
+        conflicts={column: keys for column, keys in conflicts.items() if keys},
+    )
 
 
 def filter_trials(

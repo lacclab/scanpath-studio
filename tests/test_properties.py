@@ -851,25 +851,27 @@ def test_different_figure_settings_never_share_a_cache_key(first, other, look_al
 
 # --- a replayed recipe keeps the readings the app keeps ------------------------
 
-#: Three readers' readings of three texts: a condition only the fixations
-#: carry (`difficulty`), one only the words carry (`genre`), and a numeric
+#: Three readers' readings of three texts, and a fourth reader (p4) the
+#: fixations have and the words do not: a condition only the fixations carry
+#: (`difficulty`), one only the words carry (`genre`), and a numeric
 #: trial-level score one reading lacks.
 _POOL_READINGS = [(p, t) for p in ("p1", "p2", "p3") for t in ("t1", "t2", "t3")]
+_FIXATION_READINGS = [*_POOL_READINGS, ("p4", "t1")]
 _POOL_FIXATIONS = pd.DataFrame(
     {
-        "participant_id": [p for p, _ in _POOL_READINGS for _ in range(2)],
-        "trial_id": [t for _, t in _POOL_READINGS for _ in range(2)],
+        "participant_id": [p for p, _ in _FIXATION_READINGS for _ in range(2)],
+        "trial_id": [t for _, t in _FIXATION_READINGS for _ in range(2)],
         "difficulty": [
             "Adv" if (int(p[1]) + int(t[1])) % 2 else "Ele"
-            for p, t in _POOL_READINGS
+            for p, t in _FIXATION_READINGS
             for _ in range(2)
         ],
         "score": [
             np.nan if (p, t) == ("p3", "t2") else float(int(p[1]) * int(t[1]))
-            for p, t in _POOL_READINGS
+            for p, t in _FIXATION_READINGS
             for _ in range(2)
         ],
-        "duration_ms": [200.0] * (2 * len(_POOL_READINGS)),
+        "duration_ms": [200.0] * (2 * len(_FIXATION_READINGS)),
     }
 )
 _POOL_WORDS = pd.DataFrame(
@@ -961,9 +963,12 @@ def test_the_filter_diagnosis_steps_together_keep_what_the_filters_keep(
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(app.st, "session_state", {})
         steps = app._filter_diagnosis_steps(filters)
-    words, fixations = _POOL_WORDS, _POOL_FIXATIONS
+    # As the report applies them: each step on its own to the whole pool.
+    pool = data.trial_keys(_POOL_WORDS) | data.trial_keys(_POOL_FIXATIONS)
+    stepped = set(pool)
     for _label, apply, _keys in steps:
-        words, fixations = apply(words, fixations)
+        words, fixations = apply(_POOL_WORDS, _POOL_FIXATIONS)
+        stepped &= data.trial_keys(words) | data.trial_keys(fixations)
     kept = data.select_trials(
         _POOL_WORDS, _POOL_FIXATIONS, participants, metadata, ranges, drop
     )
@@ -972,6 +977,44 @@ def test_the_filter_diagnosis_steps_together_keep_what_the_filters_keep(
         kept_words, kept_fixations = data.filter_to_keys(
             kept_words, kept_fixations, readings
         )
-    assert data.trial_keys(words) | data.trial_keys(fixations) == (
-        data.trial_keys(kept_words) | data.trial_keys(kept_fixations)
-    )
+    assert stepped == data.trial_keys(kept_words) | data.trial_keys(kept_fixations)
+
+
+@given(
+    participants=st.none()
+    | st.lists(st.sampled_from(["p1", "p2", "p3", "p4"]), unique=True, max_size=4),
+    difficulty=st.none() | st.sets(st.sampled_from(["Adv", "Ele"]), min_size=1),
+    genre=st.none() | st.sets(st.sampled_from(["news", "story"]), min_size=1),
+    score=st.none() | st.tuples(st.integers(0, 9), st.integers(0, 9)).map(sorted),
+    added=st.sampled_from(["participants", "difficulty", "genre", "score"]),
+)
+def test_adding_a_trial_filter_never_widens_the_pool(
+    participants, difficulty, genre, score, added
+):
+    """Each filter decides a reading on its own, so one more filter can only
+    leave readings out — also when the readers picked have no Words rows (p4)
+    and a condition only the Words carry is on."""
+
+    def pool(with_added: bool):
+        chosen = {
+            "participants": participants,
+            "difficulty": difficulty,
+            "genre": genre,
+            "score": score,
+        }
+        if not with_added:
+            chosen[added] = None
+        metadata = {
+            column: chosen[column]
+            for column in ("difficulty", "genre")
+            if chosen[column]
+        }
+        ranges = (
+            {"score": tuple(map(float, chosen["score"]))} if chosen["score"] else {}
+        )
+        kept = data.select_trials(
+            _POOL_WORDS, _POOL_FIXATIONS, chosen["participants"], metadata, ranges
+        )
+        return data.trial_keys(kept.words) | data.trial_keys(kept.fixations)
+
+    assert pool(with_added=True) <= pool(with_added=False)

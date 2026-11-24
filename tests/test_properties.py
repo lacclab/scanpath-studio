@@ -1223,6 +1223,100 @@ def test_folded_rail_sections_round_trip_through_their_cookie(folded, junk):
     assert controls.parse_folded_sections(junk) <= set(controls.RAIL_SECTIONS)
 
 
+#: The readings of the small dataset the annotation properties write to:
+#: whole trials, and screens of a multipart one.
+_ANNOTATED_TRIALS = [("p_1", "t 1"), ("p_1", "07"), ("P2", "t 1")]
+_ANNOTATED_SCREENS = [("p_1", "t 1", "s1"), ("P2", "t 1", "page 2")]
+_TAG = st.text(max_size=12)
+_ANNOTATION_ENTRY = st.fixed_dictionaries(
+    {
+        "star": st.booleans(),
+        "tags": st.lists(_TAG, max_size=4),
+        "note": st.text(max_size=30),
+    }
+)
+_ANNOTATION_STORE = st.dictionaries(
+    st.sampled_from(_ANNOTATED_TRIALS + _ANNOTATED_SCREENS),
+    _ANNOTATION_ENTRY,
+    max_size=5,
+)
+
+
+def _annotated_dataset(folder: str):
+    """A saved dataset, *Data*, with the readings above; its cache folder."""
+    from pathlib import Path
+
+    from scanpath_studio import persistence
+
+    root = Path(folder)
+    fixations = pd.DataFrame(
+        [(p, t, None) for p, t in _ANNOTATED_TRIALS] + _ANNOTATED_SCREENS,
+        columns=["participant_id", "trial_id", "screen_id"],
+    )
+    persistence.store_dataset(
+        {"words": pd.DataFrame(), "fixations": fixations}, "Data", root=root
+    )
+    return root
+
+
+@settings(max_examples=40, suppress_health_check=[HealthCheck.too_slow])
+@given(_ANNOTATION_STORE)
+def test_annotations_a_script_writes_read_back_as_written(raw):
+    """Whatever a script writes as a table — favorites, any tags, any note,
+    on trials and screens — `read_annotations` gives back, normalized as the
+    app normalizes an entry (tags trimmed, sorted and deduplicated)."""
+    import os
+    import tempfile
+    from unittest import mock
+
+    import scanpath_studio.annotations as ann
+    import scanpath_studio.api as sps
+
+    expected = ann.records_to_store(ann.store_to_records(raw))
+    with tempfile.TemporaryDirectory() as folder:
+        root = _annotated_dataset(folder)
+        env = {"SCANPATH_STUDIO_STATE_DIR": str(root), "SCANPATH_STUDIO_PERSIST": "1"}
+        with mock.patch.dict(os.environ, env):
+            table = ann.store_to_frame(expected, screens=True)
+            # The dataset starts with none, so a merge writes exactly these.
+            result = sps.write_annotations("Data", table)
+            assert result.unknown.empty and result.annotated == len(expected)
+            back = sps.read_annotations("Data")
+            pd.testing.assert_frame_equal(
+                back, ann.store_to_frame(expected, screens=True)
+            )
+            # Written back unchanged, it changes nothing, merged or replaced.
+            for mode in ("merge", "replace") if expected else ("merge",):
+                sps.write_annotations("Data", back, mode=mode)
+                pd.testing.assert_frame_equal(sps.read_annotations("Data"), back)
+
+
+@settings(max_examples=40, suppress_health_check=[HealthCheck.too_slow])
+@given(_ANNOTATION_STORE)
+def test_an_app_export_imported_by_a_script_restores_in_the_app(raw):
+    """The app's exported `annotations.json`, imported by `write_annotations`,
+    is the store the next app session restores for that dataset."""
+    import os
+    import tempfile
+    from unittest import mock
+
+    import scanpath_studio.annotations as ann
+    import scanpath_studio.api as sps
+    from scanpath_studio import persistence
+
+    store = ann.records_to_store(ann.store_to_records(raw))
+    exported = ann.serialize(store, dataset="Data")
+    with tempfile.TemporaryDirectory() as folder:
+        root = _annotated_dataset(folder)
+        env = {"SCANPATH_STUDIO_STATE_DIR": str(root), "SCANPATH_STUDIO_PERSIST": "1"}
+        with mock.patch.dict(os.environ, env):
+            sps.write_annotations("Data", json.loads(exported))
+        session: dict = {}
+        assert persistence.restore_state(session, root)
+        assert ann.store_for(session, "Data") == store
+        assert ann.serialize(ann.store_for(session, "Data"), dataset="Data") == exported
+
+
 def _linkable_values() -> dict[str, list]:
     """Each option a link carries, at its API default and at another value."""
     from scanpath_studio import api, script_link

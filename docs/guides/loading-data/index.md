@@ -227,6 +227,47 @@ To take a dataset off the list again, use
 way, with its annotations and metadata tables, as its **Remove** on the Data
 Management page does.
 
+### Annotations from a script { #annotations-from-a-script }
+
+A script can also read and write the favorites, tags and notes on a dataset
+you added. A quality-control script can tag the readings it flags, and
+reviewers find them in the app with the tag filter. An analysis can read back
+what the reviewers marked.
+
+=== "Python"
+
+    ```python
+    import pandas as pd
+    import scanpath_studio as sps
+
+    flags = pd.DataFrame(
+        {"participant_id": ["p01", "p02"], "trial_id": ["3", "7"], "tags": "Short"}
+    )
+    result = sps.write_annotations("Pilot 3", flags)
+    print(result.unknown)  # readings the dataset does not have, left out
+
+    marked = sps.read_annotations("Pilot 3")
+    excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+    ```
+
+=== "CLI"
+
+    ```bash
+    scanpath-studio annotations import "Pilot 3" flags.csv
+    scanpath-studio annotations export "Pilot 3" -o annotations.csv
+    ```
+
+The table has one row per reading: `participant_id`, `trial_id`, `screen_id`
+for one screen of a trial recorded over several, and any of `favorite`, `tags`
+and `note`. In a CSV file, separate tags with `;`. The app's exported
+`annotations.json` works too. Writing adds a reading's tags to the ones it
+has, and a favorite or note you give replaces its own. Pass `mode="replace"`
+(`--replace`) to make the dataset's annotations exactly the ones given; it is
+refused when none of the given readings is in the dataset. A
+reading the dataset does not have is left out and listed. An app already open
+shows the new annotations once its browser tab is reloaded. See
+[`write_annotations`][scanpath_studio.api.write_annotations] for every option.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials
@@ -241,7 +282,8 @@ participant, trial or text metadata file, that table shows the complete file.
 
 **Data checks** looks for unusable values in the whole dataset, including trials
 outside the filters. **Annotations** lets you review, import and export the
-dataset’s favorites, tags and notes.
+dataset’s favorites, tags and notes. A script can read and write them too; see
+[Annotations from a script](#annotations-from-a-script).
 
 To switch datasets, open **Dataset library**. Search by name or filter by
 source, then click a dataset to open its overview. **Saved work** shows what

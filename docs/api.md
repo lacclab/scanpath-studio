@@ -200,6 +200,22 @@ url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
 
 ::: scanpath_studio.api.remove_dataset
 
+A saved dataset's favorites, tags and notes can be read and written too:
+`write_annotations` tags the readings a script flags, so reviewers find them in
+the app, and `read_annotations` gives back what they marked.
+
+```python
+flags = pd.DataFrame({"participant_id": ["p01"], "trial_id": ["3"], "tags": "Review"})
+sps.write_annotations("Pilot 3", flags)
+sps.read_annotations("Pilot 3")
+```
+
+::: scanpath_studio.api.read_annotations
+
+::: scanpath_studio.api.write_annotations
+
+::: scanpath_studio.api.AnnotationsWriteResult
+
 ::: scanpath_studio.api.cache_status
 
 ::: scanpath_studio.api.clear_cache

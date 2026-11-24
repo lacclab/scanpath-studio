@@ -70,6 +70,15 @@ def get_app_css() -> str:
        gap under it that its overflow:auto container would turn into a
        scrollbar with nothing to scroll. */
     iframe[data-testid="stIFrame"] {display: block;}
+    /* A zero-height script carrier (`embed_html_iframe(..., height=0)`) is
+       drawn 1 px tall, and each one still takes a row plus the block margin:
+       stacked under the header they open a blank band above the page. Take
+       them out of the flow — still rendered, so their scripts run — and
+       leave their place in the element order unchanged. */
+    [data-testid="stElementContainer"][height="1px"]:has(> iframe[data-testid="stIFrame"]) {
+        position: absolute !important; width: 1px; height: 1px;
+        overflow: hidden; clip-path: inset(50%); margin: 0 !important;
+    }
     .stPlotlyChart {margin: 0 !important; padding: 0 !important;}
     /* Target parent containers */
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stPlotlyChart"]) {padding: 0 !important; margin: 0 !important; gap: 0 !important;}

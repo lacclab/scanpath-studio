@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 import pytest
-from hypothesis import example, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from scanpath_studio import plots
@@ -764,6 +764,27 @@ def test_a_compare_legend_that_wraps_grows_its_band_instead_of_covering_the_text
 _SPOTS = [p for p in LEGEND_POSITIONS if p != "auto"]
 
 
+# Where along a box Plotly's ``xanchor`` / ``yanchor`` sits, written out here
+# so a wrong share in the code under test can't skew the check with it.
+_ANCHOR = {"left": 0, "center": 0.5, "right": 1, "bottom": 0, "middle": 0.5, "top": 1}
+
+
+def _overlap(a: tuple, b: tuple) -> bool:
+    """Whether two ``(x0, y0, x1, y1)`` boxes share more than an edge."""
+    return min(a[2], b[2]) - max(a[0], b[0]) > 0.5 and (
+        min(a[3], b[3]) - max(a[1], b[1]) > 0.5
+    )
+
+
+def _within(box: tuple, frame: tuple) -> bool:
+    return (
+        box[0] >= frame[0] - 0.5
+        and box[1] >= frame[1] - 0.5
+        and box[2] <= frame[2] + 0.5
+        and box[3] <= frame[3] + 0.5
+    )
+
+
 def _placed_boxes(placements, plot_w: float, plot_h: float):
     """Each placement's content box, in px from the plot's bottom-left corner,
     as `_LegendSlots.place` puts it; a box's ``pad`` is empty space inside it."""
@@ -779,37 +800,54 @@ def _placed_boxes(placements, plot_w: float, plot_h: float):
     for position, w, h, pad in placements:
         at = slots.place(fig, position, w, h, gap=plots._LEGEND_GAP_PX, pad=pad)
         width, height, _margin = plots._plot_px(fig)
-        x0 = at["x"] * width + at["dx"] - plots._ANCHOR_SHARE[at["xanchor"]] * w
-        y0 = at["y"] * height + at["dy"] - plots._ANCHOR_SHARE[at["yanchor"]] * h
+        x0 = at["x"] * width + at["dx"] - _ANCHOR[at["xanchor"]] * w
+        y0 = at["y"] * height + at["dy"] - _ANCHOR[at["yanchor"]] * h
         boxes.append((position, (x0 + pad, y0 + pad, x0 + w - pad, y0 + h - pad)))
     return boxes, (0.0, 0.0, width, height)
 
 
+@pytest.mark.parametrize(
+    "placements",
+    [
+        # Spots that meet: two inside a corner, two on the top edge outside,
+        # a side box below a corner's stack.
+        [("left-inside", 20.0, 96.0, 0.0), ("bottom-left-inside", 20.0, 95.0, 0.0)],
+        [
+            ("top-left-outside", 191.0, 16.0, 0.0),
+            ("top-center-outside", 20.0, 16.0, 0.0),
+        ],
+        [
+            ("top-right-inside", 20.0, 16.0, 0.0),
+            ("top-right-inside", 20.0, 96.0, 0.0),
+            ("right-inside", 20.0, 46.0, 0.0),
+        ],
+    ],
+)
+def test_boxes_at_spots_that_meet_make_room_for_each_other(placements):
+    boxes, _plot = _placed_boxes(placements, 400, 300)
+    for i, (position, box) in enumerate(boxes):
+        for other_position, other in boxes[i + 1 :]:
+            assert not _overlap(box, other), (position, box, other_position, other)
+
+
+@pytest.mark.parametrize(
+    "placements",
+    [
+        [("left-inside", 300.0, 40.0, 0.0), ("right-inside", 300.0, 40.0, 0.0)],
+        [
+            ("top-center-inside", 100.0, 250.0, 0.0),
+            ("bottom-center-inside", 100.0, 250.0, 0.0),
+        ],
+    ],
+)
+def test_an_inside_box_with_no_room_keeps_its_spot_in_the_plot(placements):
+    """Clearing the box before it would carry it past the plot's far edge,
+    out of the figure; it stays at its own spot instead."""
+    boxes, plot_box = _placed_boxes(placements, 400, 300)
+    assert all(_within(box, plot_box) for _position, box in boxes)
+
+
 @settings(max_examples=300)
-# Spots that meet: two inside a corner, two on the top edge outside, a side
-# box below a corner's stack.
-@example(
-    placements=[
-        ("left-inside", 20.0, 96.0, 0.0),
-        ("bottom-left-inside", 20.0, 95.0, 0.0),
-    ],
-    plot=(400, 300),
-)
-@example(
-    placements=[
-        ("top-left-outside", 191.0, 16.0, 0.0),
-        ("top-center-outside", 20.0, 16.0, 0.0),
-    ],
-    plot=(400, 300),
-)
-@example(
-    placements=[
-        ("top-right-inside", 20.0, 16.0, 0.0),
-        ("top-right-inside", 20.0, 96.0, 0.0),
-        ("right-inside", 20.0, 46.0, 0.0),
-    ],
-    plot=(400, 300),
-)
 @given(
     placements=st.lists(
         st.tuples(
@@ -826,16 +864,25 @@ def _placed_boxes(placements, plot_w: float, plot_h: float):
 def test_no_two_legends_or_keys_overlap_wherever_they_are_placed(placements, plot):
     """The legends, the size key and the highlight key each go to a spot of
     their own, and each spot stacks its own boxes; two spots on one edge, or
-    round one corner, still meet when a box is wide or tall for the plot. No
-    two boxes overlap, and none placed outside the plot covers it."""
+    round one corner, still meet when a box is wide or tall for the plot.
+
+    No box placed outside the plot covers it or any box placed before it. An
+    inside box clears the boxes before it only while that keeps it in the
+    figure, so one whose spot's stack fits the plot is never clipped."""
     boxes, plot_box = _placed_boxes(placements, *plot)
+    # The figure's starting margins; outside boxes only ever grow them.
+    figure = (-50.0, -50.0, plot[0] + 50.0, plot[1] + 60.0)
+    stacks: dict = {}
     for i, (position, box) in enumerate(boxes):
+        earlier = [other for _p, other in boxes[:i]]
         if position.endswith("-outside"):
-            assert not plots._boxes_overlap(box, plot_box), (position, box)
-        for other_position, other in boxes[i + 1 :]:
-            assert not plots._boxes_overlap(box, other), (
-                position,
-                box,
-                other_position,
-                other,
-            )
+            assert not _overlap(box, plot_box), (position, box)
+            assert not any(_overlap(box, other) for other in earlier), (position, box)
+            continue
+        _position, w, h, _pad = placements[i]
+        vertical = position.split("-")[0] in ("top", "bottom")
+        stacks[position] = stacks.get(position, 0.0) + (h if vertical else w)
+        stacks[position] += plots._LEGEND_GAP_PX
+        fits = stacks[position] <= (plot[1] if vertical else plot[0])
+        if fits and w <= plot[0] and h <= plot[1]:
+            assert _within(box, figure), (position, box)

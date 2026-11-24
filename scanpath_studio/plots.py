@@ -2508,7 +2508,8 @@ class _LegendSlots:
         toward its middle from an inside one. Each spot stacks its own boxes,
         so two spots on one edge (or round one corner) meet only when a box is
         wide or tall for the plot; then the later one makes room, and an
-        outside one grows the figure as far as it moved."""
+        outside one grows the figure as far as it moved. An inside box that
+        would be carried out of the figure keeps its spot instead."""
         plot_w, plot_h, _margin = _plot_px(fig)
         x0 = out["x"] * plot_w + out["dx"] - _ANCHOR_SHARE[out["xanchor"]] * w
         y0 = out["y"] * plot_h + out["dy"] - _ANCHOR_SHARE[out["yanchor"]] * h
@@ -2526,6 +2527,15 @@ class _LegendSlots:
             else:
                 step = (hit[3] + gap - y0) if sy > 0 else (y0 + h - (hit[1] - gap))
             x0, y0, moved = x0 + sx * step, y0 + sy * step, moved + step
+        if moved and not outside:
+            # An inside box that would be carried out of the figure stays where
+            # its spot put it: overlapping a neighbour beats being clipped.
+            m = _margin
+            beyond = x0 < -m["l"] - 0.5 or y0 < -m["b"] - 0.5
+            far = x0 + w > plot_w + m["r"] + 0.5 or y0 + h > plot_h + m["t"] + 0.5
+            if beyond or far:
+                x0, y0 = x0 - sx * moved, y0 - sy * moved
+                moved = 0.0
         self.boxes.append((x0, y0, x0 + w, y0 + h))
         if not moved:
             return out

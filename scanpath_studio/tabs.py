@@ -538,8 +538,11 @@ def _render_screen_navigator(
     widen_menu(id_key, labels.values())
     # On a phone this line of text stands in for the dropdown (`styles.py`), so
     # the screen steps fit on the trial's ◀ ▶ line without making it taller.
+    # The dropdown's label leaves with it, so a screen reader hears it here.
+    whose = "Screen B" if key_prefix == "single_compare" else "Screen"
     cell.container(key=f"{key_prefix}_screen_brief").markdown(
-        f"<span>{_literal(labels[str(selected)])}</span>", unsafe_allow_html=True
+        f'<span class="sps-sr-only">{whose} </span>{md_literal(labels[str(selected)])}',
+        unsafe_allow_html=True,
     )
     # Both steps in ONE keyed `railbtn_*` container, so they take the pill
     # shape and 3px spacing of the ◀ ▶ ⇅ cluster beside them.

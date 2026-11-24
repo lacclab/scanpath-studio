@@ -177,6 +177,7 @@ from scanpath_studio.controls import (
     column_mapping_from_state,
     column_mapping_ui,
     has_active_trial_filters,
+    hold_script_writes,
     metadata_readings,
     read_trial_filters,
     reassert_pending_writes,
@@ -7993,6 +7994,13 @@ def seed_canvas_state(
     # prefers the stored key. First run derives it; every rerun after that would
     # pay for a value it throws away. `tabs._compare_setups` withholds the same
     # scan from B's side for the same reason.
+    # The snaps below write these in the script, and a menu the user had open
+    # sends back what it showed for the dataset before (`hold_script_writes`).
+    setup_before = {
+        key: copy.deepcopy(st.session_state[key])
+        for key in SETUP_OVERRIDE_SESSION_KEYS
+        if key in st.session_state
+    }
     canvas_seeded = {"global_canvas_width", "global_canvas_height"} <= set(
         st.session_state
     )
@@ -8193,6 +8201,7 @@ def seed_canvas_state(
             2,
         ),
     )
+    hold_script_writes(setup_before)
     # Point-specified stimulus typography converts to px through the DPI above.
     # The rendering path recomputes this from its own widget values (which is
     # what makes an edit apply the same run); this keeps the non-rendering

@@ -3848,14 +3848,22 @@ def _apply_uploaded_plot_config(
             st.toast(str(exc), icon=ICONS["warning"])
             return
         st.rerun()
+    from .controls import design_state, hold_script_writes
+
+    # The file writes the rail's values before its widgets draw, and a menu the
+    # user had open sends back what it last showed on the next run.
+    before = design_state()
     try:
         applied, skipped = _restore_plot_config(config, combos, fixations, raw_gaze)
     except Exception as exc:  # backstop for an unexpectedly shaped config
+        hold_script_writes(before)
         st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return
     st.session_state["_plot_config_skipped"] = skipped
     staged = st.session_state.get(PENDING_PREPROC_RESTORE_KEY) or {}
-    if any(st.session_state.get(k) != v for k, v in staged.items()):
+    rerun = any(st.session_state.get(k) != v for k, v in staged.items())
+    hold_script_writes(before, rerun_follows=rerun)
+    if rerun:
         # Preprocessing reshapes the frames this run already filtered and drew,
         # so run again with the restored values in place (the toast is replayed
         # by the next run's `_apply_uploaded_plot_config`).

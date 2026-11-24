@@ -12,10 +12,13 @@ control, then sends the old value back under the key the browser knew.
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scanpath_studio.session_keys import PLOT_CONFIG_SCHEMA_VERSION
 from tests.conftest import APP_SCRIPT
 
 STYLE = "global_critical_span_style"
@@ -145,3 +148,138 @@ def test_a_dataset_switch_reseeds_the_stimulus_fields_against_the_menus_echo(
     controls.reassert_pending_writes()
     spans, qa, *_ = tabs._stimulus_fields(second)
     assert (spans, qa) == (["in_span"], ["answer"])
+
+
+def test_a_script_write_over_a_held_value_holds_against_the_older_echo(
+    monkeypatch,
+):
+    """A view tile holds two values; before the browser answers, a settings
+    file changes one and leaves the other. The closed menus still send back
+    what they showed before the tile, so both must hold against that."""
+    from scanpath_studio import controls
+
+    state: dict = {
+        "global_saccade_style": "Solid",
+        "global_order_label_position": "top",
+    }
+    monkeypatch.setattr(controls.st, "session_state", state)
+    # The tile's callback.
+    controls.write_through("global_saccade_style", "Dashed")
+    controls.write_through("global_order_label_position", "below")
+    controls.reassert_pending_writes()
+    # The next run: the closed menus echo, the hold puts the tile back, and a
+    # settings file then changes the style alone.
+    state["global_saccade_style"] = "Solid"
+    state["global_order_label_position"] = "top"
+    controls.reassert_pending_writes()
+    before = controls.design_state()
+    state["global_saccade_style"] = "Dotted"
+    controls.hold_script_writes(before)
+    # The run after: the menus echo what they showed before the tile.
+    state["global_saccade_style"] = "Solid"
+    state["global_order_label_position"] = "top"
+    controls.reassert_pending_writes()
+    assert state["global_saccade_style"] == "Dotted"
+    assert state["global_order_label_position"] == "below"
+
+
+@pytest.mark.timeout(180)
+def test_a_datasets_text_sizing_holds_against_the_text_menus_echo():
+    """Switching to an added dataset puts its own text sizing on the figure,
+    in the script; the closed Text menu then sends back what it showed for the
+    dataset before, and must not undo it."""
+    from scanpath_studio.experimental_setup import SetupSnapshot
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    keys = (
+        "global_base_font_size",
+        "global_line_spacing",
+        "global_scale_text_to_boxes",
+    )
+    words, fixations = make_multipart_synthetic_data()
+    sized = SetupSnapshot().to_dict() | {
+        "base_font_size": 31,
+        "line_spacing": 2.5,
+        "scale_text_to_boxes": False,
+    }
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {
+        "Sized": {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+            "setup": sized,
+        }
+    }
+    at.run()
+    shown = {key: at.session_state[key] for key in keys}
+    assert shown == {
+        "global_base_font_size": 16,
+        "global_line_spacing": 3.0,
+        "global_scale_text_to_boxes": True,
+    }
+    at.session_state["_pending_source_choice"] = "Sized"
+    at.run()
+    expected = {
+        "global_base_font_size": 31,
+        "global_line_spacing": 2.5,
+        "global_scale_text_to_boxes": False,
+    }
+    assert {key: at.session_state[key] for key in keys} == expected
+    for key, value in shown.items():
+        at.session_state[key] = value
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["data_source_choice"] == "Sized"
+    assert {key: at.session_state[key] for key in keys} == expected
+
+
+class _SettingsFile:
+    """What `st.file_uploader` holds after Share → File: bytes and an id."""
+
+    def __init__(self, config: dict):
+        self._data = json.dumps(config).encode("utf-8")
+        self.name = "scanpath_studio_settings.json"
+        self.size = len(self._data)
+        self.file_id = "settings-1"
+
+    def getvalue(self) -> bytes:
+        return self._data
+
+
+@pytest.mark.timeout(180)
+@pytest.mark.parametrize("staged", [False, True], ids=["plain", "preprocessing"])
+def test_a_settings_file_holds_against_a_closed_menus_echo(staged, monkeypatch):
+    """A settings file writes the rail's values in the script, before the
+    widgets draw. A menu the user had open sends back the value it last showed
+    on the next run, and must not undo the file. With preprocessing settings
+    staged (an experimental panel), the restore runs the script once more
+    before the browser answers."""
+    if staged:
+        monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    assert at.session_state["global_saccade_style"] == "Solid"
+    width = at.session_state["global_saccade_width"]
+    config = {
+        "schema": PLOT_CONFIG_SCHEMA_VERSION,
+        "coloring": {"saccade_style": "Dashed", "saccade_width": width + 2},
+    }
+    if staged:
+        config["preprocessing"] = {"short_policy": "Merge"}
+    at.session_state["plot_config_upload"] = _SettingsFile(config)
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["global_saccade_style"] == "Dashed"
+    if staged:
+        assert at.session_state["global_preproc_short_policy"] == "Merge"
+    # The next run brings back what the closed Saccades menu last showed.
+    at.session_state["global_saccade_style"] = "Solid"
+    at.session_state["global_saccade_width"] = width
+    at.run()
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["global_saccade_style"] == "Dashed"
+    assert at.session_state["global_saccade_width"] == width + 2

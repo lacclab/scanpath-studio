@@ -401,9 +401,11 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         saved = page.locator(".st-key-design_shell").bounding_box()
         assert grid.bounding_box()["y"] + grid.bounding_box()["height"] <= saved["y"]
         assert saved["y"] + saved["height"] <= palette.bounding_box()["y"]
-        divider = page.locator(".st-key-palette_layers_divider hr").bounding_box()
+        tiles_box = page.locator(".st-key-rail_palette_tiles").bounding_box()
+        modes_title = page.locator(".st-key-rail_modes_head").bounding_box()
         compare_row = page.locator(".st-key-split_mode_compare").bounding_box()
-        assert compare_row["y"] - (divider["y"] + divider["height"]) >= 8
+        assert tiles_box["y"] + tiles_box["height"] <= modes_title["y"]
+        assert modes_title["y"] + modes_title["height"] <= compare_row["y"]
         animation_switch = page.locator(".st-key-single_animate input")
         replay_tile.click()
         _settle(page)

@@ -2893,7 +2893,6 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
             on_click=_on_palette_change,
             args=(name,),
         )
-    host.container(key="palette_layers_divider").divider()
 
 
 # Palette setting name → the session key it writes. A palette is applied

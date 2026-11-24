@@ -351,6 +351,9 @@ FIXATION_FLAG_CATEGORIES = {
 FIXATION_DURATION_FLAGS = frozenset(
     k for k, category in FIXATION_FLAG_CATEGORIES.items() if category.has_threshold
 )
+#: A duration flag's threshold, in ms, on the rail and in a link or settings
+#: file: at most a minute, past which no fixation reaches.
+FIXATION_FLAG_THRESHOLD_BOUNDS = (1, 60_000)
 FIXATION_FLAG_MODES = ("Off", "Highlight", "Hide")
 FIXATION_FLAG_MARKERS = {
     "x": "✕ Cross",
@@ -561,6 +564,9 @@ CANVAS_PAD_FRACTION = 0.05
 #: *Auto* is unticked, and the range a link or settings file is held to.
 DEFAULT_CROP_MARGIN_PX = 50.0
 CROP_MARGIN_BOUNDS = (0.0, 2000.0)
+#: The stimulus image's nudge from its place, in screen px, on the rail and in a
+#: link or settings file.
+STIMULUS_IMAGE_OFFSET_BOUNDS = (-5000.0, 5000.0)
 
 # --- Figure design settings ----------------------------------------------------
 # Each `*_BOUNDS` is the range the rail, a link, a settings file and `render`

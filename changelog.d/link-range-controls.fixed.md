@@ -1,0 +1,1 @@
+The stimulus image's offset boxes and the fixation-flag threshold boxes now stop at the range a share link or settings file carries (±5000 px, 1–60,000 ms). Before, a value past it showed on screen but was cut back to the limit in what you shared.

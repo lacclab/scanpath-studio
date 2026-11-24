@@ -61,6 +61,7 @@ from .constants import (
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
+    FIXATION_FLAG_THRESHOLD_BOUNDS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
@@ -97,6 +98,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     SELF_SCALED_HEATMAP_STYLES,
     SNAP_POSITION_BOUNDS,
+    STIMULUS_IMAGE_OFFSET_BOUNDS,
     TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
@@ -1093,7 +1095,8 @@ def _render_fixation_cleaning(
         if spec.has_threshold:
             cols[2].number_input(
                 f"{label} threshold (ms)",
-                min_value=1,
+                min_value=FIXATION_FLAG_THRESHOLD_BOUNDS[0],
+                max_value=FIXATION_FLAG_THRESHOLD_BOUNDS[1],
                 step=10,
                 key=f"{prefix}_fixclass_{category}_threshold_ms",
                 persist_state="session",
@@ -8593,6 +8596,8 @@ def render_plot_controls(
                 _sub_caption(x_cap, "X")
                 x_col.number_input(
                     "Image X offset (px)",
+                    min_value=STIMULUS_IMAGE_OFFSET_BOUNDS[0],
+                    max_value=STIMULUS_IMAGE_OFFSET_BOUNDS[1],
                     step=5.0,
                     key="global_stimulus_image_offset_x",
                     persist_state="session",
@@ -8602,6 +8607,8 @@ def render_plot_controls(
                 _sub_caption(y_cap, "Y")
                 y_col.number_input(
                     "Image Y offset (px)",
+                    min_value=STIMULUS_IMAGE_OFFSET_BOUNDS[0],
+                    max_value=STIMULUS_IMAGE_OFFSET_BOUNDS[1],
                     step=5.0,
                     key="global_stimulus_image_offset_y",
                     persist_state="session",

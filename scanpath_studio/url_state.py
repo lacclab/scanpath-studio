@@ -76,6 +76,7 @@ from .constants import (
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
+    FIXATION_FLAG_THRESHOLD_BOUNDS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
@@ -107,6 +108,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     SETUP_OVERRIDE_SESSION_KEYS,
     SNAP_POSITION_BOUNDS,
+    STIMULUS_IMAGE_OFFSET_BOUNDS,
     SYNTHETIC_CHOICE,
     TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
@@ -991,8 +993,8 @@ _URL_BOUNDED = {
     "global_fixation_snap_position": SNAP_POSITION_BOUNDS,
     "global_stimulus_image_opacity": (0.1, 1.0),
     # Image-alignment nudge — clamp a hand-crafted link to sane ranges.
-    "global_stimulus_image_offset_x": (-5000.0, 5000.0),
-    "global_stimulus_image_offset_y": (-5000.0, 5000.0),
+    "global_stimulus_image_offset_x": STIMULUS_IMAGE_OFFSET_BOUNDS,
+    "global_stimulus_image_offset_y": STIMULUS_IMAGE_OFFSET_BOUNDS,
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
     "global_crop_margin_px": CROP_MARGIN_BOUNDS,
@@ -1003,9 +1005,7 @@ _URL_BOUNDED = {
     # 0 is a real choice for both — outlines only / fill only.
     "global_word_box_line_opacity": (0.0, 1.0),
     "global_word_box_fill_opacity": (0.0, 1.0),
-    # The colour-bar tick sliders, and the fixation-flag thresholds —
-    # a `number_input` with only a minimum, capped at a minute here so a link
-    # cannot carry a number no fixation reaches.
+    # The colour-bar tick sliders, and the fixation-flag thresholds.
     **{
         key: bounds
         for bar in ("fixation", "heatmap")
@@ -1014,10 +1014,10 @@ _URL_BOUNDED = {
             (f"global_{bar}_colorbar_tickfont_size", (6, 20)),
         )
     },
-    "global_fixclass_short_threshold_ms": (1, 60_000),
-    "global_fixclass_long_threshold_ms": (1, 60_000),
-    "cmp1_fixclass_short_threshold_ms": (1, 60_000),
-    "cmp1_fixclass_long_threshold_ms": (1, 60_000),
+    "global_fixclass_short_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
+    "global_fixclass_long_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
+    "cmp1_fixclass_short_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
+    "cmp1_fixclass_long_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
     # The recording setup and the per-scanpath styles (the saved-config
     # reader clamps by this table too). Mirrors the widgets
     # (`app.render_canvas_controls`, `controls._render_compare_*`).

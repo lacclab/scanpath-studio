@@ -2402,14 +2402,16 @@ def _amend_snippet_compare_labels(labels: tuple[str, str]) -> None:
 _IMAGE_PATH_INPUTS = frozenset({"background_image", "background_image_b"})
 
 
-def _file_version(path: str) -> tuple[int, int] | None:
-    """``(size, modification time in ns)`` of the file at ``path``, or ``None``
-    when there is none: what tells a file replaced at the same path apart."""
+def _file_version(path: str) -> tuple[int, int, int, int] | None:
+    """The file at ``path`` as of now, or ``None`` when there is none: what
+    tells a file replaced at the same path apart. The inode changes when a new
+    file is renamed over the old one, and the change time on every write,
+    including a copy that keeps the old modification time and size."""
     try:
         stat = os.stat(path)
     except OSError:
         return None
-    return stat.st_size, stat.st_mtime_ns
+    return stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
 def _figure_input_key(

@@ -304,13 +304,32 @@ def test_a_stimulus_page_replaced_on_disk_misses_the_figure_cache(key, tmp_path)
     page.write_bytes(b"\x89PNG first")
     first = tabs._figure_input_key(words, fixations, {key: str(page)})
     assert tabs._figure_input_key(words, fixations, {key: str(page)}) == first
-    page.write_bytes(b"\x89PNG second, longer")
-    os.utime(page, ns=(1, 1))  # a coarse clock must not hide the change
+    # A copy that keeps the old page's size and modification time (`cp -p`).
+    stamp = page.stat()
+    page.write_bytes(b"\x89PNG other")
+    os.utime(page, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    assert page.stat().st_size == stamp.st_size
     assert tabs._figure_input_key(words, fixations, {key: str(page)}) != first
     # A missing file and an inline page still make a key.
     page.unlink()
     assert tabs._figure_input_key(words, fixations, {key: str(page)})
     assert tabs._figure_input_key(words, fixations, {key: "data:image/png;base64,AA=="})
+
+
+def test_every_page_path_the_figure_embeds_is_stamped_in_its_key():
+    """The figure settings that name a page file are the ones
+    `_figure_input_key` stamps; a new one must be added there."""
+    from dataclasses import fields
+
+    from scanpath_studio.plots import FigureSettings
+
+    paths = {
+        f.name
+        for f in fields(FigureSettings)
+        if f.name.startswith("background_image")
+        and not f.name.removesuffix("_b").endswith(("_size", "_origin", "_opacity"))
+    }
+    assert paths == tabs._IMAGE_PATH_INPUTS
 
 
 # --- narrowing the trial pool is not a design edit ---------------------------

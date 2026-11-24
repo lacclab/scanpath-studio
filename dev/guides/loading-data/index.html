@@ -1615,6 +1615,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Load and inspect in code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add-a-dataset-from-a-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add a dataset from a script
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2585,6 +2602,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Load and inspect in code">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add-a-dataset-from-a-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add a dataset from a script
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2830,6 +2864,44 @@ the app does.</p>
 <p>For raw gaze, metadata and explicit column mappings, see the
 <a href="../../api/#load-your-data">loaders</a> and <a href="../../cli/#flags-input">CLI input options</a>.</p>
 </details>
+<h3 id="add-a-dataset-from-a-script">Add a dataset from a script<a class="headerlink" href="#add-a-dataset-from-a-script" title="Permanent link">&para;</a></h3>
+<p>On your own computer, a script can add a dataset to the app's list. Use it to
+prepare the tables in code and then look at them in the app. Start the app
+afterwards and it opens on the new dataset. If the app is already open, reload
+its browser tab right away: changes you make in it before the reload are not
+saved.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Python</label><label for="__tabbed_2_2">CLI</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">sps</span><span class="o">.</span><span class="n">add_dataset</span><span class="p">(</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">"Pilot 3"</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">words</span><span class="o">=</span><span class="s2">"ia.csv"</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">fixations</span><span class="o">=</span><span class="s2">"fixations.csv"</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1920</span><span class="p">,</span> <span class="mi">1080</span><span class="p">),</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scanpath-studio<span class="w"> </span>add<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--canvas<span class="w"> </span>1920x1080
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>The tables load as <code>load_scanpath_data</code> loads them, and the dataset is saved
+with your other <a href="../../cli/#cache">saved work</a>. Adding again under the same
+name is an error unless you pass <code>replace=True</code> (<code>--replace</code>). That swaps the
+tables and keeps the dataset's annotations, metadata tables, share links,
+description and recording setup, unless you give a new description or screen.
+Without a screen size, the app uses one the data records, or estimates one from
+the extent of the data. To set it later, use <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong>.
+See <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="../../api/#scanpath_studio.api.add_dataset"><code>add_dataset</code></a> for every option.</p>
+<p>To take a dataset off the list again, use
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="../../api/#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a> or
+<code>scanpath-studio remove "Pilot 3"</code>. Any dataset you added can be removed this
+way, with its annotations and metadata tables, as its <strong>Remove</strong> on the Data
+Management page does.</p>
 <h2 id="manage-datasets">Manage datasets<a class="headerlink" href="#manage-datasets" title="Permanent link">&para;</a></h2>
 <p><strong>Current dataset</strong> opens on <strong>Overview</strong>. It shows how many participants, trials
 and texts are in your selection and the average number of trials per participant.

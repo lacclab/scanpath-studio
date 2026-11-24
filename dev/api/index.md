@@ -59,6 +59,8 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.           |
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                            |
 | **Recovery cache**                            |                                                                                       |
+| add_dataset                                   | Add a dataset to the app's dataset list from a script.                                |
+| remove_dataset                                | Remove a dataset from the app's dataset list from a script.                           |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
 | clear_cache                                   | Delete the recovery cache.                                                            |
 | **Version and updates**                       |                                                                                       |
@@ -112,6 +114,7 @@ load_scanpath_data(
     names=NAMES_SOURCE,
     include_source_cells=False,
     _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -246,7 +249,12 @@ sps.plot_scanpath(words, fixations, show_stimulus_image=True)
 
 ```
 load_raw_gaze(
-    table, *, raw_gaze_schema=None, names=NAMES_SOURCE, _row_counts=None
+    table,
+    *,
+    raw_gaze_schema=None,
+    names=NAMES_SOURCE,
+    _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -1442,6 +1450,117 @@ Returns:
 - `dict[str, Path]` – {layer: Path} for each file written.
 
 ## Recovery cache
+
+A local app keeps the datasets you add, so they are there the next time it starts. `add_dataset` adds one from a script: prepare the tables in Python, add them, then run `scanpath-studio` and the app opens on them. `remove_dataset` takes one off the list again.
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+### add_dataset
+
+```
+add_dataset(
+    name,
+    words=None,
+    fixations=None,
+    *,
+    raw_gaze=None,
+    word_schema=None,
+    fix_schema=None,
+    raw_gaze_schema=None,
+    trial_parts_manifest=None,
+    keep_columns=None,
+    canvas_size=None,
+    setup=None,
+    description=None,
+    select=True,
+    replace=False,
+)
+```
+
+Add a dataset to the app's dataset list from a script.
+
+The tables load as load_scanpath_data and load_raw_gaze load them, and the dataset is saved where a local app keeps the datasets added with ➕ **Add dataset** (the recovery cache, see cache_status). Start the app with `scanpath-studio` and it is in the list, opened unless `select=False`. An app already open shows it once its browser tab is reloaded. The same as `scanpath-studio add`.
+
+It works for a local app only: the app on this computer, the desktop app, or a `scanpath-studio run` on this machine. A hosted app keeps no saved datasets.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows. A built-in source's name is refused.
+- **`words`** (`TablesLike | None`, default: `None` ) – The Words table, in any form load_scanpath_data takes.
+- **`fixations`** (`TablesLike | None`, default: `None` ) – The Fixations table, in the same forms.
+- **`raw_gaze`** (`TablesLike | None`, default: `None` ) – The Raw gaze table, in the same forms. Any one of the three tables is enough.
+- **`word_schema`** (`dict | None`, default: `None` ) – The Words table's column mapping, replacing auto-detection, as load_scanpath_data takes it. The app shows it as the dataset's mapping, and ✏️ Edit dataset starts from it.
+- **`fix_schema`** (`dict | None`, default: `None` ) – The same for the Fixations table.
+- **`raw_gaze_schema`** (`dict | None`, default: `None` ) – The same for the Raw gaze table, as load_raw_gaze takes it.
+- **`trial_parts_manifest`** (`dict | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`keep_columns`** (`Iterable[str] | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The recording's screen, (width, height) px. Without it, the screen a table records is used, else one estimated from the extent of the data, as ➕ Add dataset suggests it. With replace, leaving out both this and setup keeps the saved dataset's setup.
+- **`setup`** (`SetupSnapshot | None`, default: `None` ) – The full recording setup, an experimental_setup.SetupSnapshot (screen, monitor width, text size), in place of canvas_size.
+- **`description`** (`str | None`, default: `None` ) – The sentence the 🗂️ Data page shows under its name.
+- **`select`** (`bool`, default: `True` ) – Open the app on this dataset next time it starts.
+- **`replace`** (`bool`, default: `False` ) – Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless new ones are given. Without it, a name already saved is an error.
+
+Returns:
+
+- `str` – The name the dataset was saved under.
+
+Raises:
+
+- `ValueError` – No table was given, a table can't be loaded (as load_scanpath_data raises), the name is empty, too long or a built-in source's, or the saved work can't be read or was written by another version. Nothing is saved then.
+- `StoredDatasetExistsError` – A dataset with this name is already saved and replace is off. A ValueError.
+- `TypeError` – setup is not a SetupSnapshot.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+Then run `scanpath-studio` and the app opens on *Pilot 3*. Reload a tab that is already open right away: changes made in it after the dataset was added are not saved, as when two tabs change the same saved work.
+
+### remove_dataset
+
+```
+remove_dataset(name, *, missing_ok=False)
+```
+
+Remove a dataset from the app's dataset list from a script.
+
+The counterpart of add_dataset, and the same as the dataset's **Remove** on the 🗂️ **Data** page: its tables go, with its annotations, metadata tables, description and share ID. Any dataset you added counts, in the app or from a script; the built-in and public datasets can't be removed. When the app last had it open, it next opens on its default dataset. Reload a tab that is already open right away: changes made in it after the removal are not saved. The same as `scanpath-studio remove`.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows, ignoring case.
+- **`missing_ok`** (`bool`, default: `False` ) – Return False when no dataset has the name, instead of raising.
+
+Returns:
+
+- `bool` – Whether a dataset was removed.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name, and missing_ok is off. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version. Nothing is removed then.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.remove_dataset("Pilot 3")
+```
 
 ### cache_status
 

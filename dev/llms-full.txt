@@ -787,6 +787,29 @@ scanpath-studio check --words ia.csv --fixations fixations.csv
 
 For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/dev/api/#load-your-data) and [CLI input options](https://lacclab.github.io/scanpath-studio/dev/cli/#flags-input).
 
+### Add a dataset from a script
+
+On your own computer, a script can add a dataset to the app's list. Use it to prepare the tables in code and then look at them in the app. Start the app afterwards and it opens on the new dataset. If the app is already open, reload its browser tab right away: changes you make in it before the reload are not saved.
+
+```
+import scanpath_studio as sps
+
+sps.add_dataset(
+    "Pilot 3",
+    words="ia.csv",
+    fixations="fixations.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+```
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+```
+
+The tables load as `load_scanpath_data` loads them, and the dataset is saved with your other [saved work](https://lacclab.github.io/scanpath-studio/dev/cli/#cache). Adding again under the same name is an error unless you pass `replace=True` (`--replace`). That swaps the tables and keeps the dataset's annotations, metadata tables, share links, description and recording setup, unless you give a new description or screen. Without a screen size, the app uses one the data records, or estimates one from the extent of the data. To set it later, use **Edit dataset**. See add_dataset for every option.
+
+To take a dataset off the list again, use remove_dataset or `scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this way, with its annotations and metadata tables, as its **Remove** on the Data Management page does.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
@@ -1397,6 +1420,8 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.           |
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                            |
 | **Recovery cache**                            |                                                                                       |
+| add_dataset                                   | Add a dataset to the app's dataset list from a script.                                |
+| remove_dataset                                | Remove a dataset from the app's dataset list from a script.                           |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
 | clear_cache                                   | Delete the recovery cache.                                                            |
 | **Version and updates**                       |                                                                                       |
@@ -1450,6 +1475,7 @@ load_scanpath_data(
     names=NAMES_SOURCE,
     include_source_cells=False,
     _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -1584,7 +1610,12 @@ sps.plot_scanpath(words, fixations, show_stimulus_image=True)
 
 ```
 load_raw_gaze(
-    table, *, raw_gaze_schema=None, names=NAMES_SOURCE, _row_counts=None
+    table,
+    *,
+    raw_gaze_schema=None,
+    names=NAMES_SOURCE,
+    _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -2781,6 +2812,117 @@ Returns:
 
 ## Recovery cache
 
+A local app keeps the datasets you add, so they are there the next time it starts. `add_dataset` adds one from a script: prepare the tables in Python, add them, then run `scanpath-studio` and the app opens on them. `remove_dataset` takes one off the list again.
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+### add_dataset
+
+```
+add_dataset(
+    name,
+    words=None,
+    fixations=None,
+    *,
+    raw_gaze=None,
+    word_schema=None,
+    fix_schema=None,
+    raw_gaze_schema=None,
+    trial_parts_manifest=None,
+    keep_columns=None,
+    canvas_size=None,
+    setup=None,
+    description=None,
+    select=True,
+    replace=False,
+)
+```
+
+Add a dataset to the app's dataset list from a script.
+
+The tables load as load_scanpath_data and load_raw_gaze load them, and the dataset is saved where a local app keeps the datasets added with ➕ **Add dataset** (the recovery cache, see cache_status). Start the app with `scanpath-studio` and it is in the list, opened unless `select=False`. An app already open shows it once its browser tab is reloaded. The same as `scanpath-studio add`.
+
+It works for a local app only: the app on this computer, the desktop app, or a `scanpath-studio run` on this machine. A hosted app keeps no saved datasets.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows. A built-in source's name is refused.
+- **`words`** (`TablesLike | None`, default: `None` ) – The Words table, in any form load_scanpath_data takes.
+- **`fixations`** (`TablesLike | None`, default: `None` ) – The Fixations table, in the same forms.
+- **`raw_gaze`** (`TablesLike | None`, default: `None` ) – The Raw gaze table, in the same forms. Any one of the three tables is enough.
+- **`word_schema`** (`dict | None`, default: `None` ) – The Words table's column mapping, replacing auto-detection, as load_scanpath_data takes it. The app shows it as the dataset's mapping, and ✏️ Edit dataset starts from it.
+- **`fix_schema`** (`dict | None`, default: `None` ) – The same for the Fixations table.
+- **`raw_gaze_schema`** (`dict | None`, default: `None` ) – The same for the Raw gaze table, as load_raw_gaze takes it.
+- **`trial_parts_manifest`** (`dict | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`keep_columns`** (`Iterable[str] | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The recording's screen, (width, height) px. Without it, the screen a table records is used, else one estimated from the extent of the data, as ➕ Add dataset suggests it. With replace, leaving out both this and setup keeps the saved dataset's setup.
+- **`setup`** (`SetupSnapshot | None`, default: `None` ) – The full recording setup, an experimental_setup.SetupSnapshot (screen, monitor width, text size), in place of canvas_size.
+- **`description`** (`str | None`, default: `None` ) – The sentence the 🗂️ Data page shows under its name.
+- **`select`** (`bool`, default: `True` ) – Open the app on this dataset next time it starts.
+- **`replace`** (`bool`, default: `False` ) – Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless new ones are given. Without it, a name already saved is an error.
+
+Returns:
+
+- `str` – The name the dataset was saved under.
+
+Raises:
+
+- `ValueError` – No table was given, a table can't be loaded (as load_scanpath_data raises), the name is empty, too long or a built-in source's, or the saved work can't be read or was written by another version. Nothing is saved then.
+- `StoredDatasetExistsError` – A dataset with this name is already saved and replace is off. A ValueError.
+- `TypeError` – setup is not a SetupSnapshot.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+Then run `scanpath-studio` and the app opens on *Pilot 3*. Reload a tab that is already open right away: changes made in it after the dataset was added are not saved, as when two tabs change the same saved work.
+
+### remove_dataset
+
+```
+remove_dataset(name, *, missing_ok=False)
+```
+
+Remove a dataset from the app's dataset list from a script.
+
+The counterpart of add_dataset, and the same as the dataset's **Remove** on the 🗂️ **Data** page: its tables go, with its annotations, metadata tables, description and share ID. Any dataset you added counts, in the app or from a script; the built-in and public datasets can't be removed. When the app last had it open, it next opens on its default dataset. Reload a tab that is already open right away: changes made in it after the removal are not saved. The same as `scanpath-studio remove`.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows, ignoring case.
+- **`missing_ok`** (`bool`, default: `False` ) – Return False when no dataset has the name, instead of raising.
+
+Returns:
+
+- `bool` – Whether a dataset was removed.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name, and missing_ok is off. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version. Nothing is removed then.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.remove_dataset("Pilot 3")
+```
+
 ### cache_status
 
 ```
@@ -2917,6 +3059,8 @@ Raises:
 | [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
 | [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
 | [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`add`](#add)                               | Add your tables to the app's dataset list                    |
+| [`remove`](#remove)                         | Remove a dataset you added from that list                    |
 | [`cache`](#cache)                           | Show or clear the recovery cache                             |
 | [`version`](#version)                       | Show the build, and whether a newer release is out           |
 | [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
@@ -3491,6 +3635,63 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 | `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
 | `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
 | `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## add
+
+`add` adds your tables to the app's dataset list, as **Add dataset** does, without opening the app. Run `scanpath-studio` afterwards and the app opens on the new dataset. If the app is already open, reload its browser tab right away: changes you make in it before the reload are not saved. It works for an app on your own computer, not a hosted one.
+
+```
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+scanpath-studio add "Pilot 3" --fixations fixations_v2.csv --replace
+```
+
+A name that is already saved is an error unless you pass `--replace`, which swaps the dataset's tables and keeps its annotations, metadata tables, share links, description and recording setup (unless you give a new description or `--canvas`). Without `--canvas`, the app uses a screen the data records, or estimates one from the extent of the data. In Python, use add_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                      |
+| ------ | ------ | -------- | -------------------------------- |
+|        | `NAME` | required | The name the dataset list shows. |
+
+**Options**
+
+| Option                   | Value                 | Default | Description                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--words`                | `PATH [PATH ...]`     | —       | Words table(s), as for render.                                                                                                                                                                                                                                                                                                                                      |
+| `--fixations`            | `PATH [PATH ...]`     | —       | Fixations table(s), as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze`             | `PATH [PATH ...]`     | —       | The Raw gaze table, as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze-schema`      | `JSON`                | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes.                                                                                                                                                                                                                                                              |
+| `--trial-parts-manifest` | `PATH`                | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                             |
+| `--canvas`               | `WxH`                 | —       | The recording's screen in px, e.g. 1920x1080. Without it, a screen the data records is used, else one estimated from the extent of the data; with `--replace`, the saved dataset's setup is kept.                                                                                                                                                                   |
+| `--description`          | `TEXT`                | —       | The sentence the Data Management page shows under its name.                                                                                                                                                                                                                                                                                                         |
+| `--replace`              | switch                | —       | Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless `--description` or `--canvas` gives new ones. Without it, a name already saved is an error.                                                                                                           |
+| `--no-select`            | switch                | —       | Add it to the list without opening the app on it next time.                                                                                                                                                                                                                                                                                                         |
+| `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
+| `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
+| `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## remove
+
+`remove` takes a dataset you added, in the app or with `add`, off the app's dataset list. Its annotations, metadata tables and description go with it, as its **Remove** on the **Data Management** page does. Built-in and public datasets can't be removed. If the app last had it open, it next opens on its default dataset.
+
+```
+scanpath-studio remove "Pilot 3"
+scanpath-studio remove "Pilot 3" --missing-ok   # no error if it isn't there
+```
+
+In Python, use remove_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option         | Value  | Default | Description                                                          |
+| -------------- | ------ | ------- | -------------------------------------------------------------------- |
+| `--missing-ok` | switch | —       | Exit quietly when no dataset has the name, instead of with an error. |
 
 ## cache
 
@@ -4215,6 +4416,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - Hovering over Scanpath View, Corpus Analysis or Data Management in the top navigation now says what each view is for.
 - Smaller PNG files works outside the app too: `render --compact-png` and `save_figure(..., compact_png=True)` / `save_figure_layers(..., compact_png=True)` compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
+- Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
 
 ### Changed
 

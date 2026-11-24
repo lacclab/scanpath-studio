@@ -10,6 +10,8 @@
 | [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
 | [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
 | [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`add`](#add)                               | Add your tables to the app's dataset list                    |
+| [`remove`](#remove)                         | Remove a dataset you added from that list                    |
 | [`cache`](#cache)                           | Show or clear the recovery cache                             |
 | [`version`](#version)                       | Show the build, and whether a newer release is out           |
 | [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
@@ -584,6 +586,63 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 | `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
 | `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
 | `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## add
+
+`add` adds your tables to the app's dataset list, as **Add dataset** does, without opening the app. Run `scanpath-studio` afterwards and the app opens on the new dataset. If the app is already open, reload its browser tab right away: changes you make in it before the reload are not saved. It works for an app on your own computer, not a hosted one.
+
+```
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+scanpath-studio add "Pilot 3" --fixations fixations_v2.csv --replace
+```
+
+A name that is already saved is an error unless you pass `--replace`, which swaps the dataset's tables and keeps its annotations, metadata tables, share links, description and recording setup (unless you give a new description or `--canvas`). Without `--canvas`, the app uses a screen the data records, or estimates one from the extent of the data. In Python, use add_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                      |
+| ------ | ------ | -------- | -------------------------------- |
+|        | `NAME` | required | The name the dataset list shows. |
+
+**Options**
+
+| Option                   | Value                 | Default | Description                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--words`                | `PATH [PATH ...]`     | —       | Words table(s), as for render.                                                                                                                                                                                                                                                                                                                                      |
+| `--fixations`            | `PATH [PATH ...]`     | —       | Fixations table(s), as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze`             | `PATH [PATH ...]`     | —       | The Raw gaze table, as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze-schema`      | `JSON`                | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes.                                                                                                                                                                                                                                                              |
+| `--trial-parts-manifest` | `PATH`                | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                             |
+| `--canvas`               | `WxH`                 | —       | The recording's screen in px, e.g. 1920x1080. Without it, a screen the data records is used, else one estimated from the extent of the data; with `--replace`, the saved dataset's setup is kept.                                                                                                                                                                   |
+| `--description`          | `TEXT`                | —       | The sentence the Data Management page shows under its name.                                                                                                                                                                                                                                                                                                         |
+| `--replace`              | switch                | —       | Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless `--description` or `--canvas` gives new ones. Without it, a name already saved is an error.                                                                                                           |
+| `--no-select`            | switch                | —       | Add it to the list without opening the app on it next time.                                                                                                                                                                                                                                                                                                         |
+| `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
+| `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
+| `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## remove
+
+`remove` takes a dataset you added, in the app or with `add`, off the app's dataset list. Its annotations, metadata tables and description go with it, as its **Remove** on the **Data Management** page does. Built-in and public datasets can't be removed. If the app last had it open, it next opens on its default dataset.
+
+```
+scanpath-studio remove "Pilot 3"
+scanpath-studio remove "Pilot 3" --missing-ok   # no error if it isn't there
+```
+
+In Python, use remove_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option         | Value  | Default | Description                                                          |
+| -------------- | ------ | ------- | -------------------------------------------------------------------- |
+| `--missing-ok` | switch | —       | Exit quietly when no dataset has the name, instead of with an error. |
 
 ## cache
 

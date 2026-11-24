@@ -2618,6 +2618,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3106,6 +3128,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3240,6 +3284,14 @@ check data and manage saved work without opening the app:</p>
 <tr>
 <td><a href="#check"><code>check</code></a></td>
 <td>Run the Data checks on your tables</td>
+</tr>
+<tr>
+<td><a href="#add"><code>add</code></a></td>
+<td>Add your tables to the app's dataset list</td>
+</tr>
+<tr>
+<td><a href="#remove"><code>remove</code></a></td>
+<td>Remove a dataset you added from that list</td>
 </tr>
 <tr>
 <td><a href="#cache"><code>cache</code></a></td>
@@ -5318,15 +5370,190 @@ with missing participant or trial IDs. Its <code>findings</code> list matches <c
 </tbody>
 </table>
 </div>
+<h2 id="add">add<a class="headerlink" href="#add" title="Permanent link">&para;</a></h2>
+<p><code>add</code> adds your tables to the app's dataset list, as <strong>Add dataset</strong> does,
+without opening the app. Run <code>scanpath-studio</code> afterwards and the app opens on
+the new dataset. If the app is already open, reload its browser tab right away:
+changes you make in it before the reload are not saved. It works for an app on
+your own computer, not a hosted one.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>add<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--canvas<span class="w"> </span>1920x1080
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>add<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--fixations<span class="w"> </span>fixations_v2.csv<span class="w"> </span>--replace
+</code></pre></div>
+<p>A name that is already saved is an error unless you pass <code>--replace</code>, which
+swaps the dataset's tables and keeps its annotations, metadata tables, share
+links, description and recording setup (unless you give a new description or
+<code>--canvas</code>). Without <code>--canvas</code>, the app uses a screen the data records, or
+estimates one from the extent of the data. In Python, use
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="../api/#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>.</p>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--words</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Words table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--fixations</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Fixations table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>The Raw gaze table, as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection, in the form <code>--fix-schema</code> takes.</td>
+</tr>
+<tr>
+<td><code>--trial-parts-manifest</code></td>
+<td><code>PATH</code></td>
+<td>—</td>
+<td>JSON manifest assigning source rows to ordered screens.</td>
+</tr>
+<tr>
+<td><code>--canvas</code></td>
+<td><code>WxH</code></td>
+<td>—</td>
+<td>The recording's screen in px, e.g. 1920x1080. Without it, a screen the data records is used, else one estimated from the extent of the data; with <code>--replace</code>, the saved dataset's setup is kept.</td>
+</tr>
+<tr>
+<td><code>--description</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td>The sentence the Data Management page shows under its name.</td>
+</tr>
+<tr>
+<td><code>--replace</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless <code>--description</code> or <code>--canvas</code> gives new ones. Without it, a name already saved is an error.</td>
+</tr>
+<tr>
+<td><code>--no-select</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Add it to the list without opening the app on it next time.</td>
+</tr>
+<tr>
+<td><code>--word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--words</code> table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--fixations</code> table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by <code>--color-by</code>, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="remove">remove<a class="headerlink" href="#remove" title="Permanent link">&para;</a></h2>
+<p><code>remove</code> takes a dataset you added, in the app or with <code>add</code>, off the app's
+dataset list. Its annotations, metadata tables and description go with it, as
+its <strong>Remove</strong> on the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management</strong> page does. Built-in
+and public datasets can't be removed. If the app last had it open, it next
+opens on its default dataset.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>scanpath-studio<span class="w"> </span>remove<span class="w"> </span><span class="s2">"Pilot 3"</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>scanpath-studio<span class="w"> </span>remove<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--missing-ok<span class="w">   </span><span class="c1"># no error if it isn't there</span>
+</code></pre></div>
+<p>In Python, use <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="../api/#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a>.</p>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows (case does not matter).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--missing-ok</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Exit quietly when no dataset has the name, instead of with an error.</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="cache">cache<a class="headerlink" href="#cache" title="Permanent link">&para;</a></h2>
 <p>A local or desktop run saves your session on your computer, so a refresh or a
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5390,8 +5617,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5427,9 +5654,9 @@ app, open <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></s
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>

@@ -2913,6 +2913,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.add_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;add_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.remove_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;remove_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.cache_status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3824,6 +3846,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.add_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;add_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.remove_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;remove_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.cache_status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4175,6 +4219,14 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <td></td>
 </tr>
 <tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a></td>
+<td>Add a dataset to the app's dataset list from a script.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a></td>
+<td>Remove a dataset from the app's dataset list from a script.</td>
+</tr>
+<tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cache_status&lt;/span&gt;" href="#scanpath_studio.api.cache_status"><code>cache_status</code></a></td>
 <td>Describe the recovery cache a local run keeps, without launching the app.</td>
 </tr>
@@ -4253,7 +4305,8 @@ across datasets. The example below shows the names returned for the bundled demo
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">names</span><span class="o">=</span><span class="n">NAMES_SOURCE</span><span class="p">,</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">include_source_cells</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">_row_counts</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">_schemas</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -4728,8 +4781,13 @@ climbs out of it.</p>
 
 <a href="#scanpath_studio.api.load_raw_gaze" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_raw_gaze</span><span class="p">(</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">table</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">raw_gaze_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="n">NAMES_SOURCE</span><span class="p">,</span> <span class="n">_row_counts</span><span class="o">=</span><span class="kc">None</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">table</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">raw_gaze_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">names</span><span class="o">=</span><span class="n">NAMES_SOURCE</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">_row_counts</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">_schemas</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -9181,7 +9239,376 @@ dot. <code>svg</code> and <code>pdf</code> are vector and the best to edit; <cod
     </div>
 
 </div><h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
+<p>A local app keeps the datasets you add, so they are there the next time it
+starts. <code>add_dataset</code> adds one from a script: prepare the tables in Python, add
+them, then run <code>scanpath-studio</code> and the app opens on them. <code>remove_dataset</code>
+takes one off the list again.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sps</span><span class="o">.</span><span class="n">add_dataset</span><span class="p">(</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">"Pilot 3"</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">words</span><span class="o">=</span><span class="s2">"pilot3/ia_report.csv"</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">fixations</span><span class="o">=</span><span class="s2">"pilot3/fixation_report.csv"</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1920</span><span class="p">,</span> <span class="mi">1080</span><span class="p">),</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span>
+</code></pre></div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.add_dataset" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">add_dataset</span>
+
+
+<a href="#scanpath_studio.api.add_dataset" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">add_dataset</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">words</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">fixations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">raw_gaze</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">word_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">fix_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">raw_gaze_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">trial_parts_manifest</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">keep_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">setup</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">description</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">select</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Add a dataset to the app's dataset list from a script.</p>
+<p>The tables load as <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_scanpath_data&lt;/span&gt;" href="#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>
+and <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_raw_gaze"><code>load_raw_gaze</code></a> load them, and the
+dataset is saved where a local app keeps the datasets added with ➕ <strong>Add
+dataset</strong> (the recovery cache, see
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cache_status&lt;/span&gt;" href="#scanpath_studio.api.cache_status"><code>cache_status</code></a>). Start the app with
+<code>scanpath-studio</code> and it is in the list, opened unless <code>select=False</code>. An
+app already open shows it once its browser tab is reloaded. The same as
+<code>scanpath-studio add</code>.</p>
+<p>It works for a local app only: the app on this computer, the desktop app, or a
+<code>scanpath-studio run</code> on this machine. A hosted app keeps no saved datasets.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>name</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The name the dataset list shows. A built-in source's name is refused.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>words</code></b>
+              (<code><span title="scanpath_studio.api.TablesLike">TablesLike</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The Words table, in any form <code>load_scanpath_data</code> takes.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>fixations</code></b>
+              (<code><span title="scanpath_studio.api.TablesLike">TablesLike</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The Fixations table, in the same forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>raw_gaze</code></b>
+              (<code><span title="scanpath_studio.api.TablesLike">TablesLike</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The Raw gaze table, in the same forms. Any one of the three tables
+is enough.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>word_schema</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The Words table's column mapping, replacing auto-detection, as
+<code>load_scanpath_data</code> takes it. The app shows it as the dataset's
+mapping, and ✏️ <strong>Edit dataset</strong> starts from it.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>fix_schema</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The same for the Fixations table.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>raw_gaze_schema</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The same for the Raw gaze table, as <code>load_raw_gaze</code> takes
+it.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>trial_parts_manifest</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>As <code>load_scanpath_data</code> takes it.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>keep_columns</code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;collections.abc.Iterable&lt;/code&gt;" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable">Iterable</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a>] | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>As <code>load_scanpath_data</code> takes it.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>canvas_size</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple">tuple</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a>] | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The recording's screen, <code>(width, height)</code> px. Without it, the
+screen a table records is used, else one estimated from the extent of
+the data, as ➕ <strong>Add dataset</strong> suggests it. With <code>replace</code>, leaving
+out both this and <code>setup</code> keeps the saved dataset's setup.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>setup</code></b>
+              (<code><span title="scanpath_studio.experimental_setup.SetupSnapshot">SetupSnapshot</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The full recording setup, an <code>experimental_setup.SetupSnapshot</code>
+(screen, monitor width, text size), in place of <code>canvas_size</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>description</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The sentence the 🗂️ <strong>Data</strong> page shows under its name.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>select</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
+                  <code>True</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Open the app on this dataset next time it starts.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>replace</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Replace the tables of the saved dataset with this name, keeping its
+annotations, metadata tables, share links, and its description and
+recording setup unless new ones are given. Without it, a name already
+saved is an error.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>
+          –
+          <div class="doc-md-description">
+            <p>The name the dataset was saved under.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>No table was given, a table can't be loaded (as
+<code>load_scanpath_data</code> raises), the name is empty, too long or a built-in
+source's, or the saved work can't be read or was written by another
+version. Nothing is saved then.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="scanpath_studio.persistence.StoredDatasetExistsError">StoredDatasetExistsError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>A dataset with this name is already saved and
+<code>replace</code> is off. A <code>ValueError</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#TypeError">TypeError</a></code>
+            –
+          <div class="doc-md-description">
+            <p><code>setup</code> is not a <code>SetupSnapshot</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#RuntimeError">RuntimeError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>Saving is turned off (<code>SCANPATH_STUDIO_PERSIST=0</code>).</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <p><div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.add_dataset--__codelineno-0-1" name="scanpath_studio.api.add_dataset--__codelineno-0-1" href="#scanpath_studio.api.add_dataset--__codelineno-0-1"></a><span class="n">sps</span><span class="o">.</span><span class="n">add_dataset</span><span class="p">(</span>
+<a id="scanpath_studio.api.add_dataset--__codelineno-0-2" name="scanpath_studio.api.add_dataset--__codelineno-0-2" href="#scanpath_studio.api.add_dataset--__codelineno-0-2"></a>    <span class="s2">"Pilot 3"</span><span class="p">,</span>
+<a id="scanpath_studio.api.add_dataset--__codelineno-0-3" name="scanpath_studio.api.add_dataset--__codelineno-0-3" href="#scanpath_studio.api.add_dataset--__codelineno-0-3"></a>    <span class="n">words</span><span class="o">=</span><span class="s2">"pilot3/ia_report.csv"</span><span class="p">,</span>
+<a id="scanpath_studio.api.add_dataset--__codelineno-0-4" name="scanpath_studio.api.add_dataset--__codelineno-0-4" href="#scanpath_studio.api.add_dataset--__codelineno-0-4"></a>    <span class="n">fixations</span><span class="o">=</span><span class="s2">"pilot3/fixation_report.csv"</span><span class="p">,</span>
+<a id="scanpath_studio.api.add_dataset--__codelineno-0-5" name="scanpath_studio.api.add_dataset--__codelineno-0-5" href="#scanpath_studio.api.add_dataset--__codelineno-0-5"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1920</span><span class="p">,</span> <span class="mi">1080</span><span class="p">),</span>
+<a id="scanpath_studio.api.add_dataset--__codelineno-0-6" name="scanpath_studio.api.add_dataset--__codelineno-0-6" href="#scanpath_studio.api.add_dataset--__codelineno-0-6"></a><span class="p">)</span>
+</code></pre></div>
+Then run <code>scanpath-studio</code> and the app opens on <em>Pilot 3</em>. Reload a tab
+that is already open right away: changes made in it after the dataset was
+added are not saved, as when two tabs change the same saved work.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.remove_dataset" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">remove_dataset</span>
+
+
+<a href="#scanpath_studio.api.remove_dataset" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">remove_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">missing_ok</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Remove a dataset from the app's dataset list from a script.</p>
+<p>The counterpart of <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>, and the
+same as the dataset's <strong>Remove</strong> on the 🗂️ <strong>Data</strong> page: its tables go, with
+its annotations, metadata tables, description and share ID. Any dataset you
+added counts, in the app or from a script; the built-in and public datasets
+can't be removed. When the app last had it open, it next opens on its default
+dataset. Reload a tab that is already open right away: changes made in it
+after the removal are not saved. The same as <code>scanpath-studio remove</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>name</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The name the dataset list shows, ignoring case.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>missing_ok</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Return <code>False</code> when no dataset has the name, instead of
+raising.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>
+          –
+          <div class="doc-md-description">
+            <p>Whether a dataset was removed.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="scanpath_studio.persistence.StoredDatasetNotFoundError">StoredDatasetNotFoundError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>No saved dataset has this name, and
+<code>missing_ok</code> is off. A <code>LookupError</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>The saved work can't be read or was written by another
+version. Nothing is removed then.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#RuntimeError">RuntimeError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>Saving is turned off (<code>SCANPATH_STUDIO_PERSIST=0</code>).</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.remove_dataset--__codelineno-0-1" name="scanpath_studio.api.remove_dataset--__codelineno-0-1" href="#scanpath_studio.api.remove_dataset--__codelineno-0-1"></a><span class="n">sps</span><span class="o">.</span><span class="n">remove_dataset</span><span class="p">(</span><span class="s2">"Pilot 3"</span><span class="p">)</span>
+</code></pre></div>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

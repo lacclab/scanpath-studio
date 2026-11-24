@@ -7,6 +7,7 @@
 - Hovering over Scanpath View, Corpus Analysis or Data Management in the top navigation now says what each view is for.
 - Smaller PNG files works outside the app too: `render --compact-png` and `save_figure(..., compact_png=True)` / `save_figure_layers(..., compact_png=True)` compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.
 - Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
+- Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
 
 ### Changed
 

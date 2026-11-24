@@ -448,7 +448,7 @@ def test_finding_a_setting_opens_its_editor_and_keeps_the_chart(app_url, browser
             "Horizontal screen position (px)",
         ]
         assert axes() == expected
-        playback = page.get_by_role("switch", name="Animation", exact=True)
+        playback = page.get_by_role("switch", name="Playback", exact=True)
         for enabled in (True, False):
             playback.focus()
             playback.press("Space")
@@ -806,7 +806,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         default = chart()
         editor = page.locator(".st-key-plot_editor_tabs")
         editor.get_by_role("tab", name="Axes", exact=True).click()
-        page.get_by_role("combobox", name="Axis preset").click()
+        page.get_by_role("combobox", name="Axis layout").click()
         page.get_by_role("option", name="Elapsed time by fixation index").click()
         _settle(page)
         editor.get_by_role("tab", name="Layers", exact=True).click()

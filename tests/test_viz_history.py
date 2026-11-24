@@ -95,7 +95,7 @@ def test_presets_reset_and_edits_round_trip_on_the_current_trial():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
     assert at.button(key="viz_undo").disabled and at.button(key="viz_redo").disabled
     initial_trial = at.selectbox(key="single_trial_id").value
-    preset = next(s for s in at.selectbox if s.label == "Axis preset")
+    preset = next(s for s in at.selectbox if s.label == "Axis layout")
     preset.set_value("Elapsed time by fixation index").run()
     custom = ("order_in_trial", "@elapsed_seconds")
     assert _axis_pair(at) == custom

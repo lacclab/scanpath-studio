@@ -410,6 +410,11 @@ UPLOAD_STEP_NOTES = {
         "them in your Words table before running this code; the loader does not "
         "perform that step."
     ),
+    "trial_parts_manifest": (
+        "This dataset was added with a trial-parts manifest, which splits its "
+        "trials into screens. Pass the same manifest as trial_parts_manifest= "
+        "(--trial-parts-manifest); the snippet does not include it."
+    ),
 }
 
 

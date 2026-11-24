@@ -175,3 +175,27 @@ class TestTheShadowsCarryTheirOwnDefault:
         assert list(slider.proto.default) == [pytest.approx(0.3)]
         (box,) = at.number_input
         assert box.proto.default == pytest.approx(0.3)
+
+    def test_the_opacity_box_shows_a_dragged_value(self):
+        """The box is a shadow of its own, so it moves to a fresh key showing
+        the value the slider was dragged to."""
+
+        def app():
+            import streamlit as st
+
+            from scanpath_studio import controls
+
+            st.session_state.setdefault("global_word_box_fill_opacity", 0.3)
+            controls._compare_follow_opacity(
+                st, 1, "fill", label="word box fill opacity", help=""
+            )
+
+        at = AppTest.from_function(app)
+        at.run(timeout=30)
+        at.slider[0].set_value(0.8)
+        at.run(timeout=30)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state["cmp1_box_fill_opacity"] == pytest.approx(0.8)
+        (box,) = at.number_input
+        assert box.value == pytest.approx(0.8)

@@ -9203,20 +9203,39 @@ def _retry_load(token: str) -> None:
 
 
 def _render_cancelled_load_notice(host) -> None:
-    """The "Stopped loading X · Try again" notice, once, where the notices go."""
+    """The "Stopped loading X · Try again" banner, once, where the notices go.
+
+    The note is popped as it is drawn, so any rerun clears it; the ✕ is that
+    rerun on purpose, for a reader who wants it gone without doing anything
+    else first.
+    """
     note = st.session_state.pop(CANCELLED_LOAD_KEY, None)
     if not note:
         return
     row = host.container(
-        key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
+        key="sps_cancelled_notice",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
     )
     # As wide as its words, so Try again sits beside them, not across the page.
-    row.caption(f"Stopped loading **{md_literal(note['name'])}**.", width="content")
+    row.markdown(
+        f"{ICONS['info']} Stopped loading **{md_literal(note['name'])}**.",
+        width="content",
+    )
     row.button(
         "Try again",
         key="sps_try_again",
+        icon=ICONS["refresh"],
         on_click=_retry_load,
         args=(note["token"],),
+    )
+    row.space("stretch")
+    row.button(
+        spoken("Dismiss"),
+        key="sps_cancelled_notice_close",
+        icon=ICONS["close"],
+        help="Dismiss",
         type="tertiary",
     )
 

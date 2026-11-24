@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = [
     "ScanpathData",
     "__version__",
+    "add_dataset",
     "animate_scanpath",
     "attach_stimulus_images",
     "build_authored_scanpath",
@@ -33,6 +34,7 @@ __all__ = [
     "plot_scanpath",
     "propose_schema",
     "publication_figure",
+    "remove_dataset",
     "render_parent_trial",
     "run_analysis_recipe",
     "save_figure",

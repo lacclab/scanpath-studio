@@ -7808,7 +7808,45 @@ def empty_fixations_frame() -> pd.DataFrame:
 
 
 # Identity columns recomputed (not carried) by a remap — see remap_normalized_frame.
-_REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id", "unique_paragraph_id")
+# `unique_paragraph_id` is the files' own column, kept as an add keeps it: a
+# mapped Text ID wins over it, and it is the text id only where none is mapped.
+_REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id")
+
+
+def _composite_copies(
+    frame: pd.DataFrame, stored_schema: dict | None, schema: dict
+) -> list[str]:
+    """The stored composite Trial ID's part columns that only copy a column
+    the new mapping still uses (`remap_normalized_frame`): no field of the new
+    mapping names the part, and one names a column with the same values row
+    for row (a Participant column in the Trial ID). Decided by the values, so
+    it holds whether the stored mapping names the files' columns (after an
+    add) or the stored frame's (after an edit), and a part whose field the new
+    mapping clears stays, as the only copy of its values."""
+    if not stored_schema:
+        return []
+    parts = trial_mapping_columns(stored_schema.get("trial") or [])
+    if len(parts) < 2:
+        return []
+    referenced = set(_schema_source_columns(schema))
+    used = [
+        value
+        for field, value in schema.items()
+        if field != "trial" and isinstance(value, str) and value in frame.columns
+    ]
+
+    def copies(part: str) -> bool:
+        values = frame[part].astype(str)
+        return any(
+            column != part and frame[column].astype(str).equals(values)
+            for column in used
+        )
+
+    return [
+        part
+        for part in parts
+        if part in frame.columns and part not in referenced and copies(part)
+    ]
 
 
 def repeat_bases(fixations: pd.DataFrame | None) -> dict:
@@ -7909,8 +7947,7 @@ def remap_normalized_frame(
     so the new Trial/Text mapping is authoritative: otherwise ``normalize_*``
     would keep deriving ``trial_id`` from the existing ``unique_trial_id`` and
     silently ignore a changed Trial ID pick. A derived-id column the new schema
-    *references* is NOT dropped, though — a composite trial id can be built from
-    ``unique_paragraph_id``, and dropping a chosen component would make
+    *references* is NOT dropped, though: dropping a chosen component would make
     ``trial_id_series`` raise ``KeyError``. Every surviving column is kept
     (``keep_columns`` = all current columns) so the remap only reassigns roles
     and never drops data that already survived the first normalization. After
@@ -7920,7 +7957,10 @@ def remap_normalized_frame(
     dataset holds the ``unique_*`` ids adding the files with the new mapping
     gives. ``stored_schema`` is the mapping the stored frame was made with: a
     ``unique_trial_id`` its composite Trial ID derived is not the files', and
-    is not restored once the new Trial ID is one column.
+    is not restored once the new Trial ID is one column; and a part of that
+    composite that another field also mapped (a Participant column in the
+    Trial ID) is a copy of that field's column, dropped once no mapping uses
+    it, as adding the files with the new mapping holds it only as that field.
 
     A **words** frame remapped with no Participant is a stimulus-level
     Words table, exactly as it was at import — ``normalize_words`` re-flags it for
@@ -8001,6 +8041,9 @@ def remap_normalized_frame(
             working = working.assign(trial_id=working[AOI_TRIAL_ID]).drop(
                 columns=[AOI_TRIAL_ID]
             )
+    # Last, after the collapse and the repeat ids above, which read
+    # `participant_id`: a part named so would be the column itself.
+    working = working.drop(columns=_composite_copies(working, stored_schema, schema))
     keep = set(working.columns)
     if kind == "words":
         result = normalize_words(

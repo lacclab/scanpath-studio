@@ -134,7 +134,7 @@ def test_pupil_preset_enables_recorded_samples_and_round_trips_through_settings(
     from scanpath_studio import url_state
 
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
-    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
+    next(box for box in at.selectbox if box.label == "Axis layout").set_value(
         "Pupil area over recorded time"
     ).run()
     assert not at.exception
@@ -600,7 +600,7 @@ def test_time_shortcuts_follow_the_clock_of_the_selected_reading():
 
 def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
-    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
+    next(box for box in at.selectbox if box.label == "Axis layout").set_value(
         "Vertical position over time"
     ).run()
     assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
@@ -633,7 +633,7 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
 @pytest.mark.parametrize("all_trials", [False, True], ids=["per-trial", "all-trials"])
 def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
-    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
+    next(box for box in at.selectbox if box.label == "Axis layout").set_value(
         "Elapsed time by fixation index"
     ).run()
     at.checkbox(key="global_show_order").check().run()

@@ -314,13 +314,13 @@ def test_more_lists_cover_the_spec():
     for word in ("filter", "sort", "slider", "trial summary table"):
         assert word in titles("picker")
     for word in (
-        "animation",
+        "playback",
         "compare",
         "layers",
         "filters & highlights",
         "axes",
         "figure",
-        "my views",
+        "my presets",
     ):
         assert word in titles("rail")
     assert [t.split(" ", 1)[1] for t, _ in more["subtabs"]] == [

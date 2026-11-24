@@ -83,6 +83,44 @@ class TestRemapNormalizedFrame:
         kept = remap_normalized_frame(stored, stored_names, kind="fixations")
         assert "unique_trial_id" in kept.columns
 
+    def test_a_composites_participant_copy_goes_after_an_edit_saved_before(self):
+        """A dataset saved once in the editor stores the editor's mapping, in
+        the stored frame's names (`participant_id`, the kept `subj`), not the
+        files'. Edited away from the composite then, the Participant column's
+        copy still goes; cleared, the field leaves its copy as the only one."""
+        raw = _raw_fixations()
+        composite = _FIX_SCHEMA | {"trial": ["subj", "block"]}
+        keep = compute_keep_columns(composite, keep_columns={"dwell", "block"})
+        stored = normalize_fixations(raw, composite, keep_columns=keep)
+        assert "subj" in stored.columns
+        saved_schema = {
+            "participant": "participant_id",
+            "trial": ["subj", "block"],
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        saved = remap_normalized_frame(
+            stored, saved_schema, kind="fixations", stored_schema=composite
+        )
+        edited = remap_normalized_frame(
+            saved,
+            saved_schema | {"trial": "block"},
+            kind="fixations",
+            stored_schema=saved_schema,
+        )
+        assert "subj" not in edited.columns
+        assert list(edited["participant_id"]) == list(saved["participant_id"])
+        # Participant cleared: `subj` is the only copy of the readers' ids.
+        cleared = {k: v for k, v in saved_schema.items() if k != "participant"}
+        unmapped = remap_normalized_frame(
+            saved,
+            cleared | {"trial": "block"},
+            kind="fixations",
+            stored_schema=saved_schema,
+        )
+        assert "subj" in unmapped.columns
+
     def test_identity_roundtrip(self):
         """Re-mapping with the canonical schema leaves the frame unchanged."""
         _, norm = _normalized_fixations()

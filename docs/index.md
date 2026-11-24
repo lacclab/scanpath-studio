@@ -83,7 +83,7 @@ Bring your own data, or start with the bundled demo.
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
            poster="assets/workflows/home-customize_poster.webp" data-autoplay
-           aria-label="View tiles, palettes and plot controls">
+           aria-label="Preset tiles, palettes and plot controls">
       <source src="assets/workflows/home-customize.mp4" type="video/mp4">
     </video>
 

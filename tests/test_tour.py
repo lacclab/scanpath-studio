@@ -950,8 +950,9 @@ class TestSpotlightSelectorsResolve:
         assert rail_col is not plot_col and rail_around[-2] is plot_around[-2]
         assert plot_col.weight == pytest.approx(4 * rail_col.weight)
 
-    def test_visualization_rail_uses_page_flow(self):
-        """Controls are neither capped at plot height nor faded out."""
+    def test_visualization_rail_scrolls_on_its_own(self):
+        """The rail's column scrolls within the window, never capped at the
+        plot's height and never faded out."""
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
@@ -960,7 +961,11 @@ class TestSpotlightSelectorsResolve:
         assert "height:" not in rail_rule
         assert "overflow" not in rail_rule
         assert "mask-image" not in rail_rule
-        assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail)' not in css
+        column = css.split("> .st-key-scanpath_rail) {", 1)[1].split("}", 1)[0]
+        assert "position: sticky;" in column
+        assert "overflow-y: auto;" in column
+        assert "max-height: calc(100dvh" in column
+        assert "100%" not in column
 
     def test_plot_rail_uses_one_compact_control_header(self, scanpath_page):
         """Modes and visualization settings share one rail heading, and the

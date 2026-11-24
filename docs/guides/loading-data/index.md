@@ -164,6 +164,48 @@ the app does.
     For raw gaze, metadata and explicit column mappings, see the
     [loaders](../../api.md#load-your-data) and [CLI input options](../../cli.md#flags-input).
 
+### Add a dataset from a script
+
+On your own computer, a script can add a dataset to the app's list. Use it to
+prepare the tables in code and then look at them in the app. Start the app
+afterwards and it opens on the new dataset. If the app is already open, reload
+its browser tab right away: changes you make in it before the reload are not
+saved.
+
+=== "Python"
+
+    ```python
+    import scanpath_studio as sps
+
+    sps.add_dataset(
+        "Pilot 3",
+        words="ia.csv",
+        fixations="fixations.csv",
+        canvas_size=(1920, 1080),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+    ```
+
+The tables load as `load_scanpath_data` loads them, and the dataset is saved
+with your other [saved work](../../cli.md#cache). Adding again under the same
+name is an error unless you pass `replace=True` (`--replace`). That swaps the
+tables and keeps the dataset's annotations, metadata tables, share links,
+description and recording setup, unless you give a new description or screen.
+Without a screen size, the app uses one the data records, or estimates one from
+the extent of the data. To set it later, use :material/edit: **Edit dataset**.
+See [`add_dataset`][scanpath_studio.api.add_dataset] for every option.
+
+To take a dataset off the list again, use
+[`remove_dataset`][scanpath_studio.api.remove_dataset] or
+`scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this
+way, with its annotations and metadata tables, as its **Remove** on the Data
+Management page does.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials

@@ -1,6 +1,6 @@
 ---
 name: preflight
-description: Pre-commit gate for scanpath-studio — run ruff check + format, the test suite, and verify the changelog has an entry for the pending work. Run before every commit/push.
+description: Pre-commit gate for scanpath-studio — run ruff check + format, the test suite, and verify the changelog has an entry for the pending work; before a PR is opened or updated, also the diff-reviewer. Run before every commit/push.
 disable-model-invocation: true
 ---
 
@@ -37,6 +37,14 @@ output). Fix trivial failures (formatting) directly; report anything else.
    Finished work goes to Status **Review** with the review ask in its
    *⚖ Waiting on you* checklist — **never** close the issue yourself; that is
    the user's sign-off. Conventions in `CLAUDE.md` → *Tracking work*.
+7. **Review** — before a PR is opened or updated (not before every commit),
+   run the `diff-reviewer` subagent on the branch's diff against `origin/main`,
+   plus the specialist whose area the diff touches (`surface-parity-reviewer`
+   for a user-facing option or a wire-format key, `perf-reviewer` for anything
+   on the rerun path). Fix its **Important** findings before the push, and
+   say in the PR which findings were fixed and which were left, with why. A
+   later round gets the earlier round's findings, so it checks those and what
+   changed since.
 
 ## Reminders for the commit itself
 

@@ -135,6 +135,8 @@ def _parsers() -> dict:
         "check": cli._check_parser,
         "add": cli._add_parser,
         "remove": cli._remove_parser,
+        "annotations export": lambda: cli._annotations_action_parser("export"),
+        "annotations import": lambda: cli._annotations_action_parser("import"),
         "cache": cli._cache_parser,
         "version": cli._version_parser,
         "cite": cli._cite_parser,

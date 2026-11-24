@@ -53,6 +53,14 @@ def test_whats_new_uses_fragments_only_in_dev(monkeypatch):
         ("check", cli._check_parser),
         ("cache", cli._cache_parser),
         ("version", cli._version_parser),
+        (
+            "annotations export",
+            lambda: cli._annotations_action_parser("export"),
+        ),
+        (
+            "annotations import",
+            lambda: cli._annotations_action_parser("import"),
+        ),
     ],
 )
 def test_the_cli_reference_lists_every_flag(command, parser):

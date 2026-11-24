@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "AnnotationsWriteResult",
     "ScanpathData",
     "__version__",
     "add_dataset",
@@ -34,6 +35,7 @@ __all__ = [
     "plot_scanpath",
     "propose_schema",
     "publication_figure",
+    "read_annotations",
     "remove_dataset",
     "render_parent_trial",
     "run_analysis_recipe",
@@ -42,6 +44,7 @@ __all__ = [
     "save_panel_proof",
     "save_publication",
     "version_info",
+    "write_annotations",
 ]
 # The release this tree descends from: the number `/release` bumps (with
 # CITATION.cff), `pyproject.toml` builds with, and publish.yml checks a tag

@@ -4409,6 +4409,132 @@ def remove(argv: list[str]) -> None:
     )
 
 
+def _annotations_parser() -> argparse.ArgumentParser:
+    """The `annotations` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio annotations",
+        description="Read or write the favorites, tags and notes saved on a "
+        "dataset you added, without opening the app. Same as "
+        "api.read_annotations and api.write_annotations.",
+    )
+    commands = parser.add_subparsers(dest="action", metavar="{export,import}")
+    commands.required = True
+    export = commands.add_parser(
+        "export",
+        prog="scanpath-studio annotations export",
+        help="write a dataset's annotations to a file",
+        description="Write a saved dataset's annotations to a file: .json is the "
+        "file the app's Data Management → Annotations → Export saves, .csv a "
+        "table with one row per annotated reading (tags separated by ';').",
+    )
+    export.add_argument(
+        "name", help="The name the dataset list shows (case does not matter)."
+    )
+    export.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        type=Path,
+        metavar="FILE",
+        help="The file to write, .json or .csv.",
+    )
+    import_ = commands.add_parser(
+        "import",
+        prog="scanpath-studio annotations import",
+        help="save annotations from a file on a dataset",
+        description="Save annotations from a file on a saved dataset: the app's "
+        "exported .json, or a .csv with participant_id, trial_id, optional "
+        "screen_id, and any of favorite, tags (separated by ';') and note. "
+        "Tags are added to a reading's own, and a favorite or note given "
+        "replaces its own. Readings the dataset does not have are listed and "
+        "left out. An app already open shows them once its tab is reloaded.",
+    )
+    import_.add_argument(
+        "name", help="The name the dataset list shows (case does not matter)."
+    )
+    import_.add_argument("file", type=Path, help="The .json or .csv file to read.")
+    import_.add_argument(
+        "--replace",
+        action="store_true",
+        help="Make the dataset's annotations exactly the file's, instead of "
+        "adding the file's to them. Refused when none of the file's readings "
+        "is in the dataset, so a file made for another dataset deletes nothing.",
+    )
+    return parser
+
+
+def _annotations_action_parser(action: str) -> argparse.ArgumentParser:
+    """The parser of one `annotations` action, ``export`` or ``import``."""
+    commands = next(
+        a
+        for a in _annotations_parser()._actions
+        if isinstance(a, argparse._SubParsersAction)
+    )
+    return commands.choices[action]
+
+
+def annotations(argv: list[str]) -> None:
+    """Export or import a saved dataset's annotations (`api.read_annotations`,
+    `api.write_annotations`)."""
+    args = _annotations_parser().parse_args(argv)
+
+    from . import api
+
+    if args.action == "export":
+        suffix = args.output.suffix.lower()
+        if suffix not in (".json", ".csv"):
+            raise SystemExit(
+                f"Can't write {args.output.name!r}: name a .json or .csv file."
+            )
+        import scanpath_studio.annotations as annotations_mod
+
+        from . import persistence
+
+        try:
+            shown, store, multipart = persistence.stored_annotations(args.name)
+            if suffix == ".json":
+                text = annotations_mod.serialize(store, dataset=shown)
+            else:
+                table = annotations_mod.store_to_frame(store, screens=multipart)
+                table["tags"] = table["tags"].map(
+                    lambda tags: f"{annotations_mod.TAG_SEPARATOR} ".join(tags)
+                )
+                text = table.to_csv(index=False, lineterminator="\n")
+            args.output.write_text(text, encoding="utf-8")
+        except (LookupError, ValueError, OSError) as exc:
+            raise SystemExit(str(exc)) from exc
+        noun = "annotated reading" if len(store) == 1 else "annotated readings"
+        print(f"Wrote {len(store)} {noun} of {shown!r} to {args.output}.")
+        return
+
+    try:
+        result = api.write_annotations(
+            args.name, args.file, mode="replace" if args.replace else "merge"
+        )
+    except (RuntimeError, LookupError, ValueError, OSError) as exc:
+        raise SystemExit(f"Nothing imported: {exc}") from exc
+    print(
+        f"Saved annotations on {result.written} "
+        f"reading{'' if result.written == 1 else 's'} of {result.dataset!r}; "
+        f"{result.annotated} {'is' if result.annotated == 1 else 'are'} annotated now."
+    )
+    if len(result.unknown):
+        shown_rows = result.unknown.head(10)
+        one = len(result.unknown) == 1
+        print(
+            f"{len(result.unknown)} reading{' is' if one else 's are'} not in the "
+            f"dataset and {'was' if one else 'were'} left out:"
+        )
+        for row in shown_rows.itertuples(index=False):
+            screen = (
+                f" / screen {row.screen_id}" if isinstance(row.screen_id, str) else ""
+            )
+            print(f"  {row.participant_id} / {row.trial_id}{screen}")
+        if len(result.unknown) > len(shown_rows):
+            print(f"  … and {len(result.unknown) - len(shown_rows)} more")
+    print("If the app is already open, reload its browser tab to see them.")
+
+
 def _cache_parser() -> argparse.ArgumentParser:
     """The `cache` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4811,6 +4937,9 @@ usage:
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio add NAME …       add your tables to the app's dataset list
   scanpath-studio remove NAME      remove a dataset you added from that list
+  scanpath-studio annotations export|import NAME …
+                                   read or write a dataset's favorites, tags
+                                   and notes
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
                                    show this build and how it was installed;
@@ -4839,6 +4968,7 @@ _COMMANDS = (
     "check",
     "add",
     "remove",
+    "annotations",
     "cache",
     "version",
     "cite",
@@ -4975,6 +5105,8 @@ def main(argv: list[str] | None = None) -> None:
         add(argv[1:])
     elif argv[0] == "remove":
         remove(argv[1:])
+    elif argv[0] == "annotations":
+        annotations(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
     elif argv[0] == "version":

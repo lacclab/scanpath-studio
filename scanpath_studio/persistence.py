@@ -1953,6 +1953,186 @@ def remove_stored_dataset(name: str, *, root: Path | None = None) -> str:
     return token
 
 
+def _stored_dataset(manifest: dict, label: str) -> tuple[str, str]:
+    """``(store key, shown name)`` of the saved dataset the list shows as
+    ``label``, or :class:`StoredDatasetNotFoundError`."""
+    tokens = _stored_tokens(manifest, label)
+    if not tokens:
+        hint = (
+            " A built-in or public dataset's annotations are exported and "
+            "imported in the app, on Data Management → Annotations."
+            if label.casefold() in {n.casefold() for n in RESERVED_SOURCE_NAMES}
+            else ""
+        )
+        raise StoredDatasetNotFoundError(
+            f"No dataset named {label!r} is saved on this computer.{hint}"
+        )
+    token = tokens[0]
+    aliases = _session_map(manifest["session"], DATASET_ALIASES_KEY)
+    return token, str(aliases.get(token) or token)
+
+
+def _stored_readings(
+    root: Path, entry: Any
+) -> tuple[frozenset[tuple[str, str]], frozenset[tuple[str, str, str]], bool]:
+    """A saved dataset's readings, as the app keys annotations on them.
+
+    ``(trials, screens, multipart)``: every ``(participant, trial)`` any of
+    its tables has — the trial picker's ids, ``unique_trial_id`` where a table
+    has one (`annotations.upload_trials`) — every ``(participant, trial,
+    screen)``, and whether it was recorded over several screens. Only the id
+    columns are read.
+    """
+    import pyarrow.parquet as pq
+
+    trials: set[tuple[str, str]] = set()
+    screens: set[tuple[str, str, str]] = set()
+    multipart = False
+    for relative in _as_mapping(_as_mapping(entry).get("frames", {})).values():
+        path = _frame_path(root, relative)
+        names = set(pq.read_schema(path).names)
+        trial = "unique_trial_id" if "unique_trial_id" in names else "trial_id"
+        if not {"participant_id", trial} <= names:
+            continue
+        columns = ["participant_id", trial]
+        if "screen_id" in names:
+            multipart = True
+            columns.append("screen_id")
+        frame = pd.read_parquet(path, columns=columns).drop_duplicates()
+        pids, tids = frame["participant_id"].astype(str), frame[trial].astype(str)
+        trials.update(zip(pids, tids))
+        if "screen_id" in frame:
+            on_screen = frame["screen_id"].notna()
+            screens.update(
+                zip(
+                    pids[on_screen],
+                    tids[on_screen],
+                    frame.loc[on_screen, "screen_id"].astype(str),
+                )
+            )
+    return frozenset(trials), frozenset(screens), multipart
+
+
+def _stored_multipart(root: Path, entry: Any) -> bool:
+    """Whether a saved dataset's tables carry screens, from their schemas.
+
+    A table file that is gone or unreadable says no: whether to list screens
+    is all it decides, and the annotations still say so themselves.
+    """
+    import pyarrow.parquet as pq
+
+    for relative in _as_mapping(_as_mapping(entry).get("frames", {})).values():
+        try:
+            if "screen_id" in pq.read_schema(_frame_path(root, relative)).names:
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def _annotation_owners(manifest: dict) -> tuple[dict, dict]:
+    """The manifest's ``annotations`` value, as ``(payload, {owner: records})``.
+
+    An older manifest's flat list is entries no dataset owns yet
+    (`annotations.restore_payload`), kept as ``unassigned``.
+    """
+    stored = manifest.get("annotations")
+    if isinstance(stored, list):
+        stored = {"datasets": {}, "unassigned": stored}
+    payload = dict(_as_mapping(stored or {}))
+    return payload, dict(_as_mapping(payload.get("datasets") or {}))
+
+
+def stored_annotations(
+    name: str, *, root: Path | None = None
+) -> tuple[str, dict, bool]:
+    """A saved dataset's annotations, read from outside the app.
+
+    Returns ``(shown name, store, multipart)``: the store as
+    `annotations.records_to_store` builds it. Raises
+    :class:`StoredDatasetNotFoundError` when no saved dataset has the name.
+    """
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        raise StoredDatasetNotFoundError(
+            f"No dataset named {label!r} is saved on this computer."
+        )
+    with _cache_file_lock(root, reading=True):
+        manifest = _read_manifest_for_update(root)
+        token, shown = _stored_dataset(manifest, label)
+        _, owners = _annotation_owners(manifest)
+        records = owners.get(token)
+        store = annotations_mod.records_to_store(
+            [
+                r
+                for r in (records if isinstance(records, list) else [])
+                if isinstance(r, dict)
+            ]
+        )
+        multipart = _stored_multipart(root, manifest["datasets"][token])
+    return shown, store, multipart
+
+
+def write_stored_annotations(
+    name: str,
+    incoming: dict,
+    *,
+    replace: bool = False,
+    root: Path | None = None,
+) -> tuple[str, int, list, dict]:
+    """Write annotations into a saved dataset from outside the app.
+
+    ``incoming`` is ``{reading key: given fields}``
+    (`annotations.frame_entries` / `record_entries`). The readings the
+    dataset's stored tables have are written — merged with its annotations
+    by `annotations.apply_entries`, or with ``replace`` in place of them —
+    under the cache lock, the manifest swapped in one rename; the others are
+    left out. An app tab already open merges its own edits with these by
+    reading on its next save, and shows these once reloaded.
+
+    Returns ``(shown name, readings written, unknown keys, the dataset's
+    store afterwards)``. Raises :class:`StoredDatasetNotFoundError` when no
+    saved dataset has the name.
+    """
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        raise StoredDatasetNotFoundError(
+            f"No dataset named {label!r} is saved on this computer."
+        )
+    with _manifest_update(root) as (manifest, _written):
+        token, shown = _stored_dataset(manifest, label)
+        trials, screens, _ = _stored_readings(root, manifest["datasets"][token])
+        known, unknown = annotations_mod.resolve_readings(incoming, trials, screens)
+        if replace and not known:
+            # Replacing with nothing — an empty file, or one made for another
+            # dataset — would delete every annotation the dataset has.
+            raise ValueError(
+                f"None of the {len(incoming)} readings given is in {shown!r}, so "
+                "its annotations were not replaced."
+                if incoming
+                else f"No annotations were given, so those of {shown!r} were not "
+                "replaced."
+            )
+        payload, owners = _annotation_owners(manifest)
+        records = owners.get(token)
+        before = annotations_mod.records_to_store(
+            [
+                r
+                for r in (records if isinstance(records, list) else [])
+                if isinstance(r, dict)
+            ]
+        )
+        after = annotations_mod.apply_entries(before, known, replace=replace)
+        if after:
+            owners[token] = annotations_mod.store_to_records(after)
+        else:
+            owners.pop(token, None)
+        manifest["annotations"] = {**payload, "datasets": owners}
+    return shown, len(known), unknown, after
+
+
 def _leave_dataset_values(values: dict, token: str) -> None:
     """What leaving ``token`` does to the figure, done to the saved session
     since the app will not open it again: its recording setup comes off the

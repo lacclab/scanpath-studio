@@ -1745,7 +1745,7 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             out.append(("drift_correction", str(state.drift_correction).lower()))
             # Connectors are the static builder's alone (the original→corrected
             # layer has no comparison equivalent), so `compare_scanpaths` takes
-            # no such keyword — see AGENTS.md's render-path table.
+            # no such keyword — see RENDER_PATHS.md.
             if state.drift_connectors and state.kind == "static":
                 out.append(("drift_connectors", True))
     # B's own window, on both builders that draw a B.

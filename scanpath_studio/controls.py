@@ -708,7 +708,7 @@ _ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
 # render paths consume it. Unsupported controls stay visible but disabled so the
 # reason is discoverable, and their stored values survive mode switches, deep
 # links, and restored configs. Keep the authoritative setting → render-path
-# table in `AGENTS.md` in sync with these gates.
+# table in `RENDER_PATHS.md` in sync with these gates.
 
 
 def _mode_gate(
@@ -8358,8 +8358,7 @@ def render_plot_controls(
     # drawn in. "Show only the regressions" is the figure a reading paper asks
     # for. The static and comparison builders honour it (Compare per scanpath);
     # the animation has no classification to filter on, so the picker greys out
-    # there rather than silently dropping the filter (see the render-path table
-    # in AGENTS.md).
+    # there rather than silently dropping the filter (see `RENDER_PATHS.md`).
     _cls_dis, _cls_reason = _mode_gate(animating, comparing, in_animation=False)
     with (
         _rail_subsection(

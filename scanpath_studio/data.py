@@ -7886,6 +7886,7 @@ def remap_normalized_frame(
     *,
     kind: str,
     repeat_of: dict | None = None,
+    stored_schema: dict | None = None,
 ) -> pd.DataFrame:
     """Re-derive an already-normalized frame under a new column mapping.
 
@@ -7906,11 +7907,13 @@ def remap_normalized_frame(
     ``trial_id_series`` raise ``KeyError``. Every surviving column is kept
     (``keep_columns`` = all current columns) so the remap only reassigns roles
     and never drops data that already survived the first normalization. After
-    normalization a ``unique_trial_id`` / ``unique_text_id`` the stored frame
-    held is restored (= ``trial_id`` / ``text_id``) when the single-column
-    path didn't set it, and one it did not hold is never added: the stored
-    frame is what adding the files gave, so an edited dataset holds the
-    ``unique_*`` ids an added one does.
+    normalization a ``unique_trial_id`` / ``unique_text_id`` the files gave
+    the stored frame is restored (= ``trial_id`` / ``text_id``) when the
+    single-column path didn't set it, and no other is added, so an edited
+    dataset holds the ``unique_*`` ids adding the files with the new mapping
+    gives. ``stored_schema`` is the mapping the stored frame was made with: a
+    ``unique_trial_id`` its composite Trial ID derived is not the files', and
+    is not restored once the new Trial ID is one column.
 
     A **words** frame remapped with no Participant is a stimulus-level
     Words table, exactly as it was at import — ``normalize_words`` re-flags it for
@@ -8010,13 +8013,22 @@ def remap_normalized_frame(
         )
     else:
         raise ValueError(f"unknown frame kind: {kind!r}")
-    # The ids the add gave this frame, restored from the new mapping's
-    # `trial_id` / `text_id` when the single-column path did not set them.
+    # The ids the files themselves gave this frame, restored from the new
+    # mapping's `trial_id` / `text_id` when the single-column path did not set
+    # them. A composite Trial ID derives its own `unique_trial_id`, which the
+    # files did not have, so it is not restored once the Trial ID is one column.
+    stored_trial = trial_mapping_columns((stored_schema or {}).get("trial") or [])
     for unique, plain in (
         ("unique_trial_id", "trial_id"),
         ("unique_text_id", "text_id"),
     ):
-        if unique in frame.columns and unique not in result.columns and plain in result:
+        derived_by_composite = unique == "unique_trial_id" and len(stored_trial) > 1
+        if (
+            unique in frame.columns
+            and not derived_by_composite
+            and unique not in result.columns
+            and plain in result
+        ):
             result[unique] = result[plain]
     return result
 

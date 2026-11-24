@@ -50,6 +50,38 @@ def _normalized_fixations():
 
 
 class TestRemapNormalizedFrame:
+    def test_an_edit_away_from_a_composite_trial_id_adds_no_unique_trial_id(self):
+        """A composite Trial ID derives its own `unique_trial_id`. Edited to
+        one column, the dataset holds what adding the files with that column
+        gives: no `unique_trial_id`."""
+        raw = _raw_fixations()
+        composite = _FIX_SCHEMA | {"trial": ["subj", "block"]}
+        keep = compute_keep_columns(composite, keep_columns={"dwell", "block"})
+        stored = normalize_fixations(raw, composite, keep_columns=keep)
+        assert "unique_trial_id" in stored.columns
+        single = _FIX_SCHEMA | {"trial": "block"}
+        added = normalize_fixations(
+            raw,
+            single,
+            keep_columns=compute_keep_columns(single, keep_columns={"dwell", "block"}),
+        )
+        assert "unique_trial_id" not in added.columns
+        stored_names = {
+            "participant": "participant_id",
+            "trial": "block",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        edited = remap_normalized_frame(
+            stored, stored_names, kind="fixations", stored_schema=composite
+        )
+        assert list(edited["trial_id"]) == ["b1", "b1", "b2", "b2"]
+        assert "unique_trial_id" not in edited.columns
+        # Without the stored mapping, the composite's id is taken for the files'.
+        kept = remap_normalized_frame(stored, stored_names, kind="fixations")
+        assert "unique_trial_id" in kept.columns
+
     def test_identity_roundtrip(self):
         """Re-mapping with the canonical schema leaves the frame unchanged."""
         _, norm = _normalized_fixations()

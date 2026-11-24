@@ -88,7 +88,8 @@ def test_the_next_step_dialogs_act_on_return_values():
             if kw.arg in ("on_click", "on_change")
         ]
         assert not callbacks, dialog.name
-        reruns = [call for call in calls if ast.unparse(call.func) == "st.rerun"]
+        # `reruns.rerun`, the app's `st.rerun`, or Streamlit's own.
+        reruns = [c for c in calls if ast.unparse(c.func) in ("rerun", "st.rerun")]
         assert reruns, dialog.name
         for call in reruns:
             assert [(kw.arg, ast.literal_eval(kw.value)) for kw in call.keywords] == [

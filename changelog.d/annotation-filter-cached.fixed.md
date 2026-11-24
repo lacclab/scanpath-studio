@@ -1,0 +1,1 @@
+With Favorites only or a tag filter on, a click no longer re-filters the whole dataset: the filtered trials are kept until the data or your stars and tags change (about 0.5 s a click on a full OneStop corpus).

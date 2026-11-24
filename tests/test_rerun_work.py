@@ -1,17 +1,22 @@
-"""What a rerun costs, on every view.
+"""What a rerun costs, on every view and panel.
 
 Streamlit reruns the whole script on every click. The data work — reading and
 normalizing tables, assigning fixations to words, the trial pool, the corpus
-summaries — is cached on fingerprints so a rerun skips it; a step that
-misses its cache, or a new frame built outside one, makes every click slower
-on a large corpus. Each view is drawn, then rerun: a rerun that changes
-nothing does no work at all, and one that changes a plot setting only redraws
-the figure.
+summaries, the data checks — is cached so a rerun skips it; a step that
+misses its cache makes every click slower on a large corpus. Each view and
+panel is drawn, then rerun: a rerun that changes nothing does no work at all,
+and one that changes a plot setting only redraws the figure.
 
-Two signals are counted. The expensive functions themselves, wherever they
-are imported. And `progress.report`, which a cached step calls when it misses
-and does real work, so it counts the misses of every step that follows that
-convention.
+Three signals are counted:
+- every miss of a `st.cache_data` / `st.cache_resource` function, by name, and
+  every `data.frame_cache` build, by slot;
+- the expensive data functions themselves, wherever they are imported, for
+  work done outside any cache;
+- `progress.report`, which a slow step calls while it works.
+
+What runs while a figure builder draws is that figure's drawing, but it must
+stay the size of a trial: a builder handed the whole corpus would make every
+redraw corpus-sized.
 """
 
 from __future__ import annotations
@@ -19,14 +24,23 @@ from __future__ import annotations
 import sys
 from collections import Counter
 
+import pandas as pd
 import pytest
+from streamlit.runtime.caching import cache_utils
 from streamlit.testing.v1 import AppTest
 
-from scanpath_studio import aggregation, data, measures, plots, progress
-from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+import scanpath_studio.app  # noqa: F401 — every importer exists before the patch
+from scanpath_studio import aggregation, api, data, measures, plots, progress
+from scanpath_studio.constants import (
+    _VIEW_CORPUS,
+    _VIEW_DATA,
+    _VIEW_SCANPATH,
+    DATA_INSPECTION_KEY,
+)
+from scanpath_studio.session_keys import CORPUS_SUBTAB
 from tests.conftest import APP_SCRIPT, pin_view
 
-#: The data work a rerun must not redo.
+#: The data work a rerun must not redo outside a cache.
 DATA_WORK = [
     (data, "normalize_words"),
     (data, "normalize_fixations"),
@@ -34,6 +48,8 @@ DATA_WORK = [
     (data, "harmonize_frames"),
     (data, "infer_word_schema"),
     (data, "infer_fix_schema"),
+    (data, "filter_to_keys"),
+    (data, "trial_keys"),
     (measures, "compute_per_word_measures"),
     (measures, "enrich_fixations"),
     (measures, "assign_fixations_to_words"),
@@ -46,46 +62,108 @@ FIGURE_WORK = [
     (plots, "build_scanpath_replay"),
     (plots, "make_comparison_figure"),
 ]
+#: The most rows a figure's own data work may see: a few trials' worth, far
+#: below the bundled demo's whole corpus (about 1,700 fixations, 2,400 words).
+TRIAL_ROWS = 1000
+
+
+def _demo_reading() -> tuple[str, str]:
+    words, fixations = api.load_sample_data(names="canonical")
+    return tuple(map(str, api.list_trials(words, fixations).iloc[0, :2]))
+
+
+def _subtab(name: str) -> str:
+    from scanpath_studio.tabs import subtab_labels_for
+
+    return next(
+        label
+        for label in subtab_labels_for(False, line_assignment=False)
+        if label.endswith(name)
+    )
+
+
+_READING = _demo_reading()
 
 VIEWS = {
     "scanpath": (_VIEW_SCANPATH, {}),
+    **{
+        f"scanpath · {name}": (_VIEW_SCANPATH, {"single_subtab": _subtab(name)})
+        for name in ("Stimulus & context", "Comparisons", "Export", "Share")
+    },
+    "scanpath · filtered": (
+        _VIEW_SCANPATH,
+        {"trial_annotations": {_READING: {"star": True, "tags": [], "note": ""}}},
+        # Filters are seeded on the first run, so they are set after it.
+        {"filter_participants": [_READING[0]], "filter_favorites": True},
+    ),
     "replay": (_VIEW_SCANPATH, {"single_animate": True}),
     "compare": (_VIEW_SCANPATH, {"single_compare_toggle": True}),
-    "corpus analysis": (_VIEW_CORPUS, {}),
-    "data": (_VIEW_DATA, {}),
+    **{
+        f"corpus · {name}": (_VIEW_CORPUS, {CORPUS_SUBTAB: name})
+        for name in ("Overview", "Per text", "Per participant", "Groups")
+    },
+    **{
+        f"data · {name}": (_VIEW_DATA, {DATA_INSPECTION_KEY: name})
+        for name in ("Overview", "Tables", "Data checks", "Annotations")
+    },
 }
 
-
-#: Figure work that runs on every rerun of a view today, each with why. It
-#: must keep running there, so an entry is dropped once it stops.
+#: Work that runs on every rerun of a view today, each with why. It must keep
+#: running there, so an entry is dropped once it stops.
 UNCACHED = {
     "compare": {
         "make_comparison_figure": "the comparison figure is drawn uncached: "
         "about 50–115 ms a rerun on the demo, more with heatmaps on a full page",
     },
+    "scanpath · Comparisons": {
+        "make_scanpath_figure": "the Comparisons subtab draws its grid of matching "
+        "readings uncached: one static figure per match, about 30 ms each",
+    },
 }
 
-#: The steps that draw a replay: their cache misses are the figure's.
-_FIGURE_STEPS = {"_render_scanpath_animation"}
+#: The caches a figure is drawn through: a plot setting misses them by design.
+FIGURE_CACHES = (
+    "_cached_scanpath_figure",
+    "_cached_scanpath_animation",
+    "_cached_replay_view",
+)
+
+
+class Work(Counter):
+    """Counts of the work done, and the most rows a figure's data work saw."""
+
+    drawn_rows = 0
 
 
 @pytest.fixture()
-def work(monkeypatch) -> Counter:
-    """Calls to the expensive functions, wherever they are imported, and the
-    cache misses `progress.report` announces, by the function that missed.
-    What runs while a figure builder draws counts as that figure's drawing."""
-    calls: Counter = Counter()
-    drawing = []
+def work(monkeypatch) -> Work:
+    calls = Work()
+    drawing: list[bool] = []
+
+    def rows(args, kwargs) -> int:
+        frames = [a for a in (*args, *kwargs.values()) if isinstance(a, pd.DataFrame)]
+        return max((len(frame) for frame in frames), default=0)
+
+    def record(name: str, args=(), kwargs=None) -> None:
+        if drawing:
+            calls["drawing"] += 1
+            calls.drawn_rows = max(calls.drawn_rows, rows(args, kwargs or {}))
+        else:
+            calls[name] += 1
 
     def wrap(name, original, *, builder):
         def counting(*args, **kwargs):
-            calls["drawing" if drawing and not builder else name] += 1
+            if not builder:
+                record(name, args, kwargs)
+            else:
+                calls[name] += 1
             drawing.append(builder)
             try:
                 return original(*args, **kwargs)
             finally:
                 drawing.pop()
 
+        counting.__wrapped__ = original
         return counting
 
     for module, name in DATA_WORK + FIGURE_WORK:
@@ -94,26 +172,51 @@ def work(monkeypatch) -> Counter:
         for loaded in list(sys.modules.values()):
             if getattr(loaded, name, None) is original:
                 monkeypatch.setattr(loaded, name, counting)
+
+    real_miss = cache_utils.CachedFunc._handle_cache_miss
+
+    def miss(self, cache, value_key, func_args, func_kwargs):
+        record(f"miss in {self._info.func.__qualname__}", func_args, func_kwargs)
+        return real_miss(self, cache, value_key, func_args, func_kwargs)
+
+    monkeypatch.setattr(cache_utils.CachedFunc, "_handle_cache_miss", miss)
+
+    real_shared_build = data._shared_build
+
+    def shared_build(ident, build, **kwargs):
+        def counted_build():
+            record(f"build {ident[1]}")
+            return build()
+
+        return real_shared_build(ident, counted_build, **kwargs)
+
+    monkeypatch.setattr(data, "_shared_build", shared_build)
+
     real_report = progress.report
 
     def report(*args, **kwargs):
-        step = sys._getframe(1).f_code.co_name
-        drawn = drawing or step in _FIGURE_STEPS
-        calls["drawing" if drawn else f"miss in {step}"] += 1
+        record(f"report in {sys._getframe(1).f_code.co_name}")
         return real_report(*args, **kwargs)
 
-    monkeypatch.setattr(progress, "report", report)
+    for loaded in list(sys.modules.values()):
+        if getattr(loaded, "report", None) is real_report:
+            monkeypatch.setattr(loaded, "report", report)
     return calls
 
 
-def _drawn(view: str, state: dict) -> AppTest:
+def _drawn(view: str, state: dict, then: dict | None = None) -> AppTest:
     at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
     for key, value in state.items():
         at.session_state[key] = value
     pin_view(at, view)
     at.run()
+    for key, value in (then or {}).items():
+        at.session_state[key] = value
+    at.run()
     at.run()
     assert not at.exception, at.exception
+    for key, value in (then or {}).items():
+        assert at.session_state[key] == value, f"{key} did not hold"
     return at
 
 
@@ -122,6 +225,7 @@ def _drawn(view: str, state: dict) -> AppTest:
 def test_a_rerun_that_changes_nothing_does_no_work(view, work):
     at = _drawn(*VIEWS[view])
     work.clear()
+    work.drawn_rows = 0
     at.run()
     assert not at.exception, at.exception
     known = UNCACHED.get(view, {})
@@ -129,6 +233,9 @@ def test_a_rerun_that_changes_nothing_does_no_work(view, work):
     assert not redone, f"a rerun with nothing changed redid: {redone}"
     stopped = set(known) - set(work)
     assert not stopped, f"no longer redone on a rerun; drop from UNCACHED: {stopped}"
+    assert work.drawn_rows <= TRIAL_ROWS, (
+        f"a figure drew from {work.drawn_rows} rows, more than a trial's"
+    )
 
 
 @pytest.mark.timeout(300)
@@ -136,10 +243,14 @@ def test_a_rerun_that_changes_nothing_does_no_work(view, work):
 def test_a_plot_setting_only_redraws_the_figure(view, work):
     at = _drawn(*VIEWS[view])
     work.clear()
+    work.drawn_rows = 0
     at.session_state["global_saccade_width"] = 3.5
     at.run()
     assert not at.exception, at.exception
     figure = {name for _module, name in FIGURE_WORK} | {"drawing"}
+    figure |= {f"miss in {name}" for name in FIGURE_CACHES}
     redone = {name: n for name, n in work.items() if name not in figure}
     assert not redone, f"a plot setting redid data work: {redone}"
-    assert work.keys() & figure, "the plot setting redrew nothing"
+    assert work.drawn_rows <= TRIAL_ROWS, (
+        f"a figure drew from {work.drawn_rows} rows, more than a trial's"
+    )

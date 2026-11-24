@@ -59,6 +59,36 @@ def test_the_data_page_names_the_scope_of_its_counts():
 
 
 @pytest.mark.timeout(180)
+def test_a_star_added_under_favorites_only_joins_the_pool():
+    """The pool under an annotation filter is kept between reruns; a new star
+    changes what the filter keeps, so the pool follows it."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data(names="canonical")
+    readings = [
+        tuple(map(str, row))
+        for row in api.list_trials(words, fixations)
+        .iloc[:2, :2]
+        .itertuples(index=False)
+    ]
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    at.session_state["filter_favorites"] = True
+    at.run(timeout=90)
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert _captions(at, "0 of 24 trials")
+    for count, reading in enumerate(readings, start=1):
+        stars = dict(at.session_state["trial_annotations"])
+        stars[reading] = {"star": True, "tags": [], "note": ""}
+        at.session_state["trial_annotations"] = stars
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert _captions(at, f"{count} of 24 trials"), [c.value for c in at.caption]
+
+
+@pytest.mark.timeout(180)
 def test_empty_trial_filters_leave_the_dataset_open_for_inspection():
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)

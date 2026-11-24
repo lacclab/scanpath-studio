@@ -10629,7 +10629,14 @@ def _run_app() -> None:
         # union all three so every frame's trials get judged by the filter.
         sample_key = frame_fingerprint(raw_gaze_df)
         sample_trials = raw_gaze_trial_keys(raw_gaze_df, cache_key=sample_key)
-        present_keys = trial_keys(words_df) | trial_keys(fixations_df) | sample_trials
+        # Both steps read every row of both frames, so each is kept until its
+        # inputs change: a click elsewhere must not mask the corpus again.
+        pool_key = (frame_fingerprint(words_df), frame_fingerprint(fixations_df))
+        present_keys = frame_cache(
+            "annotation_filter_readings",
+            (*pool_key, sample_key),
+            lambda: trial_keys(words_df) | trial_keys(fixations_df) | sample_trials,
+        )
         kept = set(
             filter_keys(
                 list(present_keys),
@@ -10639,7 +10646,11 @@ def _run_app() -> None:
             )
         )
         pool = (words_df, fixations_df)
-        words_df, fixations_df = filter_to_keys(words_df, fixations_df, kept)
+        words_df, fixations_df = frame_cache(
+            "annotation_filter",
+            (*pool_key, hashable_key(kept)),
+            lambda: filter_to_keys(*pool, kept),
+        )
         assign_derived((words_df, fixations_df), "filter_to_keys", pool, kept)
         if not sample_trials.issubset(kept):
             raw_gaze_scoped = frame_cache(

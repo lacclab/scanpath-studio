@@ -3364,10 +3364,15 @@ def _trace_layer(trace) -> str:
     scanpath figure draws is a fixation-marker variant with a data-dependent name
     (``Fixations``, per-line ``line: …``, categorical colour-legend entries, the
     fixation-flag overlays, the drift-correction ``drift`` connectors), so they
-    all fall through to ``fixations`` — robust to those names changing."""
+    all fall through to ``fixations`` — robust to those names changing.
+
+    A trace whose name is its scanpath's label (a comparison's) says its layer
+    in ``meta`` instead, as the layer's name."""
     name = trace.name or ""
     if trace.meta == _COLORS_LEGEND_META:
         return "fixations"
+    if isinstance(trace.meta, str) and trace.meta in SCANPATH_LAYER_ORDER:
+        return trace.meta
     low = name.lower()
     if name == "words":
         return "labels"
@@ -8575,6 +8580,7 @@ def _add_comparison_raw_gaze_trace(
         ),
         customdata=customdata,
         name=f"{display_name} · raw gaze",
+        meta="raw_gaze",
         legendgroup=display_name,
         showlegend=bool(settings.show_legend),
     )
@@ -8715,6 +8721,7 @@ def _add_comparison_fixation_trace(
                     ),
                     opacity=saccade_opacity,
                     name=display_name,
+                    meta="saccades",
                     legendgroup=display_name,
                     showlegend=False,
                     hoverinfo="skip",
@@ -8742,6 +8749,7 @@ def _add_comparison_fixation_trace(
                         line=dict(width=0),
                     ),
                     opacity=saccade_opacity,
+                    meta="saccades",
                     legendgroup=display_name,
                     showlegend=False,
                     hoverinfo="skip",
@@ -9139,6 +9147,7 @@ def _comparison_heatmap_colorbar_trace(
         showlegend=False,
         hoverinfo="skip",
         name="comparison heatmap colorbar",
+        meta="heatmap",
     )
 
 

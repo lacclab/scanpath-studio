@@ -300,8 +300,8 @@ def test_mirror_keys_and_late_defaults_are_not_drift():
     applied = {"global_fixation_opacity": 0.7, "global_show_saccades": True}
     late = {
         **applied,
-        # A slider's typed twin and the span-highlight mirrors, registered the
-        # first time their popover draws.
+        # A slider's typed twin, registered the first time its popover draws,
+        # and the span-highlight mirrors a saved design can still hold.
         "global_fixation_opacity__num": 0.7,
         "global_marker_size_range__num_lo": 8,
         "global_highlight_span_on": True,

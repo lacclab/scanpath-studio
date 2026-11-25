@@ -409,6 +409,8 @@ from scanpath_studio.session_keys import (
     MATCH_LINK_STATE_KEY,
     MATCH_SHARE_STATE_KEY,
     MULTI_VIEW,
+    MULTI_VIEW_GRID,
+    MULTI_VIEW_OVERLAY,
     PARAM_MATCH,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
@@ -13746,8 +13748,8 @@ def _collect_generations(
     return dict(sorted(candidates.items(), key=lambda item: _reading_order(item[0])))
 
 
-_VIEW_GRID = "Grid"
-_VIEW_OVERLAY = "Overlay"
+_VIEW_GRID = MULTI_VIEW_GRID
+_VIEW_OVERLAY = MULTI_VIEW_OVERLAY
 #: The Comparisons subtab's *View* choices, the default first.
 _COMPARISON_VIEWS = (_VIEW_GRID, _VIEW_OVERLAY)
 

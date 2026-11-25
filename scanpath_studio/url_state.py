@@ -164,11 +164,15 @@ from .session_keys import (
     LINK_SETUP_STATE_KEY,
     MATCH_LINK_STATE_KEY,
     MATCH_SHARE_STATE_KEY,
+    MATCH_VIEW_LINK_VALUES,
+    MULTI_VIEW,
+    MULTI_VIEW_OVERLAY,
     PARAM_CORPUS,
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
     PARAM_MATCH,
+    PARAM_MATCH_VIEW,
     PARAM_PREPARE,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
@@ -1335,6 +1339,7 @@ def _apply_url_preset() -> str | None:
         &tab=animation           → select Animation (legacy link)
         &match=same_text         → open Comparisons on this Match field
                                    (checked there — see tabs.match_from_link)
+        &match_view=overlay      → … in its Overlay view (only beside match)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -1517,6 +1522,14 @@ def _apply_url_preset() -> str | None:
         st.session_state.setdefault(
             MATCH_LINK_STATE_KEY, {"value": str(qp[PARAM_MATCH])}
         )
+        # Its *View*, read only beside it: alone it would open nothing.
+        raw_view = qp.get(PARAM_MATCH_VIEW)
+        if raw_view not in (None, ""):
+            view = MATCH_VIEW_LINK_VALUES.get(str(raw_view).strip().lower())
+            if view is None:
+                _warn_invalid_link_param(PARAM_MATCH_VIEW, raw_view)
+            else:
+                st.session_state.setdefault(MULTI_VIEW, view)
 
     # `?compare=<participant>:<trial>` turns Compare on and parks B's ids for
     # the picker to consume once its candidate list exists (the picker's own
@@ -4408,6 +4421,8 @@ def _build_share_query(
     # Shared from Comparisons, the link reopens it on the same Match field.
     if st.session_state.get(MATCH_SHARE_STATE_KEY):
         params[PARAM_MATCH] = str(st.session_state[MATCH_SHARE_STATE_KEY])
+        if st.session_state.get(MULTI_VIEW) == MULTI_VIEW_OVERLAY:
+            params[PARAM_MATCH_VIEW] = "overlay"
     return urlencode(params), caveats
 
 

@@ -679,7 +679,7 @@ plot_scanpath(
 
 Build one trial's scanpath figure, by default in the app's Scanpath design.
 
-Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, `x_field="order_in_trial"`), and figure_options lists them with their defaults. An option naming a column takes either name: frames under the dataset's own column names, as `load_scanpath_data` returns them by default, are read through the map they carry. Use `x_field="@elapsed_seconds"` with `y_field="x"` or `"y"` to draw fixation durations against time since the reading's first recorded onset. Selecting a screen or index window keeps that origin.
+Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, `x_field="order_in_trial"`), and figure_options lists them with their defaults. An option naming a column takes either name: frames under the dataset's own column names, as `load_scanpath_data` returns them by default, are read through the map they carry. Use `x_field="@elapsed_seconds"` with `y_field="x"` or `"y"` to draw fixation durations against time since the reading's first recorded onset. Selecting a screen or index window keeps that origin. `reverse_x_axis=True` / `reverse_y_axis=True` run a chart's axis the other way, such as the first fixation at the top of `y_field="order_in_trial"`; the screen view (`x` by `y`) keeps the stimulus as it was shown.
 
 Parameters:
 
@@ -832,7 +832,7 @@ Build a figure comparing two scanpaths: the app's **Compare** mode.
 
 **Two datasets.** `words_b` / `fixations_b` draw B from a *different* dataset. Two datasets can hold the same `(participant_id, trial_id)`, so B's participant IDs are prefixed with `dataset_b` inside the merged frames. Without that, the figure could draw the wrong reading, or rows of both mixed into one. The frames you pass in are not modified, and only the trace labels show the prefix.
 
-**Numeric axes.** Set `x_field` and `y_field` to compare index, position, duration or other numeric fields in panels with matching ranges. An overlay request uses side-by-side panels on these axes. Elapsed seconds start at each full reading's first recorded fixation onset.
+**Numeric axes.** Set `x_field` and `y_field` to compare index, position, duration or other numeric fields in panels with matching ranges, and `reverse_x_axis` / `reverse_y_axis` to run either axis the other way. An overlay request uses side-by-side panels on these axes. Elapsed seconds start at each full reading's first recorded fixation onset.
 
 **The overlay gate.** A spatial overlay needs both readings on screens of the same size, or it raises `ValueError` (the app falls back to side by side). That holds across datasets, and within one when the two screens carry different `canvas_width` / `canvas_height` or `setup_b` states another screen. Pass `layout="side_by_side"` or `"stacked"` to compare readings from different screens; each panel is then drawn to its own. Nothing is rescaled.
 
@@ -1146,6 +1146,8 @@ Examples:
 | `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`    | Size of the coordinate grid's labels, 6–36 px.                                                                                                                                                                                           |
 | `x_field` `--x-field`                                     | `'x'`   | Horizontal axis of the static chart. Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. *Single plot, Compare.* |
 | `y_field` `--y-field`                                     | `'y'`   | Vertical axis of the static chart. Takes the same fields as `--x-field`. *Single plot, Compare.*                                                                                                                                         |
+| `reverse_x_axis` `--reverse-x`                            | `False` | Run the static chart's horizontal axis right to left (charts only; the screen view keeps the stimulus as shown). *Single plot, Compare.*                                                                                                 |
+| `reverse_y_axis` `--reverse-y`                            | `False` | Flip the static chart's vertical axis, so the end at the bottom goes to the top (charts only; screen Y already runs top to bottom). *Single plot, Compare.*                                                                              |
 
 ### Title & labels
 

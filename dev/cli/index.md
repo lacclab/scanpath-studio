@@ -410,6 +410,8 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--coordinate-grid-font-size` | `PX`    | —       | Size of the coordinate grid's labels, 6–36 px (default: 18).                                                                                                                                                                  |
 | `--x-field`                   | `FIELD` | —       | Horizontal axis of the static chart (default: x). Choose a numeric fixation field, @elapsed_seconds from the first recorded fixation, or a raw sample field such as timestamp_ms, sample_index, pupil_area or pupil_diameter. |
 | `--y-field`                   | `FIELD` | —       | Vertical axis of the static chart (default: y). Takes the same fields as `--x-field`.                                                                                                                                         |
+| `--reverse-x`                 | switch  | —       | Run the static chart's horizontal axis right to left (charts only; the screen view keeps the stimulus as shown).                                                                                                              |
+| `--reverse-y`                 | switch  | —       | Flip the static chart's vertical axis, so the end at the bottom goes to the top (charts only; screen Y already runs top to bottom).                                                                                           |
 
 ### Title & labels
 

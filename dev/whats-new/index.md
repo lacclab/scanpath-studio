@@ -2,7 +2,10 @@
 
 ## In development
 
-There are no unreleased changes listed.
+### Added
+
+- The Axis layout menu offers *Fixation index by word number*: each fixation's place in the reading against the word it landed on.
+- Charts can run either axis the other way with Reverse horizontal axis and Reverse vertical axis under Axes (--reverse-x / --reverse-y on the command line, reverse_x_axis / reverse_y_axis in Python), for example to put the first fixation at the top.
 
 ## Release v0.49.0
 

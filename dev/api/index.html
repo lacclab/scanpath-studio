@@ -6157,7 +6157,10 @@ defaults. An option naming a column takes either name: frames under the dataset'
 own column names, as <code>load_scanpath_data</code> returns them by default, are read
 through the map they carry. Use <code>x_field="@elapsed_seconds"</code> with
 <code>y_field="x"</code> or <code>"y"</code> to draw fixation durations against time since the
-reading's first recorded onset. Selecting a screen or index window keeps that origin.</p>
+reading's first recorded onset. Selecting a screen or index window keeps that origin.
+<code>reverse_x_axis=True</code> / <code>reverse_y_axis=True</code> run a chart's axis the other
+way, such as the first fixation at the top of <code>y_field="order_in_trial"</code>; the
+screen view (<code>x</code> by <code>y</code>) keeps the stimulus as it was shown.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -6865,8 +6868,9 @@ IDs are prefixed with <code>dataset_b</code> inside the merged frames. Without t
 figure could draw the wrong reading, or rows of both mixed into one. The frames you
 pass in are not modified, and only the trace labels show the prefix.</p>
 <p><strong>Numeric axes.</strong> Set <code>x_field</code> and <code>y_field</code> to compare index, position,
-duration or other numeric fields in panels with matching ranges. An overlay
-request uses side-by-side panels on these axes. Elapsed seconds start at
+duration or other numeric fields in panels with matching ranges, and
+<code>reverse_x_axis</code> / <code>reverse_y_axis</code> to run either axis the other way. An
+overlay request uses side-by-side panels on these axes. Elapsed seconds start at
 each full reading's first recorded fixation onset.</p>
 <p><strong>The overlay gate.</strong> A spatial overlay needs both readings on screens of the same size, or
 it raises <code>ValueError</code> (the app falls back to side by side). That holds across
@@ -8273,6 +8277,16 @@ listing them for anything else.</p>
 <td><code>y_field</code><br><code>--y-field</code></td>
 <td><code>'y'</code></td>
 <td>Vertical axis of the static chart. Takes the same fields as <code>--x-field</code>.<br><em>Single plot, Compare.</em></td>
+</tr>
+<tr>
+<td><code>reverse_x_axis</code><br><code>--reverse-x</code></td>
+<td><code>False</code></td>
+<td>Run the static chart's horizontal axis right to left (charts only; the screen view keeps the stimulus as shown).<br><em>Single plot, Compare.</em></td>
+</tr>
+<tr>
+<td><code>reverse_y_axis</code><br><code>--reverse-y</code></td>
+<td><code>False</code></td>
+<td>Flip the static chart's vertical axis, so the end at the bottom goes to the top (charts only; screen Y already runs top to bottom).<br><em>Single plot, Compare.</em></td>
 </tr>
 </tbody>
 </table>

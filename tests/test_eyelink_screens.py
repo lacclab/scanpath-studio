@@ -272,9 +272,82 @@ def test_groups_of_one_ias_file_move_together(tmp_path):
     assert [_words(b) for b in five["boxes"]] == [[], [], [], groups[3]["words"]]
     assert notes == [
         "Trial 5: interest areas in aoi/IA_5.ias at 21034 ms match no display "
-        "(the nearest begins 10 ms away, out of step with the file's other "
-        "groups); they were left out."
+        "(the nearest begins 10 ms away, and no one shift of the file's groups "
+        "matches them all); they were left out."
     ]
+
+
+def _add_displays(asc: Path, *offsets: int) -> None:
+    """Add blank displays at ``offsets`` to trial 5's draw list."""
+    vcl = asc.parent / "graphics" / "VC_5.vcl"
+    lines = vcl.read_text(encoding="utf-8").splitlines()
+    lines += [f"{offset} CLEAR 255 255 255" for offset in offsets]
+    vcl.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_shift_never_moves_a_matched_group_to_another_display(tmp_path):
+    asc = write_experiment(tmp_path, older_layout=True)
+    # A display at 21030, 14 ms before the paragraph's: the first group (21034)
+    # matches it as logged.  Only shifts of +4 to +14 would match the second
+    # group (25417), and each moves the first onto 21044, so none is taken.
+    _add_displays(asc, -947)
+    _, _, screens, notes = _tables(asc, asc.parent)
+    five = screens[screens["trial_id"] == "5"]
+    groups = EXPECTED["older_layout_trials"][5]["screens"]
+    assert list(five["begin"]) == [20083, 21030, 21044, 23225, 25426]
+    assert [_words(b) for b in five["boxes"]] == [
+        [],
+        groups[1]["words"],
+        [],
+        [],
+        [],
+    ]
+    assert notes == [
+        "Trial 5: interest areas in aoi/IA_5.ias at 25417 ms match no display "
+        "(the nearest begins 9 ms away, and no one shift of the file's groups "
+        "matches them all); they were left out."
+    ]
+
+
+def test_ambiguous_shift_leaves_the_file_unbound(tmp_path):
+    asc = write_experiment(tmp_path, older_layout=True)
+    # Displays at 21026 and 25409 as well: a shift of -8 fits the groups
+    # (21034, 25417) to those, +9 to 21044 and 25426.
+    _add_displays(asc, -943, -5326)
+    _, _, screens, notes = _tables(asc, asc.parent)
+    five = screens[screens["trial_id"] == "5"]
+    assert five["boxes"].isna().all()
+    ambiguous = (
+        "; the file's timing is ambiguous, since shifting its groups together "
+        "fits more than one set of displays); they were left out."
+    )
+    assert notes == [
+        "Trial 5: interest areas in aoi/IA_5.ias at 21034 ms match no display "
+        "(the nearest begins 8 ms away" + ambiguous,
+        "Trial 5: interest areas in aoi/IA_5.ias at 25417 ms match no display "
+        "(the nearest begins 8 ms away" + ambiguous,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("begins", "times", "expected"),
+    [
+        # Every group matches as logged: no shift.
+        ([1000, 5000], [1003, 4998], (0, False)),
+        # The whole file 9 ms early: moved together.
+        ([1000, 5000, 9000], [991, 4991, 8991], (9, False)),
+        # A shift that matches the rest would move 1017 off the display it
+        # matches as logged (onto 1003, or nowhere).
+        ([1003, 1017, 5000, 9000], [1017, 5009, 9009], (0, False)),
+        ([1000, 1017, 5000, 9000], [1017, 5009, 9009], (0, False)),
+        # -8 and +9 both match every group, to different displays.
+        ([1000, 1017, 5000, 5017], [1008, 5008], (0, True)),
+        # Beyond IAS_SHIFT_MS.
+        ([1000, 5000], [970, 4970], (0, False)),
+    ],
+)
+def test_ias_shift(begins, times, expected):
+    assert eyelink._ias_shift(begins, times) == expected
 
 
 def test_resolve_session_dir_order(tmp_path):

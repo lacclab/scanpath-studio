@@ -295,8 +295,8 @@ IAS_MATCH_MS = 5
 # An ``.ias`` file's group offsets count from the same onset as its draw list's
 # displays, but the ``IAREA FILE`` message that anchors them can be logged up to
 # one 60 Hz refresh away from that onset (OneStop's older experiments: 6 to 12
-# ms, every group of the file alike).  A file's groups therefore move together
-# by one shift of at most this many ms before each is matched.
+# ms, every group of the file alike).  A file's groups may therefore move
+# together by one shift of at most this many ms, when it matches them all.
 IAS_SHIFT_MS = 17
 
 _WHITE = (255, 255, 255)
@@ -711,24 +711,39 @@ def _nearest(begins: list[int], time: int) -> int:
     return min(range(len(begins)), key=lambda k: abs(begins[k] - time))
 
 
-def _matched(begins: list[int], time: int) -> bool:
-    return abs(begins[_nearest(begins, time)] - time) <= IAS_MATCH_MS
+def _match(begins: list[int], time: int) -> int | None:
+    """The display ``time`` falls within `IAS_MATCH_MS` of, else ``None``."""
+    i = _nearest(begins, time)
+    return i if abs(begins[i] - time) <= IAS_MATCH_MS else None
 
 
-def _ias_shift(begins: list[int], times: list[int]) -> int:
-    """The one shift, within `IAS_SHIFT_MS`, that brings the most of a file's
-    group times within `IAS_MATCH_MS` of a display; the smallest such shift,
-    so 0 whenever no shift matches more groups."""
-    shifts = {0} | {
-        begin - time
-        for begin in begins
-        for time in times
-        if abs(begin - time) <= IAS_SHIFT_MS
+def _ias_shift(begins: list[int], times: list[int]) -> tuple[int, bool]:
+    """The shift a file's group times move by, and whether the file's timing
+    was ambiguous.
+
+    0 when every group matches as logged.  Otherwise a non-zero shift within
+    `IAS_SHIFT_MS` is taken only when it matches every group of the file and
+    leaves each group that matched as logged on that same display; when such
+    shifts disagree on which display a group belongs to, the timing is
+    ambiguous and the file is not moved.
+    """
+    logged = [_match(begins, t) for t in times]
+    if all(i is not None for i in logged):
+        return 0, False
+    fits: dict[tuple[int, ...], int] = {}
+    candidates = {
+        b - t for b in begins for t in times if 0 < abs(b - t) <= IAS_SHIFT_MS
     }
-    return max(
-        sorted(shifts, key=lambda s: (abs(s), s)),
-        key=lambda s: sum(_matched(begins, t + s) for t in times),
-    )
+    for shift in sorted(candidates, key=lambda s: (abs(s), s)):
+        moved = [_match(begins, t + shift) for t in times]
+        if any(i is None for i in moved):
+            continue
+        if any(i is not None and i != j for i, j in zip(logged, moved)):
+            continue
+        fits.setdefault(tuple(moved), shift)
+    if len(fits) == 1:
+        return next(iter(fits.values())), False
+    return 0, len(fits) > 1
 
 
 def screen_table(
@@ -746,10 +761,11 @@ def screen_table(
     the next display or the trial's end; a trial without one is one screen.
     ``boxes`` holds the interest areas (``.ias`` groups or ``!V IAREA
     RECTANGLE`` messages) logged within ``IAS_MATCH_MS`` of its begin, and
-    ``ias`` the file they came from.  The groups of one ``.ias`` file are first
-    moved together by the shift `_ias_shift` finds (at most ``IAS_SHIFT_MS``),
-    since the message that anchors the file can be logged off its displays'
-    onset; a group still matching no display is noted with the reason.  A draw list whose ``.vcl`` is missing
+    ``ias`` the file they came from.  When the groups of one ``.ias`` file do
+    not all match as logged, they may move together by one shift
+    (`_ias_shift`, at most ``IAS_SHIFT_MS``), since the message anchoring the
+    file can be logged off its displays' onset.  A group still matching no
+    display is noted with the reason.  A draw list whose ``.vcl`` is missing
     still starts a screen, with no ``display``.  The files and images the
     recording names are confined to the session's `_experiment_root`.
     """
@@ -772,14 +788,19 @@ def screen_table(
             for file in {g[4] for g in groups if g[4] is not None}
         }
         for time, group, path, name, file in groups:
-            shift = shifts.get(file, 0)
-            i = _nearest(begins, time + shift)
-            if abs(begins[i] - (time + shift)) > IAS_MATCH_MS:
+            shift, ambiguous = shifts.get(file, (0, False))
+            i = _match(begins, time + shift)
+            if i is None:
                 where = f"in {name} " if name else ""
                 away = abs(begins[_nearest(begins, time)] - time)
                 why = f"the nearest begins {away} ms away"
-                if file is not None and away <= IAS_SHIFT_MS + IAS_MATCH_MS:
-                    why += ", out of step with the file's other groups"
+                if ambiguous:
+                    why += (
+                        "; the file's timing is ambiguous, since shifting its "
+                        "groups together fits more than one set of displays"
+                    )
+                elif file is not None and away <= IAS_SHIFT_MS + IAS_MATCH_MS:
+                    why += ", and no one shift of the file's groups matches them all"
                 notes.append(
                     f"Trial {trial.trial_id}: interest areas {where}at {time} ms "
                     f"match no display ({why}); they were left out."

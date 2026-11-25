@@ -17,6 +17,7 @@
 
 ### Fixed
 
+- A burst of seeks on the replay's time slider draws only the last frame, without reporting errors for the frames it replaced.
 - The Data page's experimental Stimuli table (with SCANPATH_EXPERIMENTAL=1), which shows each version of a screen with the readers who saw it since v0.49.0, now says so in its caption, as the Texts table does.
 - The Data page's Texts table keeps each word whose Word ID is blank as a word of its own, after its line's numbered words, instead of folding them into one word that depended on the row order.
 - Leaving the Add-dataset wizard after uploading a file no longer stops the bundled demo from loading ("Screen ID is set in only one table").

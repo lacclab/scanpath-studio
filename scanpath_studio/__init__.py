@@ -70,6 +70,10 @@ _HELD_BACK_EXPORTS = frozenset(
         "trial_summary",
     }
 )
+# The EyeLink import is experimental too (`constants.eyelink_import_enabled`):
+# its entries resolve, and raise without SCANPATH_EXPERIMENTAL=1, but are not
+# listed.
+_HELD_BACK_EXPORTS |= {"add_eyelink_dataset", "import_eyelink", "load_eyelink"}
 # `load_multipleye` is experimental too (`constants.multipleye_format_enabled`):
 # it resolves, and raises without SCANPATH_EXPERIMENTAL=1, but is not listed.
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})

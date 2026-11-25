@@ -195,13 +195,16 @@ def _scan_lines(path: Path, encoding: str):
 
 def _fixation_frame(events, efix) -> pd.DataFrame:
     rows = []
-    for name, eye, onset, offset, duration in events.iter_rows():
-        if name != "fixation_eyelink":
+    for row in events.iter_rows(named=True):
+        if row["name"] != "fixation_eyelink":
             continue
-        letter = _EYE_LETTER[eye]
+        letter = _EYE_LETTER[row["eye"]]
+        onset, offset = row["onset"], row["offset"]
         # The EFIX line's own duration counts both end samples, which the
         # difference of its times does not.
-        line_duration, x, y = efix.get((letter, onset), (duration, np.nan, np.nan))
+        line_duration, x, y = efix.get(
+            (letter, onset), (row["duration"], np.nan, np.nan)
+        )
         rows.append((letter, onset, offset, line_duration, x, y))
     return pd.DataFrame(
         rows, columns=["eye", "onset", "offset", "duration_ms", "x", "y"]

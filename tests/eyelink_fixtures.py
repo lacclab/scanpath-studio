@@ -97,8 +97,8 @@ _VCL = {
         "0 IMGLOAD TOP_LEFT ../../runtime/images/text2.png 100 150 300 100",
     ],
     "VC_3.vcl": [
-        f"{_BOM}-12 CLEAR 200 200 200",
-        "-12 IMGLOAD TOP_LEFT ../../runtime/images/bg.png 0 0",
+        f"{_BOM}0 CLEAR 200 200 200",
+        "0 IMGLOAD TOP_LEFT ../../runtime/images/bg.png 0 0",
     ],
 }
 
@@ -152,17 +152,22 @@ EXPECTED = {
             "start": 990,
             "end": 2000,
             "vars": {"condition": "Adv", "item": "1", "Session_Name_": "p01"},
-            # Each display: the time it was drawn (message time minus its
-            # offset), its draw list, interest-area file and fixations.
+            # Each display: the time its DRAW_LIST message was logged (message
+            # time minus its offset), the time the draw list's first display
+            # begins (its offset-0 lines, so the same instant; a later display
+            # of a list has a negative offset and begins that many ms after),
+            # its draw list, interest-area file and fixations.
             "screens": [
                 {
                     "drawn": 1013,
+                    "begin": 1013,
                     "vcl": "graphics/VC_1.vcl",
                     "ias": "aoi/IA_1.ias",
                     "fixations": _R1,
                 },
                 {
                     "drawn": 1713,
+                    "begin": 1713,
                     "vcl": "graphics/VC_3.vcl",
                     "ias": None,
                     "fixations": _R1_QUESTION,
@@ -176,6 +181,7 @@ EXPECTED = {
             "screens": [
                 {
                     "drawn": 3033,
+                    "begin": 3033,
                     "vcl": "graphics/VC_2.vcl",
                     "ias": "aoi/IA_2.ias",
                     "fixations": _R2,

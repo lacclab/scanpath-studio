@@ -1,0 +1,1 @@
+OneStop's word tables, the demo's included, carry stimulus_font_px and stimulus_font_family columns, and a demo link or settings file that never named a font now opens in Lucida Sans Typewriter; plot_scanpath, animate_scanpath and compare_scanpaths draw the declared font unless font_family is passed.

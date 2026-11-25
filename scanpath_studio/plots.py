@@ -1423,6 +1423,15 @@ def _display_scale(x_range: list, y_range: list, fitted_w: int, fitted_h: int) -
     return min(fitted_w / x_span, fitted_h / y_span)
 
 
+def _declared_font_px(words: pd.DataFrame) -> float | None:
+    """The stimulus font size (data px) the words declare, or ``None``."""
+    if words.empty or "stimulus_font_px" not in words.columns:
+        return None
+    px = pd.to_numeric(words["stimulus_font_px"], errors="coerce").dropna()
+    px = px[px > 0]
+    return float(px.iloc[0]) if not px.empty else None
+
+
 def _word_label_font_px(
     words: pd.DataFrame,
     *,
@@ -1453,10 +1462,17 @@ def _word_label_font_px(
       read off the boxes exactly,
       and neither the line-spacing guess nor the fit's safety margin applies —
       each would shrink such text by its own few percent.
+      **And before either**, a size the dataset declares on its words
+      (``stimulus_font_px``, the font its stimulus was drawn in) is exact on
+      every screen, including one whose few boxes cannot give it (a one-word
+      feedback screen).
     - otherwise / no usable boxes: ``manual_font_px`` is treated as the real
       monitor font size and scaled the same way.
     """
     font_data_px = float(manual_font_px)
+    declared = _declared_font_px(words) if scale_text_to_boxes else None
+    if declared:
+        return max(declared * scale, _MIN_LABEL_PX)
     exact = _padded_monospace_font(words) if scale_text_to_boxes else None
     if exact:
         font_data_px = exact

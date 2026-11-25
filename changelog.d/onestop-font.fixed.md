@@ -1,0 +1,1 @@
+The bundled demo and OneStop draw their word labels in Lucida Sans Typewriter, the font the experiment used, at its size on every screen, so a one-word Feedback screen is no longer drawn too large; where the font isn't installed, labels fall back to the browser's monospace.

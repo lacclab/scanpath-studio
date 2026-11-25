@@ -1027,3 +1027,12 @@ class TestNormalizePairUncachedReportsItsParts:
                 app_module._normalize_pair_uncached(
                     words, word_schema, fixations, fix_schema, ("k", 2)
                 )
+
+
+def test_a_commercial_font_is_named_without_a_link():
+    """Google Fonts does not carry OneStop's Lucida Sans Typewriter."""
+    name, url = app_module._stimulus_font_install_hint(
+        "'Lucida Sans Typewriter', monospace"
+    )
+    assert name == "Lucida Sans Typewriter"
+    assert url is None

@@ -3109,3 +3109,55 @@ class TestCategoryColors:
         legend = [t.marker.color for t in fig.data if t.showlegend]
         assert len(legend) >= 3
         assert self._closest(legend) >= 23
+
+
+class TestDeclaredStimulusFont:
+    """A size the words declare (`stimulus_font_px`) is the label size on every
+    screen, including one whose few boxes cannot give it."""
+
+    @staticmethod
+    def _one_word(**extra):
+        return pd.DataFrame(
+            {
+                "participant_id": ["p"],
+                "trial_id": ["t"],
+                "text": ["CORRECT"],
+                "x": [1213.0],
+                "y": [718.0],
+                "width": [152.0],
+                "height": [114.0],
+                **extra,
+            }
+        )
+
+    def test_a_one_word_screen_takes_the_declared_size(self):
+        words = self._one_word(stimulus_font_px=[31.5])
+        px = _word_label_font_px(
+            words,
+            scale=2.0,
+            line_spacing=3.0,
+            manual_font_px=16,
+            scale_text_to_boxes=True,
+        )
+        assert px == pytest.approx(63.0)
+
+    def test_without_a_declaration_the_box_fit_still_applies(self):
+        px = _word_label_font_px(
+            self._one_word(),
+            scale=1.0,
+            line_spacing=3.0,
+            manual_font_px=16,
+            scale_text_to_boxes=True,
+        )
+        assert px != pytest.approx(31.5)
+
+    def test_scale_text_to_boxes_off_keeps_the_manual_size(self):
+        words = self._one_word(stimulus_font_px=[31.5])
+        px = _word_label_font_px(
+            words,
+            scale=1.0,
+            line_spacing=3.0,
+            manual_font_px=20,
+            scale_text_to_boxes=False,
+        )
+        assert px == pytest.approx(20.0)

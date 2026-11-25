@@ -1904,7 +1904,10 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
         for key, value in sanitize_design(saved[name])[0].items():
             ss[key] = deepcopy(value)
         ss.pop("_canvas_seeded_for", None)
-        ss.pop("_font_seeded_for", None)
+        # A design that names its font keeps it; one that doesn't lets the
+        # dataset's declared font snap back.
+        if "global_font_family" not in saved[name]:
+            ss.pop("_font_seeded_for", None)
         ss.pop("_palette_picked", None)
         ss.pop(_PRE_ILLUSTRATION_STATE, None)
         _drop_linked_view_params()

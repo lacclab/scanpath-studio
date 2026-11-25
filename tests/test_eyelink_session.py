@@ -406,3 +406,54 @@ def test_frames_load_in_the_app_pipeline(tmp_path):
     assert len(fig.layout.images) == 1
     assert fig.layout.images[0].source
     assert len(data.fixations) == 5 and len(data.words) == 5
+
+
+def test_repeated_trial_ids_kept_apart(tmp_path):
+    asc = write_experiment(tmp_path)
+    text = asc.read_text(encoding="utf-8")
+    asc.write_text(text.replace("TRIALID 2", "TRIALID 1"), encoding="utf-8")
+    t = _tables(asc, tmp_path)
+    second = {"1_r2": EXPECTED["trials"][2]}
+    assert _fixation_rows(t.fixations) == _expected_fixations(
+        {1: EXPECTED["trials"][1], **second}
+    )
+    assert _word_rows(t.words) == _expected_words({1: EXPECTED["trials"][1], **second})
+    assert t.words.groupby("trial_id")["text_id"].first().to_dict() == {
+        "1": "aoi/IA_1",
+        "1_r2": "aoi/IA_2",
+    }
+    assert t.trial_metadata["trial_id"].tolist() == ["1", "1_r2"]
+    assert t.trial_metadata["condition"].tolist() == ["Adv", "Ele"]
+    # Each reading keeps its own stimulus: red text1 for 1, blue text2 for 1_r2.
+    with Image.open(_image_of(t.fixations, "1", 1)) as image:
+        assert image.getpixel((100, 150)) == (230, 40, 40)
+    with Image.open(_image_of(t.fixations, "1_r2", 1)) as image:
+        assert image.getpixel((100, 150)) == (40, 40, 230)
+    assert _image_of(t.words, "1_r2", 1) == _image_of(t.fixations, "1_r2", 1)
+    assert t.notes == [
+        "TRIALID 1 is logged more than once; its later readings are 1_r2."
+    ]
+
+
+def test_loose_session_folder_is_its_own_root(tmp_path):
+    lab = write_experiment(tmp_path / "lab")
+    loose = tmp_path / "dl" / "p01"
+    shutil.copytree(lab.parent, loose)
+    # Where the .vcl's ../../runtime/images would lead from the loose folder.
+    shutil.copytree(tmp_path / "lab" / "exp" / "runtime", tmp_path / "runtime")
+    asc = loose / lab.name
+    t = _tables(asc, tmp_path)
+    refused = (
+        f"graphics/VC_1.vcl: ../../runtime/images/text1.png is outside the "
+        f"experiment folder {loose}; it was not read."
+    )
+    assert refused in t.notes
+    with Image.open(_image_of(t.fixations, "1", 1)) as image:
+        assert image.getpixel((100, 150)) == (255, 255, 255)
+    # Naming the experiment folder widens the root to it.
+    t = eyelink.session_tables(
+        asc, image_dir=tmp_path / "images2", experiment_dir=tmp_path
+    )
+    assert t.notes == []
+    with Image.open(_image_of(t.fixations, "1", 1)) as image:
+        assert image.getpixel((100, 150)) == (230, 40, 40)

@@ -316,34 +316,43 @@ def _read_lines(path: Path) -> list[str]:
     return []
 
 
-def _experiment_root(session: Path) -> Path:
-    """The experiment folder: the session folder's grandparent, as Experiment
-    Builder lays sessions out in ``<experiment>/results/<session>/``."""
-    return session.resolve().parent.parent
+def _experiment_root(session: Path, experiment_dir: Path | None = None) -> Path:
+    """The folder a session's ``!V`` paths are confined to.
+
+    In Experiment Builder's layout, ``<experiment>/results/<session>/``, it is
+    the session folder's grandparent; otherwise ``experiment_dir`` when given,
+    else the session folder itself.
+    """
+    session = Path(session).resolve()
+    if session.parent.name == "results":
+        return session.parent.parent
+    if experiment_dir is not None:
+        return Path(experiment_dir).resolve()
+    return session
 
 
-def _session_path(name: str, session: Path | None) -> Path | None:
+def _session_path(
+    name: str, session: Path | None, root: Path | None = None
+) -> Path | None:
     """A ``!V`` / ``.vcl`` path, which is relative to the session folder.
 
-    The recording names these paths, so they are confined to the experiment
-    folder: an absolute path, or one that leads out of it (symbolic links
-    followed), is ``None``.  Without a session folder the path is kept as
-    written.
+    The recording names these paths, so they are confined to ``root`` (by
+    default the session's `_experiment_root`): an absolute path, or one that
+    leads out of it (symbolic links followed), is ``None``.  Without a session
+    folder the path is kept as written.
     """
     path = Path(name)
     if session is None:
         return path
     if path.is_absolute():
         return None
+    root = _experiment_root(session) if root is None else root
     resolved = (session / path).resolve()
-    return resolved if resolved.is_relative_to(_experiment_root(session)) else None
+    return resolved if resolved.is_relative_to(root) else None
 
 
-def _refused(name: str, session: Path) -> str:
-    return (
-        f"{name} is outside the experiment folder {_experiment_root(session)}; "
-        "it was not read."
-    )
+def _refused(name: str, root: Path) -> str:
+    return f"{name} is outside the experiment folder {root}; it was not read."
 
 
 def _image(args: list[str]):
@@ -368,14 +377,17 @@ def _colour(args: list[str]) -> tuple[int, int, int] | None:
     return r, g, b
 
 
-def parse_vcl(path: Path, *, session: Path | None = None) -> list[Display]:
+def parse_vcl(
+    path: Path, *, session: Path | None = None, root: Path | None = None
+) -> list[Display]:
     """The displays of a ``.vcl`` draw list: a new one at each ``CLEAR``.
 
     Image paths in a ``.vcl`` are relative to the session folder (the one the
     recording was made in), not to the ``.vcl``'s own; they are resolved
     against ``session`` when given and kept as written otherwise.  With a
-    session folder, a path outside the experiment folder is not kept as an
-    image but listed in the display's ``refused``.
+    session folder, a path outside the experiment folder (``root``, by default
+    the session's `_experiment_root`) is not kept as an image but listed in the
+    display's ``refused``.
     """
     displays: list[Display] = []
     for line in _read_lines(Path(path)):
@@ -395,7 +407,7 @@ def parse_vcl(path: Path, *, session: Path | None = None) -> list[Display]:
             displays.append(Display(offset, _WHITE, []))
         image = _image(args) if command == "IMGLOAD" else None
         if image is not None and displays:
-            path = _session_path(image[0], session)
+            path = _session_path(image[0], session, root)
             if path is None:
                 displays[-1].refused.append(image[0])
             else:
@@ -467,6 +479,9 @@ def trial_table(rec: AscRecording) -> pd.DataFrame:
     """One row per ``TRIALID``: ``trial_id`` (its value), ``start`` (the START
     line of its recording), ``begin`` (the TRIALID message) and ``end``.
 
+    A ``TRIALID`` value seen before gets ``_r2``, ``_r3``, … in file order;
+    ``attrs["repeated"]`` maps each repeated value to the ids it was given.
+
     A trial ends at its ``TRIAL_RESULT``, else at the next ``TRIALID``, else
     at its recording's ``END``, else at the file's last event.  Its recording
     is the first that starts between its TRIALID and the next (Experiment
@@ -496,9 +511,19 @@ def trial_table(rec: AscRecording) -> pd.DataFrame:
             end = _last_time(rec)
         start = block.start if block is not None else begin
         rows.append((label.removeprefix("TRIALID").strip(), start, begin, end))
-    return pd.DataFrame(rows, columns=["trial_id", "start", "begin", "end"]).astype(
+    table = pd.DataFrame(rows, columns=["trial_id", "start", "begin", "end"]).astype(
         {"start": "int64", "begin": "int64", "end": "int64"}
     )
+    # A TRIALID logged again is a repeated reading: its second occurrence is
+    # ``<id>_r2``, its third ``<id>_r3``, as the app names repeated readings.
+    occurrence = table.groupby("trial_id", sort=False).cumcount() + 1
+    repeated: dict[str, list[str]] = {}
+    for i, (trial_id, n) in enumerate(zip(table["trial_id"].tolist(), occurrence)):
+        if n > 1:
+            table.loc[i, "trial_id"] = f"{trial_id}_r{n}"
+            repeated.setdefault(trial_id, []).append(f"{trial_id}_r{n}")
+    table.attrs["repeated"] = repeated
+    return table
 
 
 def _trial_messages(rec: AscRecording, trials: pd.DataFrame):
@@ -567,22 +592,28 @@ def resolve_session_dir(
     for candidate in candidates:
         if candidate is None:
             continue
-        paths = (_session_path(name, Path(candidate)) for name in names)
+        root = _experiment_root(Path(candidate), experiment_dir)
+        paths = (_session_path(name, Path(candidate), root) for name in names)
         if any(path is not None and path.is_file() for path in paths):
             return Path(candidate)
     return None
 
 
 def _session_file(
-    name: str, session: Path | None, trial_id: str, lacks: str, notes: list[str]
+    name: str,
+    session: Path | None,
+    root: Path | None,
+    trial_id: str,
+    lacks: str,
+    notes: list[str],
 ) -> Path | None:
     """The session file a message names, or ``None`` (noted when the session
     folder is known but lacks it, or the path leads out of the experiment)."""
     if session is None:
         return None
-    path = _session_path(name, session)
+    path = _session_path(name, session, root)
     if path is None:
-        notes.append(f"Trial {trial_id}: {_refused(name, session)}")
+        notes.append(f"Trial {trial_id}: {_refused(name, root)}")
         return None
     if path.is_file():
         return path
@@ -590,7 +621,9 @@ def _session_file(
     return None
 
 
-def _trial_displays(trial, messages: pd.DataFrame, session: Path | None, notes):
+def _trial_displays(
+    trial, messages: pd.DataFrame, session: Path | None, root: Path | None, notes
+):
     """The trial's displays as ``(begin, display)``, ``display`` ``None`` for
     a draw list whose ``.vcl`` is missing, and its interest-area groups as
     ``(time, boxes, .ias path, .ias name)``."""
@@ -603,20 +636,20 @@ def _trial_displays(trial, messages: pd.DataFrame, session: Path | None, notes):
         if parts[:2] == ["!V", "DRAW_LIST"] and len(parts) > 2:
             name = text.split(None, 2)[2].strip()
             lacks = "has no stimulus for that draw list"
-            path = _session_file(name, session, trial.trial_id, lacks, notes)
+            path = _session_file(name, session, root, trial.trial_id, lacks, notes)
             if path is None:
                 displays.append((time, None))
                 continue
-            for display in parse_vcl(path, session=session):
+            for display in parse_vcl(path, session=session, root=root):
                 displays.append((time - display.offset, display))
                 notes.extend(f"{name}: skipped {line}" for line in display.skipped)
                 notes.extend(
-                    f"{name}: {_refused(image, session)}" for image in display.refused
+                    f"{name}: {_refused(image, root)}" for image in display.refused
                 )
         elif parts[:3] == ["!V", "IAREA", "FILE"] and len(parts) > 3:
             name = text.split(None, 3)[3].strip()
             lacks = "has no words from it"
-            path = _session_file(name, session, trial.trial_id, lacks, notes)
+            path = _session_file(name, session, root, trial.trial_id, lacks, notes)
             if path is None:
                 continue
             boxes = parse_ias(path)
@@ -629,13 +662,13 @@ def _trial_displays(trial, messages: pd.DataFrame, session: Path | None, notes):
         elif parts[:2] == ["!V", "IMGLOAD"]:
             image = _image(parts[2:])
             display = inline.setdefault(time, Display(0, _WHITE, []))
-            path = None if image is None else _session_path(image[0], session)
+            path = None if image is None else _session_path(image[0], session, root)
             if image is None:
                 display.skipped.append(text)
                 notes.append(f"Trial {trial.trial_id}: skipped {text}")
             elif path is None:
                 display.refused.append(image[0])
-                notes.append(f"Trial {trial.trial_id}: {_refused(image[0], session)}")
+                notes.append(f"Trial {trial.trial_id}: {_refused(image[0], root)}")
             else:
                 display.images.append((path, *image[1:]))
         elif parts[:3] == ["!V", "IAREA", "RECTANGLE"]:
@@ -653,7 +686,11 @@ def _trial_displays(trial, messages: pd.DataFrame, session: Path | None, notes):
 
 
 def screen_table(
-    rec: AscRecording, trials: pd.DataFrame, session: Path | None
+    rec: AscRecording,
+    trials: pd.DataFrame,
+    session: Path | None,
+    *,
+    experiment_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
     """One row per screen of each trial, and notes on what could not be read.
 
@@ -664,12 +701,14 @@ def screen_table(
     ``boxes`` holds the interest areas (``.ias`` groups or ``!V IAREA
     RECTANGLE`` messages) logged within ``IAS_MATCH_MS`` of its begin, and
     ``ias`` the file they came from.  A draw list whose ``.vcl`` is missing
-    still starts a screen, with no ``display``.
+    still starts a screen, with no ``display``.  The files and images the
+    recording names are confined to the session's `_experiment_root`.
     """
     notes: list[str] = []
     rows = []
+    root = None if session is None else _experiment_root(session, experiment_dir)
     for trial, messages in _trial_messages(rec, trials):
-        displays, groups = _trial_displays(trial, messages, session, notes)
+        displays, groups = _trial_displays(trial, messages, session, root, notes)
         displays = [
             (begin, display)
             for begin, display in sorted(displays, key=lambda d: d[0])
@@ -805,11 +844,14 @@ def compose_display(display: Display, out_dir: Path, size: tuple[int, int]) -> P
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{hashlib.sha256(data).hexdigest()[:16]}.png"
     if not out.is_file():
-        # Sessions are read in parallel into one folder: write aside, then
-        # move into place, so a reader never sees a partial file.
-        partial = out.with_name(f".{out.stem}.{os.getpid()}.partial")
-        partial.write_bytes(data)
-        os.replace(partial, out)
+        # Sessions are read in parallel into one folder: each writer writes
+        # its own file aside, then moves it into place, so a reader never sees
+        # a partial one.
+        with tempfile.NamedTemporaryFile(
+            dir=out_dir, prefix=f".{out.stem}.", suffix=".partial", delete=False
+        ) as partial:
+            partial.write(data)
+        os.replace(partial.name, out)
     return out
 
 
@@ -970,7 +1012,12 @@ def session_tables(
     if session is not None:
         session = session.resolve()
     trials = trial_table(rec)
-    screens, notes = screen_table(rec, trials, session)
+    screens, notes = screen_table(rec, trials, session, experiment_dir=experiment_dir)
+    notes += [
+        f"TRIALID {trial_id} is logged more than once; its later readings are "
+        f"{', '.join(ids)}."
+        for trial_id, ids in trials.attrs.get("repeated", {}).items()
+    ]
     image_paths = _screen_images(screens, rec.display, Path(image_dir), notes)
     screens = screens.assign(image_path=image_paths)
     participant = source.stem

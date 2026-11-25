@@ -1565,3 +1565,74 @@ def test_a_script_link_opens_its_dataset_reading_and_settings(
     for key, value in expected.items():
         assert key in recipient, key
         assert _comparable(recipient[key]) == _comparable(value), key
+
+
+# ---------------------------------------------------------------------------
+# The Comparisons subtab's Match field on a link (`?match=`)
+# ---------------------------------------------------------------------------
+_MATCH_NAME = st.one_of(
+    st.sampled_from(["same_text", "same_participant", "@same_text", "text_id"]),
+    st.text(min_size=1, max_size=12),
+)
+
+
+@settings(max_examples=200)
+@given(
+    columns=st.lists(_MATCH_NAME, max_size=6, unique=True),
+    sentinels=st.booleans(),
+    renamed=st.dictionaries(_MATCH_NAME, _MATCH_NAME, max_size=6),
+    data=st.data(),
+)
+def test_a_match_field_a_link_writes_reads_back_as_itself(
+    columns, sentinels, renamed, data
+):
+    """Whatever the dataset calls its columns — a friendly spelling, a raw
+    ``@…`` choice, another option's name — the spelling Share writes for a
+    Match option reads back as that option, and only a value that names an
+    option is accepted."""
+    from scanpath_studio.column_names import ColumnNames, SourceName
+    from scanpath_studio.tabs import match_from_link, match_link_value
+
+    options = (["@same_text", "@same_participant"] if sentinels else []) + [
+        c for c in columns if c not in ("@same_text", "@same_participant")
+    ]
+    assume(options)
+    names = ColumnNames(
+        {
+            column: SourceName((source,))
+            for column, source in renamed.items()
+            if column in options
+        }
+    )
+    choice = data.draw(st.sampled_from(options))
+    spelled = match_link_value(choice, options, names)
+    assert match_from_link(spelled, options, names) == choice
+    # A column keeps the dataset's own name unless that name is taken.
+    if choice not in ("@same_text", "@same_participant"):
+        assert spelled in (choice, names.display(choice))
+    value = data.draw(_MATCH_NAME)
+    assert match_from_link(value, options, names) in (None, *options)
+
+
+@settings(max_examples=60)
+@given(match=_LINK_TEXT)
+def test_a_script_link_s_match_waits_for_the_comparisons_subtab(match):
+    """`api.app_link(match=…)` carries the value verbatim, and the reader parks
+    it, unread, for the Comparisons subtab to check against its options."""
+    from urllib.parse import urlsplit
+
+    from scanpath_studio import api
+    from scanpath_studio.session_keys import MATCH_LINK_STATE_KEY
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("SCANPATH_STUDIO_STATE_DIR", "/nonexistent/scanpath-studio")
+        url = api.app_link("Pilot", match=match)
+    query = dict(parse_qsl(urlsplit(url).query, keep_blank_values=True))
+    assert query["match"] == match
+    recipient: dict = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", query)
+        url_state._apply_url_preset()
+        url_state._apply_url_preset()
+    assert recipient[MATCH_LINK_STATE_KEY] == {"value": match}

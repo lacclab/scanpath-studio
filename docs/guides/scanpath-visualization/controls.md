@@ -356,7 +356,7 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | | **Notes** | Write a free-text note on the trial. |
 | :material/article: **Stimulus & context** | :material/settings: **Fields** → **Context fields** | Choose the trial context to show, such as the text's title, a question or an answer. |
 | | :material/settings: **Fields** → **Highlighted spans** | Choose true/false word columns to highlight in the text, each with a summary line. |
-| :material/difference: **Comparisons** | **Match field** | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. The panels use the plot's axes; on a reading chart they share one horizontal range. |
+| :material/difference: **Comparisons** | **Match field** | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. A Share link copied after opening this tab reopens it on the same field (`match=same_text`, `match=same_participant` or a column name). The panels use the plot's axes; on a reading chart they share one horizontal range. |
 | | **View** | **Grid** draws each match in its own panel. **Overlay** draws the selected trial and the page's matches on one figure, each in its own colour, named in the legend and in the chip table. On screen axes an overlay needs readings of the same text; on a reading chart it warns when a word axis lines up different texts. |
 | | **Columns** | Set how many comparison panels per row, from 1 to 4. |
 | :material/file_export: **Export** | **Download format** | Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video. |

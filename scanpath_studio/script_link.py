@@ -34,6 +34,7 @@ from .session_keys import (
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
+    PARAM_MATCH,
     REPLAY_FIXATIONS_PARAM,
 )
 
@@ -453,6 +454,7 @@ def link_query(
     *,
     screen: str | None = None,
     animate: bool = False,
+    match: str | None = None,
     options: Mapping | None = None,
     share_id: str | None = None,
     digest: str | None = None,
@@ -463,7 +465,8 @@ def link_query(
     The params are the ones 🔗 Share → Link writes for the same view: the
     dataset by name (with its share ID and the digest of its tables, when
     given; a dataset the app has itself by its ``?source=``, see
-    `builtin_source_params`), the reading, then the figure settings.
+    `builtin_source_params`), the reading, the Comparisons subtab's *Match
+    field* when ``match`` names one, then the figure settings.
     """
     from .url_state import settings_params
 
@@ -484,6 +487,12 @@ def link_query(
         if trial in (None, ""):
             raise ValueError("A screen belongs to a trial: pass trial= with screen=.")
         params["screen"] = _id_text(screen)
+    if match is not None:
+        if not isinstance(match, str):
+            raise TypeError(f"match is a field name, not {type(match).__name__}.")
+        if not match.strip():
+            raise ValueError("Name the field match= matches on, or leave it out.")
+        params[PARAM_MATCH] = match
     state = options_state(options or {})
     if state:
         # A link with layer switches and no duration scale is read as one

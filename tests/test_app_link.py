@@ -222,6 +222,25 @@ def test_the_link_names_the_dataset_reading_and_port():
     assert _query(sps.app_link("Pilot 3")) == {"dataset": "Pilot 3"}
 
 
+def test_the_link_opens_comparisons_on_a_match_field(capsys):
+    """`match=` goes on the link as given; `open --match` writes the same."""
+    url = sps.app_link("Pilot 3", "p7", match="source_trial", show_heatmap=True)
+    assert _query(url)["match"] == "source_trial"
+    assert _query(sps.app_link("Pilot 3", match="same_text"))["match"] == "same_text"
+    assert "match" not in _query(sps.app_link("Pilot 3"))
+    cli.main(
+        ["open", "Pilot 3", "-p", "p7", "--match", "source_trial", "--heatmap"]
+        + ["--print"]
+    )
+    assert capsys.readouterr().out.strip() == url
+
+
+@pytest.mark.parametrize(("match", "error"), [("", ValueError), (3, TypeError)])
+def test_a_match_that_names_no_field_is_refused(match, error):
+    with pytest.raises(error, match="match"):
+        sps.app_link("Pilot 3", match=match)
+
+
 # ---------------------------------------------------------------------------
 # scanpath-studio open
 # ---------------------------------------------------------------------------

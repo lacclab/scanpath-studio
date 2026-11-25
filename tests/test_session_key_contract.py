@@ -290,6 +290,8 @@ def test_deep_link_seeds_frozen_state_keys():
         # assertion below vacuous for them.
         sk.COMPARE_PARAM: "p2:t2",
         sk.COMPARE_SOURCE_PARAM: "synthetic",
+        # Parked for the Comparisons subtab (`MATCH_LINK_STATE_KEY`).
+        sk.PARAM_MATCH: "same_text",
     }
     # Plausible values per encoding — a bad one would be dropped with a warning
     # (asserted empty below), which would hide a missing key. A param whose
@@ -881,6 +883,17 @@ def test_b_dataset_reference_params_are_pinned():
     }
     assert params <= sk.URL_SELECTION_PARAMS
     assert params <= sk.URL_OPTIONAL_PARAMS
+
+
+def test_match_param_is_pinned():
+    """The Comparisons subtab's *Match field*: navigation, written only from
+    that subtab, so a link may lack it and the settings file never has it."""
+    assert sk.PARAM_MATCH == "match"
+    assert sk.PARAM_MATCH in sk.URL_SELECTION_PARAMS
+    assert sk.PARAM_MATCH in sk.URL_OPTIONAL_PARAMS
+    assert sk.PARAM_MATCH not in sk.SHARE_PARAMS
+    assert sk.MATCH_LINK_STATE_KEY == "_match_link"
+    assert sk.MATCH_LINK_STATE_KEY in sk.URL_SEEDED_STATE_KEYS
 
 
 def test_fixation_window_scope_param_is_pinned():

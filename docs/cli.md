@@ -451,7 +451,9 @@ The link is the one :material/share: **Share** → **Link** writes for the same 
 Settings it leaves out keep the values the app has. It names the dataset, so a
 dataset you added opens only where it was added. A link carries no file: `render`'s
 input, output and `--stimulus-image` flags are refused, and
-`--show-stimulus-image` draws the dataset's own pages. In Python, use
+`--show-stimulus-image` draws the dataset's own pages. `--match FIELD` opens the
+**Comparisons** tab on that match field, in Full: a column as the dataset names
+it, or `same_text` / `same_participant`. In Python, use
 [`app_link`][scanpath_studio.api.app_link].
 
 ```python exec="true"

@@ -5370,6 +5370,7 @@ def app_link(
     screen: str | None = None,
     port: int = 8501,
     animate: bool = False,
+    match: str | None = None,
     illustration: bool = False,
     **figure_options: Any,
 ) -> str:
@@ -5400,6 +5401,12 @@ def app_link(
         screen: The screen ID of a trial recorded over several screens.
         port: The port the app listens on.
         animate: Open the replay instead of the static figure.
+        match: Open the **Comparisons** subtab with this *Match field*: a
+            column as the dataset names it (one kept with ``add_dataset``'s
+            ``keep_columns``, say), or ``"same_text"`` / ``"same_participant"``
+            for the two choices before the columns. The link opens in Full,
+            the only mode with that subtab. A field the dataset doesn't offer
+            is ignored with a notice.
         illustration: The *Illustration* design, as ``plot_scanpath`` takes it;
             an option given beside it wins.
         **figure_options: Figure options, as ``plot_scanpath`` takes them, with
@@ -5417,9 +5424,11 @@ def app_link(
         The link, ``http://localhost:<port>/?…``.
 
     Raises:
-        TypeError: An option a link can't carry, or no figure option at all.
-        ValueError: An empty dataset name, a screen without a trial, a port
-            outside 1–65535, or a value the app would ignore or clamp.
+        TypeError: An option a link can't carry, or no figure option at all. A
+            ``match`` that is not a string.
+        ValueError: An empty dataset name or ``match``, a screen without a
+            trial, a port outside 1–65535, or a value the app would ignore or
+            clamp.
 
     Examples:
         ```python
@@ -5448,6 +5457,7 @@ def app_link(
         trial,
         screen=screen,
         animate=animate,
+        match=match,
         options=options,
         share_id=share_id,
         digest=digest,

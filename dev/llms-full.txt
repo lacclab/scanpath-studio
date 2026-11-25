@@ -4721,6 +4721,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - The Comparisons grid draws its panels on the plot's axes, so a reading chart such as fixation index by word compares readings the way the main plot draws one, with one shared horizontal range per page (each panel keeps its own on an absolute clock). When every match is filed under the same trial, each panel is captioned by its participant.
 - The Comparisons tab can overlay its matches: View → Overlay draws the selected trial and the page's matches on one figure, each in its own colour, with the chip table's rows named in those colours. A link opens it with match_view=overlay beside match=, as do app_link(match_view="overlay") and scanpath-studio open --match-view overlay.
 - A link can open the Comparisons subtab with its Match field chosen: Share → Link writes `match=` when copied from Comparisons, as do `api.app_link(match=…)` and `scanpath-studio open --match`.
+- A repository script, scripts/eyegenbench_to_studio.py, adds the corpora of a local EyeGenBench checkout, with every model's generated readings, as datasets the app lists: word-level fixations, each model's version of a trial matched to the human one by source_trial, and each trial's held-out regime.
 
 ### Changed
 

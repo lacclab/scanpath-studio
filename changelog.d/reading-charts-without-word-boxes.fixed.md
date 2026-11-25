@@ -1,0 +1,1 @@
+A dataset loaded from its fixations alone, with no word boxes or screen positions, now works on reading charts: the Comparisons grid draws its matches, and the plot no longer warns about missing positions on a chart that draws none.

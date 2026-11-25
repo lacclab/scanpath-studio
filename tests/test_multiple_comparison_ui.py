@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from scanpath_studio.similarity import METRICS
 from scanpath_studio.tabs import (
@@ -640,22 +641,23 @@ def test_shared_chart_range_pads_and_ignores_frames_without_the_field():
 
 
 def test_condition_matches_on_one_trial_are_captioned_by_participant():
-    """Matching a combined corpus on the original trial id puts every panel on
-    the same trial; each is then named by its reader, not by that trial."""
+    """Matching on a field every panel shares, such as a source-trial id that
+    several simulated readers carry, puts every panel on the same trial; each is
+    then named by its reader, not by that trial."""
     from scanpath_studio.tabs import _panel_captions, _reading_labels
 
     panels = {
         (p, "T"): pd.DataFrame(
             {"participant_id": [p], "trial_id": ["T"], "text_id": ["A"]}
         )
-        for p in ("r1 · EZ-Reader", "r1 · SWIFT")
+        for p in ("r1 · model A", "r1 · model B")
     }
     captions = _panel_captions(
-        "eyegenbench_trial_id", panels, "text_id", _reading_labels(panels)
+        "source_trial_id", panels, "text_id", _reading_labels(panels)
     )
     assert captions == {
-        ("r1 · EZ-Reader", "T"): "Participant r1 · EZ-Reader",
-        ("r1 · SWIFT", "T"): "Participant r1 · SWIFT",
+        ("r1 · model A", "T"): "Participant r1 · model A",
+        ("r1 · model B", "T"): "Participant r1 · model B",
     }
     # Different trials keep the trial caption.
     mixed = {
@@ -665,3 +667,56 @@ def test_condition_matches_on_one_trial_are_captioned_by_participant():
     assert set(
         _panel_captions("model", mixed, "text_id", _reading_labels(mixed)).values()
     ) == {"T1", "T2"}
+
+
+def _wordless_comparisons_app(axes=("order_in_trial", "word_id")) -> None:
+    """The look-alike grid with no word boxes at all, as a dataset loaded from
+    its fixations alone has."""
+    from scanpath_studio import tabs
+    from tests.test_mode_parity import _viz
+    from tests.test_multiple_comparison_ui import _lookalike_frames
+
+    words, fixations = _lookalike_frames()
+    fixations["word_id"] = fixations["fixation_id"]
+    fixations[["x", "y"]] = float("nan")
+    tabs.render_multiple_comparison_tab(
+        words.iloc[:0],
+        fixations[fixations["participant_id"] == "p0"],
+        words.iloc[:0],
+        fixations,
+        selected_participant="p0",
+        selected_trial="base",
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        font_family="Arial",
+        viz_settings={**_viz(), "x_field": axes[0], "y_field": axes[1]},
+    )
+
+
+@pytest.mark.parametrize("on_chart", [True, False])
+def test_a_reading_chart_grid_needs_no_word_boxes(monkeypatch, on_chart):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    shown = []
+    real_render = tabs._render_true_scale_chart
+
+    def recording_render(fig, **kwargs):
+        shown.append(sum(len(t.x) for t in fig.data if t.mode == "markers"))
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    at = AppTest.from_function(
+        _wordless_comparisons_app,
+        kwargs={"axes": ("order_in_trial", "word_id") if on_chart else ("x", "y")},
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    infos = [i.value for i in at.info]
+    if on_chart:
+        assert shown and all(points > 0 for points in shown), shown
+        assert not any("no word boxes" in i for i in infos)
+    else:
+        assert not shown
+        assert any("no word boxes" in i for i in infos)

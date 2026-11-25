@@ -6801,7 +6801,19 @@ def render_single_trial_tab(
 
     # A dataset that fails its data checks badly (most fixations at 0 ms, most
     # positions missing) still draws a plausible figure; say so above it.
-    render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
+    # A chart with no screen axis draws no position, so missing positions don't
+    # affect it; the replay always draws the screen.
+    on_screen = bool(st.session_state.get("single_animate")) or any(
+        st.session_state.get(key, axis) in chart_axes.POSITION_FIELDS
+        for key, axis in (("global_x_field", "x"), ("global_y_field", "y"))
+    )
+    render_data_health_notice(
+        plot_notes_slot,
+        words_all,
+        fixations_all,
+        raw_gaze_all,
+        positions_drawn=on_screen,
+    )
 
     if not (selected_participant and selected_trial):
         if on_reading_selected is not None:
@@ -13912,8 +13924,18 @@ def render_multiple_comparison_tab(
     st.caption(
         "Browse related readings by selecting a field they share with this trial."
     )
-    if trial_words.empty or trial_fixations.empty:
-        st.info("This trial has no word boxes or no fixations. Pick another trial.")
+    # A reading chart places fixations by their own fields, so only the screen
+    # view needs the trial's word boxes.
+    axes = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+    on_chart = axes != ("x", "y")
+    if trial_fixations.empty:
+        st.info("This trial has no fixations. Pick another trial.")
+        return
+    if trial_words.empty and not on_chart:
+        st.info(
+            "This trial has no word boxes. Pick another trial, or choose chart "
+            "axes such as Fixation order by Word ID."
+        )
         return
 
     names = active_all(st.session_state)
@@ -13997,9 +14019,6 @@ def render_multiple_comparison_tab(
     base_settings["line_spacing"] = line_spacing
     base_settings["scale_text_to_boxes"] = scale_text_to_boxes
     panel_settings = _comparison_panel_settings(base_settings)
-
-    axes = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
-    on_chart = axes != ("x", "y")
 
     def _make_fig(
         words: pd.DataFrame,
@@ -17702,16 +17721,24 @@ def serious_health_lines(findings) -> list[str]:
     return lines
 
 
-def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
+def render_data_health_notice(
+    host, words, fixations, raw_gaze, *, positions_drawn: bool = True
+) -> None:
     """A notice on the Scanpath view when the dataset fails a data check badly.
 
     The figure is drawn either way, and looks plausible: a duration mapped to
     a column of words draws every fixation at the smallest size. So when a
     check flags most of a table (`serious_health_lines`), say so above the
     plot and point to 🗂️ Data Management → *Data checks*, where the rows are
-    listed. ``host`` is a slot drawn on every run.
+    listed. ``host`` is a slot drawn on every run. Without ``positions_drawn``
+    (a chart with no screen axis) the checks on screen positions are left out,
+    since that figure draws none.
     """
     findings = _dataset_health_findings(words, fixations, raw_gaze)
+    if not positions_drawn:
+        findings = [
+            f for f in findings if not set(f.columns) & set(chart_axes.POSITION_FIELDS)
+        ]
     lines = serious_health_lines(findings)
     if not lines:
         return

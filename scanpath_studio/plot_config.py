@@ -176,6 +176,8 @@ def build_plot_config(
         "axes": {
             "x_field": x_field,
             "y_field": y_field,
+            "reverse_x": bool(state.get("global_reverse_x_axis", False)),
+            "reverse_y": bool(state.get("global_reverse_y_axis", False)),
             "coordinate_grid": bool(figure_settings.get("show_coordinate_grid", False)),
             "coordinate_grid_auto": bool(
                 viz_settings.get("coordinate_grid_auto", True)

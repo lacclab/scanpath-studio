@@ -47,6 +47,7 @@ lists the four render views. The reference and compact Share snippets use
 | `word_hover_measure` | ✅ | ✅ | ✅ | The measure appears when the word hover includes it. |
 | colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |
 | `x_field` / `y_field` | ✅ | ❌ | ✅ | Index and elapsed-time presets set these same two fields. On a position chart, index supports a sequence line and elapsed seconds show fixation durations. Sample charts can show position, timestamp, sample number, pupil area and pupil diameter. Static comparisons use paired panels with shared numeric ranges and a separate elapsed-time origin per reading. Animation uses screen `x` / `y` |
+| `reverse_x_axis` / `reverse_y_axis` | ✅ | ❌ | ✅ | Chart axes only: each flips its axis from the usual direction (screen Y already runs top to bottom). The screen view and the replay keep the stimulus as shown |
 | `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `show_credit`, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |
 | `fixation_outline_width` / `_color` | ✅ | ✅ | ✅ | A zero width disables the color. Hollow marks and A/B metric or category outlines supply their own rings. |
 | `show_compare_legend`, `compare_stimulus` | ❌ | ✅ (co-animation) | ✅ | Widgets in `tabs.py` (⚙ Compare options) |

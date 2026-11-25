@@ -862,6 +862,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # analytical overlays, off by default and one click (or one design preset) away.
     "global_x_field": "x",
     "global_y_field": "y",
+    "global_reverse_x_axis": False,
+    "global_reverse_y_axis": False,
     "global_show_words": False,
     "global_show_labels": True,
     "global_redact_text": False,
@@ -7119,6 +7121,8 @@ def _collect_viz_settings(
         heatmap_metric=ss.get("global_heatmap_metric") or "duration_ms",
         x_field=ss.get("global_x_field"),
         y_field=ss.get("global_y_field"),
+        reverse_x_axis=bool(ss.get("global_reverse_x_axis", False)),
+        reverse_y_axis=bool(ss.get("global_reverse_y_axis", False)),
         marker_size_range=tuple(ss.get("global_marker_size_range", (8, 24))),
         marker_size_scale=(
             ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE
@@ -9451,6 +9455,7 @@ def render_plot_controls(
             "Vertical position by fixation index": ("order_in_trial", "y"),
             "Duration by fixation index": ("order_in_trial", "duration_ms"),
             "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
+            "Fixation index by word number": ("word_id", "order_in_trial"),
         }
         # A tracker can timestamp its samples even when it recorded no
         # fixation onsets. Only the fixation clock supplies elapsed seconds.
@@ -9545,6 +9550,29 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=axis_disabled,
                 help=axis_help if axis_disabled else None,
+            )
+        reverse_reason = (
+            axis_help
+            if axis_disabled
+            else "The screen view keeps the stimulus as it was shown. Choose a chart under **Axis layout** to reverse an axis."
+        )
+        for axis, direction, usual in (
+            ("x", "horizontal", "Run the axis right to left."),
+            (
+                "y",
+                "vertical",
+                "Flip the axis: what runs bottom to top runs top to bottom, and the other way round.",
+            ),
+        ):
+            st.checkbox(
+                f"Reverse {direction} axis",
+                key=f"global_reverse_{axis}_axis",
+                persist_state="session",
+                disabled=axis_disabled or not chart_axes,
+                help=_gated_help(
+                    usual,
+                    "" if chart_axes and not axis_disabled else reverse_reason,
+                ),
             )
         if chart_axes and current is None:
             st.caption(

@@ -1628,6 +1628,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "word_hover_measure": _optional_valued("--word-hover-measure"),
     "x_field": _valued("--x-field"),
     "y_field": _valued("--y-field"),
+    "reverse_x_axis": _flag_when("--reverse-x", True),
+    "reverse_y_axis": _flag_when("--reverse-y", True),
     # A flag of its own, not implied by `--canvas`: a figure cropped to its
     # data rather than framed on the full monitor has to say so, or it
     # reproduces framed on the monitor.

@@ -1390,6 +1390,20 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Vertical axis of the static chart (default: y). Takes the same fields as --x-field.",
     )
     viz.add_argument(
+        "--reverse-x",
+        dest="reverse_x_axis",
+        action="store_true",
+        help="Run the static chart's horizontal axis right to left (charts only; "
+        "the screen view keeps the stimulus as shown).",
+    )
+    viz.add_argument(
+        "--reverse-y",
+        dest="reverse_y_axis",
+        action="store_true",
+        help="Flip the static chart's vertical axis, so the end at the bottom goes "
+        "to the top (charts only; screen Y already runs top to bottom).",
+    )
+    viz.add_argument(
         "--crop-to-data",
         "--no-full-monitor",
         dest="fit_to_monitor",
@@ -2003,6 +2017,8 @@ _SWITCH_OPTION_FLAGS = {
     "show_stimulus_image": True,
     "show_plot_frame": False,
     "show_credit": True,
+    "reverse_x_axis": True,
+    "reverse_y_axis": True,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.

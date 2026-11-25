@@ -52,6 +52,8 @@ _SAME_VALUE = {
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     "show_coordinate_grid": "global_show_coordinate_grid",
+    "reverse_x_axis": "global_reverse_x_axis",
+    "reverse_y_axis": "global_reverse_y_axis",
     "heatmap_style": "global_heatmap_style",
     "heatmap_norm": "global_heatmap_norm",
     "heatmap_colorscale": "global_heatmap_colorscale",

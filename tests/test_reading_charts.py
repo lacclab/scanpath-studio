@@ -179,6 +179,36 @@ def test_fixations_say_why_they_grey_on_axes_they_lack():
     assert not any("Turn the layer on" in caption for caption in captions)
 
 
+def test_fixation_index_by_word_number_preset():
+    """The preset puts the word each fixation landed on along X and the
+    fixation's place in the reading up Y."""
+    from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.toggle(key="single_animate").set_value(False).run()
+    at.selectbox(key="_plot_axis_preset").set_value(
+        "Fixation index by word number"
+    ).run()
+    assert not at.exception
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "word_id",
+        "order_in_trial",
+    )
+    settings = at.session_state[SNIPPET_STATE_KEY].settings
+    assert (settings["x_field"], settings["y_field"]) == ("word_id", "order_in_trial")
+
+    # The first fixation can sit at the top: the vertical axis runs reversed.
+    reverse = at.checkbox(key="global_reverse_y_axis")
+    assert not reverse.disabled
+    reverse.check().run()
+    assert not at.exception
+    assert at.session_state[SNIPPET_STATE_KEY].settings["reverse_y_axis"]
+
+    # The screen view keeps the stimulus as shown, so the switch greys there.
+    at.selectbox(key="_plot_axis_preset").set_value("Screen X and Y").run()
+    assert at.checkbox(key="global_reverse_y_axis").disabled
+
+
 def test_gaze_over_time_keeps_its_small_onset_markers_in_compare():
     """Each reading draws its own marker size in Compare, so the view sets
     both: a large duration-scaled marker would hide a short fixation's bar."""

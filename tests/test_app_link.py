@@ -465,3 +465,15 @@ def test_the_saved_names_reach_the_link(cache_dir):
 
     assert persistence.stored_dataset_aliases() == {"Bundled demo": "Wolf pilot"}
     assert _query(sps.app_link("Wolf pilot")) == {"source": "demo"}
+
+
+@pytest.mark.parametrize("kind", ["static", "comparison"])
+def test_every_figure_option_is_linked_or_named_unlinkable(kind):
+    """A new figure option a link drops would make `app_link` and `open`
+    refuse it as unknown, though `figure_options` lists it."""
+    missing = (
+        set(sps.figure_options(kind))
+        - script_link.LINKED_OPTIONS
+        - set(script_link.UNLINKABLE_OPTIONS)
+    )
+    assert not missing, sorted(missing)

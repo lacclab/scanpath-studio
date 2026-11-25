@@ -2220,6 +2220,8 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         word_hover_fields=viz_settings.get("word_hover_fields"),
         fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
+        reverse_x_axis=bool(viz_settings.get("reverse_x_axis", False)),
+        reverse_y_axis=bool(viz_settings.get("reverse_y_axis", False)),
         # Optional design choices: unset, each is the builder's own default.
         **{
             key: viz_settings[key]

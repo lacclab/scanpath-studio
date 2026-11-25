@@ -14,9 +14,16 @@ trial keeps that trial's id, under the reader ``"<reader> · <model>"``, and
 ``source_trial`` names the human trial it was generated for, so matching on
 ``source_trial`` in the Comparisons tab shows a human trial beside every model's
 version of it. ``scanpath_source`` says where a reading came from; a run that
-covers only part of its corpus (a debug run) says so there too. ``regime`` says
-how it was made: recorded (a human reading), benchmark run (one model run over
-the benchmark's corpora together), per-corpus run, or debug run.
+covers only part of its corpus (a debug run) says so there too. ``run_type``
+says how it was made: recorded (a human reading), benchmark run (one model run
+over the benchmark's corpora together), per-corpus run, or debug run.
+
+``regime`` says how the trial is held out, in the split the reading answers to:
+a human reading and a benchmark run by the benchmark split
+(``combined_benchmark/processed/folds.csv``: new reader, new text, new reader
+and text, new corpus, ..., or train / validation); a per-corpus or debug run by
+its corpus' own split, whose test fold 0 groups trials by participant, so a
+reading generated there is a new reader. Each value names its split.
 
     python scripts/eyegenbench_to_studio.py --report
     python scripts/eyegenbench_to_studio.py --corpus CopCo
@@ -47,7 +54,28 @@ WORK = Path("/data/home/shubi/scanpath-studio-data/eyegenbench-work")
 PREFIX = "EyeGenBench · "
 
 HUMAN = "Human"
-RECORDED = "recorded"  # the regime of a human reading
+RECORDED = "recorded"  # the run type of a human reading
+#: The benchmark split's subsets, as ``regime`` names them.
+BENCHMARK_SUBSETS = {
+    "train": "train",
+    "val": "validation",
+    "test_participant": "new reader",
+    "test_text": "new text",
+    "test_both": "new reader and text",
+    "test_corpus": "new corpus",
+    "test_language": "new language",
+    "test_zeroshot": "zero-shot corpus",
+    "test_nontext_syllables": "non-text: syllables",
+    "test_nontext_pseudowords": "non-text: pseudowords",
+    "test_task_participant": "task reading, new reader",
+    "test_task_text": "task reading, new text",
+    "test_task_both": "task reading, new reader and text",
+    "test_reread_participant": "rereading, new reader",
+    "test_reread_text": "rereading, new text",
+    "test_reread_both": "rereading, new reader and text",
+}
+#: A per-corpus run's test fold (fold 0 of a split grouped by participant).
+PER_CORPUS_TEST_FOLD = 0
 #: Model directory → the name shown for its readings.
 MODELS = {
     "ezreader": "EZ-Reader",
@@ -75,6 +103,7 @@ FIX_SCHEMA = dict(
 KEEP = [
     "source_trial",
     "scanpath_source",
+    "run_type",
     "regime",
     "ia_label",
     "fix_landing_position",
@@ -109,7 +138,7 @@ class Run:
     model: str
     rows: pd.DataFrame
     path: Path
-    kind: str  # its regime: "benchmark run", "per-corpus run" or "debug run"
+    kind: str  # its run type: "benchmark run", "per-corpus run" or "debug run"
     note: str = ""  # e.g. "5 of 30 batches"
     dropped_draws: int = 0
 
@@ -270,10 +299,37 @@ def model_runs(
     return runs
 
 
+def benchmark_regimes(root: Path) -> pd.Series:
+    """Each trial's subset in the benchmark split, as ``regime`` names it."""
+    folds = pd.read_csv(
+        root / "code" / "data" / "combined_benchmark" / "processed" / "folds.csv"
+    )
+    unknown = set(folds["subset"]) - set(BENCHMARK_SUBSETS)
+    if unknown:
+        raise ValueError(f"Benchmark subsets without a regime name: {sorted(unknown)}")
+    return "benchmark: " + folds.set_index("unique_trial_id")["subset"].map(
+        BENCHMARK_SUBSETS
+    )
+
+
+def corpus_regimes(root: Path, corpus: str) -> pd.Series:
+    """Each trial's place in its corpus' own split, as ``regime`` names it."""
+    folds = pd.read_csv(root / "code" / "data" / corpus / "processed" / "folds.csv")
+    held_out = folds.set_index("unique_trial_id")["fold"].eq(PER_CORPUS_TEST_FOLD)
+    return held_out.map({True: "per-corpus: new reader", False: "per-corpus: train"})
+
+
 def build_fixations(
-    human: pd.DataFrame, words: pd.DataFrame, runs: list[Run]
+    human: pd.DataFrame,
+    words: pd.DataFrame,
+    runs: list[Run],
+    benchmark: pd.Series,
+    per_corpus: pd.Series,
 ) -> tuple[pd.DataFrame, list[dict]]:
-    """The corpus' fixation table: human rows, then each run's, and coverage."""
+    """The corpus' fixation table: human rows, then each run's, and coverage.
+
+    ``benchmark`` and ``per_corpus`` are each trial's ``regime`` in the
+    benchmark split and in the corpus' own split."""
     language = words.drop_duplicates("unique_paragraph_id").set_index(
         "unique_paragraph_id"
     )["text_language"]
@@ -284,7 +340,8 @@ def build_fixations(
         human.assign(
             source_trial=human["unique_trial_id"],
             scanpath_source=HUMAN,
-            regime=RECORDED,
+            run_type=RECORDED,
+            regime=human["unique_trial_id"].map(benchmark),
         )
     ]
     coverage = []
@@ -294,13 +351,17 @@ def build_fixations(
         matched = rows["unique_trial_id"].isin(human_trials)
         rows = rows[matched]
         key = pd.MultiIndex.from_arrays([rows["unique_paragraph_id"], rows["ia_index"]])
+        regime = rows["unique_trial_id"].map(
+            benchmark if run.kind == "benchmark run" else per_corpus
+        )
         frames.append(
             rows.assign(
                 unique_participant_id=rows["unique_participant_id"].astype(str)
                 + f" · {MODELS[run.model]}",
                 source_trial=rows["unique_trial_id"],
                 scanpath_source=run.source,
-                regime=run.kind,
+                run_type=run.kind,
+                regime=regime,
                 ia_label=labels.reindex(key).to_numpy(),
                 dataset_name=dataset_name,
             )
@@ -317,6 +378,14 @@ def build_fixations(
                     run.rows.loc[~matched, "unique_trial_id"].nunique()
                 ),
                 "dropped_draw_rows": run.dropped_draws,
+                # Trials per regime: a run's trials should all be held out.
+                "regimes": {
+                    str(k): int(v)
+                    for k, v in regime[~rows["unique_trial_id"].duplicated()]
+                    .fillna("unknown")
+                    .value_counts()
+                    .items()
+                },
             }
         )
     fixations = pd.concat(frames, ignore_index=True)
@@ -348,7 +417,13 @@ def add_corpus(
     human = human_fixations(root, corpus)
     words = word_table(root, corpus)
     runs = model_runs(corpus, work, full_meta, matrix_root)
-    fixations, coverage = build_fixations(human, words, runs)
+    fixations, coverage = build_fixations(
+        human,
+        words,
+        runs,
+        benchmark_regimes(root),
+        corpus_regimes(root, corpus),
+    )
     name = api.add_dataset(
         PREFIX + corpus,
         None,

@@ -75,6 +75,22 @@ def tree(tmp_path):
                 dataset_name=corpus,
             )
         ).to_csv(processed / "texts.csv", index=False)
+        # The corpus' own split: r2 is in the test fold (0), r1 in training.
+        pd.DataFrame(
+            dict(
+                unique_trial_id=[f"{corpus}_r1_p1", f"{corpus}_r2_p1"],
+                fold=[3, 0],
+            )
+        ).to_csv(processed / "folds.csv", index=False)
+    # The benchmark split.
+    benchmark = root / "code" / "data" / "combined_benchmark" / "processed"
+    benchmark.mkdir(parents=True)
+    pd.DataFrame(
+        dict(
+            unique_trial_id=["Alpha_r1_p1", "Alpha_r2_p1", "Beta_r1_p1", "Beta_r2_p1"],
+            subset=["test_participant", "train", "test_text", "val"],
+        )
+    ).to_csv(benchmark / "folds.csv", index=False)
     # A combined table is not a corpus.
     combined = root / "code" / "data" / "combined_all" / "processed"
     combined.mkdir(parents=True)
@@ -146,13 +162,22 @@ def test_a_full_run_keeps_one_draw_per_trial_under_its_human_trial(script, tree,
         script.human_fixations(root, "Alpha"),
         script.word_table(root, "Alpha"),
         script.model_runs("Alpha", work, full_runs, matrix),
+        script.benchmark_regimes(root),
+        script.corpus_regimes(root, "Alpha"),
     )
     generated = fixations[fixations["scanpath_source"] == "EZ-Reader"]
     assert set(generated["unique_participant_id"]) == {"Alpha_r1 · EZ-Reader"}
     assert set(generated["source_trial"]) == {"Alpha_r1_p1"}
-    assert set(generated["regime"]) == {"benchmark run"}
+    assert set(generated["run_type"]) == {"benchmark run"}
+    # A benchmark run's reading is held out as the benchmark split holds it out.
+    assert set(generated["regime"]) == {"benchmark: new reader"}
     human = fixations[fixations["scanpath_source"] == script.HUMAN]
-    assert set(human["regime"]) == {"recorded"}
+    assert set(human["run_type"]) == {"recorded"}
+    assert dict(zip(human["unique_trial_id"], human["regime"])) == {
+        "Alpha_r1_p1": "benchmark: new reader",
+        "Alpha_r2_p1": "benchmark: train",
+    }
+    assert model["regimes"] == {"benchmark: new reader": 1}
     # Labels come from the paragraph's word list, by 0-based index.
     assert list(generated["ia_label"]) == ["the", "quick", "fox"]
     assert set(fixations["text_language"]) == {"en"}
@@ -163,6 +188,8 @@ def test_a_debug_matrix_cell_says_so_in_its_source(script, tree, cache):
     (model,) = added["Beta"]["models"]
     assert model["source"] == "ScanDL 2.0 (debug run, 5 of 30 batches)"
     assert model["kind"] == "debug run"
+    # A per-corpus run tests on its corpus' fold 0: new readers.
+    assert model["regimes"] == {"per-corpus: new reader": 1}
 
 
 def test_the_dataset_reaches_the_apps_list_without_word_boxes(script, tree, cache):

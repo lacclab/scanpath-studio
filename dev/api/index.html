@@ -9665,9 +9665,10 @@ added are not saved, as when two tabs change the same saved work.</p>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">screen</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">port</span><span class="o">=</span><span class="mi">8501</span><span class="p">,</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">animate</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">illustration</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="o">**</span><span class="n">figure_options</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">match</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">illustration</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="o">**</span><span class="n">figure_options</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -9752,6 +9753,21 @@ trial, or the reading it last showed.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>match</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Open the <strong>Comparisons</strong> subtab with this <em>Match field</em>: a
+column as the dataset names it (one kept with <code>add_dataset</code>'s
+<code>keep_columns</code>, say), or <code>"same_text"</code> / <code>"same_participant"</code>
+for the two choices before the columns. The link opens in Full,
+the only mode with that subtab. A field the dataset doesn't offer
+is ignored with a notice.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>illustration</code></b>
               (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>, default:
                   <code>False</code>
@@ -9802,15 +9818,17 @@ its own patterns.</p>
               <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#TypeError">TypeError</a></code>
             –
           <div class="doc-md-description">
-            <p>An option a link can't carry, or no figure option at all.</p>
+            <p>An option a link can't carry, or no figure option at all. A
+<code>match</code> that is not a string.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
               <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
             –
           <div class="doc-md-description">
-            <p>An empty dataset name, a screen without a trial, a port
-outside 1–65535, or a value the app would ignore or clamp.</p>
+            <p>An empty dataset name or <code>match</code>, a screen without a
+trial, a port outside 1–65535, or a value the app would ignore or
+clamp.</p>
           </div>
         </li>
     </ul>

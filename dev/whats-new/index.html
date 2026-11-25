@@ -2610,6 +2610,7 @@
 <li>The Scanpath view shows when trial filters are on: a dot on the filter button and a line under the trial picker with how many trials the filters keep, what they are, and a Clear filters button.</li>
 <li>Experimental: import EyeLink EDF recordings without Data Viewer — fixations, word boxes, stimulus screens, trial variables and, on request, raw gaze samples — into a resumable study folder with api.import_eyelink or scanpath-studio import-eyelink, then add it to the app with api.add_eyelink_dataset or --add; turn it on with SCANPATH_EXPERIMENTAL=1 and pip install "scanpath-studio[edf]", and it needs SR Research's edf2asc from the EyeLink Developers Kit.</li>
 <li>The Comparisons grid draws its panels on the plot's axes, so a reading chart such as fixation index by word compares readings the way the main plot draws one, with one shared horizontal range per page (each panel keeps its own on an absolute clock). When every match is filed under the same trial, each panel is captioned by its participant.</li>
+<li>A link can open the Comparisons subtab with its Match field chosen: Share → Link writes <code>match=</code> when copied from Comparisons, as do <code>api.app_link(match=…)</code> and <code>scanpath-studio open --match</code>.</li>
 </ul>
 <h3 id="exec-18--changed">Changed<a class="headerlink" href="#exec-18--changed" title="Permanent link">&para;</a></h3>
 <ul>

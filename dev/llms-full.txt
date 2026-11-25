@@ -1291,7 +1291,7 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 |                        | **Notes**                                                        | Write a free-text note on the trial.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Stimulus & context** | **Fields** → **Context fields**                                  | Choose the trial context to show, such as the text's title, a question or an answer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 |                        | **Fields** → **Highlighted spans**                               | Choose true/false word columns to highlight in the text, each with a summary line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Comparisons**        | **Match field**                                                  | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. The panels use the plot's axes; on a reading chart they share one horizontal range.                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Comparisons**        | **Match field**                                                  | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. A Share link copied after opening this tab reopens it on the same field (`match=same_text`, `match=same_participant` or a column name). The panels use the plot's axes; on a reading chart they share one horizontal range.                                                                                                                                                                                                                                         |
 |                        | **Columns**                                                      | Set how many comparison panels per row, from 1 to 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Export**             | **Download format**                                              | Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 |                        | **Width**, unit, **DPI**                                         | Set the PNG export size for print: width (mm or in) and resolution (DPI). A blank width writes the figure at three times its screen size.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -2954,6 +2954,7 @@ app_link(
     screen=None,
     port=8501,
     animate=False,
+    match=None,
     illustration=False,
     **figure_options,
 )
@@ -2973,6 +2974,7 @@ Parameters:
 - **`screen`** (`str | None`, default: `None` ) – The screen ID of a trial recorded over several screens.
 - **`port`** (`int`, default: `8501` ) – The port the app listens on.
 - **`animate`** (`bool`, default: `False` ) – Open the replay instead of the static figure.
+- **`match`** (`str | None`, default: `None` ) – Open the Comparisons subtab with this Match field: a column as the dataset names it (one kept with add_dataset's keep_columns, say), or "same_text" / "same_participant" for the two choices before the columns. The link opens in Full, the only mode with that subtab. A field the dataset doesn't offer is ignored with a notice.
 - **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
 - **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
 
@@ -2982,8 +2984,8 @@ Returns:
 
 Raises:
 
-- `TypeError` – An option a link can't carry, or no figure option at all.
-- `ValueError` – An empty dataset name, a screen without a trial, a port outside 1–65535, or a value the app would ignore or clamp.
+- `TypeError` – An option a link can't carry, or no figure option at all. A match that is not a string.
+- `ValueError` – An empty dataset name or match, a screen without a trial, a port outside 1–65535, or a value the app would ignore or clamp.
 
 Examples:
 
@@ -3910,7 +3912,7 @@ scanpath-studio open "Pilot 3" -p p07 -t t12
 scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
 ```
 
-The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. In Python, use app_link.
+The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. `--match FIELD` opens the **Comparisons** tab on that match field, in Full: a column as the dataset names it, or `same_text` / `same_participant`. In Python, use app_link.
 
 **Positional arguments**
 
@@ -3920,14 +3922,15 @@ The link is the one **Share** → **Link** writes for the same view. Settings it
 
 **Options**
 
-| Option               | Value         | Default | Description                                                    |
-| -------------------- | ------------- | ------- | -------------------------------------------------------------- |
-| `-p` `--participant` | `PARTICIPANT` | —       | Participant ID.                                                |
-| `-t` `--trial`       | `TRIAL`       | —       | Trial ID (without it, the participant's first trial).          |
-| `--screen`           | `SCREEN`      | —       | Screen ID within a trial recorded over several screens.        |
-| `--animate`          | switch        | —       | Open the replay of the reading.                                |
-| `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501). |
-| `--print`            | switch        | —       | Print the link and exit, without opening or starting anything. |
+| Option               | Value         | Default | Description                                                                                                                          |
+| -------------------- | ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `-p` `--participant` | `PARTICIPANT` | —       | Participant ID.                                                                                                                      |
+| `-t` `--trial`       | `TRIAL`       | —       | Trial ID (without it, the participant's first trial).                                                                                |
+| `--screen`           | `SCREEN`      | —       | Screen ID within a trial recorded over several screens.                                                                              |
+| `--animate`          | switch        | —       | Open the replay of the reading.                                                                                                      |
+| `--match`            | `FIELD`       | —       | Open the Comparisons subtab with this Match field: a column as the dataset names it, or same_text / same_participant. Opens in Full. |
+| `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501).                                                                       |
+| `--print`            | switch        | —       | Print the link and exit, without opening or starting anything.                                                                       |
 
 ## annotations
 
@@ -4712,6 +4715,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - The Scanpath view shows when trial filters are on: a dot on the filter button and a line under the trial picker with how many trials the filters keep, what they are, and a Clear filters button.
 - Experimental: import EyeLink EDF recordings without Data Viewer — fixations, word boxes, stimulus screens, trial variables and, on request, raw gaze samples — into a resumable study folder with api.import_eyelink or scanpath-studio import-eyelink, then add it to the app with api.add_eyelink_dataset or --add; turn it on with SCANPATH_EXPERIMENTAL=1 and pip install "scanpath-studio[edf]", and it needs SR Research's edf2asc from the EyeLink Developers Kit.
 - The Comparisons grid draws its panels on the plot's axes, so a reading chart such as fixation index by word compares readings the way the main plot draws one, with one shared horizontal range per page (each panel keeps its own on an absolute clock). When every match is filed under the same trial, each panel is captioned by its participant.
+- A link can open the Comparisons subtab with its Match field chosen: Share → Link writes `match=` when copied from Comparisons, as do `api.app_link(match=…)` and `scanpath-studio open --match`.
 
 ### Changed
 

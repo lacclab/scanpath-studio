@@ -58,9 +58,8 @@ def test_comparison_labels_preview_and_title_split_panels_with_the_legend_hidden
         label = at.text_input(key=f"cmp{idx}_label_pattern")
         assert not label.disabled
         label.set_value("{participant_id} · {n_fixations}")
-    next(s for s in at.slider if s.label == "B fixation index range").set_range(
-        2, 5
-    ).run()
+    window_b = next(s for s in at.slider if s.label == "B fixation index range")
+    window_b.set_range(window_b.min + 1, window_b.min + 4).run()
     assert not at.exception
     selection = at.session_state["_share_selection"]
     n_a = selection["full_fix_range"][1] - selection["full_fix_range"][0] + 1

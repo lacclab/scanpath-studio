@@ -253,6 +253,8 @@ def test_bulk_manifest_records_grid_settings():
     assert config["axes"] == {
         "x_field": "x",
         "y_field": "y",
+        "reverse_x": False,
+        "reverse_y": False,
         "coordinate_grid": True,
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,
@@ -335,6 +337,8 @@ def test_saved_config_round_trips_grid():
     assert at.session_state["_saved_axes"] == {
         "x_field": "x",
         "y_field": "y",
+        "reverse_x": False,
+        "reverse_y": False,
         "coordinate_grid": True,
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,

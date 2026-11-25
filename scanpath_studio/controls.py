@@ -1868,6 +1868,8 @@ _MOUNTED_VIEW_KEYS = frozenset(
         "global_show_raw_gaze",
         "global_x_field",
         "global_y_field",
+        "global_reverse_x_axis",
+        "global_reverse_y_axis",
         SINGLE_ANIMATE,
         SINGLE_COMPARE_TOGGLE,
         "global_preproc_enabled",

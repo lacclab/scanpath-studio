@@ -657,7 +657,7 @@ scanpath-studio open "Pilot 3" -p p07 -t t12
 scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
 ```
 
-The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. `--match FIELD` opens the **Comparisons** tab on that match field, in Full: a column as the dataset names it, or `same_text` / `same_participant`. In Python, use app_link.
+The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. `--match FIELD` opens the **Comparisons** tab on that match field, in Full: a column as the dataset names it, or `same_text` / `same_participant`; `--match-view overlay` opens it with every match on one figure. In Python, use app_link.
 
 **Positional arguments**
 
@@ -667,15 +667,16 @@ The link is the one **Share** → **Link** writes for the same view. Settings it
 
 **Options**
 
-| Option               | Value         | Default | Description                                                                                                                          |
-| -------------------- | ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `-p` `--participant` | `PARTICIPANT` | —       | Participant ID.                                                                                                                      |
-| `-t` `--trial`       | `TRIAL`       | —       | Trial ID (without it, the participant's first trial).                                                                                |
-| `--screen`           | `SCREEN`      | —       | Screen ID within a trial recorded over several screens.                                                                              |
-| `--animate`          | switch        | —       | Open the replay of the reading.                                                                                                      |
-| `--match`            | `FIELD`       | —       | Open the Comparisons subtab with this Match field: a column as the dataset names it, or same_text / same_participant. Opens in Full. |
-| `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501).                                                                       |
-| `--print`            | switch        | —       | Print the link and exit, without opening or starting anything.                                                                       |
+| Option               | Value             | Default | Description                                                                                                                          |
+| -------------------- | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `-p` `--participant` | `PARTICIPANT`     | —       | Participant ID.                                                                                                                      |
+| `-t` `--trial`       | `TRIAL`           | —       | Trial ID (without it, the participant's first trial).                                                                                |
+| `--screen`           | `SCREEN`          | —       | Screen ID within a trial recorded over several screens.                                                                              |
+| `--animate`          | switch            | —       | Open the replay of the reading.                                                                                                      |
+| `--match`            | `FIELD`           | —       | Open the Comparisons subtab with this Match field: a column as the dataset names it, or same_text / same_participant. Opens in Full. |
+| `--match-view`       | `grid`, `overlay` | —       | The Comparisons subtab's View for `--match`: one panel per match (grid, the default) or every match on one figure (overlay).         |
+| `--port`             | `PORT`            | `8501`  | The port the app listens on, or is started on (default: 8501).                                                                       |
+| `--print`            | switch            | —       | Print the link and exit, without opening or starting anything.                                                                       |
 
 ## annotations
 

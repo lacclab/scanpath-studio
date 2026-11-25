@@ -5680,7 +5680,8 @@ dataset you added opens only where it was added. A link carries no file: <code>r
 input, output and <code>--stimulus-image</code> flags are refused, and
 <code>--show-stimulus-image</code> draws the dataset's own pages. <code>--match FIELD</code> opens the
 <strong>Comparisons</strong> tab on that match field, in Full: a column as the dataset names
-it, or <code>same_text</code> / <code>same_participant</code>. In Python, use
+it, or <code>same_text</code> / <code>same_participant</code>; <code>--match-view overlay</code> opens it
+with every match on one figure. In Python, use
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;app_link&lt;/span&gt;" href="../api/#scanpath_studio.api.app_link"><code>app_link</code></a>.</p>
 <p><strong>Positional arguments</strong></p>
 <div class="sps-reference-table sps-flag-table">
@@ -5744,6 +5745,12 @@ it, or <code>same_text</code> / <code>same_participant</code>. In Python, use
 <td><code>FIELD</code></td>
 <td>—</td>
 <td>Open the Comparisons subtab with this Match field: a column as the dataset names it, or same_text / same_participant. Opens in Full.</td>
+</tr>
+<tr>
+<td><code>--match-view</code></td>
+<td><code>grid</code>, <code>overlay</code></td>
+<td>—</td>
+<td>The Comparisons subtab's View for <code>--match</code>: one panel per match (grid, the default) or every match on one figure (overlay).</td>
 </tr>
 <tr>
 <td><code>--port</code></td>

@@ -1551,6 +1551,7 @@ app_link(
     port=8501,
     animate=False,
     match=None,
+    match_view=None,
     illustration=False,
     **figure_options,
 )
@@ -1571,6 +1572,7 @@ Parameters:
 - **`port`** (`int`, default: `8501` ) – The port the app listens on.
 - **`animate`** (`bool`, default: `False` ) – Open the replay instead of the static figure.
 - **`match`** (`str | None`, default: `None` ) – Open the Comparisons subtab with this Match field: a column as the dataset names it (one kept with add_dataset's keep_columns, say), or "same_text" / "same_participant" for the two choices before the columns. The link opens in Full, the only mode with that subtab. A field the dataset doesn't offer is ignored with a notice.
+- **`match_view`** (`str | None`, default: `None` ) – The Comparisons subtab's View for match: "grid" (the default) or "overlay", every match on one figure.
 - **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
 - **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
 

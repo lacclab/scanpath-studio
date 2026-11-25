@@ -214,6 +214,67 @@ the result says which boxes / images were not found.
   trial, and a resumed run that skips everything. Raw gaze is timed separately on
   a few sessions.
 
+## Results
+
+Measured on 2026-11-25 on a 10-core Mac with 64 GB of memory, from the OneStop
+ASCs (`edf2asc` does not run on this machine), with `scripts/eyelink_onestop_check.py`
+for the comparison and scratch scripts for the timings.
+
+**Against Data Viewer (`l42_2070`).** The script imports the session with its
+experiment folder and sets it against Data Viewer's paragraph fixation and
+interest-area reports (`fixations_P.tsv`, `ia_P.tsv`). Trials are matched on the
+`Trial_Index_` trial variable, which both carry; both time a fixation from the
+trial's `START` line, so a fixation is paired by its last millisecond, or by its
+first when Data Viewer cut its end. All 4,490 of Data Viewer's fixations in its
+68 paragraph trials pair with an imported one, at exactly the same position
+(largest difference 0.0 px). The remaining differences are where the two draw the
+paragraph's edges. Data Viewer cuts a fixation that straddles its interest
+period's start or end to that edge (127 fixations, onset differences up to
+2,967 ms where a fixation began well before the paragraph
+appeared). The import gives a fixation to the screen on which it began, so 67
+fixations that straddle the paragraph's onset sit on the screen before. Its
+screen runs to the next display, so 5 fixations that begin up to 17 ms after Data
+Viewer's interest period ends are on the paragraph screen only in the import.
+Word boxes equal the interest areas in all 68 trials (7,736 boxes: id, label,
+left, top, width and height).
+
+**Full study (360 ASCs, 28 GB).** One `import_eyelink` call per experiment
+folder (26 folders; every session's folder was found), with the default 9
+workers:
+
+| Measure | Result |
+|---|---|
+| Sessions imported / failed | 360 / 0 |
+| Wall time | 1,873 s (31 min) |
+| Peak memory, whole process tree | 16.0 GiB |
+| Study folder | 831 MB (images 718 MB, 13,486 PNGs; fixations 64 MB; words 27 MB; trial metadata 22 MB) |
+| Fixations / word boxes / readings | 3,756,552 / 4,004,908 / 27,212 |
+| Re-run | 360 skipped, 0.2 s |
+| `load_eyelink` of the whole study | 354 s, 3.2 GiB |
+| `add_eyelink_dataset` | 392 s, 9.4 GiB peak |
+| App: open the dataset and draw one trial (AppTest) | 26 s first run, 4.6 s rerun, 5.8 GiB peak |
+| App's dataset | 3,558,393 fixations (1.1 GiB in memory), 4,004,783 boxes (1.2 GiB), 24,876 readings |
+
+Every session has a note; most are expected. 355 sessions have fixations before
+their trial's first screen, and 5 have fixations outside every trial (10 in all).
+Four sessions of `ose_3n_l1_l60_tower_st` name stimulus images that the folder
+does not hold (507 notes); those screens are drawn without them. Fourteen
+sessions each lose the word boxes of one trial whose `.ias` file matches no
+display (58 notes): its groups sit 19 to 772 ms from the nearest display, beyond
+the one-refresh shift the import allows.
+
+The import fits a full study. Opening it in the app does not fit comfortably:
+the app holds the whole study's fixations and boxes in memory (5.8 GiB), and
+adding the dataset takes 6.5 minutes, nearly all in `load_eyelink`, which
+resolves each row's image path one row at a time. Making that per unique path
+is a small fix; on-demand, per-participant loading of fixations and words in the
+app is the next round's work.
+
+**Raw gaze (3 sessions, 61–73 MB ASCs, 2 workers).** With raw gaze the import
+took 57.6 s against 54.9 s for events only, at a peak of 4.4 GiB for both. Raw
+gaze added 78 MB to the study folder (6.8M samples), and `load_eyelink` read
+them back in 3.2 s.
+
 ## Left to the builder
 
 Module and function names, cache layout, the exact VCL / IAS edge cases beyond

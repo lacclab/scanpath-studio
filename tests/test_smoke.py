@@ -538,6 +538,40 @@ class TestStimuliTable:
         assert row["Text"] == "The cat sat"
         assert "Differs by reader" not in row.index
 
+    def test_words_without_an_id_are_each_kept_after_their_line(self):
+        import numpy as np
+        import pandas as pd
+
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4 + ["p2"] * 4,
+                "trial_id": ["t1"] * 8,
+                "text_id": ["a"] * 8,
+                "word_id": [1, np.nan, 2, np.nan] * 2,
+                "line_idx": [0] * 8,
+                "x": [0.0, 10.0, 20.0, 30.0] * 2,
+                "text": ["The", "big", "cat", "sat"] * 2,
+            }
+        )
+        # Two words without an id are two words, left to right after the
+        # numbered ones, whatever the order of the rows.
+        for frame in (words, words.iloc[::-1].reset_index(drop=True)):
+            row = self._build(frame).iloc[0]
+            assert row["Text"] == "The cat big sat"
+            assert row["# Words"] == 4
+            assert "Differs by reader" not in row.index
+        # A row listed twice, at the same place, is one word.
+        twice = pd.concat([words, words.iloc[[1]]], ignore_index=True)
+        assert self._build(twice).iloc[0]["Text"] == "The cat big sat"
+        # A reader whose word without an id differs saw another version.
+        changed = words.assign(
+            text=["The", "big", "cat", "sat"] + ["The", "big", "cat", "ran"]
+        )
+        row = self._build(changed).iloc[0]
+        assert row["Text"] == (
+            "[seen by p1] The cat big sat [seen by p2] The cat big ran"
+        )
+
     def test_a_screen_without_an_id_is_named_in_the_version_column(self):
         words = self._paged_words(readers=("p1", "p2"))
         words["screen_id"] = words["screen_id"].replace("page-2", "")

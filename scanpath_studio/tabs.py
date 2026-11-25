@@ -14537,6 +14537,10 @@ def _build_stimuli_table_cached(
     marker — naming the screen's kind when the data has one — with a
     *# Screens* column beside.
 
+    A word whose id is blank is a word of its own, never merged with another
+    blank one (:func:`_blank_id_ranks`); such words follow the numbered words
+    of their line, in the order of their place on the screen.
+
     Readers need not all have seen the same words (:func:`_reader_versions`):
     a screen — or a single-screen text — that two readers saw differently is
     shown once per version, the most-seen first, each marked ``seen by`` its
@@ -14559,6 +14563,8 @@ def _build_stimuli_table_cached(
             "screen_kind",
             "word_id",
             "line_idx",
+            "x",
+            "y",
             "text",
         )
         if c in _words.columns
@@ -14602,6 +14608,8 @@ def _build_stimuli_table_cached(
     word_key = ["text_id", *([SCREEN_ID] if multipart else [])]
     # The word as the passage shows it: a blank cell shows nothing.
     sub["_word"] = sub["text"].astype("string").replace({"": pd.NA, "nan": pd.NA})
+    if "word_id" in sub.columns:
+        sub["_blank_rank"] = _blank_id_ranks(sub, [*word_key, *reading])
     seen_by = None
     if "word_id" in sub.columns and reading:
         sub["_version"], seen_by = _reader_versions(sub, word_key, reading)
@@ -14609,14 +14617,17 @@ def _build_stimuli_table_cached(
         sub["_version"] = 0
     if "word_id" in sub.columns:
         # Of a word id listed twice, keep the first that shows a word — the one
-        # its version was told apart by.
+        # its version was told apart by. Words without an id are told apart by
+        # their rank, so each stays a word of its own.
         shown_first = np.argsort(sub["_word"].isna().to_numpy(), kind="stable")
         sub = sub.iloc[shown_first].drop_duplicates(
-            subset=[*word_key, "_version", "word_id"]
+            subset=[*word_key, "_version", "word_id", "_blank_rank"]
         )
     else:
         sub = sub.drop_duplicates(
-            subset=[c for c in sub.columns if c not in (SCREEN_INDEX, *reading)]
+            subset=[
+                c for c in sub.columns if c not in (SCREEN_INDEX, "x", "y", *reading)
+            ]
         )
     if seen_by is not None and not seen_by.empty:
         sub = sub.merge(seen_by, on=[*word_key, "_version"], how="left")
@@ -14629,7 +14640,7 @@ def _build_stimuli_table_cached(
         ["text_id"]
         + screen_sort
         + ["_version"]
-        + [c for c in ("line_idx", "word_id") if c in sub.columns]
+        + [c for c in ("line_idx", "word_id", "_blank_rank") if c in sub.columns]
     )
     sub = sub.sort_values(sort_cols, kind="stable", na_position="last")
 
@@ -14731,12 +14742,47 @@ def _build_stimuli_table_cached(
     return result[[c for c in ordered if c in result.columns]]
 
 
+def _blank_id_ranks(sub: pd.DataFrame, reading: list[str]) -> np.ndarray:
+    """Each shown word's place among its reading's words that have no id.
+
+    A blank word id stays blank: it names no word, so two words without one
+    are two words, not one listed twice. Each shown word (``_word``) whose id
+    is missing gets its rank within its ``reading`` (the unit and reading
+    columns) by line, then top to bottom, left to right, then word, 0, 1, …;
+    every other row gets -1. ``y`` comes before ``x`` because ``line_idx`` is
+    often one value for every row of an IA export. Without positions the word
+    itself decides, so the order never depends on the order of the rows. The
+    rank tells such words apart where a word id would; a row listed twice
+    (same place, same word) keeps one rank, as a word id listed twice is one
+    word.
+    """
+    rank = np.full(len(sub), -1, dtype=int)
+    blank = (sub["word_id"].isna() & sub["_word"].notna()).to_numpy()
+    if not blank.any():
+        return rank
+    rows = sub.loc[blank, reading].copy()
+    order = [c for c in ("line_idx", "y", "x") if c in sub.columns]
+    for column in order:
+        rows[f"_by_{column}"] = pd.to_numeric(sub.loc[blank, column], errors="coerce")
+    rows["_by_word"] = sub.loc[blank, "_word"]
+    rows["_row"] = np.flatnonzero(blank)
+    by = [*(f"_by_{c}" for c in order), "_by_word"]
+    rows = rows.sort_values(by, kind="stable", na_position="last")
+    new = (~rows.duplicated(subset=[*reading, *by])).astype(int)
+    ranks = (
+        new.groupby([rows[c] for c in reading], sort=False, dropna=False).cumsum() - 1
+    )
+    rank[rows["_row"].to_numpy()] = ranks.to_numpy()
+    return rank
+
+
 def _reader_versions(
     sub: pd.DataFrame, unit: list[str], reading: list[str]
 ) -> tuple[np.ndarray, pd.DataFrame]:
     """Each word row's version of its ``unit`` (a text, or one screen of it).
 
-    A reading's version is the set of its ``(word id, word)`` pairs, taking
+    A reading's version is the set of its ``(word id, word)`` pairs — a word
+    without an id paired with its rank among those (``_blank_rank``) — taking
     the words the passage shows (``_word``: no blank cells, the first word of an
     id listed twice): readings that saw the same words under the same ids share
     one, while an answer order drawn per reader, or feedback on the reader's own
@@ -14752,13 +14798,17 @@ def _reader_versions(
         sub.groupby([*unit, *reading], sort=False, dropna=False).ngroup().to_numpy()
     )
     word_hash = pd.util.hash_pandas_object(
-        sub[["word_id", "_word"]], index=False
+        sub[["word_id", "_blank_rank", "_word"]], index=False
     ).to_numpy()
-    # Each reading's first shown word per word id; the uint64 sum wraps, so it
-    # names the set whatever the row order.
+    # Each reading's first shown word per word id (and rank, for a blank id);
+    # the uint64 sum wraps, so it names the set whatever the row order.
     shown = np.flatnonzero(sub["_word"].notna().to_numpy())
     repeated = pd.DataFrame(
-        {"r": reading_id[shown], "w": sub["word_id"].to_numpy()[shown]}
+        {
+            "r": reading_id[shown],
+            "w": sub["word_id"].to_numpy()[shown],
+            "b": sub["_blank_rank"].to_numpy()[shown],
+        }
     ).duplicated()
     once = np.zeros(len(sub), dtype="uint64")
     once[shown[~repeated.to_numpy()]] = 1

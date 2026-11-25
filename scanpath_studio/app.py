@@ -5387,9 +5387,10 @@ def discard_and_leave_wizard() -> None:
 
 
 def render_data_source_picker(host=None) -> None:
-    """Render the dataset picker and its + creation menu.
+    """Render the dataset picker, its + creation menu and the Tables button.
 
-    The menu sits between the dataset and trial selectors. Creation goes
+    The menu sits between the dataset and trial selectors; the button opens
+    the Data Management page on the dataset's tables. Creation goes
     through the manual editor or the file wizard.
     """
     from scanpath_studio.wizard import _enter_add_data_wizard

@@ -86,6 +86,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Draw a scanpath | Draw word 1 → word 3 → word 1, change the last duration, preview, save and reopen by name. The draft and Share code reproduce the three visits. |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
 | Empty annotations | Data → Current dataset → Annotations on a dataset with none: Full shows **Open Scanpath → Annotations**, which lands on that subtab. |
+| Data page links | The table button beside the dataset picker (Scanpath and Corpus Analysis) opens Data → Current dataset → **Tables**; Full → Annotations subtab → *Data Management → Annotations* opens the **Annotations** panel. |
 | Current dataset | Overview counts the filtered trials. Averages and table coverage describe the same selection. A recording row jumps to its table on a page with all six tables. Data checks cover the whole dataset even when the filters leave zero trials. |
 | Dataset library | Search or filter by source, sort, and open a dataset. Opening another dataset with unsaved edits offers to keep or discard the draft. Renaming an upload preserves its annotations, saved selection and comparison identity. |
 | Saved work | Local recovery and downloaded corpora are accessible even when the current dataset fails to load. |

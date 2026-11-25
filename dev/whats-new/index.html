@@ -2311,6 +2311,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#exec-18--changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exec-18--fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2340,7 +2362,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-18--changed" class="md-nav__link">
+  <a href="#exec-18--changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -2362,7 +2384,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-18--fixed" class="md-nav__link">
+  <a href="#exec-18--fixed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Fixed
@@ -2461,6 +2483,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#exec-18--changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exec-18--fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2490,7 +2534,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-18--changed" class="md-nav__link">
+  <a href="#exec-18--changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -2512,7 +2556,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-18--fixed" class="md-nav__link">
+  <a href="#exec-18--fixed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Fixed
@@ -2561,6 +2605,17 @@
 <ul>
 <li>The Axis layout menu offers <em>Fixation index by word number</em>: each fixation's place in the reading against the word it landed on.</li>
 <li>Charts can run either axis the other way with Reverse horizontal axis and Reverse vertical axis under Axes (--reverse-x / --reverse-y on the command line, reverse_x_axis / reverse_y_axis in Python), for example to put the first fixation at the top.</li>
+<li>An empty Annotations tab on the Data page has a button that opens Scanpath → Annotations.</li>
+<li>The Scanpath view shows when trial filters are on: a dot on the filter button and a line under the trial picker with how many trials the filters keep, what they are, and a Clear filters button.</li>
+</ul>
+<h3 id="exec-18--changed">Changed<a class="headerlink" href="#exec-18--changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Leaving the Add-dataset wizard before uploading anything no longer warns that uploaded files will be lost.</li>
+<li>The Add-dataset wizard lists the file formats it accepts and the size limit before the first upload.</li>
+</ul>
+<h3 id="exec-18--fixed">Fixed<a class="headerlink" href="#exec-18--fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Leaving the Add-dataset wizard after uploading a file no longer stops the bundled demo from loading ("Screen ID is set in only one table").</li>
 </ul>
 <h2 id="exec-18--release-v0490">Release v0.49.0<a class="headerlink" href="#exec-18--release-v0490" title="Permanent link">&para;</a></h2>
 <h3 id="exec-18--added_1">Added<a class="headerlink" href="#exec-18--added_1" title="Permanent link">&para;</a></h3>
@@ -2573,7 +2628,7 @@
 <li>Read and write a saved dataset's favorites, tags and notes from a script with <code>read_annotations</code> / <code>write_annotations</code> or <code>scanpath-studio annotations export</code> / <code>import</code>, so a quality-control script's tags show up in the app's trial filters.</li>
 <li>A script can open the app on a dataset it added, at one reading and figure: <code>api.app_link</code> writes the link Share would, and <code>scanpath-studio open</code> opens it in the browser (starting the app if it isn't running) with the figure set by the same flags <code>render</code> takes.</li>
 </ul>
-<h3 id="exec-18--changed">Changed<a class="headerlink" href="#exec-18--changed" title="Permanent link">&para;</a></h3>
+<h3 id="exec-18--changed_1">Changed<a class="headerlink" href="#exec-18--changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Buttons, help text and guides now name the Scanpath View tab as it appears in the navigation.</li>
 <li>The hosted demo keeps its cached figures and tables within a memory budget, dropping the least recently used ones when many people use it at once.</li>
@@ -2598,7 +2653,7 @@
 <ul>
 <li>The package no longer ships a CSV copy of the demo raw gaze (<code>sample_data/raw_gaze.csv</code>); <code>load_sample_raw_gaze()</code> reads the bundled Parquet, and the download is about 3 MB smaller.</li>
 </ul>
-<h3 id="exec-18--fixed">Fixed<a class="headerlink" href="#exec-18--fixed" title="Permanent link">&para;</a></h3>
+<h3 id="exec-18--fixed_1">Fixed<a class="headerlink" href="#exec-18--fixed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>The Raw gaze switch can be turned off on a trial with no samples of its own, and its "no samples" warning no longer shows during Animation or for a dataset without raw gaze.</li>
 <li>Clicking the Custom view no longer switches Compare readings on or off, or puts back an earlier replay speed, autoplay or smoothness.</li>

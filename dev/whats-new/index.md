@@ -6,6 +6,17 @@
 
 - The Axis layout menu offers *Fixation index by word number*: each fixation's place in the reading against the word it landed on.
 - Charts can run either axis the other way with Reverse horizontal axis and Reverse vertical axis under Axes (--reverse-x / --reverse-y on the command line, reverse_x_axis / reverse_y_axis in Python), for example to put the first fixation at the top.
+- An empty Annotations tab on the Data page has a button that opens Scanpath → Annotations.
+- The Scanpath view shows when trial filters are on: a dot on the filter button and a line under the trial picker with how many trials the filters keep, what they are, and a Clear filters button.
+
+### Changed
+
+- Leaving the Add-dataset wizard before uploading anything no longer warns that uploaded files will be lost.
+- The Add-dataset wizard lists the file formats it accepts and the size limit before the first upload.
+
+### Fixed
+
+- Leaving the Add-dataset wizard after uploading a file no longer stops the bundled demo from loading ("Screen ID is set in only one table").
 
 ## Release v0.49.0
 

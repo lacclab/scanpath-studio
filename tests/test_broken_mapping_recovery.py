@@ -495,3 +495,32 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
     open_checks.click().run(timeout=180)
     assert not at.exception
     assert "Recording quality checks" in [h.value for h in at.subheader]
+
+
+def _positionless_notice_app(positions_drawn: bool) -> None:
+    import streamlit as st
+
+    from scanpath_studio import tabs
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    fixations = fixations.assign(x=float("nan"), y=float("nan"))
+    tabs.render_data_health_notice(
+        st.container(), words, fixations, None, positions_drawn=positions_drawn
+    )
+
+
+@pytest.mark.parametrize("positions_drawn", [True, False])
+def test_missing_positions_are_said_only_where_the_figure_draws_them(
+    positions_drawn,
+):
+    """A chart of word by fixation order draws no screen position, so fixations
+    without one don't affect it; the screen view does draw them."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(
+        _positionless_notice_app, kwargs={"positions_drawn": positions_drawn}
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    said = " ".join(w.value for w in at.warning)
+    assert ("Fixations with no usable position" in said) == positions_drawn

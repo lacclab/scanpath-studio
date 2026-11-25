@@ -2903,7 +2903,9 @@ def _load_eyelink_render(study_dir: str, participant: str | None):
     from .multipart import SCREEN_ID
 
     data = load_eyelink(
-        study_dir, participants=None if participant is None else [participant]
+        study_dir,
+        participants=None if participant is None else [participant],
+        raw_gaze=False,
     )
     words, fixations = data.words, data.fixations
     if not words.empty and not fixations.empty:
@@ -4545,7 +4547,7 @@ def import_eyelink(argv: list[str]) -> None:
             keep_asc=args.keep_asc,
             progress=_progress,
         )
-    except (ValueError, ImportError, FileNotFoundError, NotImplementedError) as exc:
+    except (ValueError, ImportError, FileNotFoundError) as exc:
         parser.error(str(exc))
     except (RuntimeError, OSError) as exc:
         raise SystemExit(str(exc)) from exc
@@ -4568,7 +4570,7 @@ def import_eyelink(argv: list[str]) -> None:
                 report.study_dir,
                 raw_gaze_participants=args.raw_gaze_participants,
             )
-        except (ValueError, FileNotFoundError, NotImplementedError) as exc:
+        except (ValueError, FileNotFoundError) as exc:
             parser.error(str(exc))
         except (RuntimeError, OSError) as exc:
             raise SystemExit(str(exc)) from exc

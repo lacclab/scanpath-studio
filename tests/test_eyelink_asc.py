@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import io
 import sys
 
 import pandas as pd
@@ -80,15 +81,42 @@ def test_asc_parsed_once_in_its_encoding(tmp_path, monkeypatch, latin1):
     import pymovements as pm
 
     real = pm.gaze.from_asc
-    encodings = []
+    files = []
 
-    def counting(*args, **kwargs):
-        encodings.append(kwargs["encoding"])
-        return real(*args, **kwargs)
+    def counting(file, **kwargs):
+        files.append(file)
+        return real(file, **kwargs)
 
     monkeypatch.setattr(pm.gaze, "from_asc", counting)
-    eyelink.read_asc(write_experiment(tmp_path, latin1=latin1))
-    assert encodings == ["latin-1" if latin1 else "utf-8"]
+    rec = eyelink.read_asc(write_experiment(tmp_path, latin1=latin1))
+    # One parse, of text already decoded: pymovements never opens the file.
+    assert len(files) == 1 and isinstance(files[0], io.TextIOBase)
+    assert ("participant: Renée" in set(rec.messages["text"])) == latin1
+
+
+def test_each_line_decoded_on_its_own(tmp_path):
+    """A UTF-8 file with one stray latin-1 byte: that line reads as latin-1,
+    every other line as UTF-8."""
+    asc = write_experiment(tmp_path)
+    lines = asc.read_bytes().split(b"\n")
+    at = lines.index(b"MSG\t2010\t!V TRIAL_VAR item 1")
+    lines.insert(at + 1, "MSG\t2010\t!V TRIAL_VAR title “Rising seas”".encode())
+    lines.insert(4, "MSG\t600\tparticipant: Renée".encode("latin-1"))
+    asc.write_bytes(b"\n".join(lines))
+    rec = eyelink.read_asc(asc)
+    assert "participant: Renée" in set(rec.messages["text"])
+    variables = eyelink.trial_vars(rec).set_index("trial_id")
+    assert variables.loc["1", "title"] == "“Rising seas”"
+    assert _rows(rec.fixations) == EXPECTED["fixations"]
+
+
+def test_crlf_asc_parses(tmp_path):
+    asc = write_experiment(tmp_path)
+    asc.write_bytes(asc.read_bytes().replace(b"\n", b"\r\n"))
+    rec = eyelink.read_asc(asc)
+    assert _rows(rec.fixations) == EXPECTED["fixations"]
+    assert "TRIALID 1" in set(rec.messages["text"])
+    assert len(rec.blocks) == 2
 
 
 def test_events_only_has_no_samples(tmp_path):

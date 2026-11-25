@@ -309,11 +309,6 @@ def test_edf_goes_through_edf2asc(tmp_path, monkeypatch):
     assert t.words["trial_id"].nunique() == 2
 
 
-def test_raw_gaze_not_yet_supported(tmp_path):
-    with pytest.raises(NotImplementedError):
-        _tables(write_experiment(tmp_path), tmp_path, raw_gaze=True)
-
-
 def test_requires_experimental_flag(tmp_path, monkeypatch):
     asc = write_experiment(tmp_path)
     monkeypatch.delenv("SCANPATH_EXPERIMENTAL")

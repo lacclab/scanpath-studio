@@ -5030,7 +5030,8 @@ def add_eyelink_dataset(
         study_dir: The study folder.
         raw_gaze_participants: The participants whose raw gaze the dataset
             carries; none by default, since raw gaze is large. The study must
-            have been imported with ``raw_gaze=True``.
+            have been imported with ``raw_gaze=True``. Their samples are kept
+            on the screens kept for the fixations.
         description: The sentence the 🗂️ **Data** page shows under its name;
             by default it names the number of sessions and the folder.
         select: Open the app on this dataset next time it starts.
@@ -5048,10 +5049,11 @@ def add_eyelink_dataset(
 
     _eyelink._require_enabled("add_eyelink_dataset")
     study_dir = Path(study_dir).resolve()
-    data = load_eyelink(study_dir)
+    wanted = {str(p) for p in raw_gaze_participants or ()}
+    # Raw gaze is large: only the named participants' is read.
+    data = load_eyelink(study_dir, raw_gaze=wanted)
     words, fixations, trials = data.words, data.fixations, data.trial_metadata
     raw_gaze = None
-    wanted = {str(p) for p in raw_gaze_participants or ()}
     if wanted:
         gaze = data.raw_gaze
         have = set() if gaze is None else set(gaze["participant_id"].astype(str))
@@ -5060,7 +5062,7 @@ def add_eyelink_dataset(
                 f"The study folder {study_dir} has no raw gaze for "
                 f"{', '.join(sorted(wanted - have))}; import it with raw_gaze=True."
             )
-        raw_gaze = gaze[gaze["participant_id"].astype(str).isin(wanted)]
+        raw_gaze = gaze
     note = None
     if not words.empty and not fixations.empty:
         # The app refuses a screen that only one table has.

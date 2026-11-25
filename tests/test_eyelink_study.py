@@ -178,12 +178,6 @@ def test_entries_are_gated(study, monkeypatch):
         eyelink.load_eyelink(study_dir)
 
 
-def test_raw_gaze_not_read_yet(study):
-    experiment, study_dir = study
-    with pytest.raises(NotImplementedError):
-        eyelink.import_eyelink(experiment, study_dir, workers=1, raw_gaze=True)
-
-
 def test_load_eyelink_round_trip_and_participants_filter(study):
     experiment, study_dir = study
     eyelink.import_eyelink(experiment, study_dir, workers=1)

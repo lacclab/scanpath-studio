@@ -68,13 +68,6 @@ def test_import_eyelink_cli_add(experiment, tmp_path, cache_dir, capsys):
     assert "Pilot EL" in names
 
 
-def test_import_eyelink_cli_raw_gaze_is_a_clear_error(experiment, tmp_path, capsys):
-    with pytest.raises(SystemExit) as exc:
-        _import(experiment, tmp_path / "study", "--raw-gaze")
-    assert exc.value.code == 2
-    assert "Traceback" not in capsys.readouterr().err
-
-
 def test_render_eyelink_study_writes_png_or_html(experiment, tmp_path, capsys):
     study = tmp_path / "study"
     _import(experiment, study)

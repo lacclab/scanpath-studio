@@ -17,6 +17,10 @@ groups at negative offsets.  ``inline=True`` logs every display and interest
 area as ``!V CLEAR`` / ``!V IMGLOAD`` / ``!V IAREA RECTANGLE`` messages instead
 of ``.vcl`` / ``.ias`` files.
 
+``samples=True`` records gaze samples too (``SAMPLES`` lines), a few ticks
+of the two complete readings at the times in ``_SAMPLES``: some on a screen,
+some before a trial's first screen, one the tracker lost.
+
 ``older_layout=True`` adds trial 5, logged as OneStop's older experiments log
 some readings: the ``IAREA FILE`` message is timed 10 ms before the display its
 ``.vcl`` places, so each interest-area group is that far from its display while
@@ -129,6 +133,56 @@ _OLDER_LAYOUT_TRIAL = [
     "MSG\t26020\tTRIAL_RESULT 0",
 ]
 
+# Right-eye gaze samples of the two complete readings: (time, x, y, pupil).
+# 995 and 3020 fall inside a trial but before its first screen; 1800 is a tick
+# the tracker lost (EyeLink writes ``.`` positions and a 0 pupil).
+_SAMPLES = [
+    (995, 50.0, 60.0, 1200.0),
+    (1100, 110.0, 210.0, 1300.0),
+    (1500, 260.0, 205.0, 1310.0),
+    (1800, None, None, 0.0),
+    (1990, 505.0, 601.0, 1290.0),
+    (3020, 70.0, 80.0, 1250.0),
+    (3100, 165.0, 221.0, 1280.0),
+    (3400, 345.0, 226.0, 1270.0),
+]
+# The left eye of a binocular recording sees each tick this far off.
+_LEFT_EYE_SHIFT = (-2.0, 3.0, 100.0)
+
+
+def _sample_line(time, x, y, pupil, *, binocular: bool) -> str:
+    def eye(dx: float, dy: float, dp: float) -> list[str]:
+        if x is None:
+            return [".", ".", f"{pupil:.1f}"]
+        return [f"{x + dx:.1f}", f"{y + dy:.1f}", f"{pupil + dp:.1f}"]
+
+    fields = [str(time)]
+    if binocular:
+        fields += eye(*_LEFT_EYE_SHIFT)
+    fields += eye(0.0, 0.0, 0.0)
+    fields.append("....." if binocular else "...")
+    return "\t".join(fields)
+
+
+def _with_samples(lines: list[str], *, binocular: bool) -> list[str]:
+    """``lines`` with each sample line placed before the first line written
+    after its tick."""
+    out = list(lines)
+    for time, x, y, pupil in _SAMPLES:
+        at = next(
+            (
+                i
+                for i, line in enumerate(out)
+                if not line.startswith("**")
+                and line.split("\t")[0] in ("MSG", "START", "END", "EFIX", "ESACC")
+                and _line_time(line) > time
+            ),
+            len(out),
+        )
+        out.insert(at, _sample_line(time, x, y, pupil, binocular=binocular))
+    return out
+
+
 _IAS = {
     "IA_1.ias": [
         (1, 100, 150, 200, 250, "The"),
@@ -218,6 +272,44 @@ def _fix(eye, onset, offset, duration, x, y) -> dict:
         "x": x,
         "y": y,
     }
+
+
+def _sample(trial_id, screen, start, time, x, y, pupil, eye) -> dict:
+    lost = x is None
+    return {
+        "trial_id": trial_id,
+        "screen_id": f"screen_{screen}",
+        "screen_index": screen,
+        "x": float("nan") if lost else x,
+        "y": float("nan") if lost else y,
+        "timestamp_ms": time - start,
+        "pupil": float("nan") if lost else pupil,
+        "eye": eye,
+    }
+
+
+# Where each kept sample lands: (time, trial, screen, the trial's START).
+_SAMPLE_PLACES = {
+    1100: ("1", 1, 990),
+    1500: ("1", 1, 990),
+    1800: ("1", 2, 990),
+    1990: ("1", 2, 990),
+    3100: ("2", 1, 3010),
+    3400: ("2", 1, 3010),
+}
+
+
+def _expected_samples(eye: str) -> list[dict]:
+    rows = []
+    for time, x, y, pupil in _SAMPLES:
+        if time not in _SAMPLE_PLACES:
+            continue
+        if eye == "L" and x is not None:
+            dx, dy, dp = _LEFT_EYE_SHIFT
+            x, y, pupil = x + dx, y + dy, pupil + dp
+        trial_id, screen, start = _SAMPLE_PLACES[time]
+        rows.append(_sample(trial_id, screen, start, time, x, y, pupil, eye))
+    return rows
 
 
 _R1 = [
@@ -400,6 +492,11 @@ EXPECTED = {
             ],
         },
     },
+    # The right-eye samples kept: those on a screen, on the fixations' clock.
+    "samples": _expected_samples("R"),
+    "samples_left": _expected_samples("L"),
+    # Sample ticks inside a trial but before its first screen.
+    "samples_between_screens": [995, 3020],
     # Interest-area boxes as (word_id, left, top, right, bottom, text).
     "words": _IAS,
     "images": {name: size for name, size, _ in _IMAGES},
@@ -461,6 +558,8 @@ def _asc_text(
     multi_display: bool,
     inline: bool,
     older_layout: bool,
+    samples: bool,
+    pupil: str,
 ) -> str:
     eyes = "LEFT\tRIGHT" if binocular else "RIGHT"
     header = [_BOM + _COMMON_HEADER[0], *_COMMON_HEADER[1:]]
@@ -469,6 +568,11 @@ def _asc_text(
         f"EVENTS\tGAZE\t{eyes}\tRATE\t1000.00\tTRACKING\tCR\tFILTER\t2",
         "MSG\t500\tDISPLAY_COORDS 0 0 1279 1023",
     ]
+    if samples:
+        lines += [
+            f"SAMPLES\tGAZE\t{eyes}\tRATE\t1000.00\tTRACKING\tCR\tFILTER\t2",
+            f"PUPIL\t{pupil}",
+        ]
     if latin1:
         # What a non-ASCII message looks like in OneStop's latin-1 ASC files.
         lines.append("MSG\t600\tparticipant: Renée")
@@ -484,7 +588,16 @@ def _asc_text(
         trials += _MULTI_DISPLAY_TRIAL
     if older_layout:
         trials += _OLDER_LAYOUT_TRIAL
-    lines += _inline(trials) if inline else trials
+    trials = _inline(trials) if inline else trials
+    if samples:
+        trials = [
+            line.replace("\tEVENTS", "\tSAMPLES\tEVENTS", 1)
+            if line.startswith("START")
+            else line
+            for line in trials
+        ]
+        trials = _with_samples(trials, binocular=binocular)
+    lines += trials
     return "\n".join(lines) + "\n"
 
 
@@ -498,6 +611,8 @@ def write_experiment(
     multi_display: bool = False,
     inline: bool = False,
     older_layout: bool = False,
+    samples: bool = False,
+    pupil: str = "AREA",
 ) -> Path:
     """Write the experiment under ``root`` and return the ``.asc`` path,
     ``root/exp/results/p01/p01.asc``.
@@ -516,6 +631,8 @@ def write_experiment(
         multi_display=multi_display,
         inline=inline,
         older_layout=older_layout,
+        samples=samples,
+        pupil=pupil,
     )
     if latin1:
         # The BOM stays UTF-8 bytes while the body is latin-1, as in OneStop's files.

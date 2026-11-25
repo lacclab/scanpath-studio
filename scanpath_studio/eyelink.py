@@ -133,6 +133,9 @@ class AscRecording:
     samples: pd.DataFrame | None
     # Width and height of the tracker's display, from DISPLAY_COORDS.
     display: tuple[int, int] | None
+    # What the samples' pupil values measure, from the PUPIL line: "area" or
+    # "diameter" (None when the file does not say).
+    pupil: str | None = None
 
 
 _MISSING_PYMOVEMENTS = (
@@ -145,53 +148,102 @@ _DISPLAY_COORDS = re.compile(r"^DISPLAY_COORDS\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(
 _EYE_LETTER = {"left": "L", "right": "R"}
 
 
-def _asc_encoding(path: Path) -> str:
-    """UTF-8 when the whole file decodes as it, else latin-1 (which decodes any
-    bytes), so the file is parsed once.  OneStop's ASC files are latin-1."""
+# A byte that is not part of UTF-8, as ``surrogateescape`` decodes it.
+_ESCAPED_BYTE = re.compile("[\udc80-\udcff]")
+
+
+def _asc_lines(path: Path) -> list[str]:
+    """The file's lines, each ending in ``\\n``: each decoded as UTF-8, or as
+    latin-1 (which decodes any bytes) when that one line is not UTF-8.
+
+    ``edf2asc -utf8`` writes UTF-8, but a message the experiment logged in
+    another encoding (OneStop's carry a few latin-1 bytes) leaves stray bytes
+    in some lines; decoding the whole file as latin-1 would garble every UTF-8
+    character in it.
+    """
+    data = path.read_bytes()
     try:
-        path.read_bytes().decode("utf-8")
+        text, clean = data.decode("utf-8"), True
     except UnicodeDecodeError:
-        return "latin-1"
-    return "utf-8"
+        text, clean = data.decode("utf-8", "surrogateescape"), False
+    del data
+    if "\r" in text:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # The line each stray byte is on.
+    rows, line, done = set(), 0, 0
+    for at in [] if clean else (m.start() for m in _ESCAPED_BYTE.finditer(text)):
+        line += text.count("\n", done, at)
+        done = at
+        rows.add(line)
+    lines = text.split("\n")
+    del text
+    for row in rows:
+        lines[row] = lines[row].encode("utf-8", "surrogateescape").decode("latin-1")
+    if lines and lines[-1] == "":
+        lines.pop()
+    for i in range(len(lines)):
+        lines[i] += "\n"
+    return lines
 
 
-def _parse_asc(path: Path):
+class _DecodedLines(io.TextIOBase):
+    """Lines already decoded, read as a text stream: pymovements parses the
+    same list the line scan reads, so the file is read and decoded once."""
+
+    def __init__(self, lines: list[str], name: str) -> None:
+        super().__init__()
+        self._lines = lines
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def readable(self) -> bool:
+        return True
+
+    def readlines(self, hint: int = -1) -> list[str]:
+        return self._lines
+
+
+def _parse_asc(lines: list[str], name: str):
     try:
         import pymovements as pm
     except ImportError as exc:
         raise ImportError(_MISSING_PYMOVEMENTS) from exc
-    encoding = _asc_encoding(path)
     with warnings.catch_warnings():
         for pattern in _QUIET_PYMOVEMENTS:
             warnings.filterwarnings("ignore", message=pattern)
-        gaze = pm.gaze.from_asc(path, events=True, messages=True, encoding=encoding)
-    return gaze, encoding
+        return pm.gaze.from_asc(_DecodedLines(lines, name), events=True, messages=True)
 
 
-def _scan_lines(path: Path, encoding: str):
+def _scan_lines(lines: list[str]):
     """The facts pymovements does not keep: each EFIX line's position and
-    duration, the START / END lines, and the eyes recorded."""
+    duration, the START / END lines, the eyes recorded and what the ``PUPIL``
+    line says the samples' pupil values measure (``"area"`` / ``"diameter"``)."""
     efix: dict[tuple[str, int], tuple[int, float, float]] = {}
     order: list[tuple[str, int]] = []
     eyes: tuple[str, ...] = ()
-    with open(path, encoding=encoding, newline="") as handle:
-        for line in handle:
-            if line.startswith("EFIX"):
-                f = line.split()
-                efix[(f[1], int(f[2]))] = (int(f[4]), float(f[5]), float(f[6]))
-            elif line.startswith("START"):
-                f = line.split()
-                time = int(f[1])
-                order.append(("start", time))
-                if not eyes:
-                    eyes = tuple(
-                        _EYE_LETTER[t.lower()]
-                        for t in f[2:]
-                        if t.lower() in _EYE_LETTER
-                    )
-            elif line.startswith("END"):
-                f = line.split()
-                order.append(("end", int(f[1])))
+    pupil: str | None = None
+    for line in lines:
+        if line.startswith("EFIX"):
+            f = line.split()
+            efix[(f[1], int(f[2]))] = (int(f[4]), float(f[5]), float(f[6]))
+        elif line.startswith("START"):
+            f = line.split()
+            time = int(f[1])
+            order.append(("start", time))
+            if not eyes:
+                eyes = tuple(
+                    _EYE_LETTER[t.lower()] for t in f[2:] if t.lower() in _EYE_LETTER
+                )
+        elif line.startswith("END"):
+            f = line.split()
+            order.append(("end", int(f[1])))
+        elif pupil is None and line.startswith("PUPIL"):
+            f = line.split()
+            if len(f) > 1 and f[1].lower() in ("area", "diameter"):
+                pupil = f[1].lower()
     blocks: list[tuple[int, int | None]] = []
     open_start: int | None = None
     for kind, time in order:
@@ -204,7 +256,7 @@ def _scan_lines(path: Path, encoding: str):
             open_start = None
     if open_start is not None:
         blocks.append((open_start, None))
-    return efix, blocks, eyes
+    return efix, blocks, eyes, pupil
 
 
 def _fixation_frame(events, efix) -> pd.DataFrame:
@@ -270,8 +322,10 @@ def read_asc(path: Path, *, samples: bool = False) -> AscRecording:
     and display size, and with ``samples`` its raw gaze samples."""
     _require_enabled("read_asc")
     path = Path(path)
-    gaze, encoding = _parse_asc(path)
-    efix, blocks, eyes = _scan_lines(path, encoding)
+    lines = _asc_lines(path)
+    gaze = _parse_asc(lines, str(path))
+    efix, blocks, eyes, pupil = _scan_lines(lines)
+    del lines
     messages = _message_frame(gaze.messages)
     return AscRecording(
         fixations=_fixation_frame(gaze.events.frame, efix),
@@ -281,6 +335,7 @@ def read_asc(path: Path, *, samples: bool = False) -> AscRecording:
         ),
         samples=_sample_frame(gaze.samples, eyes) if samples else None,
         display=_display_size(messages),
+        pupil=pupil,
     )
 
 
@@ -864,6 +919,19 @@ FIXATION_COLUMNS = [
     "eye",
     "image_path",
 ]
+# ``pupil`` is named by what the recording's PUPIL line says it measures:
+# ``pupil_area`` or ``pupil_diameter``.
+RAW_GAZE_COLUMNS = [
+    "participant_id",
+    "trial_id",
+    "screen_id",
+    "screen_index",
+    "x",
+    "y",
+    "timestamp_ms",
+    "pupil",
+    "eye",
+]
 WORD_COLUMNS = [
     "participant_id",
     "trial_id",
@@ -887,8 +955,10 @@ class SessionTables:
     ``words`` and ``fixations`` carry the canonical columns (multipart, with
     ``screen_id`` / ``screen_index`` and each screen's composed stimulus as
     ``image_path``); ``trial_metadata`` has one row per trial with its
-    ``TRIAL_VAR`` values; ``display`` is the tracker's display size; ``notes``
-    says what could not be read or was left out.
+    ``TRIAL_VAR`` values; ``raw_gaze``, when asked for, has one row per eye
+    per sample shown on a screen (`RAW_GAZE_COLUMNS`); ``display`` is the
+    tracker's display size; ``notes`` says what could not be read or was left
+    out.
     """
 
     words: pd.DataFrame
@@ -1040,6 +1110,76 @@ def _fixation_table(
     return pd.concat(parts, ignore_index=True)
 
 
+def _pupil_column(rec: AscRecording, notes: list[str]) -> str:
+    if rec.pupil is None:
+        if not len(rec.samples):
+            notes.append(
+                "The recording has no gaze samples (it was converted events only)."
+            )
+            return "pupil"
+        notes.append(
+            "The recording does not say whether its pupil values are areas or "
+            "diameters (no PUPIL line); they are kept as pupil."
+        )
+        return "pupil"
+    return f"pupil_{rec.pupil}"
+
+
+def _raw_gaze_table(
+    rec: AscRecording, trials: pd.DataFrame, screens: pd.DataFrame, notes: list[str]
+) -> pd.DataFrame:
+    """The samples of each trial shown on one of its screens, on the fixations'
+    clock (``timestamp_ms`` from the trial's ``START``).
+
+    A sample between a trial's TRIALID and its first screen, or outside every
+    trial, belongs to no screen and is left out.  A sample the tracker lost
+    keeps its row with a missing position and pupil.
+    """
+    samples = rec.samples
+    pupil = _pupil_column(rec, notes)
+    columns = [pupil if c == "pupil" else c for c in RAW_GAZE_COLUMNS]
+    columns.remove("participant_id")
+    time = samples["time"].to_numpy()
+    by_trial = dict(tuple(screens.groupby("trial_id", sort=False)))
+    parts = []
+    for trial in trials.itertuples(index=False):
+        own = by_trial[trial.trial_id]
+        begins, ends = own["begin"].to_numpy(), own["end"].to_numpy()
+        lo, hi = np.searchsorted(time, [begins[0], ends[-1]], side="left")
+        inside = samples.iloc[lo:hi]
+        ticks = time[lo:hi]
+        # ``lo`` is at the first screen's begin, so every tick has a screen
+        # begun before it; it is on that screen until the screen ends.
+        index = np.searchsorted(begins, ticks, side="right") - 1
+        on_screen = ticks < ends[index]
+        inside, index = inside[on_screen], index[on_screen]
+        shown = own.iloc[index]
+        parts.append(
+            pd.DataFrame(
+                {
+                    "trial_id": trial.trial_id,
+                    "screen_id": shown["screen_id"].to_numpy(),
+                    "screen_index": shown["screen_index"].to_numpy(),
+                    "x": inside["x"].to_numpy(),
+                    "y": inside["y"].to_numpy(),
+                    "timestamp_ms": inside["time"].to_numpy() - trial.start,
+                    pupil: inside["pupil"].to_numpy(),
+                    "eye": inside["eye"].to_numpy(),
+                },
+                columns=columns,
+            )
+        )
+    kept = sum(len(part) for part in parts)
+    if len(samples) > kept:
+        notes.append(
+            f"Raw gaze samples left out: {len(samples) - kept} shown on no "
+            "screen of a trial."
+        )
+    if not kept:
+        return pd.DataFrame(columns=columns)
+    return pd.concat([part for part in parts if len(part)], ignore_index=True)
+
+
 def _word_table(screens: pd.DataFrame) -> pd.DataFrame:
     parts = [
         boxes.assign(
@@ -1072,19 +1212,21 @@ def session_tables(
     interest areas is found by `resolve_session_dir`; each screen's stimulus is
     composed into ``image_dir`` (`compose_display`).  ``participant_id`` is the
     file's stem, and ``timestamp_ms`` counts from the trial's ``START`` line.
+    ``raw_gaze`` also reads the recorded samples (`_raw_gaze_table`); an
+    ``.edf`` is then converted with them.
     """
     _require_enabled("session_tables")
-    if raw_gaze:
-        raise NotImplementedError("Raw gaze from EyeLink recordings is not read yet.")
     source = Path(source)
     if source.suffix.lower() == ".edf":
         if asc_dir is None:
             with tempfile.TemporaryDirectory() as tmp:
-                rec = read_asc(convert_edf(source, Path(tmp), samples=False))
+                asc = convert_edf(source, Path(tmp), samples=raw_gaze)
+                rec = read_asc(asc, samples=raw_gaze)
         else:
-            rec = read_asc(convert_edf(source, Path(asc_dir), samples=False))
+            asc = convert_edf(source, Path(asc_dir), samples=raw_gaze)
+            rec = read_asc(asc, samples=raw_gaze)
     else:
-        rec = read_asc(source)
+        rec = read_asc(source, samples=raw_gaze)
     session = resolve_session_dir(
         source, rec, session_dir=session_dir, experiment_dir=experiment_dir
     )
@@ -1112,11 +1254,15 @@ def session_tables(
     words = _finish(_word_table(screens), WORD_COLUMNS)
     metadata = trial_vars(rec)
     metadata.insert(0, "participant_id", participant)
+    gaze = None
+    if raw_gaze:
+        gaze = _raw_gaze_table(rec, trials, screens, notes)
+        gaze.insert(0, "participant_id", participant)
     return SessionTables(
         words=words,
         fixations=fixations,
         trial_metadata=metadata,
-        raw_gaze=None,
+        raw_gaze=gaze,
         display=rec.display,
         notes=notes,
     )
@@ -1128,7 +1274,7 @@ def session_tables(
 
 #: Bumped whenever the tables read from the same recording change, so that a
 #: study folder reads every session again.
-PARSER_VERSION = 2
+PARSER_VERSION = 3
 MANIFEST_VERSION = 1
 _MANIFEST = "manifest.json"
 # The per-participant tables of a study folder, one subfolder each.
@@ -1351,6 +1497,27 @@ def _relative_image(path, study_dir: Path) -> str | None:
     return Path(path).resolve().relative_to(study_dir).as_posix()
 
 
+def _write_by_trial(frame: pd.DataFrame, path: str) -> None:
+    """Write ``frame`` as Parquet sorted by ``trial_id`` and ``timestamp_ms``,
+    one row group per trial, so a reader can take one trial's rows alone."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    frame = frame.sort_values(
+        ["trial_id", "timestamp_ms"], kind="stable", ignore_index=True
+    )
+    table = pa.Table.from_pandas(frame, preserve_index=False)
+    trial = frame["trial_id"].to_numpy()
+    starts = [0, *(np.flatnonzero(trial[1:] != trial[:-1]) + 1).tolist()]
+    stops = [*starts[1:], len(frame)]
+    with pq.ParquetWriter(path, table.schema) as writer:
+        if not len(frame):
+            writer.write_table(table)
+            return
+        for start, stop in zip(starts, stops):
+            writer.write_table(table.slice(start, stop - start), stop - start)
+
+
 def _write_session(study_dir: Path, pid: str, tables: SessionTables) -> None:
     for name in _STUDY_TABLES:
         frame = getattr(tables, name)
@@ -1362,7 +1529,11 @@ def _write_session(study_dir: Path, pid: str, tables: SessionTables) -> None:
             frame = frame.assign(
                 image_path=[_relative_image(p, study_dir) for p in frame["image_path"]]
             )
-        _replace_atomically(path, functools.partial(frame.to_parquet, index=False))
+        if name == "raw_gaze":
+            write = functools.partial(_write_by_trial, frame)
+        else:
+            write = functools.partial(frame.to_parquet, index=False)
+        _replace_atomically(path, write)
 
 
 def _study_display(
@@ -1409,10 +1580,14 @@ def import_eyelink(
     list of them.  Each session is read by `session_tables` and written as
     ``fixations/``, ``words/`` and ``trial_metadata/<participant>.parquet``,
     its stimulus screens into ``images/``, with ``image_path`` relative to the
-    study folder; ``manifest.json`` records each session as it finishes.  A
-    session whose recording, parser version and raw-gaze choice are unchanged
-    since it was read is skipped, unless ``rebuild``; one that fails is
-    reported and the others go on.
+    study folder; ``manifest.json`` records each session as it finishes.
+    ``raw_gaze`` also writes each session's samples to
+    ``raw_gaze/<participant>.parquet``, one row group per trial.  A session
+    whose recording and parser version are unchanged since it was read is
+    skipped, unless ``rebuild`` -- also when it was read with raw gaze and
+    ``raw_gaze`` is off (it keeps its raw gaze), but not when ``raw_gaze`` asks
+    for raw gaze it was read without.  One that fails is reported and the
+    others go on.
 
     ``session_dir`` is the session folder of a single recording; for several,
     ``experiment_dir`` finds each in ``results/<participant>/``.  Sessions are
@@ -1422,8 +1597,6 @@ def import_eyelink(
     as each session to read finishes.
     """
     _require_enabled("import_eyelink")
-    if raw_gaze:
-        raise NotImplementedError("Raw gaze from EyeLink recordings is not read yet.")
     sources = study_sources(paths)
     if session_dir is not None and len(sources) != 1:
         raise ValueError(
@@ -1552,21 +1725,33 @@ def _absolute_images(
 
 
 def load_eyelink(
-    study_dir: str | Path, *, participants: Iterable[str] | None = None
+    study_dir: str | Path,
+    *,
+    participants: Iterable[str] | None = None,
+    raw_gaze: bool | Iterable[str] = True,
 ) -> EyeLinkData:
     """Read back a study folder `import_eyelink` wrote: every session it read,
-    or only ``participants``'.  Sessions that failed are not part of it."""
+    or only ``participants``'.  Sessions that failed are not part of it.
+
+    ``raw_gaze`` is the sessions whose raw gaze is read, of those read: all of
+    them (``True``), none (``False``), or the participants it names.
+    ``EyeLinkData.raw_gaze`` is ``None`` when none of them has raw gaze.
+    """
     _require_enabled("load_eyelink")
     study_dir = Path(study_dir).resolve()
     if not (study_dir / _MANIFEST).is_file():
         raise FileNotFoundError(
             f"{study_dir} is not an EyeLink study folder: it has no {_MANIFEST}."
         )
+    if not isinstance(raw_gaze, bool):
+        raw_gaze = {str(p) for p in raw_gaze}
     with file_lock(study_dir / ".lock", reading=True):
-        return _load_study(study_dir, participants)
+        return _load_study(study_dir, participants, raw_gaze)
 
 
-def _load_study(study_dir: Path, participants: Iterable[str] | None) -> EyeLinkData:
+def _load_study(
+    study_dir: Path, participants: Iterable[str] | None, raw_gaze: bool | set[str]
+) -> EyeLinkData:
     sessions = _read_manifest(study_dir)["sessions"]
     ok = sorted(_ok_sessions(sessions))
     if participants is None:
@@ -1587,6 +1772,10 @@ def _load_study(study_dir: Path, participants: Iterable[str] | None) -> EyeLinkD
     frames: dict[str, list[pd.DataFrame]] = {name: [] for name in _STUDY_TABLES}
     for pid in pids:
         for name in _STUDY_TABLES:
+            if name == "raw_gaze" and (
+                raw_gaze is False or (raw_gaze is not True and pid not in raw_gaze)
+            ):
+                continue
             path = study_dir / name / f"{pid}.parquet"
             if path.is_file():
                 frame = pd.read_parquet(path)

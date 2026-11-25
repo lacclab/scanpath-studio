@@ -290,6 +290,9 @@ SINGLE_ANIMATE = "single_animate"
 #: Show the chips above the plot (default on). Hiding keeps the field
 #: selection (`trial_chip_fields`), so showing them again restores the row.
 SINGLE_SHOW_CHIPS = "single_show_chips"
+#: The Comparisons subtab's view: its matches in a grid of panels, or overlaid
+#: with the selected trial on one figure.
+MULTI_VIEW = "multi_view"
 #: The ⚙ Playback replay speed. Mode-local, like `single_animate`, which is
 #: why it is `single_*` rather than `global_*`.
 SINGLE_PLAYBACK_SPEED = "single_playback_speed"

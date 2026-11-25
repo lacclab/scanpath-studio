@@ -384,6 +384,7 @@ from scanpath_studio.plots import (
     make_metric_convergence_figure,
     make_paired_bars_figure,
     make_progression_figure,
+    make_readings_overlay_figure,
     make_scanpath_figure,
     make_small_multiples_figure,
     make_trend_figure,
@@ -391,6 +392,7 @@ from scanpath_studio.plots import (
     make_word_profile_figure,
     make_word_rate_figure,
     normalize_legend_layout,
+    overlay_reading_color,
     reading_stimulus_image,
     replay_page,
     replay_page_box,
@@ -404,6 +406,7 @@ from scanpath_studio.session_keys import (
     EXPORT_FIGURE_DPI,
     EXPORT_FIGURE_WIDTH,
     EXPORT_FIGURE_WIDTH_UNIT,
+    MULTI_VIEW,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
@@ -6524,13 +6527,23 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     )
 
 
-def _render_matches_chip_table(fields, rows: list[tuple[str, ChipReading]]) -> None:
+def _render_matches_chip_table(
+    fields,
+    rows: list[tuple[str, ChipReading]],
+    colors: list[str] | None = None,
+) -> None:
     """The Comparisons subtab's chip table: the selected trial and each
     match on the page, one row each, named as their panels are, under the
     fields the ✏️ chips menu picked — the table above the plot, one row per
     reading, so the matches compare down each column and a value they all
-    share is written quieter."""
-    sides = [(label, None, reading.entries(fields)) for label, reading in rows]
+    share is written quieter.
+
+    ``colors`` names each row in its reading's colour, as the overlay draws it."""
+    colors = colors or [None] * len(rows)
+    sides = [
+        (label, color, reading.entries(fields))
+        for (label, reading), color in zip(rows, colors)
+    ]
     if any(entries for _label, _color, entries in sides):
         st.markdown(
             _chip_table_html(*sides, order=list(fields or [])),
@@ -13658,6 +13671,93 @@ def _collect_generations(
     return dict(sorted(candidates.items(), key=lambda item: _reading_order(item[0])))
 
 
+_VIEW_GRID = "Grid"
+_VIEW_OVERLAY = "Overlay"
+#: The Comparisons subtab's *View* choices, the default first.
+_COMPARISON_VIEWS = (_VIEW_GRID, _VIEW_OVERLAY)
+
+
+def _overlay_refusal(axes, trial_fixations, frames, text_col) -> str | None:
+    """Why the Comparisons overlay cannot draw the selected trial with
+    ``frames``, else ``None``. On screen axes every reading is drawn over the
+    selected trial's word boxes, so each must read its text; a reading chart
+    has no boxes. On the session clock readings recorded apart would each take
+    a sliver of one long axis."""
+    if "timestamp_ms" in axes:
+        return (
+            "An overlay on the session clock puts readings recorded at different "
+            "times far apart on one axis. Showing the grid: choose Seconds since "
+            "first fixation onset to overlay them."
+        )
+    if axes == ("x", "y") and not _all_read_the_selected_text(
+        trial_fixations, frames, text_col
+    ):
+        return (
+            "An overlay on the screen draws every reading over the selected "
+            "trial's word boxes, so it needs readings of the same text. Showing "
+            "the grid: match on the text, or choose chart axes such as Fixation "
+            "order by Word ID."
+        )
+    return None
+
+
+def _render_comparison_overlay(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    matches: list[tuple[tuple, pd.DataFrame]],
+    *,
+    captions: dict,
+    nld_by_gen: dict,
+    axes: tuple[str, str],
+    options: dict,
+    text_col: str | None,
+) -> None:
+    """The Comparisons overlay: the selected trial and the page's matches on
+    one figure, each in its own colour (`overlay_reading_color`, the colours
+    the chip table names its rows in) and named in the legend as its panel
+    would be. A reading that cannot be placed on ``axes`` keeps its colour and
+    is said to be missing."""
+    readings = [("Selected", trial_fixations)]
+    missing = []
+    for name, fix in matches:
+        label = captions[name]
+        nld = nld_by_gen.get(name)
+        if nld is not None and pd.notna(nld):
+            label = f"{label} · NLD {nld:.2f}"
+        if chart_axes.drawable_fixations(axes, fix):
+            readings.append((label, fix))
+        else:
+            # An empty frame holds its place, so the colours stay the chips'.
+            readings.append((label, fix.iloc[:0]))
+            missing.append(captions[name])
+    if "word_id" in axes and not _all_read_the_selected_text(
+        trial_fixations, [fix for _name, fix in matches], text_col
+    ):
+        st.warning(
+            "These readings are of different texts. An overlay puts them on one "
+            "word axis, so word *n* of one text sits on word *n* of another. "
+            "Match on the text, or set **View** to **Grid**."
+        )
+    on_chart = axes != ("x", "y")
+    aspect = (
+        0.6 if on_chart else options["canvas_height"] / (options["canvas_width"] or 1)
+    )
+    _render_true_scale_chart(
+        # The overlay draws no raw gaze: its colours name readings.
+        make_readings_overlay_figure(
+            trial_words,
+            readings,
+            **{k: v for k, v in options.items() if k != "raw_gaze"},
+        ),
+        key="multi_overlay",
+        max_height=int(1200 * aspect) + 24,
+    )
+    if missing:
+        st.caption(
+            "Not drawn, without a value on both axes: " + ", ".join(missing) + "."
+        )
+
+
 def _all_read_the_selected_text(trial_fixations, frames, text_col) -> bool:
     """Whether every match reads the selected trial's one text — what the
     similarity scores need, since they compare word sequences."""
@@ -13961,10 +14061,12 @@ def render_multiple_comparison_tab(
     # One `label | field` row whose first label sits in the subtabs' own
     # label column (`PANEL_LABEL_W`); what *Match field* does is its hover help,
     # not a caption beside it repeating the same thing.
-    match_label_col, match_col, cols_label_col, cols_col = st.columns(
-        [PANEL_LABEL_W, 0.44, 0.09, 0.27],
-        gap=LABEL_GAP,
-        vertical_alignment="center",
+    match_label_col, match_col, view_label_col, view_col, cols_label_col, cols_col = (
+        st.columns(
+            [PANEL_LABEL_W, 0.3, 0.06, 0.16, 0.08, 0.2],
+            gap=LABEL_GAP,
+            vertical_alignment="center",
+        )
     )
     match_help = "Shows the other trials that share the selected trial's value here."
     row_label(match_label_col, "Match field", match_help)
@@ -13976,7 +14078,24 @@ def render_multiple_comparison_tab(
         help=match_help,
         label_visibility="collapsed",
     )
-    cols_help = "Panels per row."
+    view_help = (
+        "Grid draws each match in its own panel. Overlay draws the selected "
+        "trial and the page's matches on one figure, each in its own colour."
+    )
+    row_label(view_label_col, "View", view_help)
+    # A deselected segment (or no choice yet) is the grid.
+    if st.session_state.get(MULTI_VIEW) not in _COMPARISON_VIEWS:
+        st.session_state[MULTI_VIEW] = _VIEW_GRID
+    view_col.segmented_control(
+        "View",
+        options=list(_COMPARISON_VIEWS),
+        key=MULTI_VIEW,
+        help=view_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    overlay_chosen = st.session_state.get(MULTI_VIEW) == _VIEW_OVERLAY
+    cols_help = "Panels per row, in the grid."
     row_label(cols_label_col, "Columns", cols_help)
     n_cols = cols_col.slider(
         "Columns",
@@ -14026,6 +14145,23 @@ def render_multiple_comparison_tab(
     base_settings["scale_text_to_boxes"] = scale_text_to_boxes
     panel_settings = _comparison_panel_settings(base_settings)
 
+    def _panel_options(fields: tuple[str, str], settings: dict = panel_settings):
+        return {
+            "canvas_width": int(canvas_width),
+            "canvas_height": int(canvas_height),
+            "base_font_size": int(base_font_size),
+            "font_family": font_family,
+            "x_field": fields[0],
+            "y_field": fields[1],
+            "column_labels": active_figure_labels(
+                st.session_state,
+                words=words_filtered.columns,
+                fixations=fixations_filtered.columns,
+            ),
+            "color_categories": color_categories,
+            **settings,
+        }
+
     def _make_fig(
         words: pd.DataFrame,
         fix: pd.DataFrame,
@@ -14037,23 +14173,7 @@ def render_multiple_comparison_tab(
         x_field, y_field = (
             axes if chart_axes.drawable_fixations(axes, fix) else ("x", "y")
         )
-        fig = _panel_figure(
-            words,
-            fix,
-            {
-                "canvas_width": int(canvas_width),
-                "canvas_height": int(canvas_height),
-                "base_font_size": int(base_font_size),
-                "font_family": font_family,
-                "x_field": x_field,
-                "y_field": y_field,
-                "column_labels": active_figure_labels(
-                    st.session_state, words=words.columns, fixations=fix.columns
-                ),
-                "color_categories": color_categories,
-                **settings,
-            },
-        )
+        fig = _panel_figure(words, fix, _panel_options((x_field, y_field), settings))
         if x_range is not None and (x_field, y_field) == axes:
             fig.update_xaxes(range=x_range, autorange=False)
         return fig
@@ -14131,6 +14251,19 @@ def render_multiple_comparison_tab(
             name: _comparison_trial_words(words_filtered, candidates[name])
             for name in grid_names
         }
+        refusal = (
+            _overlay_refusal(
+                axes,
+                trial_fixations,
+                [candidates[name] for name in grid_names],
+                text_col,
+            )
+            if overlay_chosen
+            else None
+        )
+        if refusal:
+            st.info(refusal)
+        overlay = overlay_chosen and refusal is None
         # The chips above the plot, for the selected trial and the page's
         # matches — one row each, so they compare down each column.
         chip_fields = st.session_state.get("trial_chip_fields") or []
@@ -14165,6 +14298,22 @@ def render_multiple_comparison_tab(
                         for name in grid_names
                     ),
                 ],
+                colors=(
+                    [overlay_reading_color(i) for i in range(len(grid_names) + 1)]
+                    if overlay
+                    else None
+                ),
+            )
+        if overlay:
+            _render_comparison_overlay(
+                trial_words,
+                trial_fixations,
+                [(name, candidates[name]) for name in grid_names],
+                captions=captions,
+                nld_by_gen=nld_by_gen,
+                axes=axes,
+                options=_panel_options(axes),
+                text_col=text_col,
             )
         # On chart axes the page's panels share one X range, so a longer
         # scanpath reads as longer rather than as the same width squeezed. Not
@@ -14184,7 +14333,7 @@ def render_multiple_comparison_tab(
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
-        for start in range(0, len(grid_names), n_cols):
+        for start in range(0, 0 if overlay else len(grid_names), n_cols):
             row_names = grid_names[start : start + n_cols]
             grid_cols = st.columns(n_cols)
             for offset, (cell, name) in enumerate(zip(grid_cols, row_names)):

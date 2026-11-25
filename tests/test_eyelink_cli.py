@@ -108,3 +108,25 @@ def test_hidden_when_gate_off(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         cli.main(["render", "--help"])
     assert "--eyelink-study" not in capsys.readouterr().out
+
+
+def test_render_without_a_participant_loads_the_first_alone(
+    experiment, tmp_path, monkeypatch
+):
+    from tests.test_eyelink_study import _add_session
+
+    _add_session(experiment, "p00")
+    study = tmp_path / "study"
+    _import(experiment, study)
+    loads = []
+    real = eyelink.load_eyelink
+
+    def spy(study_dir, **options):
+        loads.append(options)
+        return real(study_dir, **options)
+
+    monkeypatch.setattr(eyelink, "load_eyelink", spy)
+    out = tmp_path / "fig.html"
+    cli.main(["render", "--eyelink-study", str(study), "-o", str(out)])
+    assert out.is_file()
+    assert loads == [{"participants": ["p00"]}]

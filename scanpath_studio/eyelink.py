@@ -21,9 +21,11 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import union_categoricals
 
 from scanpath_studio import constants
 from scanpath_studio import progress as progress_mod
@@ -164,6 +166,8 @@ _ESCAPED_BYTE = re.compile("[\udc80-\udcff]")
 # A long message's id is not always a number (OneStop logs ``50a``), and an id
 # is used again by later messages.
 _LONG_START = re.compile(rb"!V LONGMS_ST_(\S+) ")
+# A sample line: it begins with its tick's time.
+_SAMPLE_LINE = re.compile(rb"(?m)^[0-9][^\n]*(?:\n|$)")
 
 
 def _line_end(data: bytes, at: int) -> int:
@@ -226,6 +230,9 @@ def _asc_lines(path: Path, *, samples: bool = True) -> list[str]:
     character of the file.
     """
     data = _join_long_messages(path.read_bytes())
+    if not samples:
+        # Dropped before decoding, in one pass over the bytes.
+        data = _SAMPLE_LINE.sub(b"", data)
     try:
         text, clean = data.decode("utf-8"), True
     except UnicodeDecodeError:
@@ -245,8 +252,6 @@ def _asc_lines(path: Path, *, samples: bool = True) -> list[str]:
         lines[row] = lines[row].encode("utf-8", "surrogateescape").decode("latin-1")
     if lines and lines[-1] == "":
         lines.pop()
-    if not samples:
-        lines = [line for line in lines if not line[:1].isdigit()]
     for i in range(len(lines)):
         lines[i] += "\n"
     return lines
@@ -1688,9 +1693,22 @@ def _read_sessions(jobs: list[dict], workers: int) -> Iterator[tuple[int, object
         pool.shutdown(wait=True, cancel_futures=True)
 
 
+def _map_paths(values: pd.Series, convert: Callable) -> pd.Categorical:
+    """``convert`` applied to each distinct value of ``values`` once, as a
+    categorical: a session's tables name a few image files over thousands of
+    rows.  A missing value, or one ``convert`` makes ``None``, is missing."""
+    codes, uniques = pd.factorize(values, use_na_sentinel=True)
+    converted = [convert(value) for value in uniques]
+    categories = list(dict.fromkeys(c for c in converted if c is not None))
+    position = {c: i for i, c in enumerate(categories)}
+    lookup = np.array(
+        [-1 if c is None else position[c] for c in converted] + [-1], dtype=np.int64
+    )
+    # A missing value's code is -1, the lookup's last entry.
+    return pd.Categorical.from_codes(lookup[codes], categories=categories)
+
+
 def _relative_image(path, study_dir: Path) -> str | None:
-    if path is None or (isinstance(path, float) and np.isnan(path)):
-        return None
     return Path(path).resolve().relative_to(study_dir).as_posix()
 
 
@@ -1734,7 +1752,9 @@ def _write_session(study_dir: Path, pid: str, tables: SessionTables) -> None:
             continue
         if "image_path" in frame.columns:
             frame = frame.assign(
-                image_path=[_relative_image(p, study_dir) for p in frame["image_path"]]
+                image_path=_map_paths(
+                    frame["image_path"], lambda p: _relative_image(p, study_dir)
+                )
             )
         if name == "raw_gaze":
             write = functools.partial(_write_by_trial, frame)
@@ -1918,28 +1938,44 @@ def _concat(frames: list[pd.DataFrame], columns: list[str]) -> pd.DataFrame:
     filled = [frame for frame in frames if len(frame)]
     if not filled:
         return frames[0] if frames else pd.DataFrame(columns=columns)
-    return pd.concat(filled, ignore_index=True)
+    joined = pd.concat(filled, ignore_index=True)
+    # Sessions show different images, and concat makes categoricals whose
+    # categories differ ``object``: their union keeps one shared copy of each.
+    if "image_path" in joined.columns and all(
+        isinstance(frame["image_path"].dtype, pd.CategoricalDtype) for frame in filled
+    ):
+        joined["image_path"] = union_categoricals(
+            [frame["image_path"] for frame in filled], ignore_order=True
+        )
+    return joined
+
+
+def _absolute_image(stored, study_dir: Path) -> str | None:
+    """A stored image path made absolute, or ``None`` when it is not a path
+    relative to the study folder that stays inside it."""
+    path = (study_dir / str(stored)).resolve()
+    if Path(str(stored)).is_absolute() or not path.is_relative_to(study_dir):
+        return None
+    return str(path)
 
 
 def _absolute_images(
     frame: pd.DataFrame, study_dir: Path, notes: list[str]
 ) -> pd.DataFrame:
-    """``frame`` with each ``image_path`` made absolute.  A stored path must be
-    relative and lead to a file inside the study folder; any other is dropped
-    and noted."""
+    """``frame`` with each ``image_path`` made absolute, a categorical.  A
+    stored path must be relative and lead to a file inside the study folder;
+    any other is dropped and noted."""
     if "image_path" not in frame.columns:
         return frame
-    paths, outside = [], set()
-    for p in frame["image_path"]:
-        if p is None or (isinstance(p, float) and np.isnan(p)):
-            paths.append(None)
-            continue
-        path = (study_dir / str(p)).resolve()
-        if Path(str(p)).is_absolute() or not path.is_relative_to(study_dir):
-            outside.add(str(p))
-            paths.append(None)
-        else:
-            paths.append(str(path))
+    outside = set()
+
+    def convert(stored) -> str | None:
+        path = _absolute_image(stored, study_dir)
+        if path is None:
+            outside.add(str(stored))
+        return path
+
+    paths = _map_paths(frame["image_path"], convert)
     for p in sorted(outside):
         note = f"The image path {p} leads outside the study folder; it was dropped."
         if note not in notes:
@@ -1951,16 +1987,15 @@ def load_eyelink(
     study_dir: str | Path,
     *,
     participants: Iterable[str] | None = None,
-    raw_gaze: bool | Iterable[str] = True,
+    raw_gaze: bool | Iterable[str] = False,
 ) -> EyeLinkData:
     """Read back a study folder `import_eyelink` wrote: every session it read,
     or only ``participants``'.  Sessions that failed are not part of it.
 
-    ``raw_gaze`` is the sessions whose raw gaze is read, of those read: all of
-    them (``True``), none (``False``), or the participants it names.
-    ``EyeLinkData.raw_gaze`` is ``None`` when none of them has raw gaze.  Raw
-    gaze is millions of rows per session, so on a whole study pass
-    ``participants`` or ``raw_gaze=False``.
+    ``raw_gaze`` is the sessions whose raw gaze is read, of those read: none
+    (``False``, the default, since raw gaze is millions of rows per session),
+    all of them (``True``), or the participants it names.
+    ``EyeLinkData.raw_gaze`` is ``None`` when none of them has raw gaze.
     """
     _require_enabled("load_eyelink")
     study_dir = Path(study_dir).resolve()
@@ -1972,6 +2007,68 @@ def load_eyelink(
         raw_gaze = {str(p) for p in raw_gaze}
     with file_lock(study_dir / ".lock", reading=True):
         return _load_study(study_dir, participants, raw_gaze)
+
+
+def study_participants(study_dir: str | Path) -> list[str]:
+    """The participants of a study folder whose sessions were read, sorted."""
+    _require_enabled("study_participants")
+    study_dir = Path(study_dir).resolve()
+    if not (study_dir / _MANIFEST).is_file():
+        raise FileNotFoundError(
+            f"{study_dir} is not an EyeLink study folder: it has no {_MANIFEST}."
+        )
+    with file_lock(study_dir / ".lock", reading=True):
+        return sorted(_ok_sessions(_read_manifest(study_dir)["sessions"]))
+
+
+class SharedScreens(NamedTuple):
+    """`shared_screens`' result: the rows kept, how many screens were left
+    out and how many fixations were on them."""
+
+    words: pd.DataFrame
+    fixations: pd.DataFrame
+    raw_gaze: pd.DataFrame | None
+    screens_left_out: int
+    fixations_left_out: int
+
+
+_SCREEN_KEYS = ["participant_id", "trial_id", "screen_id"]
+
+
+def _screen_index(frame: pd.DataFrame) -> pd.MultiIndex:
+    """Each row's ``(participant_id, trial_id, screen_id)``, as stored."""
+    return pd.MultiIndex.from_arrays([frame[key] for key in _SCREEN_KEYS])
+
+
+def shared_screens(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    raw_gaze: pd.DataFrame | None = None,
+) -> SharedScreens:
+    """The rows of the screens both ``words`` and ``fixations`` have, as the
+    app shows a screen only when both tables do; ``raw_gaze`` keeps the
+    samples of those screens.  When either table is empty, everything is kept
+    (a study without word boxes loads its fixations alone).  A frame nothing
+    is left out of is returned as it is, not copied.
+    """
+    _require_enabled("shared_screens")
+    if words.empty or fixations.empty:
+        return SharedScreens(words, fixations, raw_gaze, 0, 0)
+    word_keys, fix_keys = _screen_index(words), _screen_index(fixations)
+    shared = word_keys.unique().intersection(fix_keys.unique())
+    kept_words, kept_fix = word_keys.isin(shared), fix_keys.isin(shared)
+    left_out = len(fix_keys[~kept_fix].unique().union(word_keys[~kept_words].unique()))
+    if raw_gaze is not None and not raw_gaze.empty and "screen_id" in raw_gaze:
+        kept_gaze = _screen_index(raw_gaze).isin(shared)
+        if not kept_gaze.all():
+            raw_gaze = raw_gaze[kept_gaze]
+    return SharedScreens(
+        words if kept_words.all() else words[kept_words],
+        fixations if kept_fix.all() else fixations[kept_fix],
+        raw_gaze,
+        left_out,
+        int((~kept_fix).sum()),
+    )
 
 
 def _load_study(

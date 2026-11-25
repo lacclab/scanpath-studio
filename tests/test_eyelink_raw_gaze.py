@@ -196,7 +196,7 @@ def test_rerun_with_raw_gaze_redoes_sessions_without_it(tmp_path):
     # Without raw gaze, a session that has it is unchanged and keeps it.
     third = eyelink.import_eyelink(experiment, study_dir, workers=1)
     assert third.imported == [] and sorted(third.skipped) == ["p01", "p02"]
-    gaze = eyelink.load_eyelink(study_dir, participants=["p02"]).raw_gaze
+    gaze = eyelink.load_eyelink(study_dir, participants=["p02"], raw_gaze=True).raw_gaze
     assert set(gaze["participant_id"]) == {"p02"}
     assert len(gaze) == len(EXPECTED["samples"])
 
@@ -222,10 +222,10 @@ def test_load_eyelink_raw_gaze_choice(tmp_path):
     experiment = _experiment(tmp_path)
     study_dir = tmp_path / "study"
     eyelink.import_eyelink(experiment, study_dir, workers=1, raw_gaze=True)
-    assert set(eyelink.load_eyelink(study_dir).raw_gaze["participant_id"]) == {
-        "p01",
-        "p02",
-    }
+    # Raw gaze is read only when asked for.
+    assert eyelink.load_eyelink(study_dir).raw_gaze is None
+    every = eyelink.load_eyelink(study_dir, raw_gaze=True).raw_gaze
+    assert set(every["participant_id"]) == {"p01", "p02"}
     assert eyelink.load_eyelink(study_dir, raw_gaze=False).raw_gaze is None
     only = eyelink.load_eyelink(study_dir, raw_gaze=["p02"])
     assert set(only.raw_gaze["participant_id"]) == {"p02"}

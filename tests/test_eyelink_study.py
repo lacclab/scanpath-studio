@@ -348,6 +348,7 @@ def test_image_paths_outside_the_study_dropped(study):
     eyelink.import_eyelink(experiment, study_dir, workers=1)
     path = study_dir / "fixations" / "p01.parquet"
     frame = pd.read_parquet(path)
+    frame["image_path"] = frame["image_path"].astype(object)
     secret = study_dir.parent / "secret.png"
     frame.loc[0, "image_path"] = str(secret)
     frame.loc[1, "image_path"] = "../secret.png"
@@ -460,3 +461,76 @@ def test_raw_gaze_workers_never_exceed_the_cpus(monkeypatch, cpus, expected):
     monkeypatch.setattr(os, "cpu_count", lambda: cpus)
     assert eyelink.default_workers(raw_gaze=True) == expected
     assert eyelink.default_workers(raw_gaze=False) == max(1, (cpus or 1) - 1)
+
+
+def test_image_paths_worked_out_once_per_image(study, monkeypatch):
+    """A study's image paths are a few files over many rows: each is made
+    relative, then absolute, once, and the frames hold them as categories."""
+    experiment, study_dir = study
+    calls = {"relative": [], "absolute": []}
+    relative, absolute = eyelink._relative_image, eyelink._absolute_image
+
+    def count_relative(path, root):
+        calls["relative"].append(path)
+        return relative(path, root)
+
+    def count_absolute(path, root):
+        calls["absolute"].append(path)
+        return absolute(path, root)
+
+    monkeypatch.setattr(eyelink, "_relative_image", count_relative)
+    monkeypatch.setattr(eyelink, "_absolute_image", count_absolute)
+    eyelink.import_eyelink(experiment, study_dir, workers=1)
+    stored = pd.read_parquet(study_dir / "fixations" / "p01.parquet")
+    assert isinstance(stored["image_path"].dtype, pd.CategoricalDtype)
+    data = eyelink.load_eyelink(study_dir)
+    for frame in (data.fixations, data.words):
+        assert isinstance(frame["image_path"].dtype, pd.CategoricalDtype)
+    # Once per image per table per session, never once per row.
+    unique = sum(
+        frame.loc[frame["participant_id"] == pid, "image_path"].nunique()
+        for frame in (data.fixations, data.words)
+        for pid in PIDS
+    )
+    rows = sum(
+        frame["image_path"].notna().sum() for frame in (data.fixations, data.words)
+    )
+    assert rows > unique
+    assert len(calls["relative"]) == len(calls["absolute"]) == unique
+
+
+def test_sessions_with_other_images_stay_categorical():
+    one = pd.DataFrame({"x": [1, 2], "image_path": pd.Categorical(["a", None])})
+    two = pd.DataFrame({"x": [3], "image_path": pd.Categorical(["b"])})
+    joined = eyelink._concat([one, two], ["x", "image_path"])
+    assert isinstance(joined["image_path"].dtype, pd.CategoricalDtype)
+    assert joined["image_path"].tolist()[0::2] == ["a", "b"]
+    assert pd.isna(joined["image_path"].iloc[1])
+
+
+def test_shared_screens_keeps_screens_both_tables_have():
+    words = pd.DataFrame(
+        {
+            "participant_id": ["a", "a", "b"],
+            "trial_id": ["1", "1", "1"],
+            "screen_id": ["screen_1", "screen_1", "screen_1"],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["a", "a", "a", "b"],
+            "trial_id": ["1", "1", "1", "2"],
+            "screen_id": ["screen_1", "screen_2", "screen_2", "screen_1"],
+        }
+    )
+    gaze = fixations.loc[fixations.index.repeat(2)].reset_index(drop=True)
+    kept = eyelink.shared_screens(words, fixations, gaze)
+    assert kept.words.index.tolist() == [0, 1]
+    assert kept.fixations.index.tolist() == [0]
+    assert len(kept.raw_gaze) == 2
+    # a/1/screen_2 and b/2/screen_1 (fixations only), b/1/screen_1 (words only).
+    assert (kept.screens_left_out, kept.fixations_left_out) == (3, 3)
+    # Nothing to leave out: the frames themselves, not copies.
+    same = eyelink.shared_screens(kept.words.iloc[:1], kept.fixations, None)
+    assert same.fixations is kept.fixations and same.raw_gaze is None
+    assert same.screens_left_out == 0

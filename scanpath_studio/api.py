@@ -4800,7 +4800,7 @@ def add_dataset(
     description: str | None = None,
     select: bool = True,
     replace: bool = False,
-    trial_metadata: TrialMetadata | pd.DataFrame | None = None,
+    _trial_metadata: TrialMetadata | pd.DataFrame | bool | None = None,
 ) -> str:
     """Add a dataset to the app's dataset list from a script.
 
@@ -4842,12 +4842,6 @@ def add_dataset(
             annotations, metadata tables, share links, and its description and
             recording setup unless new ones are given. Without it, a name already
             saved is an error.
-        trial_metadata: The dataset's trial metadata table, a `TrialMetadata`
-            or a frame with ``participant_id`` and ``trial_id`` columns (loaded
-            with [`load_trial_metadata`][scanpath_studio.api.load_trial_metadata]
-            keyed by both). The app attaches it with the dataset, as one attached
-            on the 🗂️ **Data** page, and its trial filters offer its columns.
-            With ``replace``, leaving it out keeps the saved dataset's.
 
     Returns:
         The name the dataset was saved under.
@@ -4891,7 +4885,14 @@ def add_dataset(
             "setup must be an experimental_setup.SetupSnapshot, got "
             f"{type(setup).__name__}."
         )
-    trial_payload = _trial_metadata_payload(trial_metadata)
+    # ``_trial_metadata`` is `add_eyelink_dataset`'s: the dataset's trial
+    # table, a `TrialMetadata` or a frame keyed by ``participant_id`` and
+    # ``trial_id``, stored where the app keeps one attached on the Data page.
+    # ``None`` keeps a replaced dataset's; ``False`` drops it.
+    drop_trial_metadata = _trial_metadata is False
+    trial_payload = (
+        None if drop_trial_metadata else _trial_metadata_payload(_trial_metadata)
+    )
     schemas: dict = {}
     if words is not None or fixations is not None:
         loaded = load_scanpath_data(
@@ -4970,6 +4971,7 @@ def add_dataset(
         replace=replace,
         keep_setup=keep_setup,
         trial_metadata=trial_payload,
+        drop_trial_metadata=drop_trial_metadata,
     )
     return str(name).strip()
 
@@ -4995,13 +4997,6 @@ def _trial_metadata_payload(trial_metadata) -> dict | None:
     return {**payload, "columns": list(trial_metadata.frame.columns)}
 
 
-def _screen_keys(frame: pd.DataFrame) -> pd.MultiIndex:
-    """Each row's ``(participant_id, trial_id, screen_id)``, as text."""
-    return pd.MultiIndex.from_frame(
-        frame[["participant_id", "trial_id", SCREEN_ID]].astype(str)
-    )
-
-
 def add_eyelink_dataset(
     name: str,
     study_dir: str | Path,
@@ -5023,7 +5018,8 @@ def add_eyelink_dataset(
     word boxes, a screen with fixations but no words (a question or a blank
     screen) is left out, as is one with words but no fixations; the description
     says how many. A study with no word boxes at all loads its fixations alone.
-    The study folder keeps everything.
+    The study folder keeps everything. With ``replace``, a study without
+    ``TRIAL_VAR`` values drops the trial table the saved dataset had.
 
     Args:
         name: The name the dataset list shows.
@@ -5052,7 +5048,7 @@ def add_eyelink_dataset(
     wanted = {str(p) for p in raw_gaze_participants or ()}
     # Raw gaze is large: only the named participants' is read.
     data = load_eyelink(study_dir, raw_gaze=wanted)
-    words, fixations, trials = data.words, data.fixations, data.trial_metadata
+    sessions, display = len(data.notes), data.display
     raw_gaze = None
     if wanted:
         gaze = data.raw_gaze
@@ -5063,45 +5059,44 @@ def add_eyelink_dataset(
                 f"{', '.join(sorted(wanted - have))}; import it with raw_gaze=True."
             )
         raw_gaze = gaze
+    kept = _eyelink.shared_screens(data.words, data.fixations, raw_gaze)
+    trials = data.trial_metadata
+    # The loaded tables go before the dataset is saved, so a large study is
+    # not held twice.
+    del data, raw_gaze
+    words, fixations = kept.words, kept.fixations
     note = None
-    if not words.empty and not fixations.empty:
-        # The app refuses a screen that only one table has.
-        word_screens, fix_screens = _screen_keys(words), _screen_keys(fixations)
-        shared = word_screens.intersection(fix_screens)
-        kept_words, kept_fix = word_screens.isin(shared), fix_screens.isin(shared)
-        left_out = fix_screens[~kept_fix].union(word_screens[~kept_words]).nunique()
-        if left_out:
-            note = (
-                f"{left_out} screens without both words and fixations, with "
-                f"{int((~kept_fix).sum())} fixations, were left out."
-            )
-        words, fixations = words[kept_words], fixations[kept_fix]
-        if raw_gaze is not None and SCREEN_ID in raw_gaze.columns:
-            raw_gaze = raw_gaze[_screen_keys(raw_gaze).isin(shared)]
-        readings = pd.MultiIndex.from_frame(
-            fixations[["participant_id", "trial_id"]].astype(str)
+    if kept.screens_left_out:
+        note = (
+            f"{kept.screens_left_out} screens without both words and fixations, "
+            f"with {kept.fixations_left_out} fixations, were left out."
         )
+        readings = pd.MultiIndex.from_arrays(
+            [fixations["participant_id"], fixations["trial_id"]]
+        ).unique()
         trials = trials[
-            pd.MultiIndex.from_frame(
-                trials[["participant_id", "trial_id"]].astype(str)
+            pd.MultiIndex.from_arrays(
+                [trials["participant_id"], trials["trial_id"]]
             ).isin(readings)
         ]
     if description is None:
-        description = f"EyeLink import of {len(data.notes)} sessions from {study_dir}"
+        noun = "session" if sessions == 1 else "sessions"
+        description = f"EyeLink import of {sessions} {noun} from {study_dir}"
     if note:
         description = f"{description.strip().rstrip('.')}. {note}"
-    # Only the two key columns: the study's trials carry no TRIAL_VARs.
+    # Only the two key columns: the study's trials carry no TRIAL_VARs, and a
+    # replaced dataset's stored trial table is dropped.
     has_variables = not trials.empty and len(trials.columns) > 2
     return add_dataset(
         name,
         words if not words.empty else None,
         fixations,
-        raw_gaze=raw_gaze,
-        canvas_size=data.display,
-        trial_metadata=trials if has_variables else None,
+        raw_gaze=kept.raw_gaze,
+        canvas_size=display,
         description=description,
         select=select,
         replace=replace,
+        _trial_metadata=trials if has_variables else False,
     )
 
 

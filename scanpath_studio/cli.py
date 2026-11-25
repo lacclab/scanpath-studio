@@ -2892,33 +2892,29 @@ def _load_multipleye_render(root: str, participant: str | None):
 
 
 def _load_eyelink_render(study_dir: str, participant: str | None):
-    """`render --eyelink-study`: the study folder's tables, only the given
-    participant's when one is named, normalized like a dataset added to the app.
+    """`render --eyelink-study`: one participant's tables from the study
+    folder -- the one named, else the study's first -- normalized like a
+    dataset added to the app.
 
     A screen only one table has (a question screen with fixations and no word
     boxes) is left out, as `api.add_eyelink_dataset` leaves it out. Returns
     ``(words, fixations, display)``."""
     from . import api
-    from .eyelink import load_eyelink
-    from .multipart import SCREEN_ID
+    from .eyelink import load_eyelink, shared_screens, study_participants
 
+    if participant is None:
+        # One reading is drawn: the whole study is never loaded for it.
+        participant = next(iter(study_participants(study_dir)), None)
     data = load_eyelink(
-        study_dir,
-        participants=None if participant is None else [participant],
-        raw_gaze=False,
+        study_dir, participants=None if participant is None else [participant]
     )
-    words, fixations = data.words, data.fixations
-    if not words.empty and not fixations.empty:
-        keys = ["participant_id", "trial_id", SCREEN_ID]
-        shared = pd.MultiIndex.from_frame(words[keys].astype(str)).intersection(
-            pd.MultiIndex.from_frame(fixations[keys].astype(str))
-        )
-        words = words[pd.MultiIndex.from_frame(words[keys].astype(str)).isin(shared)]
-        fixations = fixations[
-            pd.MultiIndex.from_frame(fixations[keys].astype(str)).isin(shared)
-        ]
-    words, fixations = api.load_scanpath_data(words, fixations, names="canonical")
-    return words, fixations, data.display
+    kept = shared_screens(data.words, data.fixations)
+    display = data.display
+    del data
+    words, fixations = api.load_scanpath_data(
+        kept.words, kept.fixations, names="canonical"
+    )
+    return words, fixations, display
 
 
 def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:

@@ -7,6 +7,7 @@ offer them.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -86,7 +87,7 @@ def test_add_eyelink_dataset_round_trip(cache_dir, study):
     assert set(entry["words"]["image_path"].dropna()) == set(paths)
     assert SetupSnapshot.from_dict(entry["setup"]).canvas == (1280, 1024)
     description = session[DATASET_DESCRIPTIONS_KEY]["Pilot EDF"]
-    assert description.startswith(f"EyeLink import of 1 sessions from {study}")
+    assert description.startswith(f"EyeLink import of 1 session from {study}")
     assert f"{left_out} fixation" in description
     assert session["data_source_choice"] == "Pilot EDF"
 
@@ -124,7 +125,7 @@ def test_add_dataset_trial_metadata_replace_keeps_it(cache_dir, study):
         "With trials",
         words,
         fixations,
-        trial_metadata=data.trial_metadata,
+        _trial_metadata=data.trial_metadata,
         keep_columns=["image_path"],
     )
 
@@ -139,7 +140,7 @@ def test_add_dataset_trial_metadata_replace_keeps_it(cache_dir, study):
     # A new one replaces it.
     changed = data.trial_metadata.assign(condition="Hard")
     sps.add_dataset(
-        "With trials", words, fixations, replace=True, trial_metadata=changed
+        "With trials", words, fixations, replace=True, _trial_metadata=changed
     )
     assert stored_conditions() == {"Hard"}
 
@@ -148,12 +149,12 @@ def test_trial_metadata_is_kept_apart_per_dataset(cache_dir, study):
     data = eyelink.load_eyelink(study)
     words = data.words[data.words["screen_id"] == "screen_1"]
     fixations = data.fixations[data.fixations["screen_id"] == "screen_1"]
-    sps.add_dataset("First", words, fixations, trial_metadata=data.trial_metadata)
+    sps.add_dataset("First", words, fixations, _trial_metadata=data.trial_metadata)
     sps.add_dataset(
         "Second",
         words,
         fixations,
-        trial_metadata=data.trial_metadata.assign(condition="Hard"),
+        _trial_metadata=data.trial_metadata.assign(condition="Hard"),
     )
     store = _restored(cache_dir)[metadata.DATASET_STORE_KEY]
     first = metadata.trial_from_payload(store["First"]["trial"]).frame
@@ -209,3 +210,39 @@ def test_trial_metadata_restored_in_app(cache_dir, study):
     ]
     assert widgets, f"no trial filter widget {key!r}"
     assert set(widgets[0].options) >= {"Adv", "Ele"}
+
+
+def test_replace_with_a_study_without_trial_variables_drops_the_table(
+    cache_dir, tmp_path
+):
+    study = _study(tmp_path / "with")
+    sps.add_eyelink_dataset("Pilot EDF", study, select=False)
+    assert "trial" in _restored(cache_dir)[metadata.DATASET_STORE_KEY]["Pilot EDF"]
+    # The same study read again from recordings that log no TRIAL_VAR.
+    asc = write_experiment(tmp_path / "without")
+    lines = asc.read_text(encoding="utf-8").splitlines()
+    asc.write_text(
+        "\n".join(line for line in lines if "TRIAL_VAR" not in line) + "\n",
+        encoding="utf-8",
+    )
+    bare = tmp_path / "without" / "study"
+    eyelink.import_eyelink(asc, bare, workers=1)
+    sps.add_eyelink_dataset("Pilot EDF", bare, select=False, replace=True)
+    store = _restored(cache_dir).get(metadata.DATASET_STORE_KEY) or {}
+    assert "trial" not in (store.get("Pilot EDF") or {})
+
+
+def test_an_unreadable_metadata_file_says_what_to_do(cache_dir, study):
+    sps.add_eyelink_dataset("Pilot EDF", study, select=False)
+    manifest = json.loads((cache_dir / "manifest.json").read_text(encoding="utf-8"))
+    persistence._metadata_path(cache_dir, manifest["metadata"]).write_text(
+        "{not json", encoding="utf-8"
+    )
+    with pytest.raises(ValueError) as saving:
+        sps.add_eyelink_dataset("Pilot EDF", study, replace=True)
+    assert "nothing was saved. Open the app and attach the table" in str(saving.value)
+    with pytest.raises(ValueError) as removing:
+        sps.remove_dataset("Pilot EDF")
+    assert "nothing was removed. Open the app and remove the dataset" in str(
+        removing.value
+    )

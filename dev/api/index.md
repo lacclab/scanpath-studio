@@ -1488,6 +1488,7 @@ add_dataset(
     description=None,
     select=True,
     replace=False,
+    _trial_metadata=None,
 )
 ```
 

@@ -2608,6 +2608,7 @@
 <li>Charts can run either axis the other way with Reverse horizontal axis and Reverse vertical axis under Axes (--reverse-x / --reverse-y on the command line, reverse_x_axis / reverse_y_axis in Python), for example to put the first fixation at the top.</li>
 <li>An empty Annotations tab on the Data page has a button that opens Scanpath → Annotations.</li>
 <li>The Scanpath view shows when trial filters are on: a dot on the filter button and a line under the trial picker with how many trials the filters keep, what they are, and a Clear filters button.</li>
+<li>Experimental: import EyeLink EDF recordings without Data Viewer — fixations, word boxes, stimulus screens, trial variables and, on request, raw gaze samples — into a resumable study folder with api.import_eyelink or scanpath-studio import-eyelink, then add it to the app with api.add_eyelink_dataset or --add; turn it on with SCANPATH_EXPERIMENTAL=1 and pip install "scanpath-studio[edf]", and it needs SR Research's edf2asc from the EyeLink Developers Kit.</li>
 </ul>
 <h3 id="exec-18--changed">Changed<a class="headerlink" href="#exec-18--changed" title="Permanent link">&para;</a></h3>
 <ul>

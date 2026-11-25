@@ -107,10 +107,13 @@ def _run(fig, steps, tmp_path) -> dict:
     return json.loads(done.stdout)
 
 
-def _run_page(fig, steps, tmp_path, *, slot: bool = False, parent=None) -> dict:
+def _run_page(
+    fig, steps, tmp_path, *, slot: bool = False, parent=None, queue: bool = False
+) -> dict:
     """`_run` on the layout `plots.replay_page` gives the page: the figure's
     own controls hidden, and the player's toolbar in their place. ``parent`` is
-    the page around the replay's frame (see the harness)."""
+    the page around the replay's frame, and ``queue`` gives Plotly a frame queue
+    whose newer draws interrupt older ones (see the harness)."""
     page, _script = replay_page(fig)
     layout = page["layout"]
     config = {
@@ -122,6 +125,7 @@ def _run_page(fig, steps, tmp_path, *, slot: bool = False, parent=None) -> dict:
         "steps": steps,
         "slot": slot,
         "parent": parent,
+        "queue": queue,
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config), encoding="utf-8")
@@ -439,6 +443,43 @@ class TestToolbar:
         assert log["toolbar"]["readout"] == (
             slider.currentvalue.prefix + slider.steps[300].label
         )
+
+    def test_a_burst_of_seeks_draws_only_the_last(self, tmp_path):
+        fig = _replay(autoplay=False)
+        last = len(fig.frames) - 1
+        log = _run_page(
+            fig,
+            [["seek_burst", [last, 0, 1, last, 0, 1, 0]], ["run_until", 100]],
+            tmp_path,
+            queue=True,
+        )
+        assert [int(n) for n, _ in log["shown"]] == [0]
+        assert log["toolbar"]["range"]["value"] == "0"
+        assert log["unhandled"] == []
+
+    def test_a_draw_another_one_interrupts_is_not_an_error(self, tmp_path):
+        # Plotly rejects a queued draw without a reason when a newer one
+        # replaces it, whichever script asked for the newer one.
+        log = _run_page(
+            _replay(autoplay=False),
+            [["seek", 10], ["seek", 20], ["seek", 30], ["animate", 40]],
+            tmp_path,
+            queue=True,
+        )
+        assert [int(n) for n, _ in log["shown"]] == [10, 20, 30, 40]
+        assert log["unhandled"] == []
+
+    @pytest.mark.parametrize(
+        ("how", "reason"), [("missing", "undefined"), ("error", "Error: draw failed")]
+    )
+    def test_a_draw_that_fails_still_reaches_the_page(self, tmp_path, how, reason):
+        log = _run_page(
+            _replay(autoplay=False),
+            [["fail_next", how], ["seek", 10], ["run_until", 100]],
+            tmp_path,
+            queue=True,
+        )
+        assert log["unhandled"] == [reason]
 
     @pytest.mark.parametrize(
         ("parent", "scheme"),

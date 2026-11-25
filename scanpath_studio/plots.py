@@ -6720,13 +6720,19 @@ _REPLAY_PLAYER_JS = """(function () {
       }
       return lo;
     }
-    var latestDraw;
+    // An 'immediate' animate drops every frame still queued, rejects each
+    // dropped draw's promise without a reason and then emits
+    // plotly_animationinterrupted. A draw rejected that way after such an
+    // event is expected; any other rejection (an error, or a frame Plotly
+    // could not find) still reaches the page as an unhandled rejection.
+    var interruptions = 0;
+    gd.on('plotly_animationinterrupted', function () { interruptions++; });
+    var pendingSeek = null;
     function animate(frame, options) {
-      var draw = Plotly.animate(gd, frame, options);
-      latestDraw = draw;
-      draw.catch(function (error) {
-        // Plotly rejects a queued frame without a reason when a newer draw replaces it.
-        if (draw === latestDraw || error !== undefined) { throw error; }
+      pendingSeek = null;  // a direct draw supersedes a seek not yet drawn
+      var before = interruptions;
+      Plotly.animate(gd, frame, options).catch(function (error) {
+        if (error !== undefined || interruptions === before) { throw error; }
       });
     }
     function draw(k, options) {
@@ -6760,11 +6766,22 @@ _REPLAY_PLAYER_JS = """(function () {
       t0 = performance.now() - start / speed;
       raf = requestAnimationFrame(tick);
     }
-    function seek(k) {  // Restart, and the toolbar's time slider
+    // Restart, and the toolbar's time slider. Seeks made before the running
+    // script returns (a script sending several input events at once) draw
+    // once, the last of them, rather than queueing frames that only replace
+    // each other.
+    function seek(k) {
       stop();
       exactTime = null; eventIndex = -1;
       shown = k;
-      draw(k, leap);
+      var queued = pendingSeek !== null;
+      pendingSeek = k;
+      if (queued) { return; }
+      Promise.resolve().then(function () {
+        var target = pendingSeek;
+        pendingSeek = null;
+        if (target !== null) { draw(target, leap); }
+      });
     }
     function step(direction) {
       stop();

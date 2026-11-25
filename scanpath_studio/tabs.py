@@ -197,6 +197,7 @@ from scanpath_studio.constants import (
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
+    FILTER_POPOVER_KEY,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
@@ -213,6 +214,7 @@ from scanpath_studio.controls import (
     active_filter_items,
     chip_field_label,
     clear_trial_filters,
+    clear_trial_filters_from_outside,
     column_mapping_ui,
     compare_b_filters,
     corpus_style_controls,
@@ -221,6 +223,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    hold_cleared_filters,
     leave_animation,
     metadata_readings,
     modes_summary,
@@ -6697,18 +6700,27 @@ def render_single_trial_tab(
             cluster and lays out as the cluster's other cells do. In Essentials
             they stay in the page, hidden, with their values, and a ＋ More
             list takes the cell."""
-            pop = ui_mode.advanced_only(host, "trial_filters").popover(
+            funnel = ui_mode.advanced_only(host, "trial_filters")
+            pop = funnel.popover(
                 "Filter the trial list",
                 icon=_FILTER_ICON,
                 width="content",
                 help="Select the whole readings available in the trial list.",
-                key="iconpop_filter_trials",
+                key=FILTER_POPOVER_KEY,
+                # Tracked, so a held *Clear filters* reset lets go the moment
+                # the panel opens and its widgets show the cleared values.
+                on_change="rerun",
             )
             box = pop.container(key="tour_grp_narrow_by")
             box.caption(
                 "Select whole readings. Each selected reading keeps all of its fixations."
             )
             _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
+            # A reset from *Clear filters* under the picker, held now that the
+            # widgets have re-seeded the defaults it resets to.
+            hold_cleared_filters()
+            # After the filters, so the dot reflects this run's edits.
+            funnel.html(_funnel_state_css(has_active_trial_filters()))
             # The chips' menu closes A's cluster (◀ ▶ ⇅ 🔎 ✏️), so the chip
             # table below has the plot's whole width, and hiding it
             # leaves no row behind. Drawn here, before the table reads
@@ -6751,6 +6763,16 @@ def render_single_trial_tab(
                 )
             )
         screen_slot = screen_cells.get("a")
+        # Drawn every run (empty when nothing filters), so turning a filter on
+        # or off keeps the elements below at the same place in the tree and the
+        # figure is not redrawn.
+        _render_filter_scope(
+            st.container(key="trial_filter_scope"),
+            combos,
+            combos_all,
+            words_all,
+            fixations_all,
+        )
         # Slots filled once the selection is resolved (chips need the trial).
         #
         # Creation order *is* screen order, so these reservations are the whole
@@ -10590,6 +10612,73 @@ def _open_measure_mapping() -> None:
 
     _open_mapping_editor()
     _go_data()
+
+
+def _funnel_state_css(active: bool) -> str:
+    """The Scanpath funnel's *filters on* look: an accent outline and a dot.
+
+    A style-only block, which Streamlit places outside the layout. CSS rather
+    than a different label or key: either would remount the popover while it is
+    open, which is exactly when a filter gets turned on.
+    """
+    if not active:
+        return "<style></style>"
+    button = ".st-key-iconpop_filter_trials button"
+    return (
+        f"<style>{button} {{ position: relative;"
+        " border-color: var(--sps-accent) !important; }"
+        f" {button}::after {{ content: ''; position: absolute; top: 3px;"
+        " right: 3px; width: 7px; height: 7px; border-radius: 50%;"
+        " background: var(--sps-accent); }</style>"
+    )
+
+
+def filter_scope_line(
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+) -> str | None:
+    """The Scanpath view's *what the filters keep* line, or None when none is on.
+
+    The counts are the trial picker's pool against the dataset's, so the slider's
+    ``n/N`` can be read as a share of the whole dataset.
+    """
+    if not has_active_trial_filters():
+        return None
+    described = " · ".join(
+        md_literal(format_filter_item(i))
+        for i in active_filter_items(words_all, fixations_all)
+    )
+    text = f"**Filtered:** {len(combos):,} of {plural(len(combos_all), 'trial')}"
+    return f"{text} · {described}" if described else text
+
+
+def _render_filter_scope(
+    host,
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+) -> None:
+    """Draw `filter_scope_line` with a one-click way out, into ``host``.
+
+    Shown in both modes: Essentials hides the funnel, not the filters a link
+    or a Full-mode session set, so this line is the only sign of them there.
+    """
+    text = filter_scope_line(combos, combos_all, words_all, fixations_all)
+    if text is None:
+        return
+    row = host.container(horizontal=True, vertical_alignment="center", gap="small")
+    row.caption(f"{ICONS['trial_filter']} {text}", width="content")
+    row.button(
+        "Clear filters",
+        icon=ICONS["close"],
+        key="trial_filter_scope_clear",
+        type="tertiary",
+        on_click=clear_trial_filters_from_outside,
+        help="Reset every trial filter.",
+    )
 
 
 def _render_pool_filters(

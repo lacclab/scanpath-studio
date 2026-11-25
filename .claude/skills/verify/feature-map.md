@@ -23,6 +23,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | --- | --- | --- | --- |
 | Prepare publication figure | Scanpath → Export → Prepare figure for export | `?prepare=1`, `render --sample -o reading.publication.json`, `publication_figure` | Download the current PNG, then open Label events, pin a fixation, save and reopen the editable file. Under Print settings, choose 85 mm and 300 dpi. The PNG and TIFF are 1,004 px wide and the SVG declares 85 mm. |
 | Pick a reading | Above the plot | `single_participant`, `single_trial_id` | The plot, title and chips follow; a share link reopens the same reading |
+| Trial filter status | Under the trial picker, and a dot on the funnel | `filter_*` keys (e.g. `filter_participants`) | While a filter is on: *Filtered: 12 of 24 trials · …* names the filters, the funnel carries a dot, and **Clear filters** resets them (`trial_filter_scope_clear`); after it, stepping trials does not bring a filter back, and reopening the funnel to pick it again applies it. Turning a filter on keeps the funnel's popover open. |
 | Keyboard shortcuts | Scanpath page, trial arrows, replay timeline | Left / Right, Shift + Left / Right, Space, Home / End | Page arrows step trials, Shift + arrows step B, and the replay timeline steps frames and toggles playback. Typing in the picker leaves the trial alone. |
 | Fixation charts | Full → Axes → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |
 | Reversed chart axes | Full → Axes → Reverse horizontal / vertical axis | `global_reverse_x_axis`, `global_reverse_y_axis` | Flips a chart axis from its usual direction (`reverse_x` / `reverse_y` link params, `--reverse-x` / `--reverse-y`, `reverse_x_axis` / `reverse_y_axis`). Greyed on the screen view and in the replay. |
@@ -81,8 +82,10 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Feature | Works when |
 | --- | --- |
 | ➕ Add dataset wizard | Upload → map columns → validate → the dataset opens; `*` fields block only when missing |
+| Leaving the wizard | Before any upload it lists the accepted formats and size limit. Upload a Fixations table, then ✕ Cancel → Discard and leave: the prompt names the uploaded files and the bundled demo loads again, mapping included. With nothing uploaded the prompt says what you filled in won't be kept. |
 | Draw a scanpath | Draw word 1 → word 3 → word 1, change the last duration, preview, save and reopen by name. The draft and Share code reproduce the three visits. |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
+| Empty annotations | Data → Current dataset → Annotations on a dataset with none: Full shows **Open Scanpath → Annotations**, which lands on that subtab. |
 | Current dataset | Overview counts the filtered trials. Averages and table coverage describe the same selection. A recording row jumps to its table on a page with all six tables. Data checks cover the whole dataset even when the filters leave zero trials. |
 | Dataset library | Search or filter by source, sort, and open a dataset. Opening another dataset with unsaved edits offers to keep or discard the draft. Renaming an upload preserves its annotations, saved selection and comparison identity. |
 | Saved work | Local recovery and downloaded corpora are accessible even when the current dataset fails to load. |

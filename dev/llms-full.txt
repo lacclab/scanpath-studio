@@ -4704,6 +4704,7 @@ Developed with AI assistance. Cross-check results before publishing.
 
 ### Added
 
+- A table button beside the dataset picker opens the Data Management page on the dataset's Tables, and the Annotations subtab's pointer opens its Annotations panel.
 - The Axis layout menu offers *Fixation index by word number*: each fixation's place in the reading against the word it landed on.
 - Charts can run either axis the other way with Reverse horizontal axis and Reverse vertical axis under Axes (--reverse-x / --reverse-y on the command line, reverse_x_axis / reverse_y_axis in Python), for example to put the first fixation at the top.
 - An empty Annotations tab on the Data page has a button that opens Scanpath → Annotations.

@@ -641,8 +641,8 @@ def test_shared_chart_range_pads_and_ignores_frames_without_the_field():
 
 
 def test_condition_matches_on_one_trial_are_captioned_by_participant():
-    """Matching on a field every panel shares, such as a source-trial id that
-    several simulated readers carry, puts every panel on the same trial; each is
+    """Matching on a field every panel shares, when several readers' readings
+    are filed under one trial id, puts every panel on the same trial; each is
     then named by its reader, not by that trial."""
     from scanpath_studio.tabs import _panel_captions, _reading_labels
 
@@ -650,14 +650,14 @@ def test_condition_matches_on_one_trial_are_captioned_by_participant():
         (p, "T"): pd.DataFrame(
             {"participant_id": [p], "trial_id": ["T"], "text_id": ["A"]}
         )
-        for p in ("r1 · model A", "r1 · model B")
+        for p in ("r1 · session A", "r1 · session B")
     }
     captions = _panel_captions(
         "source_trial_id", panels, "text_id", _reading_labels(panels)
     )
     assert captions == {
-        ("r1 · model A", "T"): "Participant r1 · model A",
-        ("r1 · model B", "T"): "Participant r1 · model B",
+        ("r1 · session A", "T"): "Participant r1 · session A",
+        ("r1 · session B", "T"): "Participant r1 · session B",
     }
     # Different trials keep the trial caption.
     mixed = {
@@ -669,7 +669,7 @@ def test_condition_matches_on_one_trial_are_captioned_by_participant():
     ) == {"T1", "T2"}
 
 
-def _wordless_comparisons_app(axes=("order_in_trial", "word_id")) -> None:
+def _wordless_comparisons_app(axes=("order_in_trial", "word_id"), clock=False) -> None:
     """The look-alike grid with no word boxes at all, as a dataset loaded from
     its fixations alone has."""
     from scanpath_studio import tabs
@@ -679,6 +679,12 @@ def _wordless_comparisons_app(axes=("order_in_trial", "word_id")) -> None:
     words, fixations = _lookalike_frames()
     fixations["word_id"] = fixations["fixation_id"]
     fixations[["x", "y"]] = float("nan")
+    if clock:
+        # Two readers recorded far apart on the session clock.
+        fixations["timestamp_ms"] = (
+            fixations["order_in_trial"] * 250.0
+            + (fixations["participant_id"] != "p0") * 3_000_000.0
+        )
     tabs.render_multiple_comparison_tab(
         words.iloc[:0],
         fixations[fixations["participant_id"] == "p0"],
@@ -720,3 +726,77 @@ def test_a_reading_chart_grid_needs_no_word_boxes(monkeypatch, on_chart):
     else:
         assert not shown
         assert any("no word boxes" in i for i in infos)
+
+
+def _recorded_panels(monkeypatch):
+    from scanpath_studio import tabs
+
+    built, ranges = [], []
+    real_make = tabs.make_scanpath_figure
+    real_render = tabs._render_true_scale_chart
+
+    def recording_make(words, fix, **kwargs):
+        built.append((kwargs["x_field"], kwargs["y_field"]))
+        return real_make(words, fix, **kwargs)
+
+    def recording_render(fig, **kwargs):
+        ranges.append(fig.layout.xaxis.range)
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "make_scanpath_figure", recording_make)
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    return built, ranges
+
+
+def test_a_computed_elapsed_axis_stays_a_chart_in_the_grid(monkeypatch):
+    """Elapsed seconds are computed from the onsets, never a column, and still
+    count as the frame's field."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import chart_axes
+
+    built, _ = _recorded_panels(monkeypatch)
+    at = AppTest.from_function(
+        _wordless_comparisons_app,
+        kwargs={"axes": (chart_axes.ELAPSED, "word_id"), "clock": True},
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    assert built and set(built) == {(chart_axes.ELAPSED, "word_id")}
+
+
+def test_an_absolute_clock_keeps_each_panels_own_range(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _, ranges = _recorded_panels(monkeypatch)
+    at = AppTest.from_function(
+        _wordless_comparisons_app,
+        kwargs={"axes": ("timestamp_ms", "word_id"), "clock": True},
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    # Each panel spans its own reading, not the 3,000,000 ms between readers.
+    assert ranges and all(abs(r[1] - r[0]) < 10_000 for r in ranges), ranges
+
+
+@pytest.mark.parametrize(
+    ("state", "drawn"),
+    [
+        ({}, True),
+        ({"global_x_field": "order_in_trial", "global_y_field": "word_id"}, False),
+        ({"global_x_field": "order_in_trial", "global_y_field": "x"}, True),
+        ({"global_x_field": "y", "global_y_field": "word_id"}, True),
+        (
+            {
+                "global_x_field": "order_in_trial",
+                "global_y_field": "word_id",
+                "single_animate": True,
+            },
+            True,
+        ),
+    ],
+)
+def test_the_figure_draws_positions_on_the_screen_a_screen_axis_or_the_replay(
+    state, drawn
+):
+    from scanpath_studio.tabs import _figure_draws_positions
+
+    assert _figure_draws_positions(state) is drawn

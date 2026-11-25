@@ -6801,18 +6801,12 @@ def render_single_trial_tab(
 
     # A dataset that fails its data checks badly (most fixations at 0 ms, most
     # positions missing) still draws a plausible figure; say so above it.
-    # A chart with no screen axis draws no position, so missing positions don't
-    # affect it; the replay always draws the screen.
-    on_screen = bool(st.session_state.get("single_animate")) or any(
-        st.session_state.get(key, axis) in chart_axes.POSITION_FIELDS
-        for key, axis in (("global_x_field", "x"), ("global_y_field", "y"))
-    )
     render_data_health_notice(
         plot_notes_slot,
         words_all,
         fixations_all,
         raw_gaze_all,
-        positions_drawn=on_screen,
+        positions_drawn=_figure_draws_positions(st.session_state),
     )
 
     if not (selected_participant and selected_trial):
@@ -13870,8 +13864,8 @@ def _panel_captions(choice: str, panels: dict, text_col, reading_labels: dict) -
     """:func:`_match_panel_caption` for each grid panel, made unique: a
     caption two panels share — one participant's two readings of a text, two
     readers' trials of one id — names its reading as well."""
-    # A condition match whose panels are all one trial (e.g. a combined
-    # corpus' readings of one original trial, matched on that trial's id)
+    # A condition match whose panels are all one trial (several readers'
+    # readings filed under one trial id, matched on a field they share)
     # would caption every panel with that same trial: name each by its
     # participant, as *Same text* does, so the panels read apart.
     trials = {reading[1] for reading in panels}
@@ -14026,7 +14020,11 @@ def render_multiple_comparison_tab(
         settings: dict,
         x_range: list[float] | None = None,
     ):
-        x_field, y_field = axes if set(axes) <= set(fix.columns) else ("x", "y")
+        # Computed axes (elapsed seconds) count as present when the frame
+        # has what they are computed from.
+        x_field, y_field = (
+            axes if chart_axes.drawable_fixations(axes, fix) else ("x", "y")
+        )
         fig = _panel_figure(
             words,
             fix,
@@ -14157,13 +14155,14 @@ def render_multiple_comparison_tab(
                 ],
             )
         # On chart axes the page's panels share one X range, so a longer
-        # scanpath reads as longer rather than as the same width squeezed.
+        # scanpath reads as longer rather than as the same width squeezed. Not
+        # on an absolute clock: readings recorded apart would each fill a sliver.
         page_x_range = (
             _shared_chart_range(
                 [candidates[name] for name in grid_names] + [trial_fixations],
                 axes[0],
             )
-            if on_chart
+            if on_chart and axes[0] != "timestamp_ms"
             else None
         )
         # Estimate a uniform cell height from the figure aspect + column count so
@@ -17719,6 +17718,17 @@ def serious_health_lines(findings) -> list[str]:
             f"{noun} rows."
         )
     return lines
+
+
+def _figure_draws_positions(state) -> bool:
+    """Whether the Scanpath figure places fixations by screen position: the
+    replay always does, and a chart does when either axis is screen X or Y."""
+    if state.get("single_animate"):
+        return True
+    return any(
+        state.get(key, axis) in chart_axes.POSITION_FIELDS
+        for key, axis in (("global_x_field", "x"), ("global_y_field", "y"))
+    )
 
 
 def render_data_health_notice(

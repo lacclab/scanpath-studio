@@ -149,7 +149,7 @@ scanpath_studio/
 
 `sample_data/` holds the bundled demo; `desktop/` the PyInstaller launcher, spec
 and smoke tests; `paper/` the scripts that make the manuscript's figures;
-`scripts/` docs, release and recording helpers.
+`scripts/` docs, release and recording helpers, and `eyegenbench_to_studio.py`, which adds EyeGenBench corpora and model runs as datasets (`api.add_dataset`).
 
 ### Pipeline
 

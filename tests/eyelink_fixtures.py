@@ -9,6 +9,13 @@ it against ``EXPECTED``, which is traced by hand from those lines.
 Two readings.  Trial 1 shows a text screen (three words) and then a question
 screen with no words; trial 2 shows one text screen (two words).  Times are
 tracker milliseconds; ``MSG t -13 ...`` happened at ``t + 13``.
+
+Two optional readings follow them: an aborted trial 3 (no ``END``, no
+``TRIAL_RESULT``) and, as OneStop logs every reading, a trial 4 whose single
+``DRAW_LIST`` / ``IAREA FILE`` pair holds three displays and two interest-area
+groups at negative offsets.  ``inline=True`` logs every display and interest
+area as ``!V CLEAR`` / ``!V IMGLOAD`` / ``!V IAREA RECTANGLE`` messages instead
+of ``.vcl`` / ``.ias`` files.
 """
 
 from __future__ import annotations
@@ -72,6 +79,27 @@ _ABORTED_TRIAL = [
     "EFIX\tR\t4050\t4249\t200\t170.0\t230.0\t1000",
 ]
 
+# One reading over three displays, logged OneStop's way: TRIALID 70 ms before
+# START, one draw list (displays at offsets 0, -6620 and -9204, so at 5120,
+# 11740 and 14324) and one interest-area file (groups at offsets 0 and -6623,
+# so at 5120 and 11743, 3 ms after the second display as in real files).  The
+# second fixation starts 5 ms before the second display.
+_MULTI_DISPLAY_TRIAL = [
+    "MSG\t5000\tTRIALID 4",
+    "START\t5070 \tRIGHT\tEVENTS",
+    "MSG\t5100\t-20 !V DRAW_LIST graphics/VC_4.vcl",
+    "MSG\t5100\t-20 !V IAREA FILE aoi/IA_4.ias",
+    "EFIX\tR\t5150\t5349\t200\t400.0\t200.0\t1000",
+    "EFIX\tR\t11735\t11934\t200\t420.0\t205.0\t1000",
+    "EFIX\tR\t11950\t12149\t200\t380.0\t210.0\t1000",
+    "EFIX\tR\t14400\t14599\t200\t900.0\t700.0\t1000",
+    "END\t15000 \tEVENTS\tRES\t80.26\t60.44",
+    "MSG\t15010\t!V TRIAL_VAR condition Adv",
+    "MSG\t15010\t!V TRIAL_VAR item 4",
+    "MSG\t15010\t!V TRIAL_VAR Session_Name_ p01",
+    "MSG\t15020\tTRIAL_RESULT 0",
+]
+
 _IAS = {
     "IA_1.ias": [
         (1, 100, 150, 200, 250, "The"),
@@ -82,6 +110,19 @@ _IAS = {
         (1, 100, 150, 250, 250, "Dogs"),
         (2, 250, 150, 400, 250, "bark"),
     ],
+}
+# Interest-area files with several groups, by offset.
+_IAS_GROUPS = {
+    "IA_4.ias": {
+        0: [
+            (1, 358, 154, 453, 261, "Food"),
+            (2, 453, 154, 643, 261, "Shortages"),
+        ],
+        -6623: [
+            (1, 358, 153, 548, 264, "According"),
+            (2, 548, 153, 605, 264, "to"),
+        ],
+    },
 }
 
 _BOM = "\ufeff"
@@ -99,6 +140,17 @@ _VCL = {
     "VC_3.vcl": [
         f"{_BOM}0 CLEAR 200 200 200",
         "0 IMGLOAD TOP_LEFT ../../runtime/images/bg.png 0 0",
+    ],
+    # As Experiment Builder writes them: two spaces before a sized image's path,
+    # and image paths relative to the session folder, not the .vcl's.
+    "VC_4.vcl": [
+        f"{_BOM}0 CLEAR 255 255 255",
+        "0 IMGLOAD TOP_LEFT ../../runtime/images/bg.png 0 0",
+        "0 IMGLOAD TOP_LEFT  ../../runtime/images/text1.png 100 150 300 100",
+        "-6620 CLEAR 255 255 255",
+        "-6620 IMGLOAD TOP_LEFT ../../runtime/images/bg.png 0 0",
+        "-6620 IMGLOAD TOP_LEFT ../../runtime/images/text2.png 100 150",
+        "-9204 CLEAR 200 200 200",
     ],
 }
 
@@ -136,6 +188,12 @@ _LEFT = [
     _fix("L", 1232, 1481, 250, 248.0, 204.0),
 ]
 _ABORTED = [_fix("R", 4050, 4249, 200, 170.0, 230.0)]
+_M1 = [
+    _fix("R", 5150, 5349, 200, 400.0, 200.0),
+    _fix("R", 11735, 11934, 200, 420.0, 205.0),
+]
+_M2 = [_fix("R", 11950, 12149, 200, 380.0, 210.0)]
+_M3 = [_fix("R", 14400, 14599, 200, 900.0, 700.0)]
 
 EXPECTED = {
     "display": DISPLAY,
@@ -147,44 +205,101 @@ EXPECTED = {
     # START / END line times of each reading.
     "blocks": [(990, 2000), (3010, 3500)],
     "block_aborted": (4010, None),
+    # Each reading: its TRIALID time (begin), the START line of its recording
+    # (start) and its TRIAL_RESULT time (end).
     "trials": {
         1: {
+            "begin": 990,
             "start": 990,
-            "end": 2000,
+            "end": 2020,
             "vars": {"condition": "Adv", "item": "1", "Session_Name_": "p01"},
             # Each display: the time its DRAW_LIST message was logged (message
-            # time minus its offset), the time the draw list's first display
-            # begins (its offset-0 lines, so the same instant; a later display
-            # of a list has a negative offset and begins that many ms after),
-            # its draw list, interest-area file and fixations.
+            # time minus its offset), the time the display begins (its draw
+            # list's offset-0 lines, so the same instant; a later display of a
+            # list has a negative offset and begins that many ms after), the
+            # time it ends (the next display, or the trial's end), its draw
+            # list, interest-area file, words and fixations.
             "screens": [
                 {
                     "drawn": 1013,
                     "begin": 1013,
+                    "end": 1713,
                     "vcl": "graphics/VC_1.vcl",
                     "ias": "aoi/IA_1.ias",
+                    "words": _IAS["IA_1.ias"],
                     "fixations": _R1,
                 },
                 {
                     "drawn": 1713,
                     "begin": 1713,
+                    "end": 2020,
                     "vcl": "graphics/VC_3.vcl",
                     "ias": None,
+                    "words": [],
                     "fixations": _R1_QUESTION,
                 },
             ],
         },
         2: {
+            "begin": 3000,
             "start": 3010,
-            "end": 3500,
+            "end": 3520,
             "vars": {"condition": "Ele", "item": "2", "Session_Name_": "p01"},
             "screens": [
                 {
                     "drawn": 3033,
                     "begin": 3033,
+                    "end": 3520,
                     "vcl": "graphics/VC_2.vcl",
                     "ias": "aoi/IA_2.ias",
+                    "words": _IAS["IA_2.ias"],
                     "fixations": _R2,
+                },
+            ],
+        },
+    },
+    # The aborted trial 3 ends at the next TRIALID (trial 4's, with
+    # ``multi_display``), else at the file's last event (its EFIX's end).
+    "trial_aborted": {
+        "trial_id": "3",
+        "begin": 4000,
+        "start": 4010,
+        "end_at_next_trialid": 5000,
+        "end_at_file_end": 4249,
+    },
+    "multi_display_trials": {
+        4: {
+            "begin": 5000,
+            "start": 5070,
+            "end": 15020,
+            "vars": {"condition": "Adv", "item": "4", "Session_Name_": "p01"},
+            "screens": [
+                {
+                    "drawn": 5120,
+                    "begin": 5120,
+                    "end": 11740,
+                    "vcl": "graphics/VC_4.vcl",
+                    "ias": "aoi/IA_4.ias",
+                    "words": _IAS_GROUPS["IA_4.ias"][0],
+                    "fixations": _M1,
+                },
+                {
+                    "drawn": 5120,
+                    "begin": 11740,
+                    "end": 14324,
+                    "vcl": "graphics/VC_4.vcl",
+                    "ias": "aoi/IA_4.ias",
+                    "words": _IAS_GROUPS["IA_4.ias"][-6623],
+                    "fixations": _M2,
+                },
+                {
+                    "drawn": 5120,
+                    "begin": 14324,
+                    "end": 15020,
+                    "vcl": "graphics/VC_4.vcl",
+                    "ias": None,
+                    "words": [],
+                    "fixations": _M3,
                 },
             ],
         },
@@ -195,7 +310,61 @@ EXPECTED = {
 }
 
 
-def _asc_text(*, binocular: bool, aborted_trial: bool, latin1: bool) -> str:
+def _ias_rows(name: str) -> list[tuple[int, tuple]]:
+    """An interest-area file's boxes, each with its offset."""
+    if name in _IAS:
+        return [(0, box) for box in _IAS[name]]
+    return [
+        (offset, box) for offset, boxes in _IAS_GROUPS[name].items() for box in boxes
+    ]
+
+
+def _line_time(line: str) -> int:
+    """When a line was written: a message's or START / END line's own time, an
+    event's end."""
+    fields = line.split("\t")
+    if fields[0] in ("EFIX", "ESACC"):
+        return int(fields[3])
+    return int(fields[1])
+
+
+def _inline(lines: list[str]) -> list[str]:
+    """``lines`` with each DRAW_LIST / IAREA FILE message replaced by the
+    ``!V`` messages it stands for, logged at their own times."""
+    out = []
+    for line in lines:
+        fields = line.split("\t")
+        if fields[0] != "MSG" or not (
+            " !V DRAW_LIST " in fields[2] or " !V IAREA FILE " in fields[2]
+        ):
+            out.append(line)
+            continue
+        offset, command = fields[2].split(" ", 1)
+        logged = int(fields[1]) - int(offset)
+        if command.startswith("!V DRAW_LIST "):
+            for row in _VCL[Path(command.split()[-1]).name]:
+                row_offset, draw = row.removeprefix(_BOM).split(" ", 1)
+                out.append(f"MSG\t{logged - int(row_offset)}\t!V {draw}")
+        elif command.startswith("!V IAREA FILE "):
+            for row_offset, box in _ias_rows(Path(command.split()[-1]).name):
+                word_id, left, top, right, bottom, word = box
+                out.append(
+                    f"MSG\t{logged - row_offset}\t!V IAREA RECTANGLE "
+                    f"{word_id} {left} {top} {right} {bottom} {word}"
+                )
+        else:
+            out.append(line)
+    return sorted(out, key=_line_time)
+
+
+def _asc_text(
+    *,
+    binocular: bool,
+    aborted_trial: bool,
+    latin1: bool,
+    multi_display: bool,
+    inline: bool,
+) -> str:
     eyes = "LEFT\tRIGHT" if binocular else "RIGHT"
     header = [_BOM + _COMMON_HEADER[0], *_COMMON_HEADER[1:]]
     lines = [
@@ -211,9 +380,12 @@ def _asc_text(*, binocular: bool, aborted_trial: bool, latin1: bool) -> str:
         trial_1.insert(4, _LEFT_TRIAL_1[0])
         trial_1.insert(7, _LEFT_TRIAL_1[1])
         trial_1[1] = "START\t990 \tLEFT\tRIGHT\tEVENTS"
-    lines += trial_1 + _RIGHT_TRIAL_2
+    trials = trial_1 + _RIGHT_TRIAL_2
     if aborted_trial:
-        lines += _ABORTED_TRIAL
+        trials += _ABORTED_TRIAL
+    if multi_display:
+        trials += _MULTI_DISPLAY_TRIAL
+    lines += _inline(trials) if inline else trials
     return "\n".join(lines) + "\n"
 
 
@@ -224,17 +396,26 @@ def write_experiment(
     with_session_files: bool = True,
     aborted_trial: bool = False,
     latin1: bool = False,
+    multi_display: bool = False,
+    inline: bool = False,
 ) -> Path:
     """Write the experiment under ``root`` and return the ``.asc`` path,
     ``root/exp/results/p01/p01.asc``.
 
     ``with_session_files=False`` writes the ASC alone (no ``aoi/``,
-    ``graphics/`` or ``runtime/images/``).
+    ``graphics/`` or ``runtime/images/``); ``inline=True`` writes no ``aoi/``
+    or ``graphics/``, since the ASC's messages carry what they hold.
     """
     session = Path(root) / "exp" / "results" / SESSION
     session.mkdir(parents=True, exist_ok=True)
     asc = session / f"{SESSION}.asc"
-    text = _asc_text(binocular=binocular, aborted_trial=aborted_trial, latin1=latin1)
+    text = _asc_text(
+        binocular=binocular,
+        aborted_trial=aborted_trial,
+        latin1=latin1,
+        multi_display=multi_display,
+        inline=inline,
+    )
     if latin1:
         # The BOM stays UTF-8 bytes while the body is latin-1, as in OneStop's files.
         body = text.removeprefix(_BOM).encode("latin-1")
@@ -243,11 +424,21 @@ def write_experiment(
         asc.write_text(text, encoding="utf-8")
     if not with_session_files:
         return asc
+    if not inline:
+        _write_draw_lists(session)
+    images = Path(root) / "exp" / "runtime" / "images"
+    images.mkdir(parents=True, exist_ok=True)
+    for name, size, colour in _IMAGES:
+        Image.new("RGB", size, colour).save(images / name)
+    return asc
+
+
+def _write_draw_lists(session: Path) -> None:
     (session / "aoi").mkdir(exist_ok=True)
-    for name, boxes in _IAS.items():
+    for name in [*_IAS, *_IAS_GROUPS]:
         rows = [
-            f"0 RECTANGLE\t{i}\t{left}\t{top}\t{right}\t{bottom}\t{word}"
-            for i, left, top, right, bottom, word in boxes
+            f"{offset} RECTANGLE\t{i}\t{left}\t{top}\t{right}\t{bottom}\t{word}"
+            for offset, (i, left, top, right, bottom, word) in _ias_rows(name)
         ]
         (session / "aoi" / name).write_text(
             _BOM + "\n".join(rows) + "\n", encoding="utf-8"
@@ -257,8 +448,3 @@ def write_experiment(
         (session / "graphics" / name).write_text(
             "\n".join(rows) + "\n", encoding="utf-8"
         )
-    images = Path(root) / "exp" / "runtime" / "images"
-    images.mkdir(parents=True, exist_ok=True)
-    for name, size, colour in _IMAGES:
-        Image.new("RGB", size, colour).save(images / name)
-    return asc

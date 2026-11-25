@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -1131,6 +1132,7 @@ def study_sources(paths: str | Path | Iterable[str | Path]) -> list[Path]:
         raise ValueError("No .edf or .asc recordings were found.")
     by_stem: dict[str, list[Path]] = {}
     for source in sources:
+        _check_participant(source.stem, f"the name of {source}")
         by_stem.setdefault(source.stem, []).append(source)
     clashes = [
         f"{stem} ({', '.join(map(str, files))})"
@@ -1145,6 +1147,23 @@ def study_sources(paths: str | Path | Iterable[str | Path]) -> list[Path]:
     return sources
 
 
+def _check_participant(pid: str, where: str) -> str:
+    """``pid``, which names the session's files, when it is one plain file name."""
+    if (
+        not pid
+        or pid in (".", "..")
+        or "/" in pid
+        or os.sep in pid
+        or (os.altsep is not None and os.altsep in pid)
+        or pid != Path(pid).name
+    ):
+        raise ValueError(
+            f"{pid!r} ({where}) cannot be a participant id: it names the "
+            "session's files, so it must be a plain file name."
+        )
+    return pid
+
+
 def _read_manifest(study_dir: Path) -> dict:
     path = study_dir / _MANIFEST
     if not path.is_file():
@@ -1155,6 +1174,8 @@ def _read_manifest(study_dir: Path) -> dict:
             f"{path} has manifest version {manifest.get('version')}; this version "
             f"of Scanpath Studio reads version {MANIFEST_VERSION}."
         )
+    for pid in manifest.get("sessions", {}):
+        _check_participant(pid, f"a session in {path}")
     return manifest
 
 
@@ -1199,6 +1220,10 @@ def _ok_sessions(sessions: dict) -> list[str]:
     return [pid for pid, entry in sessions.items() if entry.get("status") == "ok"]
 
 
+def _failure(exc: BaseException) -> str:
+    return f"{type(exc).__name__}: {exc}"
+
+
 def _read_session(job: dict) -> SessionTables | str:
     """One session's tables, or the message of the error that stopped them.
 
@@ -1208,7 +1233,7 @@ def _read_session(job: dict) -> SessionTables | str:
     try:
         return session_tables(**job)
     except Exception as exc:
-        return str(exc) or type(exc).__name__
+        return _failure(exc)
 
 
 def _read_sessions(jobs: list[dict], workers: int) -> Iterator[tuple[int, object]]:
@@ -1219,20 +1244,34 @@ def _read_sessions(jobs: list[dict], workers: int) -> Iterator[tuple[int, object
             yield i, _read_session(job)
         return
     import multiprocessing
-    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 
+    workers = min(workers, len(jobs))
     pool = ProcessPoolExecutor(
-        max_workers=min(workers, len(jobs)),
-        mp_context=multiprocessing.get_context("spawn"),
+        max_workers=workers, mp_context=multiprocessing.get_context("spawn")
     )
+    # A finished future holds its session's tables, so only a window of jobs
+    # is submitted at a time and each future is dropped once its result is
+    # taken: the parent holds a few sessions, not the whole study.
+    queued = iter(enumerate(jobs))
+    running: dict = {}
     try:
-        futures = {pool.submit(_read_session, job): i for i, job in enumerate(jobs)}
-        for future in as_completed(futures):
-            try:
-                result = future.result()
-            except Exception as exc:  # the worker process itself died
-                result = str(exc) or type(exc).__name__
-            yield futures[future], result
+        while True:
+            for i, job in itertools.islice(queued, 2 * workers - len(running)):
+                running[pool.submit(_read_session, job)] = i
+            if not running:
+                return
+            finished, _ = wait(running, return_when=FIRST_COMPLETED)
+            while finished:
+                future = finished.pop()
+                i = running.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:  # the worker process itself died
+                    result = _failure(exc)
+                del future
+                yield i, result
+                del result
     finally:
         # A cancelled import stops queued sessions instead of reading them all.
         pool.shutdown(wait=True, cancel_futures=True)
@@ -1378,7 +1417,11 @@ def import_eyelink(
                 "display": None,
             }
             if isinstance(result, SessionTables):
-                _write_session(study_dir, pid, result)
+                try:
+                    _write_session(study_dir, pid, result)
+                except Exception as exc:
+                    result = _failure(exc)
+            if isinstance(result, SessionTables):
                 entry.update(
                     raw_gaze=result.raw_gaze is not None,
                     status="ok",
@@ -1393,6 +1436,7 @@ def import_eyelink(
                 report.failed[pid] = result
             report.notes[pid] = list(entry["notes"])
             sessions[pid] = entry
+            del result
             display, _ = _study_display(sessions, _ok_sessions(sessions))
             manifest["display"] = None if display is None else list(display)
             _write_manifest(study_dir, manifest)
@@ -1413,17 +1457,30 @@ def _concat(frames: list[pd.DataFrame], columns: list[str]) -> pd.DataFrame:
     return pd.concat(filled, ignore_index=True)
 
 
-def _absolute_images(frame: pd.DataFrame, study_dir: Path) -> pd.DataFrame:
+def _absolute_images(
+    frame: pd.DataFrame, study_dir: Path, notes: list[str]
+) -> pd.DataFrame:
+    """``frame`` with each ``image_path`` made absolute.  A stored path must be
+    relative and lead to a file inside the study folder; any other is dropped
+    and noted."""
     if "image_path" not in frame.columns:
         return frame
-    return frame.assign(
-        image_path=[
-            None
-            if p is None or (isinstance(p, float) and np.isnan(p))
-            else str(study_dir / p)
-            for p in frame["image_path"]
-        ]
-    )
+    paths, outside = [], set()
+    for p in frame["image_path"]:
+        if p is None or (isinstance(p, float) and np.isnan(p)):
+            paths.append(None)
+            continue
+        path = (study_dir / str(p)).resolve()
+        if Path(str(p)).is_absolute() or not path.is_relative_to(study_dir):
+            outside.add(str(p))
+            paths.append(None)
+        else:
+            paths.append(str(path))
+    for p in sorted(outside):
+        note = f"The image path {p} leads outside the study folder; it was dropped."
+        if note not in notes:
+            notes.append(note)
+    return frame.assign(image_path=paths)
 
 
 def load_eyelink(
@@ -1437,6 +1494,11 @@ def load_eyelink(
         raise FileNotFoundError(
             f"{study_dir} is not an EyeLink study folder: it has no {_MANIFEST}."
         )
+    with file_lock(study_dir / ".lock", reading=True):
+        return _load_study(study_dir, participants)
+
+
+def _load_study(study_dir: Path, participants: Iterable[str] | None) -> EyeLinkData:
     sessions = _read_manifest(study_dir)["sessions"]
     ok = sorted(_ok_sessions(sessions))
     if participants is None:
@@ -1450,12 +1512,17 @@ def load_eyelink(
                 f"{', '.join(unknown)}."
             )
     display, display_notes = _study_display(sessions, pids)
+    notes = {
+        pid: [*sessions[pid].get("notes", []), *display_notes.get(pid, [])]
+        for pid in pids
+    }
     frames: dict[str, list[pd.DataFrame]] = {name: [] for name in _STUDY_TABLES}
     for pid in pids:
         for name in _STUDY_TABLES:
             path = study_dir / name / f"{pid}.parquet"
             if path.is_file():
-                frames[name].append(_absolute_images(pd.read_parquet(path), study_dir))
+                frame = pd.read_parquet(path)
+                frames[name].append(_absolute_images(frame, study_dir, notes[pid]))
     return EyeLinkData(
         words=_concat(frames["words"], WORD_COLUMNS),
         fixations=_concat(frames["fixations"], FIXATION_COLUMNS),
@@ -1464,8 +1531,5 @@ def load_eyelink(
         ),
         raw_gaze=_concat(frames["raw_gaze"], []) if frames["raw_gaze"] else None,
         display=display,
-        notes={
-            pid: [*sessions[pid].get("notes", []), *display_notes.get(pid, [])]
-            for pid in pids
-        },
+        notes=notes,
     )

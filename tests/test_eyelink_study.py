@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import gc
 import json
 import os
 import shutil
+import weakref
 from pathlib import Path
 
 import pandas as pd
@@ -274,3 +276,92 @@ def test_progress_callback_counts(study, monkeypatch):
     assert [(done, total) for done, total, _ in calls] == [(1, 3), (2, 3), (3, 3)]
     assert sorted(pid for _, _, pid in calls) == PIDS
     assert reported == [(d, t, "sessions", pid) for d, t, pid in calls]
+
+
+def test_failure_message_names_the_error(study):
+    experiment, study_dir = study
+    asc = experiment / "results" / "p02" / "p02.asc"
+    asc.write_bytes(asc.read_bytes() + CORRUPT_LINE.encode())
+    report = eyelink.import_eyelink(experiment, study_dir, workers=1)
+    assert report.failed["p02"].startswith("IndexError: ")
+
+
+def test_corrupt_session_fails_alone_in_the_pool(study):
+    experiment, study_dir = study
+    asc = experiment / "results" / "p02" / "p02.asc"
+    asc.write_bytes(asc.read_bytes() + CORRUPT_LINE.encode())
+    report = eyelink.import_eyelink(experiment, study_dir, workers=2)
+    assert sorted(report.imported) == ["p01", "p03"]
+    assert list(report.failed) == ["p02"]
+
+
+def test_pool_keeps_no_finished_session(study, monkeypatch):
+    """Each session's tables are released once written, so a study's memory
+    does not grow with its size."""
+    experiment, study_dir = study
+    _add_session(experiment, "p04")
+    _add_session(experiment, "p05")
+    written = []
+    real = eyelink._write_session
+
+    def write(study_dir, pid, tables):
+        gc.collect()
+        assert [ref() for ref in written] == [None] * len(written)
+        written.append(weakref.ref(tables))
+        real(study_dir, pid, tables)
+
+    monkeypatch.setattr(eyelink, "_write_session", write)
+    report = eyelink.import_eyelink(experiment, study_dir, workers=2)
+    assert len(report.imported) == 5 and len(written) == 5
+
+
+def test_write_error_fails_only_that_session(study, monkeypatch):
+    experiment, study_dir = study
+    real = eyelink._replace_atomically
+
+    def replace(path, write):
+        if path.name == "p02.parquet" and path.parent.name == "words":
+            raise OSError("disk full")
+        real(path, write)
+
+    monkeypatch.setattr(eyelink, "_replace_atomically", replace)
+    report = eyelink.import_eyelink(experiment, study_dir, workers=1)
+    assert sorted(report.imported) == ["p01", "p03"]
+    assert report.failed == {"p02": "OSError: disk full"}
+    assert not list(study_dir.rglob("p02.parquet"))
+    assert _manifest(study_dir)["sessions"]["p02"]["status"] == "failed"
+
+
+def test_unsafe_participant_ids_refused(study, tmp_path):
+    experiment, study_dir = study
+    eyelink.import_eyelink(experiment, study_dir, workers=1)
+    manifest = _manifest(study_dir)
+    manifest["sessions"]["../evil"] = manifest["sessions"]["p01"]
+    (study_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"\.\./evil"):
+        eyelink.load_eyelink(study_dir)
+
+    folder = tmp_path / "dots"
+    folder.mkdir()
+    shutil.copy(experiment / "results" / "p01" / "p01.asc", folder / "..asc")
+    with pytest.raises(ValueError, match="participant id"):
+        eyelink.import_eyelink(folder, tmp_path / "other", workers=1)
+
+
+def test_image_paths_outside_the_study_dropped(study):
+    experiment, study_dir = study
+    eyelink.import_eyelink(experiment, study_dir, workers=1)
+    path = study_dir / "fixations" / "p01.parquet"
+    frame = pd.read_parquet(path)
+    secret = study_dir.parent / "secret.png"
+    frame.loc[0, "image_path"] = str(secret)
+    frame.loc[1, "image_path"] = "../secret.png"
+    frame.to_parquet(path, index=False)
+    data = eyelink.load_eyelink(study_dir, participants=["p01"])
+    paths = data.fixations["image_path"]
+    assert pd.isna(paths.iloc[0]) and pd.isna(paths.iloc[1])
+    assert all(
+        Path(p).resolve().is_relative_to(study_dir.resolve()) for p in paths.dropna()
+    )
+    dropped = [n for n in data.notes["p01"] if "outside the study folder" in n]
+    assert len(dropped) == 2

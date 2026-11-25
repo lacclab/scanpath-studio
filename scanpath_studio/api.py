@@ -5371,6 +5371,7 @@ def app_link(
     port: int = 8501,
     animate: bool = False,
     match: str | None = None,
+    match_view: str | None = None,
     illustration: bool = False,
     **figure_options: Any,
 ) -> str:
@@ -5407,6 +5408,8 @@ def app_link(
             for the two choices before the columns. The link opens in Full,
             the only mode with that subtab. A field the dataset doesn't offer
             is ignored with a notice.
+        match_view: The Comparisons subtab's *View* for ``match``: ``"grid"``
+            (the default) or ``"overlay"``, every match on one figure.
         illustration: The *Illustration* design, as ``plot_scanpath`` takes it;
             an option given beside it wins.
         **figure_options: Figure options, as ``plot_scanpath`` takes them, with
@@ -5458,6 +5461,7 @@ def app_link(
         screen=screen,
         animate=animate,
         match=match,
+        match_view=match_view,
         options=options,
         share_id=share_id,
         digest=digest,

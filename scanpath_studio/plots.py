@@ -11895,6 +11895,141 @@ def _require_one_screen_per_reading(
                 )
 
 
+#: The colour of the selected reading in an overlay of several: the others
+#: take ``_CATEGORY_PALETTE`` in turn, so it stays the one drawn in black.
+OVERLAY_SELECTED_COLOR = "#111111"
+#: The most readings one overlay draws: one colour each, none repeated.
+OVERLAY_MAX_READINGS = 1 + len(_CATEGORY_PALETTE)
+
+
+def overlay_reading_color(idx: int) -> str:
+    """Reading ``idx``'s colour in :func:`make_readings_overlay_figure`."""
+    return OVERLAY_SELECTED_COLOR if idx == 0 else _CATEGORY_PALETTE[idx - 1]
+
+
+def make_readings_overlay_figure(
+    words: pd.DataFrame,
+    readings: Sequence[tuple[str, pd.DataFrame]],
+    *,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
+    **overrides: Any,
+) -> go.Figure:
+    """Several readings on one figure, each in its own colour and named in the
+    legend — the Comparisons subtab's overlay.
+
+    ``readings`` is ``(name, fixations)`` per reading, the selected one first;
+    ``words`` is the selected reading's, drawn once under all of them on screen
+    axes. Each reading's fixations and connecting line take
+    :func:`overlay_reading_color`; on both, every reading is sized on one
+    duration scale, so a size means one duration across the figure. The figure's
+    own layers that belong to one reading (heatmap, raw gaze, colour by line or
+    by a category) are left off: here colour says which reading a fixation is.
+
+    Raises ``ValueError`` for more than :data:`OVERLAY_MAX_READINGS` readings.
+    """
+    if len(readings) > OVERLAY_MAX_READINGS:
+        raise ValueError(
+            f"An overlay draws at most {OVERLAY_MAX_READINGS} readings, one "
+            f"colour each; got {len(readings)}."
+        )
+    resolved = _resolve_figure_settings(settings, overrides)
+    fields = (resolved.x_field, resolved.y_field)
+    # A computed axis (elapsed seconds) becomes a column of each reading, timed
+    # from its own first fixation.
+    readings = [
+        (name, chart_axes.comparison_coordinates(fix, None, fields)[0])
+        for name, fix in readings
+    ]
+    frames = [
+        _finite_for_plotting(fix, fields) for _name, fix in readings if not fix.empty
+    ]
+    pooled = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    # The base draws the words, the axes and their ranges over every reading's
+    # fixations, and none of the readings itself.
+    base = replace(
+        resolved,
+        show_fixations=False,
+        show_saccades=False,
+        show_saccade_arrows=False,
+        show_order=False,
+        show_heatmap=False,
+        show_raw_gaze=False,
+        color_by_line=False,
+        color_by=None,
+    )
+    fig = make_scanpath_figure(words, pooled, settings=base)
+    numeric_color = (
+        resolved.color_by
+        if resolved.color_by not in (None, UNIFORM_COLOR_FIELD, "line")
+        and resolved.color_by in pooled
+        and pd.api.types.is_numeric_dtype(pooled[resolved.color_by])
+        else None
+    )
+    # One colour scale for every reading, so a colour means one value.
+    color_range = resolved.fixation_color_range
+    if numeric_color and color_range is None:
+        values = pd.to_numeric(pooled[numeric_color], errors="coerce")
+        if values.notna().any():
+            color_range = (float(values.min()), float(values.max()))
+    specs = []
+    for idx, (name, fix) in enumerate(readings):
+        color = overlay_reading_color(idx)
+        style = _comparison_scanpath_style(
+            idx,
+            {"fix_color": color, "saccade_color": color},
+            default_marker_size_range=resolved.marker_size_range,
+        )
+        specs.append({"trial_fix": fix, "trial_words": words, "style": style})
+    duration_scale = _comparison_duration_scale(specs, resolved)
+    font_settings = dict(
+        family=resolved.font_family or FONT_FAMILY, size=resolved.base_font_size
+    )
+    with _labelled_columns(resolved.column_labels):
+        for idx, ((name, _fix), spec) in enumerate(zip(readings, specs)):
+            first_trace = len(fig.data)
+            _add_comparison_fixation_trace(
+                fig,
+                _finite_for_plotting(spec["trial_fix"], fields),
+                name,
+                spec["style"],
+                font_settings,
+                fields=fields,
+                show_fixations=resolved.show_fixations,
+                show_saccades=resolved.show_saccades,
+                show_saccade_arrows=resolved.show_saccade_arrows,
+                saccade_opacity=resolved.saccade_opacity,
+                saccade_arrow_size=resolved.saccade_arrow_size,
+                outline_width=resolved.fixation_outline_width,
+                outline_color=resolved.fixation_outline_color,
+                show_order=False,
+                show_legend=True,
+                color_by=numeric_color,
+                colorscale=resolved.fixation_colorscale,
+                color_range=color_range,
+                show_colorbar=bool(numeric_color) and idx == 0,
+                fixation_symbol=resolved.fixation_symbol,
+                fixation_hover_fields=resolved.fixation_hover_fields,
+                trial_words=words,
+                duration_scale=duration_scale,
+            )
+            # With its fixations hidden a reading still has its legend entry,
+            # on its line.
+            added = fig.data[first_trace:]
+            if added and not any(trace.showlegend for trace in added):
+                added[0].update(name=name, showlegend=True)
+    fig.update_layout(showlegend=True)
+    _arrange_colorbars(fig)
+    # Placed as Compare places its A/B legend, clear of the figure's toolbar.
+    apply_legend_layout(
+        fig,
+        resolved.legend_layout,
+        comparing=True,
+        show_colors=False,
+        show_highlight=resolved.show_highlight_legend,
+    )
+    return fig
+
+
 def make_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,

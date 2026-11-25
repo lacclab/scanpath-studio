@@ -35,6 +35,7 @@ from .session_keys import (
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
     PARAM_MATCH,
+    PARAM_MATCH_VIEW,
     REPLAY_FIXATIONS_PARAM,
 )
 
@@ -455,6 +456,7 @@ def link_query(
     screen: str | None = None,
     animate: bool = False,
     match: str | None = None,
+    match_view: str | None = None,
     options: Mapping | None = None,
     share_id: str | None = None,
     digest: str | None = None,
@@ -493,6 +495,18 @@ def link_query(
         if not match.strip():
             raise ValueError("Name the field match= matches on, or leave it out.")
         params[PARAM_MATCH] = match
+    if match_view is not None:
+        from .session_keys import MATCH_VIEW_LINK_VALUES
+
+        if match is None:
+            raise ValueError("match_view= is the view of a match=: pass match= too.")
+        view = str(match_view).strip().lower()
+        if view not in MATCH_VIEW_LINK_VALUES:
+            raise ValueError(
+                f"match_view is one of {', '.join(MATCH_VIEW_LINK_VALUES)}; "
+                f"got {match_view!r}."
+            )
+        params[PARAM_MATCH_VIEW] = view
     state = options_state(options or {})
     if state:
         # A link with layer switches and no duration scale is read as one

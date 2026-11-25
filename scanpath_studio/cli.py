@@ -4714,6 +4714,12 @@ def _open_parser() -> argparse.ArgumentParser:
         "dataset names it, or same_text / same_participant. Opens in Full.",
     )
     parser.add_argument(
+        "--match-view",
+        choices=("grid", "overlay"),
+        help="The Comparisons subtab's View for --match: one panel per match "
+        "(grid, the default) or every match on one figure (overlay).",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=8501,
@@ -4826,6 +4832,7 @@ def open_link(argv: list[str]) -> None:
             port=args.port,
             animate=args.animate,
             match=args.match,
+            match_view=args.match_view,
             **options,
         )
     except (TypeError, ValueError) as exc:

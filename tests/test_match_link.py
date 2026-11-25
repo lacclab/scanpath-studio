@@ -15,7 +15,9 @@ from scanpath_studio import tabs
 from scanpath_studio.session_keys import (
     MATCH_LINK_STATE_KEY,
     MATCH_SHARE_STATE_KEY,
+    MULTI_VIEW,
     PARAM_MATCH,
+    PARAM_MATCH_VIEW,
 )
 from tests.conftest import APP_SCRIPT, SUBTAB_KEY
 
@@ -154,3 +156,27 @@ def test_a_kept_column_is_matched_by_its_own_name():
     at.session_state[SUBTAB_KEY] = tabs.SUBTAB_SHARE
     at.run()
     assert _shared_match(at) == "source_trial"
+
+
+def test_a_match_link_opens_comparisons_in_its_overlay_and_share_keeps_it():
+    at = _boot("same_text", match_view="overlay")
+    assert at.session_state[SUBTAB_KEY] == tabs.SUBTAB_COMPARISONS
+    assert at.session_state[MULTI_VIEW] == "Overlay"
+    at.session_state[SUBTAB_KEY] = tabs.SUBTAB_SHARE
+    at.run()
+    query, _caveats = at.session_state["_share_query_current"]
+    assert parse_qs(query).get(PARAM_MATCH_VIEW) == ["overlay"]
+
+
+def test_the_grid_writes_no_view():
+    at = _boot("same_text")
+    at.session_state[SUBTAB_KEY] = tabs.SUBTAB_SHARE
+    at.run()
+    query, _caveats = at.session_state["_share_query_current"]
+    assert PARAM_MATCH_VIEW not in parse_qs(query)
+
+
+def test_a_view_the_comparisons_tab_lacks_is_dropped_with_a_notice():
+    at = _boot("same_text", match_view="pile")
+    assert any("match_view=" in w.value for w in at.warning)
+    assert at.session_state[MULTI_VIEW] == "Grid"

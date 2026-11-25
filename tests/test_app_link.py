@@ -241,6 +241,29 @@ def test_a_match_that_names_no_field_is_refused(match, error):
         sps.app_link("Pilot 3", match=match)
 
 
+def test_the_link_opens_comparisons_in_its_overlay(capsys):
+    """`match_view=` rides beside `match=`; `open --match-view` writes the same."""
+    url = sps.app_link("Pilot 3", match="source_trial", match_view="Overlay")
+    assert _query(url)["match_view"] == "overlay"
+    cli.main(
+        ["open", "Pilot 3", "--match", "source_trial", "--match-view", "overlay"]
+        + ["--print"]
+    )
+    assert capsys.readouterr().out.strip() == url
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"match_view": "overlay"}, "pass match="),
+        ({"match": "x", "match_view": "pile"}, "one of"),
+    ],
+)
+def test_a_match_view_needs_a_match_and_a_view(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        sps.app_link("Pilot 3", **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # scanpath-studio open
 # ---------------------------------------------------------------------------

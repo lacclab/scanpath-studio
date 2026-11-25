@@ -290,6 +290,13 @@ SINGLE_ANIMATE = "single_animate"
 #: Show the chips above the plot (default on). Hiding keeps the field
 #: selection (`trial_chip_fields`), so showing them again restores the row.
 SINGLE_SHOW_CHIPS = "single_show_chips"
+#: The Comparisons subtab's view: its matches in a grid of panels, or overlaid
+#: with the selected trial on one figure.
+MULTI_VIEW = "multi_view"
+MULTI_VIEW_GRID = "Grid"
+MULTI_VIEW_OVERLAY = "Overlay"
+#: *View* as a link's ``match_view=`` spells it.
+MATCH_VIEW_LINK_VALUES = {"grid": MULTI_VIEW_GRID, "overlay": MULTI_VIEW_OVERLAY}
 #: The ⚙ Playback replay speed. Mode-local, like `single_animate`, which is
 #: why it is `single_*` rather than `global_*`.
 SINGLE_PLAYBACK_SPEED = "single_playback_speed"
@@ -432,6 +439,8 @@ PARAM_PREPARE = "prepare"
 # names it, or `same_text` / `same_participant` (`tabs.match_from_link`). Where
 # to look, not a figure setting, so the settings file leaves it out.
 PARAM_MATCH = "match"
+# Beside `match=`: the Comparisons subtab's *View*, `grid` or `overlay`.
+PARAM_MATCH_VIEW = "match_view"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
@@ -853,6 +862,7 @@ URL_SELECTION_PARAMS = frozenset(
         COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
         PARAM_MATCH,
+        PARAM_MATCH_VIEW,
     }
 )
 
@@ -943,6 +953,7 @@ URL_OPTIONAL_PARAMS = frozenset(
     {
         PARAM_PREPARE,
         PARAM_MATCH,
+        PARAM_MATCH_VIEW,
         "word_hover_fields_json",
         "fixation_hover_fields_json",
         *LEGEND_PARAMS,

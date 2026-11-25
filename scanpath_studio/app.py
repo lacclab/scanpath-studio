@@ -5479,6 +5479,16 @@ def render_data_source_picker(host=None) -> None:
             on_click=_enter_add_data_wizard,
             width="stretch",
         )
+    # Icon-only: `spoken` names it for screen readers and is clipped from view.
+    box.button(
+        spoken("Open the data tables"),
+        icon=ICONS["data_tables"],
+        key="open_data_tables_btn",
+        help="Open this dataset's tables (fixations, words, raw gaze and "
+        f"metadata) on the {ICONS['view_data']} Data Management page.",
+        on_click=open_dataset_panel,
+        args=("Tables",),
+    )
 
 
 #: Each dataset kind's word in the table, keyed by the picker's glyph,

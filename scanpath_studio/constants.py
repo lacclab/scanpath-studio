@@ -1222,6 +1222,7 @@ ICONS: dict[str, str] = {
     "view_scanpath": ":material/route:",
     "view_corpus": ":material/bar_chart:",
     "view_data": ":material/database:",
+    "data_tables": ":material/table_view:",
     "help": ":material/help:",
     "tutorials": ":material/explore:",
     "faq": ":material/quiz:",

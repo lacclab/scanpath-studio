@@ -428,6 +428,10 @@ PARAM_TAB = "tab"
 # preference, so it is read from a link but never written by Share.
 PARAM_UI = "ui"
 PARAM_PREPARE = "prepare"
+# Opens the Comparisons subtab on this *Match field*: a column as the dataset
+# names it, or `same_text` / `same_participant` (`tabs.match_from_link`). Where
+# to look, not a figure setting, so the settings file leaves it out.
+PARAM_MATCH = "match"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
@@ -547,6 +551,14 @@ REPLAY_FIXATIONS_PARAM = "replay_fixations"
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
 PENDING_COMPARE_STATE_KEY = "_pending_compare"
+#: A link's ``match=``, read once: ``{"value": …}`` until the Comparisons subtab
+#: checks it against the dataset's *Match* options, which marks it ``done`` (and
+#: ``rejected`` when it names none of them).
+MATCH_LINK_STATE_KEY = "_match_link"
+#: How Share → Link spells the *Match field* the Comparisons subtab last showed.
+#: Set while that subtab is drawn and dropped when another one (Share aside)
+#: opens, so a link carries ``match=`` only when shared from Comparisons.
+MATCH_SHARE_STATE_KEY = "_match_share"
 #: B's own screen navigator, seeded by `cmp_screen=` and by a settings file's
 #: `selection.compare.screen_id` (schema 6).
 SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
@@ -840,6 +852,7 @@ URL_SELECTION_PARAMS = frozenset(
         COMPARE_DATASET_ID_PARAM,
         COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
+        PARAM_MATCH,
     }
 )
 
@@ -929,6 +942,7 @@ LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
 URL_OPTIONAL_PARAMS = frozenset(
     {
         PARAM_PREPARE,
+        PARAM_MATCH,
         "word_hover_fields_json",
         "fixation_hover_fields_json",
         *LEGEND_PARAMS,
@@ -1066,6 +1080,8 @@ URL_SEEDED_STATE_KEYS = frozenset(
         DEEPLINK_PARTICIPANT,
         # The one-shot "leave these alone" handoff to the source snap.
         LINK_SETUP_STATE_KEY,
+        # `?match=`, waiting for the Comparisons subtab to check it.
+        MATCH_LINK_STATE_KEY,
     }
 )
 

@@ -404,6 +404,9 @@ from scanpath_studio.session_keys import (
     EXPORT_FIGURE_DPI,
     EXPORT_FIGURE_WIDTH,
     EXPORT_FIGURE_WIDTH_UNIT,
+    MATCH_LINK_STATE_KEY,
+    MATCH_SHARE_STATE_KEY,
+    PARAM_MATCH,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
@@ -8412,6 +8415,18 @@ def render_single_trial_tab(
         subtab_labels = subtab_labels_for(
             simple, line_assignment=drift_correction_enabled()
         )
+        # A link's `?match=` opens Comparisons until the subtab has read it;
+        # Essentials, which has no Comparisons, says where it is instead.
+        match_link = st.session_state.get(MATCH_LINK_STATE_KEY)
+        match_waiting = bool(match_link) and not match_link.get("done")
+        if match_waiting and not simple:
+            st.session_state["single_subtab"] = SUBTAB_COMPARISONS
+        link_note = st.container()
+        if match_waiting and simple:
+            link_note.info(
+                "This link opens the Comparisons subtab, which only Full shows. "
+                "Switch to Full to see it."
+            )
         # The bar's identity includes its labels, so a mode switch makes it a
         # new widget that would start on its first tab. Writing the selection
         # back before the bar is created carries it over, and a subtab the mode
@@ -8439,6 +8454,12 @@ def render_single_trial_tab(
             on_change="rerun",
         )
         by_label = dict(zip(subtab_labels, _subtabs))
+        # Share → Link carries the Match field only when shared from Comparisons.
+        if st.session_state.get("single_subtab") not in (
+            SUBTAB_COMPARISONS,
+            SUBTAB_SHARE,
+        ):
+            st.session_state.pop(MATCH_SHARE_STATE_KEY, None)
         tab_annot = by_label.get(SUBTAB_ANNOTATIONS)
         tab_stim = by_label.get(SUBTAB_STIMULUS)
         tab_compare = by_label.get(SUBTAB_COMPARISONS)
@@ -13528,6 +13549,11 @@ _MATCH_LABELS = {
     _MATCH_SAME_TEXT: "Same text — other participants",
     _MATCH_SAME_PARTICIPANT: "Same participant — other texts",
 }
+#: How a link (``?match=``) spells the two choices above.
+_MATCH_LINK_SPELLINGS = {
+    _MATCH_SAME_TEXT: "same_text",
+    _MATCH_SAME_PARTICIPANT: "same_participant",
+}
 #: Ids and orderings the two choices above cover, or that select one trial:
 #: never offered as a condition field of their own.
 _MATCH_NOT_A_CONDITION = frozenset(
@@ -13565,6 +13591,55 @@ def _match_options(fixations: pd.DataFrame, names: ColumnNames) -> list[str]:
         seen.add(label)
         options.append(column)
     return options
+
+
+def match_from_link(value: str, options: list[str], names: ColumnNames) -> str | None:
+    """The *Match* option a link's ``match=`` value names, or ``None``.
+
+    Tried in order: an option exactly (a column's canonical name, or
+    ``@same_text`` / ``@same_participant``), a column by the dataset's own name,
+    then ``same_text`` / ``same_participant``.
+    """
+    value = str(value)
+    if value in options:
+        return value
+    for option in options:
+        if option not in _MATCH_LINK_SPELLINGS and names.display(option) == value:
+            return option
+    for option, spelled in _MATCH_LINK_SPELLINGS.items():
+        if spelled == value and option in options:
+            return option
+    return None
+
+
+def match_link_value(choice: str, options: list[str], names: ColumnNames) -> str:
+    """How a link spells the *Match* ``choice``, one of ``options``.
+
+    A column by the dataset's own name and the two choices before them as
+    ``same_text`` / ``same_participant``, unless :func:`match_from_link` would
+    read that spelling as another option; then the option itself.
+    """
+    spelled = _MATCH_LINK_SPELLINGS.get(choice) or names.display(choice)
+    return spelled if match_from_link(spelled, options, names) == choice else choice
+
+
+def _check_match_link(options: list[str], names: ColumnNames) -> None:
+    """Apply a link's ``match=`` the first time the options are known, and keep
+    saying so while it named none of them."""
+    link = st.session_state.get(MATCH_LINK_STATE_KEY)
+    if not link:
+        return
+    if not link.get("done"):
+        link["done"] = True
+        choice = match_from_link(link["value"], options, names)
+        if choice is None:
+            link["rejected"] = True
+        else:
+            st.session_state["multi_gen_col"] = choice
+    if link.get("rejected"):
+        from scanpath_studio.url_state import _warn_invalid_link_param
+
+        _warn_invalid_link_param(PARAM_MATCH, link["value"])
 
 
 def _resolve_match(choice: str, fixations: pd.DataFrame) -> tuple[str, str | None]:
@@ -13879,12 +13954,16 @@ def render_multiple_comparison_tab(
     st.caption(
         "Browse related readings by selecting a field they share with this trial."
     )
+    # Written again below once a field is chosen, so an early return leaves
+    # Share no field from an earlier reading.
+    st.session_state.pop(MATCH_SHARE_STATE_KEY, None)
+    names = active_all(st.session_state)
+    match_options = _match_options(fixations_filtered, names)
+    _check_match_link(match_options, names)
     if trial_words.empty or trial_fixations.empty:
         st.info("This trial has no word boxes or no fixations. Pick another trial.")
         return
 
-    names = active_all(st.session_state)
-    match_options = _match_options(fixations_filtered, names)
     if not match_options:
         st.info("No field to match trials on.")
         return
@@ -13914,6 +13993,9 @@ def render_multiple_comparison_tab(
         key="multi_gen_col",
         help=match_help,
         label_visibility="collapsed",
+    )
+    st.session_state[MATCH_SHARE_STATE_KEY] = match_link_value(
+        choice, match_options, names
     )
     cols_help = "Panels per row."
     row_label(cols_label_col, "Columns", cols_help)

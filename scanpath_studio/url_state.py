@@ -162,10 +162,13 @@ from .session_keys import (
     GLOBAL_SHOW_FIX,
     LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
+    MATCH_LINK_STATE_KEY,
+    MATCH_SHARE_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
+    PARAM_MATCH,
     PARAM_PREPARE,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
@@ -1330,6 +1333,8 @@ def _apply_url_preset() -> str | None:
         &cmp_source=corpus&cmp_corpus=potec
                                  → open B from an installed public corpus
         &tab=animation           → select Animation (legacy link)
+        &match=same_text         → open Comparisons on this Match field
+                                   (checked there — see tabs.match_from_link)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -1505,6 +1510,13 @@ def _apply_url_preset() -> str | None:
             st.session_state[_AUTO_REPLAY_FIXATIONS] = True
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
+    # `?match=` waits for the Comparisons subtab, the only place that knows the
+    # dataset's Match options; `setdefault` reads it once, as the link stays in
+    # the address bar for the whole session.
+    if qp.get(PARAM_MATCH) not in (None, ""):
+        st.session_state.setdefault(
+            MATCH_LINK_STATE_KEY, {"value": str(qp[PARAM_MATCH])}
+        )
 
     # `?compare=<participant>:<trial>` turns Compare on and parks B's ids for
     # the picker to consume once its candidate list exists (the picker's own
@@ -4393,6 +4405,9 @@ def _build_share_query(
         )
     if st.session_state.get("share_prepare_figure"):
         params[PARAM_PREPARE] = "1"
+    # Shared from Comparisons, the link reopens it on the same Match field.
+    if st.session_state.get(MATCH_SHARE_STATE_KEY):
+        params[PARAM_MATCH] = str(st.session_state[MATCH_SHARE_STATE_KEY])
     return urlencode(params), caveats
 
 

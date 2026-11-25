@@ -48,6 +48,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Compare readings | Below the palette tiles | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
 | Undo and Redo | Full → foot of Plot controls, beside Reset | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
+| Comparisons link | Comparisons subtab → Match field; Share → Link | `?match=same_text\|same_participant\|<column>`, `open --match`, `app_link(match=)` (`multi_gen_col`) | A link opens Full on Comparisons with that field chosen (`ui=essentials` says to switch to Full). A field the dataset lacks is ignored with a notice. Share → Link copied after Comparisons carries it; after another subtab it does not |
 | Fold Presets / Palette / Modes / Customize | Chevron beside each rail label | `rail_view_fold`, `rail_palette_fold`, `rail_modes_fold`, `rail_customize_fold` (`_rail_folded_sections`, kept in the `sps_rail_folded` cookie) | Fold, reload the page: still folded; tiles hidden, the label names the current pick (a saved design by name); unfold restores them |
 
 ### Subtabs under the plot

@@ -1,8 +1,9 @@
 """The Essentials / Full interface mode: which one is in force, and how it persists.
 
 The mode is resolved once per session, in this order: a ``?ui=`` link
-parameter, the browser cookie from the last visit, then Essentials. It is the
-viewer's own preference, so Share never writes it into a link. The functions
+parameter, Full for a link that opens a view only Full has (``?match=``), the
+browser cookie from the last visit, then Essentials. It is the viewer's own
+preference, so Share never writes it into a link. The functions
 that decide take plain mappings, so they need no Streamlit runtime.
 """
 
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from scanpath_studio.constants import ICONS
 from scanpath_studio.session_keys import (
+    PARAM_MATCH,
     PARAM_UI,
     SINGLE_ANIMATE,
     UI_MODE,
@@ -131,10 +133,17 @@ def seed_mode(session: MutableMapping, query_params: Mapping, cookies: Mapping) 
     the link, the choice this session last wrote to the cookie
     (``COOKIE_MODE_KEY``, which survives starting over) beats ``cookies``,
     which is read once, when the page connects, and so misses that write.
+
+    A link that opens the Comparisons subtab (``?match=``) and names no mode
+    opens Full, the only mode that has the subtab, over the cookie; the cookie
+    itself is left alone.
     """
     remembered = parse_mode(session.get(COOKIE_MODE_KEY)) or cookies.get(UI_MODE_COOKIE)
+    linked = parse_mode(query_params.get(PARAM_UI))
+    if linked is None and query_params.get(PARAM_MATCH) not in (None, ""):
+        linked = ADVANCED
     session[UI_MODE] = parse_mode(session.get(UI_MODE)) or resolve_mode(
-        query_params.get(PARAM_UI), remembered
+        linked, remembered
     )
     return session[UI_MODE]
 

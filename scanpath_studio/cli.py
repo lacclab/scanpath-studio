@@ -4504,6 +4504,12 @@ def _open_parser() -> argparse.ArgumentParser:
         "--animate", action="store_true", help="Open the replay of the reading."
     )
     parser.add_argument(
+        "--match",
+        metavar="FIELD",
+        help="Open the Comparisons subtab with this Match field: a column as the "
+        "dataset names it, or same_text / same_participant. Opens in Full.",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=8501,
@@ -4615,6 +4621,7 @@ def open_link(argv: list[str]) -> None:
             screen=args.screen,
             port=args.port,
             animate=args.animate,
+            match=args.match,
             **options,
         )
     except (TypeError, ValueError) as exc:

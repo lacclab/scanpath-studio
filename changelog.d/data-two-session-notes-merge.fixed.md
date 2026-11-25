@@ -1,1 +1,0 @@
-Two tabs or windows that share saved work now merge each other's trial notes, stars and tags as promised, whatever page, trial or plot settings each has open: those are each tab's own, and the last one to save wins them.

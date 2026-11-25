@@ -1,1 +1,0 @@
-In a right-to-left or mixed-script passage, a word made only of digits or punctuation is drawn in the direction of the words around it, so a period ending an Arabic or Hebrew sentence sits on the left.

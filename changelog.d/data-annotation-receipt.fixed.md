@@ -1,1 +1,0 @@
-The "Updated in this session" line under a trial's annotations now appears only in the editor of the trial you changed, and goes once you open another trial, instead of following you to every trial of the dataset.

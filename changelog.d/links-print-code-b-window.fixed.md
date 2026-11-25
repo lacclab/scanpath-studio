@@ -1,1 +1,0 @@
-`render --print-code` and `figure_code` keep scanpath B's fixation window (`--compare-fix-index-range`, `fix_index_range_b=`), so the printed recipe for a comparison or a two-reading replay draws the same B as the command it came from.

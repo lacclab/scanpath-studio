@@ -1,1 +1,0 @@
-Tables written by R's write.table() with its default row names (a header one column shorter than every row) load again, through the Add-dataset wizard, the API and the CLI, with the row names left out; a table with rows that really have too many fields now says how many and what each has.

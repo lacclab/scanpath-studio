@@ -1,1 +1,0 @@
-Gaze charts name their axes clearly: recorded timestamps read "Recorded time (ms)" and pupil charts "Pupil area (tracker units)" or "Pupil diameter (tracker units)", instead of "Time (ms)" and the raw column name.

@@ -35,6 +35,21 @@ def _open(**params: str) -> AppTest:
     return at
 
 
+def test_the_demo_opens_on_the_paragraph_and_keeps_a_screen_the_reader_picks():
+    at = _open()
+    assert at.session_state["single_screen_id"] == "Paragraph"
+    at.session_state["single_screen_id"] = "Title"
+    at.run()
+    assert at.session_state["single_screen_id"] == "Title"
+
+
+def test_a_demo_comparison_opens_b_on_its_paragraph():
+    at = _open()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    assert not at.exception, at.exception
+    assert at.session_state["single_compare_screen_id"] == "Paragraph"
+
+
 def test_a_demo_link_naming_no_screen_opens_the_paragraph_on_the_same_fixations():
     """A link Share wrote for the demo before it had several screens names no
     screen; it meant the paragraph, and its window counted the paragraph's

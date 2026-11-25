@@ -169,9 +169,12 @@ def test_compare_and_animate_accept_an_edit_immediately_after_undo():
 def test_linked_axes_and_window_survive_undo_and_a_reset_round_trip():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     # The window lies within the eight fixations of the first reading's
-    # first screen, its title.
+    # title screen.
     at.query_params.update(
-        x_field="order_in_trial", y_field="@elapsed_seconds", fix_range="2,6"
+        x_field="order_in_trial",
+        y_field="@elapsed_seconds",
+        fix_range="2,6",
+        screen="Title",
     )
     at.run()
     link = dict(at.query_params)

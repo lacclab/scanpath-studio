@@ -2196,6 +2196,11 @@ def _value_hint(combos: pd.DataFrame, column: str, wanted, limit: int = 5) -> st
     return hint
 
 
+def _draws_positions(fields: tuple[str, str]) -> bool:
+    """Does a figure on these axes place fixations by screen position?"""
+    return any(field in chart_axes.POSITION_FIELDS for field in fields)
+
+
 def _select_trial(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -2203,12 +2208,19 @@ def _select_trial(
     trial: str | None,
     *,
     raw_gaze: pd.DataFrame | None = None,
+    positions_needed: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
+    """``positions_needed`` is whether the figure places fixations by screen
+    position; a reading chart on other fields draws fixations without any."""
     pid, tid = _resolve_trial(words, fixations, participant, trial, raw_gaze=raw_gaze)
     trial_words, trial_fixations = _data.filter_data(
         words, fixations, {"participants": [pid], "trials": [tid]}
     )
-    if not trial_fixations.empty and trial_fixations["x"].isna().all():
+    if (
+        positions_needed
+        and not trial_fixations.empty
+        and trial_fixations["x"].isna().all()
+    ):
         # AOI-sequence fixations whose coordinates couldn't be reconstructed:
         # either no words table was given, or the word/AoI ids matched no box.
         raise ValueError(
@@ -2230,13 +2242,19 @@ def _select_part(
     raw_gaze: pd.DataFrame | None = None,
     screen_param: str = "screen",
     elapsed_axis: bool = False,
+    positions_needed: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
     """Resolve one logical trial and, for multipart data, exactly one screen.
 
     ``screen_param`` is the keyword the caller took the screen as, so an error
     names the one to fix (``screen_b=`` for a comparison's second trial)."""
     trial_words, trial_fixations, pid, tid = _select_trial(
-        words, fixations, participant, trial, raw_gaze=raw_gaze
+        words,
+        fixations,
+        participant,
+        trial,
+        raw_gaze=raw_gaze,
+        positions_needed=positions_needed,
     )
     if elapsed_axis:
         trial_fixations = chart_axes.with_origin(trial_fixations)
@@ -2890,6 +2908,7 @@ def plot_scanpath(
         screen,
         raw_gaze=raw_gaze,
         elapsed_axis=chart_axes.ELAPSED in axes,
+        positions_needed=_draws_positions(axes),
     )
     if raw_gaze is not None:
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
@@ -3901,6 +3920,7 @@ def compare_scanpaths(
         screen,
         raw_gaze=raw_gaze,
         elapsed_axis=chart_axes.ELAPSED in fields,
+        positions_needed=_draws_positions(fields),
     )
     trial_words_b, trial_fix_b, pid_b, tid_b, selected_b = _select_part(
         words_b,
@@ -3911,6 +3931,7 @@ def compare_scanpaths(
         raw_gaze=raw_gaze_b,
         screen_param="screen_b",
         elapsed_axis=chart_axes.ELAPSED in fields,
+        positions_needed=_draws_positions(fields),
     )
     trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, selected_a)
     trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, selected_b)

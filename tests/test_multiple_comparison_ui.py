@@ -800,3 +800,41 @@ def test_the_figure_draws_positions_on_the_screen_a_screen_axis_or_the_replay(
     from scanpath_studio.tabs import _figure_draws_positions
 
     assert _figure_draws_positions(state) is drawn
+
+
+def _wordless_api_frames():
+    from scanpath_studio import api
+
+    fixations = pd.DataFrame(
+        {
+            "reader": ["r1"] * 3 + ["r2"] * 2,
+            "item": ["t"] * 5,
+            "word": [0, 2, 1, 0, 1],
+            "dur": [200.0, 180.0, 220.0, 150.0, 160.0],
+        }
+    )
+    schema = dict(participant="reader", trial="item", word_id="word", duration="dur")
+    return api.load_scanpath_data(None, fixations, fix_schema=schema, names="canonical")
+
+
+def test_the_api_draws_a_fixations_only_dataset_on_a_reading_chart():
+    from scanpath_studio import api
+
+    words, fixations = _wordless_api_frames()
+    chart = dict(x_field="word_id", y_field="order_in_trial")
+    fig = api.plot_scanpath(words, fixations, "r1", "t", **chart)
+    assert sorted(_points(fig)) == [0, 1, 2]
+    pair = api.compare_scanpaths(words, fixations, ("r1", "t"), ("r2", "t"), **chart)
+    assert sorted(_points(pair)) == [0, 0, 1, 1, 2]
+    # The screen view still needs positions it can't have.
+    with pytest.raises(ValueError, match="no usable coordinates"):
+        api.plot_scanpath(words, fixations, "r1", "t")
+
+
+def _points(fig) -> list:
+    return [
+        value
+        for trace in fig.data
+        if trace.mode == "markers" and trace.x is not None
+        for value in trace.x
+    ]

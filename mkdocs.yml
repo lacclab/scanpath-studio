@@ -187,10 +187,12 @@ validation:
 
 # The abbreviation list is appended to every page by pymdownx.snippets; it is
 # not a page of its own. The dataset-adapter contract is developer material,
-# read on GitHub from CONTRIBUTING.md.
+# read on GitHub from CONTRIBUTING.md. Design specs under superpowers/ are
+# working documents for contributors, not user docs.
 exclude_docs: |
   includes/
   contributing-a-dataset.md
+  superpowers/
 
 hooks:
   - scripts/mkdocs_hooks.py

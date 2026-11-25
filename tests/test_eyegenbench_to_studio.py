@@ -205,3 +205,10 @@ def test_the_dataset_reaches_the_apps_list_without_word_boxes(script, tree, cach
         "raw_gaze": 0,
         "words": 0,
     }
+
+
+def test_the_inputs_must_be_named(script, monkeypatch):
+    for variable in script.PATH_SETTINGS.values():
+        monkeypatch.delenv(variable, raising=False)
+    with pytest.raises(SystemExit):
+        script.main(["--all"])

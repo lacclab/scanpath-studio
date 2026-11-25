@@ -26,6 +26,9 @@ and text, new corpus, ..., or train / validation); a per-corpus or debug run by
 its corpus' own split, whose test fold 0 groups trials by participant, so a
 reading generated there is a new reader. Each value names its split.
 
+    export EYEGENBENCH_DIR=/path/to/EyeGenBench
+    export EYEGENBENCH_FULL_RUNS=$EYEGENBENCH_DIR/code/model_outputs
+    export EYEGENBENCH_MATRIX=/path/to/matrix/model_outputs
     python scripts/eyegenbench_to_studio.py --report
     python scripts/eyegenbench_to_studio.py --corpus CopCo
     python scripts/eyegenbench_to_studio.py --all
@@ -35,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -46,12 +50,17 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from scanpath_studio import api
 
-EYEGENBENCH = Path("/data/home/shubi/EyeGenBench")
-#: Full benchmark runs, one model_fixations.csv per model over every benchmark
-#: corpus, and the per-corpus matrix (debug runs for the trained models).
-FULL_RUNS = EYEGENBENCH / "wt-run4" / "model_outputs"
-MATRIX = EYEGENBENCH / "wt-matrix3" / "model_outputs"
-WORK = Path("/data/home/shubi/scanpath-studio-data/eyegenbench-work")
+#: Where the inputs are, each a flag or else an environment variable: the
+#: EyeGenBench folder (holding ``code/data``), its full benchmark runs (one
+#: model_fixations.csv per model over every benchmark corpus) and its
+#: per-corpus matrix (``<model>/<corpus>/…/model_fixations.csv``).
+PATH_SETTINGS = {
+    "eyegenbench": "EYEGENBENCH_DIR",
+    "full_runs": "EYEGENBENCH_FULL_RUNS",
+    "matrix": "EYEGENBENCH_MATRIX",
+}
+#: The full runs split by corpus, and the coverage report.
+WORK = Path.home() / ".cache" / "scanpath-studio" / "eyegenbench-work"
 PREFIX = "EyeGenBench · "
 
 HUMAN = "Human"
@@ -468,10 +477,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--corpus", action="append", default=[], help="Repeatable.")
     parser.add_argument("--all", action="store_true")
-    parser.add_argument("--eyegenbench", type=Path, default=EYEGENBENCH)
-    parser.add_argument("--full-runs", type=Path, default=FULL_RUNS)
-    parser.add_argument("--matrix", type=Path, default=MATRIX)
-    parser.add_argument("--work", type=Path, default=WORK)
+    for name, variable in PATH_SETTINGS.items():
+        parser.add_argument(
+            f"--{name.replace('_', '-')}",
+            type=Path,
+            default=os.environ.get(variable),
+            help=f"Default: ${variable}.",
+        )
+    parser.add_argument(
+        "--work",
+        type=Path,
+        default=os.environ.get("EYEGENBENCH_STUDIO_WORK", WORK),
+        help=f"Default: $EYEGENBENCH_STUDIO_WORK, else {WORK}.",
+    )
     parser.add_argument(
         "--split-full-runs",
         action="store_true",
@@ -479,6 +497,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--report", action="store_true", help="List corpora and runs.")
     args = parser.parse_args(argv)
+    missing = [
+        f"--{name.replace('_', '-')} (or ${variable})"
+        for name, variable in PATH_SETTINGS.items()
+        if getattr(args, name) is None
+    ]
+    if missing:
+        parser.error("say where the inputs are: " + ", ".join(missing))
 
     available = corpora(args.eyegenbench)
     if args.report:

@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- The Data page's Texts table keeps each word whose Word ID is blank as a word of its own, after its line's numbered words, instead of folding them into one word that depended on the row order.
 - Leaving the Add-dataset wizard after uploading a file no longer stops the bundled demo from loading ("Screen ID is set in only one table").
 
 ## Release v0.49.0

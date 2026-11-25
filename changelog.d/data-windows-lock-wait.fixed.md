@@ -1,1 +1,0 @@
-On Windows, a window that opens while another one is still saving large datasets now waits for that save, instead of giving up after about ten seconds, calling the saved work unreadable and pausing saving.

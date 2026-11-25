@@ -1,1 +1,0 @@
-Each category now keeps one color in every trial of a dataset, and up to 20 categories get clearly different colors; several used to look almost identical, such as three purples for the demo's saccade types.

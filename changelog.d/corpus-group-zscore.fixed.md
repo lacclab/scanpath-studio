@@ -1,1 +1,0 @@
-Groups → Overlaid distributions with Z-score per participant now z-scores each participant once over all their selected trials before splitting the groups, so a participant who read both conditions keeps the difference between them.

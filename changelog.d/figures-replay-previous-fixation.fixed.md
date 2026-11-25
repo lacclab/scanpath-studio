@@ -1,1 +1,0 @@
-In a replay, the first Previous fixation press after pausing or scrubbing goes to the fixation before the one on screen instead of seeming to do nothing, and the fixation buttons work in Safari before 15.4.

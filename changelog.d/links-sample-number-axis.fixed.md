@@ -1,1 +1,0 @@
-The sample-number axis (`x_field="sample_index"`, `render --x-field sample_index`) draws raw gaze recorded with timestamps too, numbering each reading's samples in recorded order per screen and eye, instead of an empty chart; and a shared link whose chart axis the opened reading lacks falls back to the screen axes, rather than plotting one field against itself.

@@ -155,7 +155,7 @@ def test_a_full_run_keeps_one_draw_per_trial_under_its_human_trial(script, tree,
     assert (model["trials"], model["unmatched_trials"]) == (1, 0)
     assert model["dropped_draw_rows"] == 2
     full_runs = json.loads((tree[3] / "full_runs.json").read_text())
-    assert full_runs["ezreader"]["unmatched_rows"] == 1
+    assert full_runs["models"]["ezreader"]["unmatched_rows"] == 1
 
     root, _, matrix, work = tree
     fixations, _ = script.build_fixations(
@@ -212,3 +212,57 @@ def test_the_inputs_must_be_named(script, monkeypatch):
         monkeypatch.delenv(variable, raising=False)
     with pytest.raises(SystemExit):
         script.main(["--all"])
+
+
+def test_a_changed_full_run_is_split_again(script, tree, cache):
+    """A split in --work is reused only while its runs are the same files,
+    unchanged; a run that went away leaves nothing behind."""
+    _run(script, tree, "Alpha")
+    _root, full, _matrix, work = tree
+    assert (work / "full" / "ezreader" / "Alpha.parquet").is_file()
+    (full / "ezreader" / "benchmark" / "model_fixations.csv").unlink()
+    other = full / "swift" / "benchmark"
+    other.mkdir(parents=True)
+    _model("Alpha_r2_p1", "Alpha_p1", "Alpha_r2", [1, 2]).to_csv(
+        other / "model_fixations.csv", index=False
+    )
+    added = _run(script, tree, "Alpha")
+    sources = {m["source"]: m["kind"] for m in added["Alpha"]["models"]}
+    assert sources == {"SWIFT": "benchmark run", "EZ-Reader": "per-corpus run"}
+    assert not (work / "full" / "ezreader").exists()
+
+
+def test_a_folder_that_is_not_there_is_refused(script, tree, cache):
+    root, full, matrix, work = tree
+    with pytest.raises(SystemExit):
+        script.main(
+            ["--eyegenbench", str(root), "--full-runs", str(full / "typo")]
+            + ["--matrix", str(matrix), "--work", str(work), "--all"]
+        )
+
+
+def test_model_landing_positions_are_kept(script, tree):
+    _root, _full, matrix, work = tree
+    cell = matrix / "swift" / "Beta"
+    cell.mkdir(parents=True)
+    _model(
+        "Beta_r2_p1", "Beta_p1", "Beta_r2", [0, 1], fix_landing_position=[0.25, 0.75]
+    ).to_csv(cell / "model_fixations.csv", index=False)
+    runs = script.model_runs("Beta", work, {"models": {}}, matrix)
+    (run,) = [r for r in runs if r.model == "swift"]
+    assert list(run.rows["fix_landing_position"]) == [0.25, 0.75]
+
+
+def test_a_corpus_outside_the_benchmark_says_so(script, tree):
+    root = tree[0]
+    folds = root / "code" / "data" / "combined_benchmark" / "processed" / "folds.csv"
+    kept = pd.read_csv(folds)
+    kept[~kept["unique_trial_id"].str.startswith("Beta")].to_csv(folds, index=False)
+    fixations, _ = script.build_fixations(
+        script.human_fixations(root, "Beta"),
+        script.word_table(root, "Beta"),
+        [],
+        script.benchmark_regimes(root),
+        script.corpus_regimes(root, "Beta"),
+    )
+    assert set(fixations["regime"]) == {script.NOT_IN_BENCHMARK}

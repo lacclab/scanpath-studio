@@ -24,7 +24,11 @@ a human reading and a benchmark run by the benchmark split
 (``combined_benchmark/processed/folds.csv``: new reader, new text, new reader
 and text, new corpus, ..., or train / validation); a per-corpus or debug run by
 its corpus' own split, whose test fold 0 groups trials by participant, so a
-reading generated there is a new reader. Each value names its split.
+reading generated there is a new reader. Each value names its split; a human
+reading of a corpus the benchmark leaves out is "not in the benchmark".
+
+Model readings carry the word, duration, order and, where the model writes it
+(the simulation models), the landing position.
 
     export EYEGENBENCH_DIR=/path/to/EyeGenBench
     export EYEGENBENCH_FULL_RUNS=$EYEGENBENCH_DIR/code/model_outputs
@@ -39,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -139,6 +144,9 @@ _MODEL_COLUMNS = [
     "ia_index",
     "fix_duration",
 ]
+#: Read where a run has them: the draw (one is kept) and the landing position
+#: (the simulation models write it).
+_MODEL_OPTIONAL = {"draw", "fix_landing_position"}
 
 
 @dataclass
@@ -219,14 +227,17 @@ def split_full_runs(full_root: Path, trial_corpus: dict[str, str], work: Path) -
     """Split each model's full benchmark run by corpus into ``work``.
 
     Rows go to the corpus whose human trials hold their ``unique_trial_id``;
-    rows matching no human trial are counted, not kept. Returns
-    ``{model: {"path", "unmatched_rows", "dropped_draws"}}``."""
+    rows matching no human trial are counted, not kept. An earlier split is
+    removed first. Returns ``{"root", "models": {model: {"path", "stamp",
+    "unmatched_rows", "dropped_draws", …}}}``; ``stamp`` is the run file's size
+    and modification time, which :func:`split_is_current` compares."""
+    shutil.rmtree(work / "full", ignore_errors=True)
     report = {}
     for model, label in MODELS.items():
         csv = _full_run_csv(full_root / model)
         if csv is None:
             continue
-        usecols = lambda c: c in {*_MODEL_COLUMNS, "draw"}
+        usecols = lambda c: c in {*_MODEL_COLUMNS, *_MODEL_OPTIONAL}
         rows = pd.read_csv(csv, usecols=usecols, dtype={"unique_trial_id": str})
         before = rows["unique_trial_id"].map(trial_corpus).value_counts()
         rows, dropped = one_draw(rows)
@@ -239,6 +250,7 @@ def split_full_runs(full_root: Path, trial_corpus: dict[str, str], work: Path) -
             part.drop(columns="draw", errors="ignore").to_parquet(target, index=False)
         report[model] = {
             "path": str(csv),
+            "stamp": _stamp(csv),
             "unmatched_rows": int(corpus.isna().sum()),
             "dropped_draws": dropped,
             "dropped_draws_by_corpus": {
@@ -248,7 +260,30 @@ def split_full_runs(full_root: Path, trial_corpus: dict[str, str], work: Path) -
             },
         }
         print(f"  {label}: {len(rows):,} rows from {csv}", flush=True)
-    return report
+    if not report:
+        raise ValueError(f"no full benchmark run under {full_root}")
+    missing = [MODELS[m] for m in MODELS if m not in report]
+    if missing:
+        print(f"  No full run for: {', '.join(missing)}", flush=True)
+    return {"root": str(full_root.resolve()), "models": report}
+
+
+def _stamp(path: Path) -> list:
+    stat = path.stat()
+    return [stat.st_size, stat.st_mtime_ns]
+
+
+def split_is_current(meta: dict, full_root: Path) -> bool:
+    """Whether a saved split came from these full runs, unchanged since."""
+    if meta.get("root") != str(full_root.resolve()):
+        return False
+    found = {m for m in MODELS if _full_run_csv(full_root / m) is not None}
+    if found != set(meta.get("models", {})):
+        return False
+    return all(
+        Path(entry["path"]).is_file() and _stamp(Path(entry["path"])) == entry["stamp"]
+        for entry in meta["models"].values()
+    )
 
 
 def _matrix_run(matrix_root: Path, model: str, corpus: str) -> Run | None:
@@ -258,18 +293,23 @@ def _matrix_run(matrix_root: Path, model: str, corpus: str) -> Run | None:
     if len(found) > 1:
         raise ValueError(f"several matrix runs for {model} on {corpus}: {found}")
     csv = found[0]
+    if "fold_id=" in str(csv.relative_to(matrix_root)):
+        # ``regime`` reads every per-corpus run as tested on fold 0.
+        raise ValueError(f"{csv}: a run on another fold than {PER_CORPUS_TEST_FOLD}")
     summary_path = csv.parent / "generation_summary.csv"
     summary = pd.read_csv(summary_path).iloc[0] if summary_path.is_file() else None
     partial = bool(summary is not None and summary.get("partial", False))
-    debug = partial or "trainer=debug" in str(csv)
+    cell = str(csv.relative_to(matrix_root))
+    debug = partial or "trainer=debug" in cell or "debug=true" in cell
     note = ""
-    if (
-        summary is not None
-        and "n_batches" in summary
-        and "n_batches_available" in summary
+    for done, total, unit in (
+        ("n_batches", "n_batches_available", "batches"),
+        ("n_paragraphs", "n_paragraphs_expected", "paragraphs"),
     ):
-        note = f"{int(summary['n_batches'])} of {int(summary['n_batches_available'])} batches"
-    usecols = lambda c: c in {*_MODEL_COLUMNS, "draw"}
+        if summary is not None and done in summary and total in summary:
+            note = f"{int(summary[done])} of {int(summary[total])} {unit}"
+            break
+    usecols = lambda c: c in {*_MODEL_COLUMNS, *_MODEL_OPTIONAL}
     rows = pd.read_csv(csv, usecols=usecols, dtype={"unique_trial_id": str})
     rows, dropped = one_draw(rows)
     _require_one_scanpath_per_trial(rows, str(csv))
@@ -292,7 +332,7 @@ def model_runs(
     for model in MODELS:
         part = work / "full" / model / f"{corpus}.parquet"
         if part.is_file():
-            meta = full_meta[model]
+            meta = full_meta["models"][model]
             runs.append(
                 Run(
                     model,
@@ -322,11 +362,24 @@ def benchmark_regimes(root: Path) -> pd.Series:
     )
 
 
+#: The regime of a human reading of a corpus the benchmark split leaves out.
+NOT_IN_BENCHMARK = "benchmark: not in the benchmark"
+
+
 def corpus_regimes(root: Path, corpus: str) -> pd.Series:
     """Each trial's place in its corpus' own split, as ``regime`` names it."""
     folds = pd.read_csv(root / "code" / "data" / corpus / "processed" / "folds.csv")
-    held_out = folds.set_index("unique_trial_id")["fold"].eq(PER_CORPUS_TEST_FOLD)
-    return held_out.map({True: "per-corpus: new reader", False: "per-corpus: train"})
+    # EyeGenBench tests on fold k and validates on fold k + 1.
+    fold = folds.set_index("unique_trial_id")["fold"]
+    return fold.map(
+        lambda f: (
+            "per-corpus: new reader"
+            if f == PER_CORPUS_TEST_FOLD
+            else "per-corpus: validation"
+            if f == PER_CORPUS_TEST_FOLD + 1
+            else "per-corpus: train"
+        )
+    )
 
 
 def build_fixations(
@@ -351,7 +404,7 @@ def build_fixations(
             source_trial=human["unique_trial_id"],
             scanpath_source=HUMAN,
             run_type=RECORDED,
-            regime=human["unique_trial_id"].map(benchmark),
+            regime=human["unique_trial_id"].map(benchmark).fillna(NOT_IN_BENCHMARK),
         )
     ]
     coverage = []
@@ -423,7 +476,7 @@ def describe(corpus: str, coverage: list[dict]) -> str:
     for c in coverage:
         parts.append(
             f"{c['source']}: {c['kind']}, {c['trials']:,} of {c['human_trials']:,} "
-            f"trials ({c['run']})."
+            "trials."
         )
     return " ".join(parts)
 
@@ -458,6 +511,15 @@ def add_corpus(
         "human_fixations": len(human),
         "fixations": len(fixations),
         "models": coverage,
+        "human_regimes": {
+            str(k): int(v)
+            for k, v in fixations.loc[
+                fixations["run_type"] == RECORDED, ["unique_trial_id", "regime"]
+            ]
+            .drop_duplicates("unique_trial_id")["regime"]
+            .value_counts()
+            .items()
+        },
         "seconds": round(time.monotonic() - started, 1),
     }
 
@@ -493,17 +555,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--split-full-runs",
         action="store_true",
-        help="Re-split the full benchmark runs by corpus (otherwise reuse --work).",
+        help="Re-split the full benchmark runs by corpus. Without it the split in "
+        "--work is reused while it came from these runs, unchanged.",
     )
     parser.add_argument("--report", action="store_true", help="List corpora and runs.")
     args = parser.parse_args(argv)
+    needed = ("eyegenbench", "matrix") if args.report else tuple(PATH_SETTINGS)
     missing = [
-        f"--{name.replace('_', '-')} (or ${variable})"
-        for name, variable in PATH_SETTINGS.items()
+        f"--{name.replace('_', '-')} (or ${PATH_SETTINGS[name]})"
+        for name in needed
         if getattr(args, name) is None
     ]
     if missing:
         parser.error("say where the inputs are: " + ", ".join(missing))
+    absent = [
+        f"{name.replace('_', '-')} {getattr(args, name)}"
+        for name in needed
+        if not getattr(args, name).is_dir()
+    ]
+    if not (args.eyegenbench / "code" / "data").is_dir():
+        absent.append(f"eyegenbench {args.eyegenbench} (no code/data)")
+    if absent:
+        parser.error("not a folder: " + "; ".join(absent))
 
     available = corpora(args.eyegenbench)
     if args.report:
@@ -517,7 +590,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"choose --all or --corpus from {available}; unknown: {unknown}")
 
     meta_path = args.work / "full_runs.json"
-    if args.split_full_runs or not meta_path.is_file():
+    saved = (
+        json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
+    )
+    if args.split_full_runs or not split_is_current(saved, args.full_runs):
         print("Splitting the full benchmark runs by corpus…", flush=True)
         full_meta = split_full_runs(
             args.full_runs, trial_corpus_map(args.eyegenbench, available), args.work

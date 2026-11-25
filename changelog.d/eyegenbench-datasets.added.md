@@ -1,1 +1,1 @@
-scripts/eyegenbench_to_studio.py adds EyeGenBench's corpora, with every model's generated readings, as datasets the app lists: word-level fixations, each model's version of a trial matched to the human one by source_trial, and each trial's held-out regime.
+A repository script, scripts/eyegenbench_to_studio.py, adds the corpora of a local EyeGenBench checkout, with every model's generated readings, as datasets the app lists: word-level fixations, each model's version of a trial matched to the human one by source_trial, and each trial's held-out regime.

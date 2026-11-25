@@ -663,7 +663,7 @@ plot_scanpath(
     screen=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     raw_gaze=None,
     drift_correction=None,
     drift_connectors=False,
@@ -690,7 +690,7 @@ Parameters:
 - **`screen`** (`str | None`, default: `None` ) – The screen of a multipart trial to draw. Left out, the first recorded screen; coordinate spaces are never concatenated.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size in px, (width, height). Estimated from the data's extent by default; pass the real resolution ((2560, 1440) for OneStop) to keep coordinates true to scale.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`raw_gaze`** (`DataFrame | None`, default: `None` ) – Samples from load_raw_gaze, filtered to the trial and drawn as recorded, under the fixations. It can be the only table: with words and fixations None, the trial is looked up in the samples, the canvas is estimated from their extent, and the figure is the samples alone. No fixations are detected from them, so the fixation, saccade and heatmap layers stay empty.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental. Without SCANPATH_EXPERIMENTAL=1, anything but None or "off" raises ValueError.
 - **`drift_connectors`** (`bool`, default: `False` ) – Experimental, with drift_correction.
@@ -728,7 +728,7 @@ animate_scanpath(
     screen_b=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     playback_speed=1.0,
     autoplay=True,
     fix_index_range=None,
@@ -763,7 +763,7 @@ Parameters:
 - **`screen_b`** (`str | None`, default: `None` ) – B's screen, looked up in B's own trial. Left out, its first recorded screen.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – A's monitor size, as in plot_scanpath.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`playback_speed`** (`float`, default: `1.0` ) – The replay lasts the reading time divided by this. Any other value than 1 makes the automatic Illustration label say the timing was changed.
 - **`autoplay`** (`bool`, default: `True` ) – Start the saved HTML's replay when it opens, at playback_speed. False saves it paused, to start with ▶ Play. A GIF or MP4 always plays from its first frame.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): replay only that window of the trial's fixations, 1-based and inclusive. In a co-animation it windows A only, as in the app, where A's slider never cuts B.
@@ -814,7 +814,7 @@ compare_scanpaths(
     style_a=None,
     style_b=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     fix_index_range=None,
     fix_index_range_b=None,
     drift_correction=None,
@@ -876,7 +876,7 @@ Parameters:
 - **`style_a`** (`dict | None`, default: `None` ) – A's style, with the keys above.
 - **`style_b`** (`dict | None`, default: `None` ) – B's style.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): draw only that window of both scanpaths' fixations.
 - **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's own window, as the app's B slider sets it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
@@ -1254,7 +1254,7 @@ figure_code(
     compare_source_options=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     title="",
     caption="",
     fix_index_range=None,
@@ -1293,7 +1293,7 @@ Parameters:
 - **`compare_source_options`** (`dict | None`, default: `None` ) – How B's tables load when B is a second dataset, as source_options says it for A's files: "words" / "fixations" / "raw_gaze" paths in place of the placeholders, and "word_schema" / "fix_schema" / "raw_gaze_schema" mappings (--compare-word-schema and its siblings). Without compare_dataset, B is named "Dataset B", as render names it.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size. Defaults to the screen render assumes for the source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the same figure.
 - **`base_font_size`** (`int`, default: `16` ) – As the builders take it.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – As the builders take it.
+- **`font_family`** (`str | None`, default: `None` ) – As the builders take it.
 - **`title`** (`str`, default: `''` ) – As the builders take it.
 - **`caption`** (`str`, default: `''` ) – As the builders take it.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – As the builders take it.

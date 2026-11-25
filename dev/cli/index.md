@@ -335,7 +335,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--line-spacing`           | `N`                                             | —       | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N (default: 3, a blank line above and below).                                                                                                     |
 | `--no-scale-text-to-boxes` | switch                                          | —       | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
 | `--font-size`              | `PX`                                            | `16`    | Base figure font size (default: 16).                                                                                                                                                                                                |
-| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: monospace).                                                                                                                                                                                      |
+| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: the font the data declares for its stimulus, else monospace).                                                                                                                                    |
 
 ### Word boxes
 

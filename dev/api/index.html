@@ -6133,7 +6133,7 @@ finite and positive. Nothing is changed or dropped.</p>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">screen</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">font_family</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">raw_gaze</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">drift_correction</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">drift_connectors</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -6242,12 +6242,13 @@ OneStop) to keep coordinates true to scale.</p>
         </li>
         <li class="doc-section-item field-body">
             <b><code>font_family</code></b>
-              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
-                  <code><span title="scanpath_studio.constants.FONT_FAMILY">FONT_FAMILY</span></code>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>The font family.</p>
+            <p>The font family. Left out, the font the data declares for
+its stimulus (OneStop's Lucida Sans Typewriter), else <code>monospace</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -6454,7 +6455,7 @@ PNG). The figure draws none.</p>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">screen_b</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">font_family</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">playback_speed</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">autoplay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">fix_index_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -6581,12 +6582,13 @@ screen.</p>
         </li>
         <li class="doc-section-item field-body">
             <b><code>font_family</code></b>
-              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
-                  <code><span title="scanpath_studio.constants.FONT_FAMILY">FONT_FAMILY</span></code>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>The font family.</p>
+            <p>The font family. Left out, the font the data declares for
+its stimulus (OneStop's Lucida Sans Typewriter), else <code>monospace</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -6839,7 +6841,7 @@ leaves the replay nothing to draw.</p>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">style_a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">style_b</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">font_family</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">fix_index_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">fix_index_range_b</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">drift_correction</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -7150,12 +7152,13 @@ reads.</p>
         </li>
         <li class="doc-section-item field-body">
             <b><code>font_family</code></b>
-              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
-                  <code><span title="scanpath_studio.constants.FONT_FAMILY">FONT_FAMILY</span></code>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>The font family.</p>
+            <p>The font family. Left out, the font the data declares for
+its stimulus (OneStop's Lucida Sans Typewriter), else <code>monospace</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8543,7 +8546,7 @@ to get the same figure. <code>figure_code</code> writes the same code without th
 <a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">compare_source_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">canvas_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">base_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">font_family</span><span class="o">=</span><span class="n">FONT_FAMILY</span><span class="p">,</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">font_family</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
 <a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">caption</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">fix_index_range</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -8761,8 +8764,8 @@ same figure.</p>
         </li>
         <li class="doc-section-item field-body">
             <b><code>font_family</code></b>
-              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
-                  <code><span title="scanpath_studio.constants.FONT_FAMILY">FONT_FAMILY</span></code>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
 )
           –
           <div class="doc-md-description">

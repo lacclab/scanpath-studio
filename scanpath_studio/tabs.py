@@ -14300,8 +14300,13 @@ _RECORDING_TABLES = {
     ),
 }
 
-# The Texts table's column naming the screens its readers saw differently.
+# The Texts and Stimuli tables' column naming the screens readers saw
+# differently, and the sentence their caption adds when it is there.
 STIMULUS_VERSIONS_COLUMN = "Differs by reader"
+STIMULUS_VERSIONS_NOTE = (
+    "Where readers saw different versions of a text, each version is"
+    " shown with the readers who saw it."
+)
 
 _ENTITY_TABLES = {
     "participant": (
@@ -14501,10 +14506,7 @@ def _render_raw_metadata_tab(
         )
         return
     if STIMULUS_VERSIONS_COLUMN in derived.columns:
-        description += (
-            " Where readers saw different versions of a text, each version is"
-            " shown with the readers who saw it."
-        )
+        description += " " + STIMULUS_VERSIONS_NOTE
     st.caption(description)
     names = active_column_names(st.session_state, "fixations")
     st.dataframe(
@@ -17940,4 +17942,6 @@ def _render_derived_tables(
                         f"No {label.lower()} table is available for this selection."
                     )
                 else:
+                    if STIMULUS_VERSIONS_COLUMN in table.columns:
+                        st.caption(STIMULUS_VERSIONS_NOTE)
                     _render_raw_table(table)

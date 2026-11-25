@@ -366,6 +366,32 @@ class TestDerivedAnalysisTablesGate:
         labels = [e.label for e in at.expander]
         assert any("Derived analysis" in label for label in labels), labels
 
+    def test_the_stimuli_table_shows_each_version_readers_saw(self, monkeypatch):
+        from scanpath_studio import constants
+        from tests.conftest import pin_data_view
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_inspection_panel"] = "Tables"
+        at.session_state["data_derived_tables"] = True
+        pin_data_view(at)
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        # The Texts table carries the column too, beside its participant count.
+        stimuli = [
+            frame.value
+            for frame in at.dataframe
+            if tabs.STIMULUS_VERSIONS_COLUMN in frame.value.columns
+            and "# Participants" not in frame.value.columns
+        ]
+        assert len(stimuli) == 1, [list(f.value.columns) for f in at.dataframe]
+        stimuli = stimuli[0]
+        # The bundled demo's two readers saw their own Answers and Feedback.
+        row = stimuli.set_index("Text ID").loc["2_1_3_Adv"]
+        assert "[Feedback · seen by l37_273] INCORRECT" in row["Text"]
+        assert "[Feedback · seen by l7_183] CORRECT" in row["Text"]
+        assert tabs.STIMULUS_VERSIONS_NOTE in [c.value for c in at.caption]
+
 
 class TestPerSentenceGate:
     """Per sentence derives its numbers from the fixations, unlike the rest of

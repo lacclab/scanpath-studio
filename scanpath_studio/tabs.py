@@ -1359,7 +1359,9 @@ def _render_true_scale_plot(
     loading.record_plot_size(key, width, iframe_height)
 
 
-def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
+def _different_texts_note(
+    text_a: str | None, text_b: str | None, *, word_axis: bool = False
+) -> str | None:
     """The warning for an **overlay** of readings of two **different texts**.
 
     ``None`` when they match, or when either side's text id is unknown — a
@@ -1375,9 +1377,19 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
     Rendered under the figure (both the static comparison and the animated
     co-replay) rather than inside the rail's popover: a caveat about what the
     figure *means* has to be where the figure is.
+
+    ``word_axis`` is an overlay on a reading chart with a word-id axis, which
+    draws no boxes but puts word *n* of one text on word *n* of the other.
     """
     if not text_a or not text_b or str(text_a) == str(text_b):
         return None
+    if word_axis:
+        return (
+            f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay puts "
+            "both on one word axis, so word *n* of one text sits on word *n* of "
+            "the other. Compare two trials of the same text, or set **View** to "
+            "**Side by side**."
+        )
     return (
         f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay draws both "
         "scanpaths over one set of word boxes, so it doesn't show where each "
@@ -6804,7 +6816,13 @@ def render_single_trial_tab(
 
     # A dataset that fails its data checks badly (most fixations at 0 ms, most
     # positions missing) still draws a plausible figure; say so above it.
-    render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
+    render_data_health_notice(
+        plot_notes_slot,
+        words_all,
+        fixations_all,
+        raw_gaze_all,
+        positions_drawn=_figure_draws_positions(st.session_state),
+    )
 
     if not (selected_participant and selected_trial):
         if on_reading_selected is not None:
@@ -7286,33 +7304,16 @@ def render_single_trial_tab(
                     # Seed so the control shows "Overlay" selected by default
                     # (the body reads this key to resolve compare_layout).
                     st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
-                    chart_layout = not animate and (
+                    chart_fields = (
                         st.session_state.get("global_x_field", "x"),
                         st.session_state.get("global_y_field", "y"),
-                    ) != ("x", "y")
-                    layout_key = SINGLE_COMPARE_LAYOUT
-                    choices = ["Overlay", "Side by side", "Stacked"]
-                    callback = {}
-                    if chart_layout:
-                        choices = choices[1:]
-                        saved = st.session_state[SINGLE_COMPARE_LAYOUT]
-                        layout_key = shadow_widget_key(
-                            "chart_compare_layout",
-                            saved if saved in choices else choices[0],
-                        )
-
-                        def choose_chart_layout():
-                            write_through(
-                                SINGLE_COMPARE_LAYOUT, st.session_state[layout_key]
-                            )
-
-                        callback["on_change"] = choose_chart_layout
-
+                    )
+                    chart_layout = not animate and chart_fields != ("x", "y")
                     _labeled(
                         st,
                         "segmented_control",
                         "Layout",
-                        options=choices,
+                        options=["Overlay", "Side by side", "Stacked"],
                         required=True,
                         format_func=lambda value: (
                             "Top & bottom" if value == "Stacked" else value
@@ -7321,8 +7322,7 @@ def render_single_trial_tab(
                         # column leaves; at the popovers' width they wrap.
                         label_width=0.2,
                         width="stretch",
-                        key=layout_key,
-                        **callback,
+                        key=SINGLE_COMPARE_LAYOUT,
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
@@ -7341,16 +7341,23 @@ def render_single_trial_tab(
                             "comes back when you turn it off."
                         )
                     # Overlay pools both trials into one axis range, so
-                    # across datasets it is allowed only when both were
-                    # recorded on the same screen size. This note
+                    # across datasets an overlay with a screen-position axis
+                    # is allowed only when both were recorded on the same
+                    # screen size. This note
                     # stays generic. The caption under the
                     # figure has the specific answer, and the resolve happens
                     # there too, *without* rewriting the key, so a
                     # same-dataset pair gets the user's Overlay back.
+                    # A reading chart draws no word boxes, so only a screen
+                    # overlay has a stimulus to choose.
                     overlaid = animate or (
                         stored_layout == "Overlay" and not chart_layout
                     )
-                    if _compare_source_name() is not None and overlaid:
+                    screen_gated = overlaid or (
+                        stored_layout == "Overlay"
+                        and chart_axes.in_screen_pixels(chart_fields)
+                    )
+                    if _compare_source_name() is not None and screen_gated:
                         st.caption(
                             "Across datasets, Overlay needs both to be recorded on "
                             "the same screen size."
@@ -7609,7 +7616,12 @@ def render_single_trial_tab(
     # so switching back to a same-dataset pair restores the user's Overlay.
     compare_layout = requested_layout
     chart_comparison = comparing and not animate and fields != ("x", "y")
-    if compare_layout == "overlay" and (chart_comparison or not compare_comparable):
+    # Screens of different sizes refuse an overlay only where an axis is in
+    # screen pixels; a chart of indices, durations or clocks overlays on any.
+    screen_refused = not compare_comparable and (
+        not chart_comparison or chart_axes.in_screen_pixels(fields)
+    )
+    if compare_layout == "overlay" and screen_refused:
         compare_layout = "side_by_side"
     # Widget label -> the wire/settings vocabulary the builders take.
     compare_stimulus = {"Both": "both", "A": "a", "B": "b"}.get(
@@ -7995,8 +8007,9 @@ def render_single_trial_tab(
                 # B's own screen, from its own navigator (`screen_b=`).
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
+                # Only a screen overlay draws word boxes to choose between.
                 compare_stimulus=str(compare_stimulus)
-                if compare_layout == "overlay"
+                if compare_layout == "overlay" and not chart_comparison
                 else "both",
                 dataset=_dataset_label(compare_meta["dataset"])
                 if compare_meta.get("dataset")
@@ -8229,7 +8242,7 @@ def render_single_trial_tab(
                     # resolve.
                     setup_note=(
                         f"{compare_setup_note} They are shown side by side instead."
-                        if compare_layout != requested_layout and not chart_comparison
+                        if compare_layout != requested_layout
                         else compare_setup_note
                     ),
                     primary_combo_row=primary_combo_row,
@@ -9319,9 +9332,9 @@ def _render_comparison_figure(
     canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
     # B's panel is drawn to B's own screen — its selected screen's canvas,
     # else its dataset's (`_build_compare_meta`). Only the split layouts read
-    # it; an overlay of two different screens never gets here (the caller
-    # resolves it to a split layout), and that holds within one dataset as
-    # much as across two.
+    # it; a screen-axis overlay of two different screens never gets here (the
+    # caller resolves it to a split layout), and that holds within one dataset
+    # as much as across two. A reading-chart overlay may, and draws no canvas.
     canvas_b = (compare_meta or {}).get("canvas")
     canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
     # Always stated, as `api.compare_scanpaths` states it: with no `canvas_b`
@@ -9420,11 +9433,16 @@ def _render_comparison_figure(
     _render_true_scale_chart(
         fig_compare, key="compare", download_name=download_name, fit_window=True
     )
-    overlaid = layout == "overlay"
     # Only where the figure is misleading (see the note's docstring): a split
-    # layout comparing two texts is a legitimate thing to do.
+    # layout comparing two texts is a legitimate thing to do, and a reading
+    # chart draws no word boxes to stack.
+    fields = (settings.x_field, settings.y_field)
+    word_axis = "word_id" in fields
+    overlaid = layout == "overlay" and (fields == ("x", "y") or word_axis)
     text_note = (
-        _different_texts_note(primary_text_id, compare_text_id) if overlaid else None
+        _different_texts_note(primary_text_id, compare_text_id, word_axis=word_axis)
+        if overlaid
+        else None
     )
     if text_note:
         st.warning(text_note, icon=ICONS["warning"])
@@ -13879,6 +13897,27 @@ def _comparison_trial_words(
     )
 
 
+def _shared_chart_range(frames: list[pd.DataFrame], field: str) -> list[float] | None:
+    """One padded ``[min, max]`` of ``field`` over ``frames``, or ``None``.
+
+    ``None`` when no frame has a finite value there, so the caller keeps each
+    panel's own autorange."""
+    values = (
+        pd.concat(
+            [pd.to_numeric(f[field], errors="coerce") for f in frames if field in f],
+            ignore_index=True,
+        )
+        if any(field in f for f in frames)
+        else pd.Series(dtype=float)
+    )
+    values = values[np.isfinite(values)]
+    if values.empty:
+        return None
+    low, high = float(values.min()), float(values.max())
+    pad = max((high - low) * 0.02, 0.5)
+    return [low - pad, high + pad]
+
+
 def _comparison_panel_settings(base_settings: dict) -> dict:
     """Comparable grid settings without hiding the main plot's stimulus text."""
     settings = {
@@ -13912,9 +13951,21 @@ def _panel_captions(choice: str, panels: dict, text_col, reading_labels: dict) -
     """:func:`_match_panel_caption` for each grid panel, made unique: a
     caption two panels share — one participant's two readings of a text, two
     readers' trials of one id — names its reading as well."""
+    # A condition match whose panels are all one trial (several readers'
+    # readings filed under one trial id, matched on a field they share)
+    # would caption every panel with that same trial: name each by its
+    # participant, as *Same text* does, so the panels read apart.
+    trials = {reading[1] for reading in panels}
+    one_trial = choice not in (_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT) and (
+        len(panels) > 1 and len(trials) == 1
+    )
     return _distinct_labels(
         {
-            reading: _match_panel_caption(choice, fix, text_col)
+            reading: (
+                _match_panel_caption(_MATCH_SAME_TEXT, fix, text_col)
+                if one_trial
+                else _match_panel_caption(choice, fix, text_col)
+            )
             for reading, fix in panels.items()
         },
         lambda reading, caption: f"{caption} ({reading_labels[reading]})",
@@ -13960,8 +14011,18 @@ def render_multiple_comparison_tab(
     names = active_all(st.session_state)
     match_options = _match_options(fixations_filtered, names)
     _check_match_link(match_options, names)
-    if trial_words.empty or trial_fixations.empty:
-        st.info("This trial has no word boxes or no fixations. Pick another trial.")
+    # A reading chart places fixations by their own fields, so only the screen
+    # view needs the trial's word boxes.
+    axes = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+    on_chart = axes != ("x", "y")
+    if trial_fixations.empty:
+        st.info("This trial has no fixations. Pick another trial.")
+        return
+    if trial_words.empty and not on_chart:
+        st.info(
+            "This trial has no word boxes. Pick another trial, or choose chart "
+            "axes such as Fixation order by Word ID."
+        )
         return
 
     if not match_options:
@@ -14035,19 +14096,30 @@ def render_multiple_comparison_tab(
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
         return
 
-    # Reuse the user's viz toggles but force a clean, comparable spatial view: the
-    # grid is inherently spatial, and a generation frame may lack the selected
-    # trial's extra columns, so pin axes to x/y, colour by duration_ms (present in
-    # every frame), and turn off heatmap / raw gaze / by-line / flags (they group
-    # by (participant_id, trial_id) against trial_words and would mis-render).
+    # Reuse the user's viz toggles but force a clean, comparable view: turn off
+    # heatmap / raw gaze / by-line / flags (they group by (participant_id,
+    # trial_id) against trial_words and would mis-render). The axes follow the
+    # rail's, so a chart of fixation order x word id compares readings as the
+    # plot above draws one; a panel whose frame lacks either field falls back
+    # to screen x / y.
     base_settings = _build_figure_settings(viz_settings, False)
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
     base_settings["scale_text_to_boxes"] = scale_text_to_boxes
     panel_settings = _comparison_panel_settings(base_settings)
 
-    def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
-        return _panel_figure(
+    def _make_fig(
+        words: pd.DataFrame,
+        fix: pd.DataFrame,
+        settings: dict,
+        x_range: list[float] | None = None,
+    ):
+        # Computed axes (elapsed seconds) count as present when the frame
+        # has what they are computed from.
+        x_field, y_field = (
+            axes if chart_axes.drawable_fixations(axes, fix) else ("x", "y")
+        )
+        fig = _panel_figure(
             words,
             fix,
             {
@@ -14055,8 +14127,8 @@ def render_multiple_comparison_tab(
                 "canvas_height": int(canvas_height),
                 "base_font_size": int(base_font_size),
                 "font_family": font_family,
-                "x_field": "x",
-                "y_field": "y",
+                "x_field": x_field,
+                "y_field": y_field,
                 "column_labels": active_figure_labels(
                     st.session_state, words=words.columns, fixations=fix.columns
                 ),
@@ -14064,6 +14136,9 @@ def render_multiple_comparison_tab(
                 **settings,
             },
         )
+        if x_range is not None and (x_field, y_field) == axes:
+            fig.update_xaxes(range=x_range, autorange=False)
+        return fig
 
     with st.container():
         # Score the matches against the selected scanpath — at most
@@ -14173,9 +14248,21 @@ def render_multiple_comparison_tab(
                     ),
                 ],
             )
+        # On chart axes the page's panels share one X range, so a longer
+        # scanpath reads as longer rather than as the same width squeezed. Not
+        # on an absolute clock: readings recorded apart would each fill a sliver.
+        page_x_range = (
+            _shared_chart_range(
+                [candidates[name] for name in grid_names] + [trial_fixations],
+                axes[0],
+            )
+            if on_chart and axes[0] != "timestamp_ms"
+            else None
+        )
         # Estimate a uniform cell height from the figure aspect + column count so
-        # panels line up and don't leave a tall whitespace band below each.
-        aspect = float(canvas_height) / float(canvas_width or 1)
+        # panels line up and don't leave a tall whitespace band below each. A
+        # chart has no screen, so it takes a fixed landscape aspect.
+        aspect = 0.6 if on_chart else float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
@@ -14195,7 +14282,7 @@ def render_multiple_comparison_tab(
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
-                        _make_fig(words, fix, panel_settings),
+                        _make_fig(words, fix, panel_settings, page_x_range),
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
@@ -17727,16 +17814,35 @@ def serious_health_lines(findings) -> list[str]:
     return lines
 
 
-def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
+def _figure_draws_positions(state) -> bool:
+    """Whether the Scanpath figure places fixations by screen position: the
+    replay always does, and a chart does when either axis is screen X or Y."""
+    if state.get("single_animate"):
+        return True
+    return any(
+        state.get(key, axis) in chart_axes.POSITION_FIELDS
+        for key, axis in (("global_x_field", "x"), ("global_y_field", "y"))
+    )
+
+
+def render_data_health_notice(
+    host, words, fixations, raw_gaze, *, positions_drawn: bool = True
+) -> None:
     """A notice on the Scanpath view when the dataset fails a data check badly.
 
     The figure is drawn either way, and looks plausible: a duration mapped to
     a column of words draws every fixation at the smallest size. So when a
     check flags most of a table (`serious_health_lines`), say so above the
     plot and point to 🗂️ Data Management → *Data checks*, where the rows are
-    listed. ``host`` is a slot drawn on every run.
+    listed. ``host`` is a slot drawn on every run. Without ``positions_drawn``
+    (a chart with no screen axis) the checks on screen positions are left out,
+    since that figure draws none.
     """
     findings = _dataset_health_findings(words, fixations, raw_gaze)
+    if not positions_drawn:
+        findings = [
+            f for f in findings if not set(f.columns) & set(chart_axes.POSITION_FIELDS)
+        ]
     lines = serious_health_lines(findings)
     if not lines:
         return

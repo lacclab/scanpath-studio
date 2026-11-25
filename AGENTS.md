@@ -80,6 +80,10 @@ scanpath_studio/
 │  ├─ metadata.py        participant / trial / text metadata tables (never broadcast onto frames)
 │  ├─ annotations.py     favorites / tags / notes, one store per dataset
 │  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop; the experimental MultiplEYE reader
+│  ├─ eyelink.py         the experimental EyeLink EDF import: the `edf2asc` wrapper (found, never
+│  │                     bundled), ASC reading, trials / screens from `.vcl` draw lists and `.ias`
+│  │                     interest areas, composed stimulus images, the resumable study folder and
+│  │                     `load_eyelink`
 │  ├─ compare_source.py  Compare's second dataset (scanpath B): widget-free readiness + loading
 │  ├─ dataset_identity.py
 │  │                     local dataset ownership, portable references for uploads, `unique_name`
@@ -289,7 +293,12 @@ Some finished-but-unvalidated or unfinished features are off unless
 - Corpus Analysis's *Per sentence* subtab;
 - the MultiplEYE session-set format (`multipleye_format_enabled`): the
   wizard's *Dataset format* choice, `datasets.load_multipleye` and
-  `render --multipleye`. A dataset already added that way still opens.
+  `render --multipleye`. A dataset already added that way still opens;
+- EyeLink EDF import (`eyelink_import_enabled`, the `edf` extra): `eyelink.py`'s
+  entries, `api.import_eyelink` / `load_eyelink` / `add_eyelink_dataset`, the
+  CLI's `import-eyelink` and `render --eyelink-study` raise without the flag.
+  `edf2asc` comes from the user's EyeLink Developers Kit (`SCANPATH_EDF2ASC`,
+  `PATH`, known install folders).
 
 Hidden, not broken: the code and its tests stay, CLI flags still parse (they
 are only hidden from `--help`), and the docs site does not describe them.

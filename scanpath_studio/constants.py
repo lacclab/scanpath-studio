@@ -155,6 +155,18 @@ def multipleye_format_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def eyelink_import_enabled() -> bool:
+    """Whether EyeLink EDF recordings can be imported: ``eyelink.py``'s public
+    entries, their ``api`` re-exports (``import_eyelink``, ``load_eyelink``)
+    and ``api.add_eyelink_dataset``, and the CLI's ``import-eyelink`` command
+    and ``render --eyelink-study``.
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set. Off, the entries raise and the
+    CLI hides its command and flag; the code and its tests stay.
+    """
+    return experimental_features_enabled()
+
+
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the font field accepts any CSS
 # font name or stack if you want the exact experiment font.

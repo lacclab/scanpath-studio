@@ -89,6 +89,12 @@ test = [
     # Writes the .xlsx fixtures the readers are tested on; the app itself
     # reads workbooks with calamine and writes none.
     "openpyxl>=3.1.5",
+    # Reads the EyeLink ASC files the EDF-import tests write.
+    "pymovements>=0.28.0",
+]
+# EyeLink EDF import (experimental): pymovements reads the converted ASC.
+edf = [
+    "pymovements>=0.28.0",
 ]
 # The linter, pinned to exactly what CI runs (.github/workflows/ci.yml). An
 # unpinned ruff means a local run and CI can disagree — a new release lands new

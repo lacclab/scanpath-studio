@@ -168,6 +168,10 @@ def test_a_full_run_keeps_one_draw_per_trial_under_its_human_trial(script, tree,
     generated = fixations[fixations["scanpath_source"] == "EZ-Reader"]
     assert set(generated["unique_participant_id"]) == {"Alpha_r1 · EZ-Reader"}
     assert set(generated["source_trial"]) == {"Alpha_r1_p1"}
+    # A model's reading is a trial of its own.
+    assert set(generated["unique_trial_id"]) == {"Alpha_r1_p1 · EZ-Reader"}
+    readers = fixations.groupby("unique_trial_id")["unique_participant_id"].nunique()
+    assert (readers == 1).all()
     assert set(generated["run_type"]) == {"benchmark run"}
     # A benchmark run's reading is held out as the benchmark split holds it out.
     assert set(generated["regime"]) == {"benchmark: new reader"}

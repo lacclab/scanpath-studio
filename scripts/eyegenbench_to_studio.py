@@ -10,8 +10,9 @@ word boxes, so the readings are drawn on reading charts (fixation order by
 word), not over a stimulus.
 
 Each dataset holds the human readings and every model's. A model's reading of a
-trial keeps that trial's id, under the reader ``"<reader> · <model>"``, and
-``source_trial`` names the human trial it was generated for, so matching on
+trial is a trial of its own, ``"<trial> · <model>"``, by the reader
+``"<reader> · <model>"``, so every trial id names one reading; ``source_trial``
+names the human trial it was generated for, so matching on
 ``source_trial`` in the Comparisons tab shows a human trial beside every model's
 version of it. ``scanpath_source`` says where a reading came from; a run that
 covers only part of its corpus (a debug run) says so there too. ``run_type``
@@ -358,6 +359,8 @@ def build_fixations(
             rows.assign(
                 unique_participant_id=rows["unique_participant_id"].astype(str)
                 + f" · {MODELS[run.model]}",
+                unique_trial_id=rows["unique_trial_id"].astype(str)
+                + f" · {MODELS[run.model]}",
                 source_trial=rows["unique_trial_id"],
                 scanpath_source=run.source,
                 run_type=run.kind,
@@ -389,6 +392,12 @@ def build_fixations(
             }
         )
     fixations = pd.concat(frames, ignore_index=True)
+    readers = fixations.groupby("unique_trial_id")["unique_participant_id"].nunique()
+    if (readers > 1).any():
+        raise ValueError(
+            "Trial ids shared by several readers: "
+            f"{readers[readers > 1].index[:5].tolist()}"
+        )
     fixations["text_language"] = fixations["unique_paragraph_id"].map(language)
     return fixations, coverage
 

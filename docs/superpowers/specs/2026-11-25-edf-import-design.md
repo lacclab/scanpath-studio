@@ -1,6 +1,6 @@
 # EyeLink EDF import — design
 
-Status: draft for approval · 2026-11-25
+Status: Approved; implemented (experimental) · 2026-11-25
 
 ## Intent
 
@@ -150,23 +150,25 @@ The app's saved datasets today are Parquet frames read whole into memory
 for OneStop) cannot work that way. The precedent is `onestop_shard.py`: one
 Parquet file per participant, read only when that participant is shown.
 
-- **Study folder.** An import writes a folder the user names (default: under the
-  app's data directory): `fixations/<pid>.parquet`, `words/<pid>.parquet`,
+- **Study folder.** An import writes a folder the user names (`--study-dir`,
+  required): `fixations/<pid>.parquet`, `words/<pid>.parquet`,
   `raw_gaze/<pid>.parquet` (only when requested; sorted by trial and time, row
   groups per trial),
-  `trial_metadata.parquet`, `images/` (composed stimulus PNGs, de-duplicated by
-  content) and `manifest.json` (per session: source path, size, mtime, status,
-  notes, parser version).
+  `trial_metadata/<pid>.parquet`, `images/` (composed stimulus PNGs,
+  de-duplicated by content) and `manifest.json` (per session: source path,
+  size, mtime, the session and experiment folders given and the session folder
+  found, status, notes, parser version).
 - **Per session, in parallel.** Each session is convert → parse → write its own
   files, in a process pool (default: CPU count − 1). Sessions are independent, so
   one bad EDF is reported in the manifest and the rest go on.
-- **Incremental and resumable.** A session whose source and parser version match
-  its manifest entry is skipped; re-running after an interruption or after adding
+- **Incremental and resumable.** A session whose source, folders and parser
+  version match its manifest entry is skipped (one left `writing` by a stopped
+  import is redone); re-running after an interruption or after adding
   EDFs only does the new work. `--rebuild` forces it.
 - **ASC is transient.** Converted to a temp folder, parsed, deleted;
   `keep_asc=True` keeps it beside the study folder.
-- **Progress.** `progress.report()` per session, so the CLI prints `n / N` with an
-  ETA and the API takes a callback.
+- **Progress.** `progress.report()` per session, so the CLI prints
+  `[n/N] <participant>` as each session finishes and the API takes a callback.
 - **Opening in the app.** `add_eyelink_dataset` reads the study folder and saves
   fixations, words and trial metadata through the existing `add_dataset` (Parquet
   in the recovery cache, loaded whole: OneStop is about 3M fixations); the stimulus

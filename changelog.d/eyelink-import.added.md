@@ -1,1 +1,0 @@
-Experimental: import EyeLink EDF recordings (fixations, word boxes, stimulus images, trial variables and, on request, raw gaze samples) without Data Viewer, through api.import_eyelink and scanpath-studio import-eyelink; needs SR Research's edf2asc.

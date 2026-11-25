@@ -157,11 +157,12 @@ def multipleye_format_enabled() -> bool:
 
 def eyelink_import_enabled() -> bool:
     """Whether EyeLink EDF recordings can be imported: ``eyelink.py``'s public
-    entries, the Add-dataset wizard's EyeLink choice and the CLI's ``--eyelink``
-    options.
+    entries, their ``api`` re-exports (``import_eyelink``, ``load_eyelink``)
+    and ``api.add_eyelink_dataset``, and the CLI's ``import-eyelink`` command
+    and ``render --eyelink-study``.
 
     Off unless ``SCANPATH_EXPERIMENTAL`` is set. Off, the entries raise and the
-    CLI hides its flags; the code and its tests stay.
+    CLI hides its command and flag; the code and its tests stay.
     """
     return experimental_features_enabled()
 

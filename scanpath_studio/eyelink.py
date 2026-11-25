@@ -6,10 +6,13 @@ found on the user's machine and never bundled or downloaded.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import os
 import re
 import shutil
 import subprocess
+import tempfile
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -293,13 +296,15 @@ class Display:
     in messages); the display begins at the draw list's message time minus it.
     ``images`` holds ``(path, x, y, width, height)`` placed by their top-left
     corner, ``width`` / ``height`` ``None`` for the picture's own size.
-    ``skipped`` keeps the lines that draw something this reader does not.
+    ``skipped`` keeps the lines that draw something this reader does not, and
+    ``refused`` the image paths that lead out of the experiment folder.
     """
 
     offset: int
     background: tuple[int, int, int]
     images: list[tuple[Path, int, int, int | None, int | None]]
     skipped: list[str] = field(default_factory=list)
+    refused: list[str] = field(default_factory=list)
 
 
 def _read_lines(path: Path) -> list[str]:
@@ -311,16 +316,39 @@ def _read_lines(path: Path) -> list[str]:
     return []
 
 
-def _session_path(name: str, session: Path | None) -> Path:
-    """A ``!V`` path, which is relative to the session folder."""
+def _experiment_root(session: Path) -> Path:
+    """The experiment folder: the session folder's grandparent, as Experiment
+    Builder lays sessions out in ``<experiment>/results/<session>/``."""
+    return session.resolve().parent.parent
+
+
+def _session_path(name: str, session: Path | None) -> Path | None:
+    """A ``!V`` / ``.vcl`` path, which is relative to the session folder.
+
+    The recording names these paths, so they are confined to the experiment
+    folder: an absolute path, or one that leads out of it (symbolic links
+    followed), is ``None``.  Without a session folder the path is kept as
+    written.
+    """
     path = Path(name)
-    if session is None or path.is_absolute():
+    if session is None:
         return path
-    return Path(os.path.normpath(session / path))
+    if path.is_absolute():
+        return None
+    resolved = (session / path).resolve()
+    return resolved if resolved.is_relative_to(_experiment_root(session)) else None
 
 
-def _image(args: list[str], session: Path | None):
-    """``TOP_LEFT <path> x y [w h]`` as an ``images`` entry, else ``None``."""
+def _refused(name: str, session: Path) -> str:
+    return (
+        f"{name} is outside the experiment folder {_experiment_root(session)}; "
+        "it was not read."
+    )
+
+
+def _image(args: list[str]):
+    """``TOP_LEFT <path> x y [w h]`` as ``(path, x, y, w, h)``, the path as
+    written, else ``None``."""
     if len(args) < 4 or args[0] != "TOP_LEFT":
         return None
     rest = args[1:]
@@ -328,8 +356,7 @@ def _image(args: list[str], session: Path | None):
         tail = rest[-size:]
         if len(rest) > size and all(re.fullmatch(r"-?\d+", v) for v in tail):
             numbers = [int(v) for v in tail] + [None, None]
-            path = _session_path(" ".join(rest[:-size]), session)
-            return (path, numbers[0], numbers[1], numbers[2], numbers[3])
+            return (" ".join(rest[:-size]), *numbers[:4])
     return None
 
 
@@ -346,7 +373,9 @@ def parse_vcl(path: Path, *, session: Path | None = None) -> list[Display]:
 
     Image paths in a ``.vcl`` are relative to the session folder (the one the
     recording was made in), not to the ``.vcl``'s own; they are resolved
-    against ``session`` when given and kept as written otherwise.
+    against ``session`` when given and kept as written otherwise.  With a
+    session folder, a path outside the experiment folder is not kept as an
+    image but listed in the display's ``refused``.
     """
     displays: list[Display] = []
     for line in _read_lines(Path(path)):
@@ -364,9 +393,13 @@ def parse_vcl(path: Path, *, session: Path | None = None) -> list[Display]:
             continue
         if offset is not None and not displays:
             displays.append(Display(offset, _WHITE, []))
-        image = _image(args, session) if command == "IMGLOAD" else None
-        if image is not None:
-            displays[-1].images.append(image)
+        image = _image(args) if command == "IMGLOAD" else None
+        if image is not None and displays:
+            path = _session_path(image[0], session)
+            if path is None:
+                displays[-1].refused.append(image[0])
+            else:
+                displays[-1].images.append((path, *image[1:]))
         elif displays:
             displays[-1].skipped.append(line.strip())
     return displays
@@ -509,8 +542,8 @@ def _named_files(rec: AscRecording) -> list[str]:
         elif parts[:3] == ["!V", "IAREA", "FILE"] and len(parts) > 3:
             name = text.split(None, 3)[3].strip()
         elif parts[:2] == ["!V", "IMGLOAD"]:
-            image = _image(parts[2:], None)
-            name = str(image[0]) if image else None
+            image = _image(parts[2:])
+            name = image[0] if image else None
         if name and name not in names:
             names.append(name)
     return names
@@ -532,9 +565,10 @@ def resolve_session_dir(
         candidates.append(Path(experiment_dir) / "results" / source.stem)
     names = _named_files(rec)
     for candidate in candidates:
-        if candidate is not None and any(
-            (Path(candidate) / name).is_file() for name in names
-        ):
+        if candidate is None:
+            continue
+        paths = (_session_path(name, Path(candidate)) for name in names)
+        if any(path is not None and path.is_file() for path in paths):
             return Path(candidate)
     return None
 
@@ -543,10 +577,13 @@ def _session_file(
     name: str, session: Path | None, trial_id: str, lacks: str, notes: list[str]
 ) -> Path | None:
     """The session file a message names, or ``None`` (noted when the session
-    folder is known but lacks it)."""
+    folder is known but lacks it, or the path leads out of the experiment)."""
     if session is None:
         return None
     path = _session_path(name, session)
+    if path is None:
+        notes.append(f"Trial {trial_id}: {_refused(name, session)}")
+        return None
     if path.is_file():
         return path
     notes.append(f"{name} was not found in {session}; trial {trial_id} {lacks}.")
@@ -573,6 +610,9 @@ def _trial_displays(trial, messages: pd.DataFrame, session: Path | None, notes):
             for display in parse_vcl(path, session=session):
                 displays.append((time - display.offset, display))
                 notes.extend(f"{name}: skipped {line}" for line in display.skipped)
+                notes.extend(
+                    f"{name}: {_refused(image, session)}" for image in display.refused
+                )
         elif parts[:3] == ["!V", "IAREA", "FILE"] and len(parts) > 3:
             name = text.split(None, 3)[3].strip()
             lacks = "has no words from it"
@@ -587,13 +627,17 @@ def _trial_displays(trial, messages: pd.DataFrame, session: Path | None, notes):
         elif parts[:2] == ["!V", "CLEAR"] and _colour(parts[2:]):
             inline[time] = Display(0, _colour(parts[2:]), [])
         elif parts[:2] == ["!V", "IMGLOAD"]:
-            image = _image(parts[2:], session)
+            image = _image(parts[2:])
             display = inline.setdefault(time, Display(0, _WHITE, []))
+            path = None if image is None else _session_path(image[0], session)
             if image is None:
                 display.skipped.append(text)
                 notes.append(f"Trial {trial.trial_id}: skipped {text}")
+            elif path is None:
+                display.refused.append(image[0])
+                notes.append(f"Trial {trial.trial_id}: {_refused(image[0], session)}")
             else:
-                display.images.append(image)
+                display.images.append((path, *image[1:]))
         elif parts[:3] == ["!V", "IAREA", "RECTANGLE"]:
             box = _box(text.split(None, 8)[2:])
             if box is None:
@@ -682,3 +726,271 @@ def screen_table(
         {"screen_index": "int64", "begin": "int64", "end": "int64"}
     )
     return table, notes
+
+
+# ---------------------------------------------------------------------------
+# One session's tables and stimulus images
+# ---------------------------------------------------------------------------
+
+FIXATION_COLUMNS = [
+    "participant_id",
+    "trial_id",
+    "text_id",
+    "screen_id",
+    "screen_index",
+    "fixation_id",
+    "x",
+    "y",
+    "duration_ms",
+    "timestamp_ms",
+    "eye",
+    "image_path",
+]
+WORD_COLUMNS = [
+    "participant_id",
+    "trial_id",
+    "text_id",
+    "screen_id",
+    "screen_index",
+    "word_id",
+    "text",
+    "x",
+    "y",
+    "width",
+    "height",
+    "image_path",
+]
+
+
+@dataclass
+class SessionTables:
+    """One recording session read as the app's tables.
+
+    ``words`` and ``fixations`` carry the canonical columns (multipart, with
+    ``screen_id`` / ``screen_index`` and each screen's composed stimulus as
+    ``image_path``); ``trial_metadata`` has one row per trial with its
+    ``TRIAL_VAR`` values; ``display`` is the tracker's display size; ``notes``
+    says what could not be read or was left out.
+    """
+
+    words: pd.DataFrame
+    fixations: pd.DataFrame
+    trial_metadata: pd.DataFrame
+    raw_gaze: pd.DataFrame | None
+    display: tuple[int, int] | None
+    notes: list[str]
+
+
+def compose_display(display: Display, out_dir: Path, size: tuple[int, int]) -> Path:
+    """Draw ``display`` on a canvas of ``size`` and save it as a PNG in ``out_dir``.
+
+    The canvas is the display's background colour; each image is pasted with
+    its top-left corner at its ``x`` / ``y``, resized only when the draw list
+    gives its width and height.  The file is named by the first 16 hex digits
+    of its bytes' SHA-256, so identical screens share one file.
+    """
+    from PIL import Image
+
+    canvas = Image.new("RGB", tuple(size), display.background)
+    for path, x, y, width, height in display.images:
+        with Image.open(path) as picture:
+            layer = picture.convert("RGBA")
+        if width is not None and height is not None:
+            layer = layer.resize((width, height))
+        canvas.paste(layer, (x, y), layer)
+    buffer = io.BytesIO()
+    canvas.save(buffer, format="PNG")
+    data = buffer.getvalue()
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{hashlib.sha256(data).hexdigest()[:16]}.png"
+    if not out.is_file():
+        # Sessions are read in parallel into one folder: write aside, then
+        # move into place, so a reader never sees a partial file.
+        partial = out.with_name(f".{out.stem}.{os.getpid()}.partial")
+        partial.write_bytes(data)
+        os.replace(partial, out)
+    return out
+
+
+def _screen_images(
+    screens: pd.DataFrame,
+    size: tuple[int, int] | None,
+    image_dir: Path,
+    notes: list[str],
+) -> list[str | None]:
+    """Each screen's composed stimulus image, or ``None`` when it has no display."""
+    from PIL import Image
+
+    paths: list[str | None] = []
+    composed: dict[tuple, str | None] = {}
+    missing: set[Path] = set()
+    if size is None and screens["display"].notna().any():
+        notes.append(
+            "The recording gives no display size (DISPLAY_COORDS), so the screens "
+            "have no stimulus images."
+        )
+    for display in screens["display"]:
+        if display is None or size is None:
+            paths.append(None)
+            continue
+        key = (display.background, tuple(display.images))
+        if key not in composed:
+            found = [image for image in display.images if image[0].is_file()]
+            for image in display.images:
+                if not image[0].is_file() and image[0] not in missing:
+                    missing.add(image[0])
+                    notes.append(
+                        f"{image[0]} was not found; the screens that show it are "
+                        "drawn without it."
+                    )
+            drawn = Display(display.offset, display.background, found)
+            try:
+                composed[key] = str(compose_display(drawn, image_dir, size))
+            except (OSError, ValueError, Image.DecompressionBombError) as exc:
+                notes.append(f"A stimulus screen could not be drawn: {exc}")
+                composed[key] = None
+        paths.append(composed[key])
+    return paths
+
+
+def _text_ids(screens: pd.DataFrame, session: Path | None) -> dict[str, str]:
+    """Each trial's ``text_id``: its first interest-area file, relative to the
+    session folder and without its suffix, else ``trial_<id>``."""
+    ids: dict[str, str] = {}
+    for trial_id, ias in zip(screens["trial_id"], screens["ias"]):
+        if trial_id not in ids and ias is not None and session is not None:
+            ids[trial_id] = (
+                Path(os.path.relpath(ias, session)).with_suffix("").as_posix()
+            )
+    for trial_id in screens["trial_id"]:
+        ids.setdefault(trial_id, f"trial_{trial_id}")
+    return ids
+
+
+def _fixation_table(
+    rec: AscRecording, trials: pd.DataFrame, screens: pd.DataFrame, notes: list[str]
+) -> pd.DataFrame:
+    """The fixations of each trial, each on the screen shown at its onset.
+
+    A fixation that begins before its trial's first screen, or outside every
+    trial (calibration, drift checks), is left out and counted in ``notes``.
+    """
+    fixations = rec.fixations.sort_values(["onset", "eye"], kind="stable")
+    onsets = fixations["onset"].to_numpy()
+    parts, early = [], 0
+    by_trial = dict(tuple(screens.groupby("trial_id", sort=False)))
+    for trial in trials.itertuples(index=False):
+        lo, hi = np.searchsorted(onsets, [trial.begin, trial.end], side="left")
+        inside = fixations.iloc[lo:hi]
+        own = by_trial[trial.trial_id]
+        begins = own["begin"].to_numpy()
+        index = np.searchsorted(begins, inside["onset"].to_numpy(), side="right") - 1
+        early += int((index < 0).sum())
+        inside, index = inside[index >= 0], index[index >= 0]
+        shown = own.iloc[index]
+        parts.append(
+            pd.DataFrame(
+                {
+                    "trial_id": trial.trial_id,
+                    "screen_id": shown["screen_id"].to_numpy(),
+                    "screen_index": shown["screen_index"].to_numpy(),
+                    "fixation_id": np.arange(1, len(inside) + 1),
+                    "x": inside["x"].to_numpy(),
+                    "y": inside["y"].to_numpy(),
+                    "duration_ms": inside["duration_ms"].to_numpy(),
+                    "timestamp_ms": inside["onset"].to_numpy() - trial.start,
+                    "eye": inside["eye"].to_numpy(),
+                    "image_path": shown["image_path"].to_numpy(),
+                }
+            )
+        )
+    kept = sum(len(part) for part in parts)
+    outside = len(fixations) - kept - early
+    left_out = []
+    if early:
+        left_out.append(f"{early} before their trial's first screen")
+    if outside:
+        left_out.append(f"{outside} outside every trial")
+    if left_out:
+        notes.append(f"Fixations left out: {', '.join(left_out)}.")
+    if not parts:
+        return pd.DataFrame(columns=FIXATION_COLUMNS)
+    return pd.concat(parts, ignore_index=True)
+
+
+def _word_table(screens: pd.DataFrame) -> pd.DataFrame:
+    parts = [
+        boxes.assign(
+            trial_id=screen.trial_id,
+            screen_id=screen.screen_id,
+            screen_index=screen.screen_index,
+            image_path=screen.image_path,
+        )
+        for screen in screens.itertuples(index=False)
+        if (boxes := screen.boxes) is not None
+    ]
+    if not parts:
+        return pd.DataFrame(columns=WORD_COLUMNS)
+    return pd.concat(parts, ignore_index=True)
+
+
+def session_tables(
+    source: Path,
+    *,
+    image_dir: Path,
+    session_dir: Path | None = None,
+    experiment_dir: Path | None = None,
+    raw_gaze: bool = False,
+    asc_dir: Path | None = None,
+) -> SessionTables:
+    """Read one recording session (``.edf`` or ``.asc``) as the app's tables.
+
+    An ``.edf`` is converted with ``edf2asc`` into ``asc_dir`` (a temporary
+    folder when ``None``).  The session folder holding its draw lists and
+    interest areas is found by `resolve_session_dir`; each screen's stimulus is
+    composed into ``image_dir`` (`compose_display`).  ``participant_id`` is the
+    file's stem, and ``timestamp_ms`` counts from the trial's ``START`` line.
+    """
+    _require_enabled("session_tables")
+    if raw_gaze:
+        raise NotImplementedError("Raw gaze from EyeLink recordings is not read yet.")
+    source = Path(source)
+    if source.suffix.lower() == ".edf":
+        if asc_dir is None:
+            with tempfile.TemporaryDirectory() as tmp:
+                rec = read_asc(convert_edf(source, Path(tmp), samples=False))
+        else:
+            rec = read_asc(convert_edf(source, Path(asc_dir), samples=False))
+    else:
+        rec = read_asc(source)
+    session = resolve_session_dir(
+        source, rec, session_dir=session_dir, experiment_dir=experiment_dir
+    )
+    if session is not None:
+        session = session.resolve()
+    trials = trial_table(rec)
+    screens, notes = screen_table(rec, trials, session)
+    image_paths = _screen_images(screens, rec.display, Path(image_dir), notes)
+    screens = screens.assign(image_path=image_paths)
+    participant = source.stem
+    text_ids = _text_ids(screens, session)
+
+    def _finish(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+        frame = frame.assign(
+            participant_id=participant, text_id=frame["trial_id"].map(text_ids)
+        )
+        return frame[columns].reset_index(drop=True)
+
+    fixations = _finish(_fixation_table(rec, trials, screens, notes), FIXATION_COLUMNS)
+    words = _finish(_word_table(screens), WORD_COLUMNS)
+    metadata = trial_vars(rec)
+    metadata.insert(0, "participant_id", participant)
+    return SessionTables(
+        words=words,
+        fixations=fixations,
+        trial_metadata=metadata,
+        raw_gaze=None,
+        display=rec.display,
+        notes=notes,
+    )

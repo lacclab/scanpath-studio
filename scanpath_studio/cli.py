@@ -1798,7 +1798,7 @@ def _render_parser() -> argparse.ArgumentParser:
         default="overlay",
         help="How A and B are arranged (default: overlay). Across two datasets, "
         "an overlay with a screen-position axis (x or y) needs canvases of the "
-        "same size; other --x-field/--y-field charts overlay on any. Different canvases are "
+        "same size; other --x-field/--y-field charts overlay on any. On those axes, different canvases are "
         "refused, so use side-by-side or stacked for them. Matching canvases "
         "that a dataset did not record still overlay, with a warning.",
     )

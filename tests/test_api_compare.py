@@ -991,3 +991,27 @@ class TestReadingChartOverlay:
         assert {t.xaxis for t in fig.data} == {"x"}
         with pytest.raises(IncomparableScreensError):
             self._compare(("order_in_trial", "x"), layout="overlay", **screens)
+
+
+def test_the_sequence_line_joins_the_fixations_either_side_of_an_unplaced_one():
+    """A fixation off every word has no word id: the line skips it rather than
+    breaking there."""
+    fixations = _fixations("p1", "t1").assign(word_id=[0.0, float("nan"), 2.0])
+    fig = api.plot_scanpath(
+        _words("p1", "t1"),
+        fixations,
+        "p1",
+        "t1",
+        x_field="word_id",
+        y_field="order_in_trial",
+    )
+    (line,) = [t for t in fig.data if t.name == "Fixation sequence"]
+    assert (list(line.x), list(line.y)) == ([0, 2], [1, 3])
+
+
+def test_a_word_axis_overlay_of_two_texts_says_what_it_lines_up():
+    from scanpath_studio.tabs import _different_texts_note
+
+    note = _different_texts_note("t1", "t2", word_axis=True)
+    assert "word *n* of one text sits on word *n* of the other" in note
+    assert _different_texts_note("t1", "t1", word_axis=True) is None

@@ -1356,7 +1356,9 @@ def _render_true_scale_plot(
     loading.record_plot_size(key, width, iframe_height)
 
 
-def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
+def _different_texts_note(
+    text_a: str | None, text_b: str | None, *, word_axis: bool = False
+) -> str | None:
     """The warning for an **overlay** of readings of two **different texts**.
 
     ``None`` when they match, or when either side's text id is unknown — a
@@ -1372,9 +1374,19 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
     Rendered under the figure (both the static comparison and the animated
     co-replay) rather than inside the rail's popover: a caveat about what the
     figure *means* has to be where the figure is.
+
+    ``word_axis`` is an overlay on a reading chart with a word-id axis, which
+    draws no boxes but puts word *n* of one text on word *n* of the other.
     """
     if not text_a or not text_b or str(text_a) == str(text_b):
         return None
+    if word_axis:
+        return (
+            f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay puts "
+            "both on one word axis, so word *n* of one text sits on word *n* of "
+            "the other. Compare two trials of the same text, or set **View** to "
+            "**Side by side**."
+        )
     return (
         f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay draws both "
         "scanpaths over one set of word boxes, so it doesn't show where each "
@@ -9397,12 +9409,13 @@ def _render_comparison_figure(
     # Only where the figure is misleading (see the note's docstring): a split
     # layout comparing two texts is a legitimate thing to do, and a reading
     # chart draws no word boxes to stack.
-    overlaid = layout == "overlay" and (settings.x_field, settings.y_field) == (
-        "x",
-        "y",
-    )
+    fields = (settings.x_field, settings.y_field)
+    word_axis = "word_id" in fields
+    overlaid = layout == "overlay" and (fields == ("x", "y") or word_axis)
     text_note = (
-        _different_texts_note(primary_text_id, compare_text_id) if overlaid else None
+        _different_texts_note(primary_text_id, compare_text_id, word_axis=word_axis)
+        if overlaid
+        else None
     )
     if text_note:
         st.warning(text_note, icon=ICONS["warning"])

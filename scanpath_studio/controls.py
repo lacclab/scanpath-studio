@@ -8479,7 +8479,8 @@ def render_plot_controls(
             off=not show_saccades
             or not has_fixations
             or (chart_axes and not has_markers),
-            reason=no_fixations_note or None,
+            reason=no_fixations_note
+            or (fix_axis_help if chart_axes and not has_markers else None),
         ),
         _popover_rows("sac"),
     ):

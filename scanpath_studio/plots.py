@@ -4921,12 +4921,17 @@ def _chart_lines(
     x_field, y_field = fields
     if show_saccades and len(ordered) > 1:
         # Reading order: the fixation index where the table has one, else the
-        # onset order the caller already sorted the rows into.
+        # onset order the caller already sorted the rows into. A fixation with
+        # no value on an axis is left out, so the line joins its neighbours.
         path = (
             ordered.sort_values("order_in_trial", kind="stable")
             if "order_in_trial" in ordered
             else ordered
         )
+        placed = np.isfinite(
+            path[list(fields)].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+        ).all(axis=1)
+        path = path[placed]
         yield go.Scatter(
             x=path[x_field],
             y=path[y_field],

@@ -134,14 +134,16 @@ _OLDER_LAYOUT_TRIAL = [
 ]
 
 # Right-eye gaze samples of the two complete readings: (time, x, y, pupil).
-# 995 and 3020 fall inside a trial but before its first screen; 1800 is a tick
-# the tracker lost (EyeLink writes ``.`` positions and a 0 pupil).
+# 995 and 3020 fall inside a trial but before its first screen; 2500 after
+# trial 1's END and before trial 2's TRIALID; 1800 is a tick the tracker lost
+# (EyeLink writes ``.`` positions and a 0 pupil).
 _SAMPLES = [
     (995, 50.0, 60.0, 1200.0),
     (1100, 110.0, 210.0, 1300.0),
     (1500, 260.0, 205.0, 1310.0),
     (1800, None, None, 0.0),
     (1990, 505.0, 601.0, 1290.0),
+    (2500, 600.0, 610.0, 1240.0),
     (3020, 70.0, 80.0, 1250.0),
     (3100, 165.0, 221.0, 1280.0),
     (3400, 345.0, 226.0, 1270.0),
@@ -495,8 +497,9 @@ EXPECTED = {
     # The right-eye samples kept: those on a screen, on the fixations' clock.
     "samples": _expected_samples("R"),
     "samples_left": _expected_samples("L"),
-    # Sample ticks inside a trial but before its first screen.
-    "samples_between_screens": [995, 3020],
+    # Sample ticks on no screen: before a trial's first screen, or between
+    # one trial's END and the next TRIALID.
+    "samples_between_screens": [995, 2500, 3020],
     # Interest-area boxes as (word_id, left, top, right, bottom, text).
     "words": _IAS,
     "images": {name: size for name, size, _ in _IMAGES},

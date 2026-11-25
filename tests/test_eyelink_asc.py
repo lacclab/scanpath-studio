@@ -110,6 +110,62 @@ def test_each_line_decoded_on_its_own(tmp_path):
     assert _rows(rec.fixations) == EXPECTED["fixations"]
 
 
+def _with_lines(asc, after: bytes, lines: list[bytes]) -> None:
+    rows = asc.read_bytes().split(b"\n")
+    at = rows.index(after) + 1
+    rows[at:at] = lines
+    asc.write_bytes(b"\n".join(rows))
+
+
+def test_long_message_joined_from_its_chunks(tmp_path):
+    """Experiment Builder's LONGMS chunks are joined as bytes: a chunk may
+    begin with the message's own space, and a character may be cut between
+    two chunks."""
+    asc = write_experiment(tmp_path)
+    quote = "“".encode()
+    _with_lines(
+        asc,
+        b"MSG\t2010\t!V TRIAL_VAR item 1",
+        [
+            b"MSG\t2010\t!V LONGMS_ST_501 !V TRIAL_VAR paragraph Leading water",
+            b"MSG\t2010\t!V LONGMS_CONT_501  scientists said " + quote[:2],
+            b"MSG\t2010\t!V LONGMS_CONT_501 " + quote[2:] + "no” twice.".encode(),
+            b"MSG\t2010\t!V TRIAL_VAR after long",
+        ],
+    )
+    rec = eyelink.read_asc(asc)
+    assert not any("LONGMS" in text for text in rec.messages["text"])
+    variables = eyelink.trial_vars(rec).set_index("trial_id")
+    assert (
+        variables.loc["1", "paragraph"] == "Leading water scientists said “no” twice."
+    )
+    assert variables.loc["1", "after"] == "long"
+    assert variables.loc["1", "item"] == "1"
+    assert _rows(rec.fixations) == EXPECTED["fixations"]
+
+
+def test_long_message_ids_crlf_and_reuse(tmp_path):
+    asc = write_experiment(tmp_path)
+    _with_lines(
+        asc,
+        b"MSG\t3510\t!V TRIAL_VAR item 2",
+        [
+            b"MSG\t3510\t!V LONGMS_ST_7 !V TRIAL_VAR title Ri",
+            b"MSG\t3510\t!V LONGMS_CONT_7 sing",
+            b"MSG\t3511\t!V LONGMS_ST_8a !V TRIAL_VAR note a",
+            b"MSG\t3511\t!V LONGMS_CONT_8a b",
+            b"MSG\t3512\t!V LONGMS_ST_7 !V TRIAL_VAR again one ",
+            b"MSG\t3512\t!V LONGMS_CONT_7 more",
+        ],
+    )
+    asc.write_bytes(asc.read_bytes().replace(b"\n", b"\r\n"))
+    variables = eyelink.trial_vars(eyelink.read_asc(asc)).set_index("trial_id")
+    assert variables.loc["2", "title"] == "Rising"
+    assert variables.loc["2", "note"] == "ab"
+    # An id used again starts a message of its own.
+    assert variables.loc["2", "again"] == "one more"
+
+
 def test_crlf_asc_parses(tmp_path):
     asc = write_experiment(tmp_path)
     asc.write_bytes(asc.read_bytes().replace(b"\n", b"\r\n"))

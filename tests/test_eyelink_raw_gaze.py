@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -84,6 +85,8 @@ def test_samples_between_screens_dropped(tmp_path):
         asc, image_dir=tmp_path / "images", raw_gaze=True
     ).raw_gaze
     start = {"1": 990, "2": 3010}
+    # 2500 is after trial 1's END (2000) and before trial 2's TRIALID (3000).
+    assert 2500 in EXPECTED["samples_between_screens"]
     kept_ticks = set(gaze["timestamp_ms"] + gaze["trial_id"].map(start))
     between = set(EXPECTED["samples_between_screens"])
     assert between <= set(recorded["time"])
@@ -116,7 +119,11 @@ def test_events_only_recording_has_empty_raw_gaze(tmp_path):
     assert any("no gaze samples" in note for note in t.notes)
     study_dir = tmp_path / "study"
     eyelink.import_eyelink(tmp_path / "exp", study_dir, workers=1, raw_gaze=True)
-    assert eyelink.load_eyelink(study_dir).raw_gaze.empty
+    # No empty file, whose plain ``pupil`` column would join other sessions'.
+    assert not (study_dir / "raw_gaze" / f"{SESSION}.parquet").exists()
+    manifest = json.loads((study_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["sessions"][SESSION]["raw_gaze"] is True
+    assert eyelink.load_eyelink(study_dir).raw_gaze is None
 
 
 def test_edf_converted_with_samples_when_raw_gaze(tmp_path, monkeypatch):
@@ -194,6 +201,22 @@ def test_rerun_with_raw_gaze_redoes_sessions_without_it(tmp_path):
     assert len(gaze) == len(EXPECTED["samples"])
 
 
+def test_raw_gaze_reads_two_sessions_at_a_time_by_default(tmp_path, monkeypatch):
+    experiment = _experiment(tmp_path)
+    seen = []
+    real = eyelink._read_sessions
+
+    def spy(jobs, workers):
+        seen.append(workers)
+        return real(jobs, 1)
+
+    monkeypatch.setattr(eyelink, "_read_sessions", spy)
+    eyelink.import_eyelink(experiment, tmp_path / "study", raw_gaze=True)
+    eyelink.import_eyelink(experiment, tmp_path / "events")
+    assert seen[0] == eyelink.RAW_GAZE_WORKERS == 2
+    assert seen[1] == max(1, (os.cpu_count() or 1) - 1)
+
+
 def test_load_eyelink_raw_gaze_choice(tmp_path):
     experiment = _experiment(tmp_path)
     study_dir = tmp_path / "study"
@@ -236,8 +259,8 @@ def test_add_eyelink_dataset_raw_gaze_participants_only(tmp_path, cache_dir):
     sps.add_eyelink_dataset("No gaze", study_dir)
     session = {}
     assert persistence.restore_state(session, cache_dir)
-    none = session["_datasets"]["No gaze"].get("raw_gaze")
-    assert none is None or none.empty
+    # add_dataset stores an empty raw-gaze table for a dataset without one.
+    assert session["_datasets"]["No gaze"]["raw_gaze"].empty
 
 
 def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys):
@@ -249,8 +272,6 @@ def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys):
             str(experiment),
             "--study-dir",
             str(study_dir),
-            "--workers",
-            "1",
             "--raw-gaze",
             "--add",
             "Gaze CLI",
@@ -258,6 +279,7 @@ def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys):
             SESSION,
         ]
     )
-    out = capsys.readouterr().out
-    assert "[1/1] p01 ok" in out and "Added 'Gaze CLI'" in out
+    captured = capsys.readouterr()
+    assert "[1/1] p01 ok" in captured.out and "Added 'Gaze CLI'" in captured.out
+    assert "Reading 2 sessions at a time" in captured.err
     assert (study_dir / "raw_gaze" / f"{SESSION}.parquet").is_file()

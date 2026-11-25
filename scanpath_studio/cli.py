@@ -4499,8 +4499,8 @@ def _import_eyelink_parser() -> argparse.ArgumentParser:
         "--workers",
         type=int,
         metavar="N",
-        help="Sessions read at once (default: one fewer than the CPUs; 1 reads "
-        "them in this process).",
+        help="Sessions read at once (default: one fewer than the CPUs, or 2 "
+        "with --raw-gaze; 1 reads them in this process).",
     )
     parser.add_argument(
         "--rebuild", action="store_true", help="Read every session again."
@@ -4535,6 +4535,14 @@ def import_eyelink(argv: list[str]) -> None:
     def _progress(done: int, total: int, pid: str) -> None:
         print(f"[{done}/{total}] {pid}", file=sys.stderr)
 
+    if args.raw_gaze and args.workers is None:
+        from .eyelink import RAW_GAZE_WORKERS
+
+        print(
+            f"Reading {RAW_GAZE_WORKERS} sessions at a time, since raw gaze takes "
+            "much memory; --workers N changes it.",
+            file=sys.stderr,
+        )
     try:
         report = api.import_eyelink(
             args.paths,

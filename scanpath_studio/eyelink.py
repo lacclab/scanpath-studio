@@ -152,16 +152,69 @@ _EYE_LETTER = {"left": "L", "right": "R"}
 _ESCAPED_BYTE = re.compile("[\udc80-\udcff]")
 
 
-def _asc_lines(path: Path) -> list[str]:
-    """The file's lines, each ending in ``\\n``: each decoded as UTF-8, or as
-    latin-1 (which decodes any bytes) when that one line is not UTF-8.
+# A long message's id is not always a number (OneStop logs ``50a``), and an id
+# is used again by later messages.
+_LONG_START = re.compile(rb"!V LONGMS_ST_(\S+) ")
 
-    ``edf2asc -utf8`` writes UTF-8, but a message the experiment logged in
-    another encoding (OneStop's carry a few latin-1 bytes) leaves stray bytes
-    in some lines; decoding the whole file as latin-1 would garble every UTF-8
-    character in it.
+
+def _line_end(data: bytes, at: int) -> int:
+    end = data.find(b"\n", at)
+    return len(data) if end < 0 else end
+
+
+def _payload(data: bytes, start: int, end: int) -> bytes:
+    """``data[start:end]`` without the line's ``\\r``, if it ends in one."""
+    if end > start and data[end - 1 : end] == b"\r":
+        end -= 1
+    return data[start:end]
+
+
+def _join_long_messages(data: bytes) -> bytes:
+    """``data`` with each message Experiment Builder split into chunks joined
+    back into one line.
+
+    A message too long for one ``MSG`` line is logged as ``!V LONGMS_ST_<id>
+    <chunk>`` followed by ``!V LONGMS_CONT_<id> <chunk>`` lines.  Each chunk
+    is everything after the one space following its tag (a chunk may begin
+    with a space of the message), and the chunks are cut at byte counts, so a
+    UTF-8 character can straddle two of them: they are joined as bytes, with
+    nothing between them, before any line is decoded.  The joined line keeps
+    the first line's ``MSG <time>`` and drops the tags.
     """
-    data = path.read_bytes()
+    if b"!V LONGMS_ST_" not in data:
+        return data
+    out, done = [], 0
+    for match in _LONG_START.finditer(data):
+        begin = data.rfind(b"\n", 0, match.start()) + 1
+        if match.start() < done or not data.startswith(b"MSG", begin):
+            continue
+        end = _line_end(data, match.end())
+        chunks = [_payload(data, match.end(), end)]
+        tag = b"!V LONGMS_CONT_" + match.group(1) + b" "
+        following = end + 1
+        while following < len(data) and data.startswith(b"MSG", following):
+            stop = _line_end(data, following)
+            at = data.find(tag, following, stop)
+            if at < 0:
+                break
+            chunks.append(_payload(data, at + len(tag), stop))
+            following = stop + 1
+        out += [data[done : match.start()], *chunks, b"\n"]
+        done = following
+    out.append(data[done:])
+    return b"".join(out)
+
+
+def _asc_lines(path: Path) -> list[str]:
+    """The file's lines, each ending in ``\\n``, with Experiment Builder's
+    long messages joined back into one line (`_join_long_messages`).
+
+    Each line is decoded as UTF-8, or as latin-1 (which decodes any bytes)
+    when that one line is not UTF-8: ``edf2asc -utf8`` writes UTF-8, and a
+    stray byte of another encoding in one message must not garble every UTF-8
+    character of the file.
+    """
+    data = _join_long_messages(path.read_bytes())
     try:
         text, clean = data.decode("utf-8"), True
     except UnicodeDecodeError:
@@ -204,6 +257,12 @@ class _DecodedLines(io.TextIOBase):
 
     def readlines(self, hint: int = -1) -> list[str]:
         return self._lines
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._lines)
+
+    def read(self, size: int | None = -1) -> str:
+        return "".join(self._lines)
 
 
 def _parse_asc(lines: list[str], name: str):
@@ -298,21 +357,31 @@ def _display_size(messages: pd.DataFrame) -> tuple[int, int] | None:
 def _sample_frame(frame, eyes: tuple[str, ...]) -> pd.DataFrame:
     """The samples as one row per eye per tick; a tick the tracker lost has a
     missing position and a missing (not EyeLink's 0) pupil."""
+    import polars as pl
+
     columns = ["time", "x", "y", "pupil", "eye"]
     if frame.height == 0 or not eyes:
         return pd.DataFrame(columns=columns)
     time = frame["time"].to_numpy()
-    pixel = np.array(frame["pixel"].to_list(), dtype=float)
-    pupil = np.array(frame["pupil"].to_list(), dtype=float).reshape(len(time), -1)
+    nested_pupil = isinstance(frame.schema["pupil"], pl.List)
+
+    def numbers(expr) -> np.ndarray:
+        return frame.select(expr.cast(pl.Float64)).to_series().to_numpy()
+
     parts = []
     for i, eye in enumerate(eyes):
-        x, y = pixel[:, 2 * i], pixel[:, 2 * i + 1]
-        p = pupil[:, i].copy()
+        x = numbers(pl.col("pixel").list.get(2 * i))
+        y = numbers(pl.col("pixel").list.get(2 * i + 1))
+        p = numbers(pl.col("pupil").list.get(i) if nested_pupil else pl.col("pupil"))
+        if not p.flags.writeable:
+            p = p.copy()
         p[np.isnan(x) | np.isnan(y)] = np.nan
         parts.append(
             pd.DataFrame({"time": time, "x": x, "y": y, "pupil": p, "eye": eye})
         )
-    return pd.concat(parts, ignore_index=True)[columns].sort_values(
+    if len(parts) == 1:
+        return parts[0]
+    return pd.concat(parts, ignore_index=True).sort_values(
         ["time", "eye"], kind="stable", ignore_index=True
     )
 
@@ -1142,7 +1211,9 @@ def _raw_gaze_table(
     time = samples["time"].to_numpy()
     by_trial = dict(tuple(screens.groupby("trial_id", sort=False)))
     parts = []
-    for trial in trials.itertuples(index=False):
+    # In ``trial_id`` order, the order the study folder stores them in.
+    ordered = trials.sort_values("trial_id", kind="stable")
+    for trial in ordered.itertuples(index=False):
         own = by_trial[trial.trial_id]
         begins, ends = own["begin"].to_numpy(), own["end"].to_numpy()
         lo, hi = np.searchsorted(time, [begins[0], ends[-1]], side="left")
@@ -1274,11 +1345,14 @@ def session_tables(
 
 #: Bumped whenever the tables read from the same recording change, so that a
 #: study folder reads every session again.
-PARSER_VERSION = 3
+PARSER_VERSION = 4
 MANIFEST_VERSION = 1
 _MANIFEST = "manifest.json"
 # The per-participant tables of a study folder, one subfolder each.
 _STUDY_TABLES = ("fixations", "words", "trial_metadata", "raw_gaze")
+#: Sessions read at once by default with raw gaze: reading one session's
+#: samples takes about 2 GB at its peak (a OneStop session, 1000 Hz).
+RAW_GAZE_WORKERS = 2
 _RECORDING_SUFFIXES = (".edf", ".asc")
 
 
@@ -1503,26 +1577,36 @@ def _write_by_trial(frame: pd.DataFrame, path: str) -> None:
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    frame = frame.sort_values(
-        ["trial_id", "timestamp_ms"], kind="stable", ignore_index=True
-    )
-    table = pa.Table.from_pandas(frame, preserve_index=False)
     trial = frame["trial_id"].to_numpy()
+    time = frame["timestamp_ms"].to_numpy()
+    same = trial[1:] == trial[:-1]
+    ordered = frame["trial_id"].is_monotonic_increasing and bool(
+        (time[1:][same] >= time[:-1][same]).all()
+    )
+    if not ordered:
+        frame = frame.sort_values(
+            ["trial_id", "timestamp_ms"], kind="stable", ignore_index=True
+        )
+        trial = frame["trial_id"].to_numpy()
     starts = [0, *(np.flatnonzero(trial[1:] != trial[:-1]) + 1).tolist()]
     stops = [*starts[1:], len(frame)]
-    with pq.ParquetWriter(path, table.schema) as writer:
-        if not len(frame):
-            writer.write_table(table)
-            return
+    # Converted one trial at a time, so the whole frame is never held twice.
+    schema = pa.Schema.from_pandas(frame.iloc[:0], preserve_index=False)
+    with pq.ParquetWriter(path, schema) as writer:
         for start, stop in zip(starts, stops):
-            writer.write_table(table.slice(start, stop - start), stop - start)
+            part = pa.Table.from_pandas(
+                frame.iloc[start:stop], schema=schema, preserve_index=False
+            )
+            writer.write_table(part, max(stop - start, 1))
 
 
 def _write_session(study_dir: Path, pid: str, tables: SessionTables) -> None:
     for name in _STUDY_TABLES:
         frame = getattr(tables, name)
         path = study_dir / name / f"{pid}.parquet"
-        if frame is None:
+        # A session read with raw gaze whose recording has no samples (one
+        # converted events only) writes none.
+        if frame is None or (name == "raw_gaze" and frame.empty):
             path.unlink(missing_ok=True)
             continue
         if "image_path" in frame.columns:
@@ -1591,9 +1675,9 @@ def import_eyelink(
 
     ``session_dir`` is the session folder of a single recording; for several,
     ``experiment_dir`` finds each in ``results/<participant>/``.  Sessions are
-    read by ``workers`` processes (default: one fewer than the CPUs; ``1``
-    reads them in this process).  ``keep_asc`` keeps the ASC converted from an
-    ``.edf`` in ``asc/``.  ``progress(done, total, participant)`` is called
+    read by ``workers`` processes (default: one fewer than the CPUs, or
+    `RAW_GAZE_WORKERS` with ``raw_gaze``; ``1`` reads them in this process).
+    ``keep_asc`` keeps the ASC converted from an ``.edf`` in ``asc/``.  ``progress(done, total, participant)`` is called
     as each session to read finishes.
     """
     _require_enabled("import_eyelink")
@@ -1605,7 +1689,7 @@ def import_eyelink(
             "results/<participant>/ holds each session."
         )
     if workers is None:
-        workers = max(1, (os.cpu_count() or 1) - 1)
+        workers = RAW_GAZE_WORKERS if raw_gaze else max(1, (os.cpu_count() or 1) - 1)
     if workers < 1:
         raise ValueError(f"workers must be at least 1, not {workers}.")
     study_dir = Path(study_dir).resolve()
@@ -1735,7 +1819,9 @@ def load_eyelink(
 
     ``raw_gaze`` is the sessions whose raw gaze is read, of those read: all of
     them (``True``), none (``False``), or the participants it names.
-    ``EyeLinkData.raw_gaze`` is ``None`` when none of them has raw gaze.
+    ``EyeLinkData.raw_gaze`` is ``None`` when none of them has raw gaze.  Raw
+    gaze is millions of rows per session, so on a whole study pass
+    ``participants`` or ``raw_gaze=False``.
     """
     _require_enabled("load_eyelink")
     study_dir = Path(study_dir).resolve()

@@ -1356,7 +1356,9 @@ def _render_true_scale_plot(
     loading.record_plot_size(key, width, iframe_height)
 
 
-def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
+def _different_texts_note(
+    text_a: str | None, text_b: str | None, *, word_axis: bool = False
+) -> str | None:
     """The warning for an **overlay** of readings of two **different texts**.
 
     ``None`` when they match, or when either side's text id is unknown — a
@@ -1372,9 +1374,19 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
     Rendered under the figure (both the static comparison and the animated
     co-replay) rather than inside the rail's popover: a caveat about what the
     figure *means* has to be where the figure is.
+
+    ``word_axis`` is an overlay on a reading chart with a word-id axis, which
+    draws no boxes but puts word *n* of one text on word *n* of the other.
     """
     if not text_a or not text_b or str(text_a) == str(text_b):
         return None
+    if word_axis:
+        return (
+            f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay puts "
+            "both on one word axis, so word *n* of one text sits on word *n* of "
+            "the other. Compare two trials of the same text, or set **View** to "
+            "**Side by side**."
+        )
     return (
         f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay draws both "
         "scanpaths over one set of word boxes, so it doesn't show where each "
@@ -7289,33 +7301,16 @@ def render_single_trial_tab(
                     # Seed so the control shows "Overlay" selected by default
                     # (the body reads this key to resolve compare_layout).
                     st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
-                    chart_layout = not animate and (
+                    chart_fields = (
                         st.session_state.get("global_x_field", "x"),
                         st.session_state.get("global_y_field", "y"),
-                    ) != ("x", "y")
-                    layout_key = SINGLE_COMPARE_LAYOUT
-                    choices = ["Overlay", "Side by side", "Stacked"]
-                    callback = {}
-                    if chart_layout:
-                        choices = choices[1:]
-                        saved = st.session_state[SINGLE_COMPARE_LAYOUT]
-                        layout_key = shadow_widget_key(
-                            "chart_compare_layout",
-                            saved if saved in choices else choices[0],
-                        )
-
-                        def choose_chart_layout():
-                            write_through(
-                                SINGLE_COMPARE_LAYOUT, st.session_state[layout_key]
-                            )
-
-                        callback["on_change"] = choose_chart_layout
-
+                    )
+                    chart_layout = not animate and chart_fields != ("x", "y")
                     _labeled(
                         st,
                         "segmented_control",
                         "Layout",
-                        options=choices,
+                        options=["Overlay", "Side by side", "Stacked"],
                         required=True,
                         format_func=lambda value: (
                             "Top & bottom" if value == "Stacked" else value
@@ -7324,8 +7319,7 @@ def render_single_trial_tab(
                         # column leaves; at the popovers' width they wrap.
                         label_width=0.2,
                         width="stretch",
-                        key=layout_key,
-                        **callback,
+                        key=SINGLE_COMPARE_LAYOUT,
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
@@ -7344,16 +7338,23 @@ def render_single_trial_tab(
                             "comes back when you turn it off."
                         )
                     # Overlay pools both trials into one axis range, so
-                    # across datasets it is allowed only when both were
-                    # recorded on the same screen size. This note
+                    # across datasets an overlay with a screen-position axis
+                    # is allowed only when both were recorded on the same
+                    # screen size. This note
                     # stays generic. The caption under the
                     # figure has the specific answer, and the resolve happens
                     # there too, *without* rewriting the key, so a
                     # same-dataset pair gets the user's Overlay back.
+                    # A reading chart draws no word boxes, so only a screen
+                    # overlay has a stimulus to choose.
                     overlaid = animate or (
                         stored_layout == "Overlay" and not chart_layout
                     )
-                    if _compare_source_name() is not None and overlaid:
+                    screen_gated = overlaid or (
+                        stored_layout == "Overlay"
+                        and chart_axes.in_screen_pixels(chart_fields)
+                    )
+                    if _compare_source_name() is not None and screen_gated:
                         st.caption(
                             "Across datasets, Overlay needs both to be recorded on "
                             "the same screen size."
@@ -7612,7 +7613,12 @@ def render_single_trial_tab(
     # so switching back to a same-dataset pair restores the user's Overlay.
     compare_layout = requested_layout
     chart_comparison = comparing and not animate and fields != ("x", "y")
-    if compare_layout == "overlay" and (chart_comparison or not compare_comparable):
+    # Screens of different sizes refuse an overlay only where an axis is in
+    # screen pixels; a chart of indices, durations or clocks overlays on any.
+    screen_refused = not compare_comparable and (
+        not chart_comparison or chart_axes.in_screen_pixels(fields)
+    )
+    if compare_layout == "overlay" and screen_refused:
         compare_layout = "side_by_side"
     # Widget label -> the wire/settings vocabulary the builders take.
     compare_stimulus = {"Both": "both", "A": "a", "B": "b"}.get(
@@ -7998,8 +8004,9 @@ def render_single_trial_tab(
                 # B's own screen, from its own navigator (`screen_b=`).
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
+                # Only a screen overlay draws word boxes to choose between.
                 compare_stimulus=str(compare_stimulus)
-                if compare_layout == "overlay"
+                if compare_layout == "overlay" and not chart_comparison
                 else "both",
                 dataset=_dataset_label(compare_meta["dataset"])
                 if compare_meta.get("dataset")
@@ -8232,7 +8239,7 @@ def render_single_trial_tab(
                     # resolve.
                     setup_note=(
                         f"{compare_setup_note} They are shown side by side instead."
-                        if compare_layout != requested_layout and not chart_comparison
+                        if compare_layout != requested_layout
                         else compare_setup_note
                     ),
                     primary_combo_row=primary_combo_row,
@@ -9304,9 +9311,9 @@ def _render_comparison_figure(
     canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
     # B's panel is drawn to B's own screen — its selected screen's canvas,
     # else its dataset's (`_build_compare_meta`). Only the split layouts read
-    # it; an overlay of two different screens never gets here (the caller
-    # resolves it to a split layout), and that holds within one dataset as
-    # much as across two.
+    # it; a screen-axis overlay of two different screens never gets here (the
+    # caller resolves it to a split layout), and that holds within one dataset
+    # as much as across two. A reading-chart overlay may, and draws no canvas.
     canvas_b = (compare_meta or {}).get("canvas")
     canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
     # Always stated, as `api.compare_scanpaths` states it: with no `canvas_b`
@@ -9405,11 +9412,16 @@ def _render_comparison_figure(
     _render_true_scale_chart(
         fig_compare, key="compare", download_name=download_name, fit_window=True
     )
-    overlaid = layout == "overlay"
     # Only where the figure is misleading (see the note's docstring): a split
-    # layout comparing two texts is a legitimate thing to do.
+    # layout comparing two texts is a legitimate thing to do, and a reading
+    # chart draws no word boxes to stack.
+    fields = (settings.x_field, settings.y_field)
+    word_axis = "word_id" in fields
+    overlaid = layout == "overlay" and (fields == ("x", "y") or word_axis)
     text_note = (
-        _different_texts_note(primary_text_id, compare_text_id) if overlaid else None
+        _different_texts_note(primary_text_id, compare_text_id, word_axis=word_axis)
+        if overlaid
+        else None
     )
     if text_note:
         st.warning(text_note, icon=ICONS["warning"])

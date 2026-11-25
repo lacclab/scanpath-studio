@@ -758,9 +758,12 @@ def test_compare_elapsed_axes_keep_each_readings_parent_clock_and_scale(layout):
     assert list(_trace(fig, "Second").x) == pytest.approx(
         [(b.timestamp_ms - first.timestamp_ms.min()) / 500]
     )
-    assert _trace(fig, "Second").xaxis == "x2"
-    assert fig.layout.xaxis.range == fig.layout.xaxis2.range
-    assert fig.layout.yaxis.range == fig.layout.yaxis2.range
+    if layout == "overlay":
+        assert {t.xaxis for t in fig.data} == {"x"}
+    else:
+        assert _trace(fig, "Second").xaxis == "x2"
+        assert fig.layout.xaxis.range == fig.layout.xaxis2.range
+        assert fig.layout.yaxis.range == fig.layout.yaxis2.range
     assert fig.layout.yaxis.range[0] > fig.layout.yaxis.range[1]
     assert len([t for t in fig.data if t.name == "Fixation duration"]) == 2
     assert all(t.marker.symbol != "arrow" for t in fig.data)
@@ -826,7 +829,10 @@ def test_sample_only_comparison_axis_does_not_draw_fixation_keys():
     assert [t.name for t in fig.data] == ["Second · raw gaze"]
     assert list(fig.data[0].x) == [35]
     assert list(fig.data[0].y) == [231]
-    assert sum(a.text == "No data on these axes" for a in fig.layout.annotations) == 1
+    # The default overlay is one panel, so it names the reading drawn without data.
+    assert [a.text for a in fig.layout.annotations if "No data" in str(a.text)] == [
+        "No data for A on these axes"
+    ]
     assert not fig.layout.shapes
 
 

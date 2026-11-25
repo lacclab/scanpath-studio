@@ -161,7 +161,15 @@ def drawable_fixations(fields: tuple[str, str], fixations: pd.DataFrame | None) 
 
 
 def position_chart(fields: tuple[str, str], along: str) -> bool:
-    return along in fields and any(field in POSITION_FIELDS for field in fields)
+    return along in fields and in_screen_pixels(fields)
+
+
+def in_screen_pixels(fields: tuple[str, str]) -> bool:
+    """Does either axis place a fixation in screen pixels?
+
+    Only such an axis needs the two readings of an overlay on screens of one
+    size; an index, a duration or a clock means the same on any screen."""
+    return any(field in POSITION_FIELDS for field in fields)
 
 
 def raw_axes_available(fields: tuple[str, str], raw: pd.DataFrame | None) -> bool:

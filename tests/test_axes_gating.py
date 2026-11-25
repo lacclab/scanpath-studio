@@ -155,7 +155,7 @@ def test_outline_and_word_only_controls_follow_the_current_marks():
     assert not at.multiselect(key="global_word_hover_fields").disabled
 
 
-def test_numeric_compare_restores_layout_and_disables_a_mismatched_size_key():
+def test_numeric_compare_keeps_its_overlay_and_disables_a_mismatched_size_key():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
     at.session_state["single_compare_toggle"] = True
     at.session_state["global_x_field"] = "order_in_trial"
@@ -164,7 +164,8 @@ def test_numeric_compare_restores_layout_and_disables_a_mismatched_size_key():
     at.run()
     assert not at.exception
     view = next(w for w in at.segmented_control if w.label == "Layout")
-    assert view.value == "Side by side"
+    assert view.value == "Overlay"
+    assert "Overlay" in view.options
     assert not at.selectbox(key="global_x_field").disabled
     assert at.segmented_control(key="single_compare_stimulus").disabled
     assert at.checkbox(key="global_duration_size_legend").disabled
@@ -197,3 +198,22 @@ def test_shared_highlight_marker_requires_the_rule_on_a_displayed_reading():
     assert not at.selectbox(key="cmp1_fixclass_blink_mode").disabled
     assert not at.color_picker(key="global_fixclass_blink_color").disabled
     assert at.selectbox(key="global_fixclass_blink_mode").disabled
+
+
+@pytest.mark.parametrize("comparing", [False, True])
+def test_saccades_join_fixations_on_any_reading_chart(comparing):
+    at = _app(
+        single_compare_toggle=comparing,
+        global_x_field="duration_ms",
+        global_y_field="order_in_trial",
+    )
+    saccades = at.toggle(key="global_show_saccades")
+    assert not saccades.disabled
+    assert saccades.label.endswith("Connect fixations in order")
+    if comparing:
+        # Share keeps the chart overlay, without a stimulus it cannot draw.
+        snippet = at.session_state[SNIPPET_STATE_KEY]
+        assert (snippet.compare.layout, snippet.compare.compare_stimulus) == (
+            "overlay",
+            "both",
+        )

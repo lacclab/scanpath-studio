@@ -59,6 +59,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    eyelink_import_enabled,
     multipleye_format_enabled,
     palette_settings,
     parse_opacity,
@@ -659,6 +660,18 @@ def _render_parser() -> argparse.ArgumentParser:
         )
     else:
         src.set_defaults(multipleye=None)
+    # Experimental, hidden like --multipleye.
+    if eyelink_import_enabled():
+        src.add_argument(
+            "--eyelink-study",
+            metavar="DIR",
+            help="Render from a study folder `scanpath-studio import-eyelink` "
+            "wrote. A participant is a recording, a trial one reading, and "
+            "--screen picks one of its screens by screen ID. The screen is the "
+            "tracker's own display.",
+        )
+    else:
+        src.set_defaults(eyelink_study=None)
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
@@ -1180,6 +1193,11 @@ def _render_parser() -> argparse.ArgumentParser:
         + (
             "the session set's own monitor for --multipleye, "
             if multipleye_format_enabled()
+            else ""
+        )
+        + (
+            "the tracker's display for --eyelink-study, "
+            if eyelink_import_enabled()
             else ""
         )
         + "otherwise estimated from the data).",
@@ -2623,6 +2641,11 @@ def _snippet_data_source(args) -> SnippetSource:
                 "parts": list(args.onestop_part or ["Paragraph"]),
             },
         )
+    if args.eyelink_study:
+        raise SystemExit(
+            "--print-code does not cover --eyelink-study: its tables are read "
+            "with `load_eyelink(study_dir)`, which no printed figure code reads."
+        )
     if args.multipleye:
         return cs.SnippetSource(
             kind=cs.SOURCE_MULTIPLEYE,
@@ -2866,6 +2889,34 @@ def _load_multipleye_render(root: str, participant: str | None):
         root, sessions=[session] if session else None, names="canonical"
     )
     return data, session
+
+
+def _load_eyelink_render(study_dir: str, participant: str | None):
+    """`render --eyelink-study`: the study folder's tables, only the given
+    participant's when one is named, normalized like a dataset added to the app.
+
+    A screen only one table has (a question screen with fixations and no word
+    boxes) is left out, as `api.add_eyelink_dataset` leaves it out. Returns
+    ``(words, fixations, display)``."""
+    from . import api
+    from .eyelink import load_eyelink
+    from .multipart import SCREEN_ID
+
+    data = load_eyelink(
+        study_dir, participants=None if participant is None else [participant]
+    )
+    words, fixations = data.words, data.fixations
+    if not words.empty and not fixations.empty:
+        keys = ["participant_id", "trial_id", SCREEN_ID]
+        shared = pd.MultiIndex.from_frame(words[keys].astype(str)).intersection(
+            pd.MultiIndex.from_frame(fixations[keys].astype(str))
+        )
+        words = words[pd.MultiIndex.from_frame(words[keys].astype(str)).isin(shared)]
+        fixations = fixations[
+            pd.MultiIndex.from_frame(fixations[keys].astype(str)).isin(shared)
+        ]
+    words, fixations = api.load_scanpath_data(words, fixations, names="canonical")
+    return words, fixations, data.display
 
 
 def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
@@ -3151,6 +3202,7 @@ def render(argv: list[str]) -> None:
         bool(args.potec),
         bool(args.onestop),
         bool(args.multipleye),
+        bool(args.eyelink_study),
     ]
     # Your own tables are words and/or fixations — or raw gaze alone, for a
     # dataset recorded as samples only. Beside any other input, --raw-gaze is
@@ -3165,6 +3217,7 @@ def render(argv: list[str]) -> None:
             "--potec DIR",
             "--onestop DIR",
             *(["--multipleye DIR"] if multipleye_format_enabled() else []),
+            *(["--eyelink-study DIR"] if eyelink_import_enabled() else []),
         ]
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
@@ -3414,6 +3467,15 @@ def render(argv: list[str]) -> None:
         # Each fixation carries the session set's monitor (`canvas_width`), so
         # the screen is read off the data.
         canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
+    elif args.eyelink_study:
+        try:
+            words, fixations, display = _load_eyelink_render(
+                args.eyelink_study, args.participant
+            )
+        except (ValueError, ImportError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        column_names = {}
+        canvas = canvas or display or api._recorded_screen(words, fixations)
     else:
         manifest = _trial_parts_manifest(args.trial_parts_manifest)
         # Guarded like every other input branch: otherwise a missing file or an
@@ -4394,6 +4456,128 @@ def add(argv: list[str]) -> None:
     )
 
 
+def _import_eyelink_parser() -> argparse.ArgumentParser:
+    """The `import-eyelink` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio import-eyelink",
+        description="Experimental. Read EyeLink recordings (.edf, or .asc already "
+        "converted) into a study folder: fixations, word boxes, stimulus screens "
+        "and trial variables, one session per participant. Needs the optional "
+        "`edf` extra and SR Research's edf2asc. A session unchanged since it was "
+        "read is skipped, so a re-run redoes only what changed. Same as "
+        "api.import_eyelink.",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="+",
+        metavar="PATH",
+        help="An .edf / .asc file, or a folder searched for them.",
+    )
+    parser.add_argument(
+        "--study-dir",
+        required=True,
+        metavar="DIR",
+        help="The study folder to write (and to re-run into).",
+    )
+    parser.add_argument(
+        "--session-dir",
+        metavar="DIR",
+        help="The experiment's session folder, for a single recording.",
+    )
+    parser.add_argument(
+        "--experiment-dir",
+        metavar="DIR",
+        help="The experiment folder; each recording's session folder is found "
+        "in results/<participant>/.",
+    )
+    parser.add_argument(
+        "--raw-gaze", action="store_true", help="Also keep the recorded gaze samples."
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        metavar="N",
+        help="Sessions read at once (default: one fewer than the CPUs; 1 reads "
+        "them in this process).",
+    )
+    parser.add_argument(
+        "--rebuild", action="store_true", help="Read every session again."
+    )
+    parser.add_argument(
+        "--keep-asc",
+        action="store_true",
+        help="Keep the ASC files converted from the EDFs.",
+    )
+    parser.add_argument(
+        "--add",
+        metavar="NAME",
+        help="Then add the study to the app's dataset list under NAME, as `add` does.",
+    )
+    parser.add_argument(
+        "--raw-gaze-participants",
+        nargs="+",
+        metavar="P",
+        help="With --add: the participants whose raw gaze the dataset carries.",
+    )
+    return parser
+
+
+def import_eyelink(argv: list[str]) -> None:
+    """Import EyeLink recordings into a study folder (`api.import_eyelink`)."""
+    parser = _import_eyelink_parser()
+    args = parser.parse_args(argv)
+    if args.raw_gaze_participants and not args.add:
+        parser.error("--raw-gaze-participants goes with --add NAME.")
+    from . import api
+
+    def _progress(done: int, total: int, pid: str) -> None:
+        print(f"[{done}/{total}] {pid}", file=sys.stderr)
+
+    try:
+        report = api.import_eyelink(
+            args.paths,
+            args.study_dir,
+            session_dir=args.session_dir,
+            experiment_dir=args.experiment_dir,
+            raw_gaze=args.raw_gaze,
+            workers=args.workers,
+            rebuild=args.rebuild,
+            keep_asc=args.keep_asc,
+            progress=_progress,
+        )
+    except (ValueError, ImportError, FileNotFoundError, NotImplementedError) as exc:
+        parser.error(str(exc))
+    except (RuntimeError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+    lines = [(pid, "ok") for pid in report.imported]
+    lines += [(pid, "skipped") for pid in report.skipped]
+    lines += [(pid, f"failed: {why}") for pid, why in report.failed.items()]
+    for number, (pid, status) in enumerate(lines, 1):
+        print(f"[{number}/{len(lines)}] {pid} {status}")
+    print(
+        f"Imported {len(report.imported)}, skipped {len(report.skipped)}, "
+        f"failed {len(report.failed)} \u2192 {report.study_dir}"
+    )
+    for pid, notes in report.notes.items():
+        for note in notes:
+            print(f"  {pid}: {note}")
+    if args.add:
+        try:
+            name = api.add_eyelink_dataset(
+                args.add,
+                report.study_dir,
+                raw_gaze_participants=args.raw_gaze_participants,
+            )
+        except (ValueError, FileNotFoundError, NotImplementedError) as exc:
+            parser.error(str(exc))
+        except (RuntimeError, OSError) as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"Added {name!r}.")
+        print("Run `scanpath-studio` to open the app on it.")
+    if report.failed:
+        raise SystemExit(1)
+
+
 def _remove_parser() -> argparse.ArgumentParser:
     """The `remove` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -5211,6 +5395,7 @@ _COMMANDS = (
     "publication",
     "check",
     "add",
+    "import-eyelink",
     "remove",
     "annotations",
     "open",
@@ -5225,21 +5410,32 @@ def _commands() -> tuple[str, ...]:
     computed measures (`constants.computed_measures_enabled`)."""
     from .constants import computed_measures_enabled
 
-    if computed_measures_enabled():
-        return _COMMANDS
-    return tuple(c for c in _COMMANDS if c != "analyze")
+    return tuple(
+        c
+        for c in _COMMANDS
+        if (c != "analyze" or computed_measures_enabled())
+        and (c != "import-eyelink" or eyelink_import_enabled())
+    )
 
 
 def _help_text() -> str:
     from .constants import computed_measures_enabled
 
-    if not computed_measures_enabled():
-        return _HELP
-    return _HELP.replace(
-        "  scanpath-studio corpus …",
-        "  scanpath-studio analyze …        export preprocessing + the full measure "
-        "family\n  scanpath-studio corpus …",
-    )
+    text = _HELP
+    if computed_measures_enabled():
+        text = text.replace(
+            "  scanpath-studio corpus …",
+            "  scanpath-studio analyze …        export preprocessing + the full "
+            "measure family\n  scanpath-studio corpus …",
+        )
+    if eyelink_import_enabled():
+        text = text.replace(
+            "  scanpath-studio remove NAME",
+            "  scanpath-studio import-eyelink PATH… --study-dir DIR\n"
+            "                                   read EyeLink recordings into a study "
+            "folder\n  scanpath-studio remove NAME",
+        )
+    return text
 
 
 def _refuse_unknown_command(word: str) -> None:
@@ -5348,6 +5544,15 @@ def main(argv: list[str] | None = None) -> None:
         check(argv[1:])
     elif argv[0] == "add":
         add(argv[1:])
+    elif argv[0] == "import-eyelink":
+        from . import eyelink
+
+        try:
+            eyelink._require_enabled("`import-eyelink`")
+        except ValueError as exc:
+            print(f"scanpath-studio: {exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        import_eyelink(argv[1:])
     elif argv[0] == "remove":
         remove(argv[1:])
     elif argv[0] == "annotations":

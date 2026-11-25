@@ -16,6 +16,7 @@
 
 - Leaving the Add-dataset wizard before uploading anything no longer warns that uploaded files will be lost.
 - The Add-dataset wizard lists the file formats it accepts and the size limit before the first upload.
+- A comparison on reading-chart axes (for example fixation index by word) can now be an overlay, and the Saccades layer joins each reading's fixations in order on any chart. A chart comparison, link or settings file with the default Overlay layout now opens as one panel instead of side by side (choose Side by side for the old figure), and charts that showed no line now show one unless Saccades is off.
 
 ### Fixed
 

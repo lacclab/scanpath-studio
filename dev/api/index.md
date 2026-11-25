@@ -832,9 +832,9 @@ Build a figure comparing two scanpaths: the app's **Compare** mode.
 
 **Two datasets.** `words_b` / `fixations_b` draw B from a *different* dataset. Two datasets can hold the same `(participant_id, trial_id)`, so B's participant IDs are prefixed with `dataset_b` inside the merged frames. Without that, the figure could draw the wrong reading, or rows of both mixed into one. The frames you pass in are not modified, and only the trace labels show the prefix.
 
-**Numeric axes.** Set `x_field` and `y_field` to compare index, position, duration or other numeric fields in panels with matching ranges, and `reverse_x_axis` / `reverse_y_axis` to run either axis the other way. An overlay request uses side-by-side panels on these axes. Elapsed seconds start at each full reading's first recorded fixation onset.
+**Numeric axes.** Set `x_field` and `y_field` to compare index, position, duration or other numeric fields on matching ranges: both readings in one panel for an overlay, or one panel each. `reverse_x_axis` / `reverse_y_axis` run either axis the other way. With `show_saccades` each reading's fixations are joined in reading order. Elapsed seconds start at each full reading's first recorded fixation onset.
 
-**The overlay gate.** A spatial overlay needs both readings on screens of the same size, or it raises `ValueError` (the app falls back to side by side). That holds across datasets, and within one when the two screens carry different `canvas_width` / `canvas_height` or `setup_b` states another screen. Pass `layout="side_by_side"` or `"stacked"` to compare readings from different screens; each panel is then drawn to its own. Nothing is rescaled.
+**The overlay gate.** An overlay with a screen-position axis (`x` or `y`) needs both readings on screens of the same size, or it raises `ValueError` (the app falls back to side by side). That holds across datasets, and within one when the two screens carry different `canvas_width` / `canvas_height` or `setup_b` states another screen. Pass `layout="side_by_side"` or `"stacked"` to compare readings from different screens; each panel is then drawn to its own. Nothing is rescaled.
 
 **Per-scanpath style.** `style_a` / `style_b` restyle one scanpath with these keys:
 

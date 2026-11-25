@@ -5058,7 +5058,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--compare-layout</code></td>
 <td><code>overlay</code>, <code>side-by-side</code>, <code>stacked</code></td>
 <td><code>overlay</code></td>
-<td>How A and B are arranged (default: overlay). Across two datasets, overlay needs canvases of the same size. Different canvases are refused, so use side-by-side or stacked for them. Matching canvases that a dataset did not record still overlay, with a warning.</td>
+<td>How A and B are arranged (default: overlay). Across two datasets, an overlay with a screen-position axis (x or y) needs canvases of the same size; other <code>--x-field</code>/<code>--y-field</code> charts overlay on any. On those axes, different canvases are refused, so use side-by-side or stacked for them. Matching canvases that a dataset did not record still overlay, with a warning.</td>
 </tr>
 <tr>
 <td><code>--compare-stimulus</code></td>

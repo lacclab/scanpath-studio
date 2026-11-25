@@ -3765,6 +3765,10 @@ def forget_mapping_for_other_table(
         for key in keys:
             st.session_state.pop(key, None)
             st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
+        # The stashed upload header is the other dataset's file too, and
+        # `_mapping_options` offers it ahead of this table's own columns: left
+        # behind, it would blank every pick this table's columns could honour.
+        st.session_state.pop(f"{state_key_prefix}_header", None)
         return
     columns = set(columns_seen)
     for key in keys:
@@ -10151,6 +10155,65 @@ def clear_trial_filters(prefix: str = "") -> None:
     st.session_state.pop(f"{prefix}_trial_filters_raw", None)
 
 
+#: The Scanpath funnel's popover, whose open state releases a held reset.
+FILTER_POPOVER_KEY = "iconpop_filter_trials"
+#: The filter values the browser last showed, recorded by
+#: `clear_trial_filters_from_outside` for `hold_cleared_filters`.
+_CLEARED_FILTER_ECHOES_KEY = "_cleared_filter_echoes"
+
+
+def clear_trial_filters_from_outside(prefix: str = "") -> None:
+    """`clear_trial_filters` for a button drawn outside the filter popover.
+
+    A filter widget the user opened keeps echoing the value it last showed
+    while its popover is closed, so a bare reset would hold for one run and the
+    next rerun would put the filter back. This records those values for
+    `hold_cleared_filters`, which holds each reset once the widgets have
+    re-seeded their defaults. An ``on_click``.
+    """
+    ss = st.session_state
+    ss[_CLEARED_FILTER_ECHOES_KEY] = {
+        key: deepcopy(ss[key]) for key in _own_filter_keys(prefix)
+    }
+    clear_trial_filters(prefix)
+
+
+def hold_cleared_filters() -> None:
+    """Hold a `clear_trial_filters_from_outside` reset against the closed
+    popover's echo (`write_through`).
+
+    Call it after the filter widgets have rendered on the run after the click:
+    only they know their defaults (every value of a condition, for one), so
+    the value to hold is what they seeded. The widgets exist by then, so the
+    hold is recorded without writing their keys again (Streamlit refuses a
+    write to an instantiated widget); `reassert_pending_writes` applies it on
+    the runs that follow.
+    """
+    ss = st.session_state
+    shown = ss.pop(_CLEARED_FILTER_ECHOES_KEY, None)
+    pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
+    for key, old in (shown or {}).items():
+        if key in ss and _write_match_key(ss[key]) != _write_match_key(old):
+            pending[key] = _PendingWidgetWrite(
+                deepcopy(ss[key]),
+                deepcopy(old),
+                fresh=False,
+                popover_key=FILTER_POPOVER_KEY,
+            )
+    if pending:
+        ss[_PENDING_WRITES_KEY] = pending
+
+
+def _echoes_cleared_filter(prefix: str) -> bool:
+    """Whether a filter's change is a closed popover echoing a held reset.
+
+    The echo reaches the filter's ``on_change`` before
+    `reassert_pending_writes` puts the reset back, so a callback that
+    recomputed the filters from it would apply the cleared filter for a run.
+    """
+    return echoes_a_held_write(*_own_filter_keys(prefix))
+
+
 def _own_filter_keys(prefix: str) -> list:
     """Filter widget keys belonging to ``prefix`` and to no *longer* prefix.
 
@@ -11757,6 +11820,8 @@ def render_narrow_by(
     Start empty = no narrowing; pick values to narrow."""
 
     def _apply() -> None:
+        if _echoes_cleared_filter(prefix):
+            return
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
             words, fixations, raw_gaze, prefix=prefix
         )
@@ -11853,6 +11918,8 @@ def render_trial_filters(
     from . import metadata as md
 
     def _apply() -> None:
+        if _echoes_cleared_filter(prefix):
+            return
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
             words, fixations, raw_gaze, prefix=prefix
         )

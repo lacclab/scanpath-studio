@@ -1618,6 +1618,18 @@ def _annotations_frame(
     return frame
 
 
+def _open_scanpath_annotations() -> None:
+    """Request the Scanpath view on its Annotations subtab (an ``on_click``).
+
+    Writes ``main_nav`` for `menu.render_nav` to reconcile, as
+    `url_state._go_scanpath` does; a callback may not switch pages itself.
+    """
+    from .constants import _VIEW_SCANPATH, SUBTAB_ANNOTATIONS
+
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+    st.session_state["single_subtab"] = SUBTAB_ANNOTATIONS
+
+
 def render_dataset_annotations(
     trials, *, dataset_name: str, open_trials=None, trial_labels=None
 ) -> None:
@@ -1685,9 +1697,18 @@ def render_dataset_annotations(
     delete_slot = toolbar.container(width="content")
 
     if not records:
+        from scanpath_studio import ui_mode
+
         st.caption(
             "No annotations on this dataset yet. Star, tag or note a trial on "
             f"{ICONS['view_scanpath']} **Scanpath → Annotations**."
+        )
+        # Full only: Essentials has no Annotations subtab to open.
+        ui_mode.advanced_only(st, "annotations_empty_open").button(
+            "Open Scanpath → Annotations",
+            icon=ICONS["view_scanpath"],
+            key="annotations_empty_open",
+            on_click=_open_scanpath_annotations,
         )
         return
     elsewhere = len(records) - len(records_in(_store(), trials))

@@ -742,6 +742,9 @@ class TestLeavingTheWizard:
         assert {"wizard_leave_stay", "wizard_leave_discard"} <= keys
         # The wizard is still on screen — its own bar, not a "nothing to plot".
         assert "cancel_add_data" in keys
+        # Nothing was uploaded, so the prompt does not speak of uploaded files.
+        prompt = [w.value for w in at.warning if "Leave setup" in w.value]
+        assert prompt and "what you filled in" in prompt[0]
 
     def test_keep_setting_up_dismisses_the_prompt(self):
         """…and *stays* dismissed. Nothing navigated, so the nav is still on the
@@ -805,6 +808,38 @@ class TestLeavingTheWizard:
         # Back on the dataset the wizard was opened from, not the half-built one
         # — which would read as data loss.
         assert at.session_state["data_source_choice"] == previous
+
+    def test_discarding_an_upload_leaves_the_demo_loadable(self):
+        """A discarded upload's header is not offered to the next dataset.
+
+        The wizard stashes each uploaded file's header under the same
+        ``col_map_<table>_header`` key a built-in source's mapping reads its
+        options from, so the demo must map against its own columns again,
+        Screen ID included, and load."""
+        at = _make_apptest()
+        at.run(timeout=90)
+        _enter_add_data(at)
+        at.run(timeout=90)
+        at.file_uploader(key="col_map_fix_upload").set_value(
+            (
+                "fixations.csv",
+                b"participant_id,trial_id,CURRENT_FIX_X,CURRENT_FIX_Y,"
+                b"CURRENT_FIX_DURATION\np1,t1,100,200,210\np1,t2,90,210,200\n",
+                "text/csv",
+            )
+        ).run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        pin_view(at, "Corpus Analysis")
+        at.run(timeout=90)
+        assert any("files you uploaded" in w.value for w in at.warning), [
+            w.value for w in at.warning
+        ]
+        at.button(key="wizard_leave_discard").click().run(timeout=90)
+        open_data_view(at, timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["_show_upload_wizard"] is False
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert at.session_state["col_map_fix_screen_id"] is not None
 
 
 @pytest.mark.timeout(120)

@@ -181,6 +181,14 @@ WIZARD_IMAGES_PATTERN_KEY = "wizard_stimulus_pattern"
 _WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
 
 
+def upload_types_note() -> str:
+    """The formats a table upload takes and the per-file limit, as one sentence."""
+    return (
+        ", ".join(t.upper() for t in app._UPLOAD_TYPES)
+        + f". Up to {upload_limit_label()} per file."
+    )
+
+
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
@@ -596,9 +604,22 @@ def _leave_prompt_dialog(destination: str) -> None:
     `st.rerun(scope="app")` both closes the modal and renders the page
     underneath (as in `tour.py`'s `_tutorial_library_dialog`).
     """
+    # The header each read stashes (an empty one for raw gaze), and the
+    # uploader's own value: the dialog can open on a run before the uploaders
+    # render, when that value is not readable yet.
+    ss = st.session_state
+    uploaded = any(
+        f"{prefix}_header" in ss or ss.get(f"{prefix}_upload")
+        for prefix in _WIZARD_MAPPING_PREFIXES
+    )
+    lost = (
+        "the files you uploaded won't be kept"
+        if uploaded
+        else "what you filled in won't be kept"
+    )
     st.warning(
         f"**Leave setup and go to {view_label(destination)}?** This dataset isn't "
-        "added yet, so the files you uploaded won't be kept.",
+        f"added yet, so {lost}.",
         icon=ICONS["warning"],
     )
     stay_col, leave_col = st.columns(2)
@@ -4391,6 +4412,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "**Raw gaze** below to get started.",
             width="content",
         )
+        # Before the first upload, not only in the hover help: a file in another
+        # format is refused by the browser without a word.
+        intro.caption(
+            f"{ICONS['info']} Accepted: {upload_types_note()}", width="content"
+        )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             # Said from this server's own state, as the About line and the FAQ
@@ -4417,10 +4443,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # `styles.py` hides it there, so it needs to survive somewhere:
     # appended to `help_text`, which already reaches both the title's hover
     # tooltip and the uploader's own accessible help.
-    _upload_types_note = (
-        ", ".join(t.upper() for t in app._UPLOAD_TYPES)
-        + f". Up to {upload_limit_label()} per file."
-    )
+    _upload_types_note = upload_types_note()
 
     def upload_box(
         host,

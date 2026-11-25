@@ -488,6 +488,24 @@ def _step_screen(key_prefix: str, options: tuple[str, ...], delta: int) -> None:
     st.session_state[id_key] = options[max(0, min(len(options) - 1, position + delta))]
 
 
+def _demo_opening_screen(*, compare: bool = False) -> str | None:
+    """The screen a bundled-demo reading opens on, or ``None`` elsewhere.
+
+    The demo keeps every screen a reader saw, from the article's title to the
+    answer feedback; it opens on the paragraph, the screen the reading is about
+    and the one a link naming no screen opens (`url_state.DEMO_UNNAMED_SCREEN`).
+    ``compare`` asks about scanpath B, whose dataset is A's unless the
+    comparison picker names another."""
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.session_keys import DATA_SOURCE_CHOICE
+    from scanpath_studio.url_state import DEMO_UNNAMED_SCREEN
+
+    source = st.session_state.get(DATA_SOURCE_CHOICE)
+    if compare:
+        source = _compare_source_name() or source
+    return DEMO_UNNAMED_SCREEN if source == DEMO_CHOICE else None
+
+
 def _render_screen_navigator(
     catalog: pd.DataFrame, *, key_prefix: str = "single", host=None
 ) -> str | None:
@@ -512,7 +530,8 @@ def _render_screen_navigator(
     options = tuple(catalog[SCREEN_ID].astype(str))
     current = st.session_state.get(id_key)
     if current not in options:
-        st.session_state[id_key] = options[0]
+        opening = _demo_opening_screen(compare=key_prefix == "single_compare")
+        st.session_state[id_key] = opening if opening in options else options[0]
     labels = {
         str(row.screen_id): f"{int(row.screen_index)}/{len(catalog)} · {row.screen_id}"
         for row in catalog.itertuples()

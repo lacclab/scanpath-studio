@@ -87,6 +87,9 @@ GLOBAL_CRITICAL_SPAN_STYLE = "global_critical_span_style"
 GLOBAL_HIGHLIGHT_COLUMN = "global_highlight_column"
 GLOBAL_X_FIELD = "global_x_field"
 GLOBAL_Y_FIELD = "global_y_field"
+# Run a chart axis the other way (chart axes only).
+GLOBAL_REVERSE_X_AXIS = "global_reverse_x_axis"
+GLOBAL_REVERSE_Y_AXIS = "global_reverse_y_axis"
 GLOBAL_SACCADE_STYLE = "global_saccade_style"
 GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
 # Vertical drift correction.
@@ -587,6 +590,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_caption": GLOBAL_SHOW_CAPTION,
         "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
+        "reverse_x": GLOBAL_REVERSE_X_AXIS,
+        "reverse_y": GLOBAL_REVERSE_Y_AXIS,
         "crop_margin_auto": GLOBAL_CROP_MARGIN_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
@@ -1198,6 +1203,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_USE_STIMULUS_FONT_PT,
         GLOBAL_X_FIELD,
         GLOBAL_Y_FIELD,
+        GLOBAL_REVERSE_X_AXIS,
+        GLOBAL_REVERSE_Y_AXIS,
         # text
         GLOBAL_SCALE_TEXT_TO_BOXES,
         GLOBAL_LINE_SPACING,

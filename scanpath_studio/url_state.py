@@ -611,6 +611,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
+    # Run a chart axis the other way.
+    "reverse_x": "global_reverse_x_axis",
+    "reverse_y": "global_reverse_y_axis",
     # Crop to data's margin — automatic, or the px below.
     "crop_margin_auto": "global_crop_margin_auto",
     "hollow_fixations": "global_hollow_fixations",
@@ -3491,6 +3494,11 @@ def _restore_plot_config(
             val = axes.get(cfg_key)
             if val is not None:
                 put_valid(val in numeric, state_key, val, label)
+    # Additive: a file saved without them leaves the axes running as they do.
+    if "reverse_x" in axes:
+        put("global_reverse_x_axis", bool(axes["reverse_x"]))
+    if "reverse_y" in axes:
+        put("global_reverse_y_axis", bool(axes["reverse_y"]))
     if "coordinate_grid" in axes:
         put("global_show_coordinate_grid", bool(axes["coordinate_grid"]))
     if "coordinate_grid_auto" in axes:

@@ -574,6 +574,8 @@ def _restore_config_app():
         "axes": {
             "x_field": numeric[0],
             "y_field": numeric[1],
+            "reverse_x": True,
+            "reverse_y": True,
             "coordinate_grid": True,
             "coordinate_grid_auto": False,
             "coordinate_grid_spacing": 250.0,

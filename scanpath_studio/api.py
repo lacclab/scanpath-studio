@@ -240,6 +240,8 @@ _CANONICAL_OPTION_NAMES = {
     "heatmap_norm",
     "x_field",
     "y_field",
+    "reverse_x_axis",
+    "reverse_y_axis",
     "color_by",
     "heatmap_metric",
     "marker_size_range",
@@ -2782,6 +2784,9 @@ def plot_scanpath(
     through the map they carry. Use ``x_field="@elapsed_seconds"`` with
     ``y_field="x"`` or ``"y"`` to draw fixation durations against time since the
     reading's first recorded onset. Selecting a screen or index window keeps that origin.
+    ``reverse_x_axis=True`` / ``reverse_y_axis=True`` run a chart's axis the other
+    way, such as the first fixation at the top of ``y_field="order_in_trial"``; the
+    screen view (``x`` by ``y``) keeps the stimulus as it was shown.
 
     Args:
         words: A normalized words frame from
@@ -3711,8 +3716,9 @@ def compare_scanpaths(
     pass in are not modified, and only the trace labels show the prefix.
 
     **Numeric axes.** Set ``x_field`` and ``y_field`` to compare index, position,
-    duration or other numeric fields in panels with matching ranges. An overlay
-    request uses side-by-side panels on these axes. Elapsed seconds start at
+    duration or other numeric fields in panels with matching ranges, and
+    ``reverse_x_axis`` / ``reverse_y_axis`` to run either axis the other way. An
+    overlay request uses side-by-side panels on these axes. Elapsed seconds start at
     each full reading's first recorded fixation onset.
 
     **The overlay gate.** A spatial overlay needs both readings on screens of the same size, or

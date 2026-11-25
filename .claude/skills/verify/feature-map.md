@@ -25,6 +25,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Pick a reading | Above the plot | `single_participant`, `single_trial_id` | The plot, title and chips follow; a share link reopens the same reading |
 | Keyboard shortcuts | Scanpath page, trial arrows, replay timeline | Left / Right, Shift + Left / Right, Space, Home / End | Page arrows step trials, Shift + arrows step B, and the replay timeline steps frames and toggles playback. Typing in the picker leaves the trial alone. |
 | Fixation charts | Full → Axes → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |
+| Reversed chart axes | Full → Axes → Reverse horizontal / vertical axis | `global_reverse_x_axis`, `global_reverse_y_axis` | Flips a chart axis from its usual direction (`reverse_x` / `reverse_y` link params, `--reverse-x` / `--reverse-y`, `reverse_x_axis` / `reverse_y_axis`). Greyed on the screen view and in the replay. |
 | The spatial plot | Centre | — (drawn by `tabs._render_true_scale_chart`) | Word labels keep their px size at any column width; never `st.plotly_chart` |
 | Fixations | Full → Layers → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
 | Saccades | Full → Layers → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |

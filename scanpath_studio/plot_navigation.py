@@ -75,6 +75,7 @@ _DESTINATIONS = {
         None,
         None,
     ),
+    "Reverse or flip a chart axis": ("Axes", None, None),
     "Choose horizontal and vertical axis fields": (
         "Axes",
         None,

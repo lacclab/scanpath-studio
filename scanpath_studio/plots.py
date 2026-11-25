@@ -122,6 +122,11 @@ class FigureSettings:
     font_family: str = FONT_FAMILY
     x_field: str = "x"
     y_field: str = "y"
+    #: Run a chart axis the other way from its usual direction (left to right,
+    #: bottom to top; screen Y top to bottom). Chart axes only: the screen
+    #: view always draws the stimulus as it was shown.
+    reverse_x_axis: bool = False
+    reverse_y_axis: bool = False
     show_words: bool = True
     #: The word boxes' outline colour at ``word_box_line_opacity``, and their
     #: fill — a colour drawn at ``word_box_fill_opacity``. A comparison outlines
@@ -3617,6 +3622,14 @@ def _trace_has_points(trace: go.Scatter) -> bool:
     return bool((np.isfinite(x) & np.isfinite(y)).any())
 
 
+def _chart_axis_reversed(settings: FigureSettings, coordinate: str, field: str) -> bool:
+    """Whether a chart axis runs high to low: screen Y does by default, and
+    the figure's *reverse* switch for that axis flips whichever way it runs."""
+    usual = coordinate == "y" and field == "y"
+    flipped = settings.reverse_x_axis if coordinate == "x" else settings.reverse_y_axis
+    return usual != flipped
+
+
 def _chart_axis_range(traces, coordinate: str, reverse: bool):
     """One numeric extent shared by the chart and each separately saved layer."""
     bounds = []
@@ -5698,11 +5711,13 @@ def _render_scanpath_figure(
                     field, "raw_gaze" if fixations.empty or not show_fixations else None
                 ),
                 range=_chart_axis_range(
-                    fig.data, coordinate, coordinate == "y" and field == "y"
+                    fig.data,
+                    coordinate,
+                    _chart_axis_reversed(settings, coordinate, field),
                 ),
             )
             if (
-                field in {"order_in_trial", "order_in_screen", "fixation_id"}
+                field in {"order_in_trial", "order_in_screen", "fixation_id", "word_id"}
                 and not fixations.empty
             ):
                 span = pd.to_numeric(fixations[field], errors="coerce")
@@ -9604,13 +9619,16 @@ def _make_split_comparison_figure(
         for coord, field, update in zip(
             ("x", "y"), fields, (fig.update_xaxes, fig.update_yaxes), strict=True
         ):
-            limits = _chart_axis_range(fig.data, coord, coord == "y" and field == "y")
+            limits = _chart_axis_range(
+                fig.data, coord, _chart_axis_reversed(settings, coord, field)
+            )
             sample_axis = not any(not spec["trial_fix"].empty for spec in trial_specs)
             tick_options = {}
             if limits and field in {
                 "order_in_trial",
                 "order_in_screen",
                 "fixation_id",
+                "word_id",
                 SAMPLE_INDEX,
             }:
                 tick_options = dict(
@@ -11579,6 +11597,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
     {
         "x_field",
         "y_field",
+        "reverse_x_axis",
+        "reverse_y_axis",
         "show_heatmap",
         "heatmap_metric",
         "heatmap_style",

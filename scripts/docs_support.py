@@ -370,6 +370,8 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "coordinate_grid_font_size",
         "x_field",
         "y_field",
+        "reverse_x_axis",
+        "reverse_y_axis",
     ),
     "Title & labels": (
         "illustration_text",

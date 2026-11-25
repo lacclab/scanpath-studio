@@ -14,7 +14,9 @@ trial keeps that trial's id, under the reader ``"<reader> · <model>"``, and
 ``source_trial`` names the human trial it was generated for, so matching on
 ``source_trial`` in the Comparisons tab shows a human trial beside every model's
 version of it. ``scanpath_source`` says where a reading came from; a run that
-covers only part of its corpus (a debug run) says so there too.
+covers only part of its corpus (a debug run) says so there too. ``regime`` says
+how it was made: recorded (a human reading), benchmark run (one model run over
+the benchmark's corpora together), per-corpus run, or debug run.
 
     python scripts/eyegenbench_to_studio.py --report
     python scripts/eyegenbench_to_studio.py --corpus CopCo
@@ -45,6 +47,7 @@ WORK = Path("/data/home/shubi/scanpath-studio-data/eyegenbench-work")
 PREFIX = "EyeGenBench · "
 
 HUMAN = "Human"
+RECORDED = "recorded"  # the regime of a human reading
 #: Model directory → the name shown for its readings.
 MODELS = {
     "ezreader": "EZ-Reader",
@@ -72,6 +75,7 @@ FIX_SCHEMA = dict(
 KEEP = [
     "source_trial",
     "scanpath_source",
+    "regime",
     "ia_label",
     "fix_landing_position",
     "text_language",
@@ -105,7 +109,7 @@ class Run:
     model: str
     rows: pd.DataFrame
     path: Path
-    kind: str  # "benchmark run", "per-corpus run" or "debug run"
+    kind: str  # its regime: "benchmark run", "per-corpus run" or "debug run"
     note: str = ""  # e.g. "5 of 30 batches"
     dropped_draws: int = 0
 
@@ -277,7 +281,11 @@ def build_fixations(
     labels = labels[~labels.index.duplicated()]
     human_trials = set(human["unique_trial_id"])
     frames = [
-        human.assign(source_trial=human["unique_trial_id"], scanpath_source=HUMAN)
+        human.assign(
+            source_trial=human["unique_trial_id"],
+            scanpath_source=HUMAN,
+            regime=RECORDED,
+        )
     ]
     coverage = []
     dataset_name = str(human["dataset_name"].iloc[0]) if len(human) else ""
@@ -292,6 +300,7 @@ def build_fixations(
                 + f" · {MODELS[run.model]}",
                 source_trial=rows["unique_trial_id"],
                 scanpath_source=run.source,
+                regime=run.kind,
                 ia_label=labels.reindex(key).to_numpy(),
                 dataset_name=dataset_name,
             )

@@ -873,6 +873,71 @@ def test_the_stimuli_table_shows_each_screen_as_each_reader_saw_it(seen, seed):
     assert row.get(STIMULUS_VERSIONS_COLUMN, "") == ", ".join(differing)
 
 
+@given(
+    st.dictionaries(
+        st.sampled_from(["p1", "p2", "p3"]),
+        st.lists(
+            st.tuples(st.sampled_from(["a", "b", "c", ""]), st.booleans()),
+            min_size=1,
+            max_size=5,
+        ),
+        min_size=1,
+    ),
+    st.integers(min_value=0, max_value=2**32 - 1),
+)
+def test_the_stimuli_table_never_folds_words_without_an_id(seen, seed):
+    """A blank word id names no word: every shown word without one is a word of
+    its own, after its line's numbered words, top to bottom and left to right
+    even where ``line_idx`` is one value for every row, as in many IA exports.
+    Readings that saw the same words at the same places share a version. The
+    order of the word rows changes nothing."""
+    import uuid
+
+    from scanpath_studio.tabs import _build_stimuli_table_cached
+
+    words = pd.DataFrame(
+        [
+            {
+                "participant_id": reader,
+                "trial_id": "t1",
+                "text_id": "x",
+                "word_id": position if numbered else np.nan,
+                "line_idx": 0,
+                # Two words to a row of the screen, the next row further down.
+                "x": 10.0 * (position % 2),
+                "y": 30.0 * (position // 2),
+                "text": word,
+            }
+            for reader, own in seen.items()
+            for position, (word, numbered) in enumerate(own, start=1)
+        ]
+    )
+
+    def build(frame: pd.DataFrame) -> pd.DataFrame:
+        # A fresh cache key: the second call must compute, not recall the first.
+        return _build_stimuli_table_cached(frame, cache_key=str(uuid.uuid4()))
+
+    table = build(words)
+    shuffled = words.sample(frac=1, random_state=seed).reset_index(drop=True)
+    pd.testing.assert_frame_equal(table, build(shuffled))
+
+    def passage(own) -> list[str]:
+        numbered = [w for w, has_id in own if w and has_id]
+        return numbered + [w for w, has_id in own if w and not has_id]
+
+    def version(own) -> tuple:
+        ids = tuple((i, w) for i, (w, has_id) in enumerate(own, 1) if w and has_id)
+        return ids, tuple(w for w, has_id in own if w and not has_id)
+
+    versions = {version(own) for own in seen.values()}
+    row = table.iloc[0]
+    if len(versions) == 1:
+        assert row["Text"] == " ".join(passage(next(iter(seen.values()))))
+    for own in seen.values():
+        assert " ".join(passage(own)) in row["Text"]
+    assert row["Text"].count("seen by") == (len(versions) if len(versions) > 1 else 0)
+
+
 # --- ✏️ Edit dataset gives what ➕ Add dataset gives -----------------------------
 
 #: A reader's two fixations tables' worth of columns, and the Words table of a

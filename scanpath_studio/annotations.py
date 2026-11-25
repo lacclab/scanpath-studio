@@ -1309,11 +1309,28 @@ def render_trial_annotations(
             note=note,
             screen_id=annotation_screen,
         )
-        # No shortcut button under this — the caption names where the whole
-        # dataset's annotations are listed instead.
-        st.caption(
-            "To export, import or delete this dataset's annotations, go to "
-            f"{ICONS['view_data']} **Data Management → Annotations**."
+        # The destination reads as a link inside the sentence: a tertiary
+        # button on the caption's row, not a full-width button.
+        from .app import open_dataset_panel
+
+        pointer = st.container(
+            key="annotation_data_pointer",
+            horizontal=True,
+            vertical_alignment="center",
+            gap="xsmall",
+        )
+        pointer.caption(
+            "To export, import or delete this dataset's annotations, go to",
+            width="content",
+        )
+        pointer.button(
+            "Data Management → Annotations",
+            icon=ICONS["view_data"],
+            type="tertiary",
+            key="annotation_open_data_annotations",
+            help="Open the Data Management page on its Annotations panel.",
+            on_click=open_dataset_panel,
+            args=("Annotations",),
         )
 
 

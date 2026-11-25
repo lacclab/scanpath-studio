@@ -356,7 +356,7 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | | **Notes** | Write a free-text note on the trial. |
 | :material/article: **Stimulus & context** | :material/settings: **Fields** → **Context fields** | Choose the trial context to show, such as the text's title, a question or an answer. |
 | | :material/settings: **Fields** → **Highlighted spans** | Choose true/false word columns to highlight in the text, each with a summary line. |
-| :material/difference: **Comparisons** | **Match field** | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. |
+| :material/difference: **Comparisons** | **Match field** | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. The panels use the plot's axes; on a reading chart they share one horizontal range. |
 | | **Columns** | Set how many comparison panels per row, from 1 to 4. |
 | :material/file_export: **Export** | **Download format** | Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video. |
 | | **Width**, unit, **DPI** | Set the PNG export size for print: width (mm or in) and resolution (DPI). A blank width writes the figure at three times its screen size. |

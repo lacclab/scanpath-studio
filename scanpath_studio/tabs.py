@@ -13804,6 +13804,27 @@ def _comparison_trial_words(
     )
 
 
+def _shared_chart_range(frames: list[pd.DataFrame], field: str) -> list[float] | None:
+    """One padded ``[min, max]`` of ``field`` over ``frames``, or ``None``.
+
+    ``None`` when no frame has a finite value there, so the caller keeps each
+    panel's own autorange."""
+    values = (
+        pd.concat(
+            [pd.to_numeric(f[field], errors="coerce") for f in frames if field in f],
+            ignore_index=True,
+        )
+        if any(field in f for f in frames)
+        else pd.Series(dtype=float)
+    )
+    values = values[np.isfinite(values)]
+    if values.empty:
+        return None
+    low, high = float(values.min()), float(values.max())
+    pad = max((high - low) * 0.02, 0.5)
+    return [low - pad, high + pad]
+
+
 def _comparison_panel_settings(base_settings: dict) -> dict:
     """Comparable grid settings without hiding the main plot's stimulus text."""
     settings = {
@@ -13837,9 +13858,21 @@ def _panel_captions(choice: str, panels: dict, text_col, reading_labels: dict) -
     """:func:`_match_panel_caption` for each grid panel, made unique: a
     caption two panels share — one participant's two readings of a text, two
     readers' trials of one id — names its reading as well."""
+    # A condition match whose panels are all one trial (e.g. a combined
+    # corpus' readings of one original trial, matched on that trial's id)
+    # would caption every panel with that same trial: name each by its
+    # participant, as *Same text* does, so the panels read apart.
+    trials = {reading[1] for reading in panels}
+    one_trial = choice not in (_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT) and (
+        len(panels) > 1 and len(trials) == 1
+    )
     return _distinct_labels(
         {
-            reading: _match_panel_caption(choice, fix, text_col)
+            reading: (
+                _match_panel_caption(_MATCH_SAME_TEXT, fix, text_col)
+                if one_trial
+                else _match_panel_caption(choice, fix, text_col)
+            )
             for reading, fix in panels.items()
         },
         lambda reading, caption: f"{caption} ({reading_labels[reading]})",
@@ -13953,19 +13986,29 @@ def render_multiple_comparison_tab(
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
         return
 
-    # Reuse the user's viz toggles but force a clean, comparable spatial view: the
-    # grid is inherently spatial, and a generation frame may lack the selected
-    # trial's extra columns, so pin axes to x/y, colour by duration_ms (present in
-    # every frame), and turn off heatmap / raw gaze / by-line / flags (they group
-    # by (participant_id, trial_id) against trial_words and would mis-render).
+    # Reuse the user's viz toggles but force a clean, comparable view: turn off
+    # heatmap / raw gaze / by-line / flags (they group by (participant_id,
+    # trial_id) against trial_words and would mis-render). The axes follow the
+    # rail's, so a chart of fixation order x word id compares readings as the
+    # plot above draws one; a panel whose frame lacks either field falls back
+    # to screen x / y.
     base_settings = _build_figure_settings(viz_settings, False)
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
     base_settings["scale_text_to_boxes"] = scale_text_to_boxes
     panel_settings = _comparison_panel_settings(base_settings)
 
-    def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
-        return _panel_figure(
+    axes = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+    on_chart = axes != ("x", "y")
+
+    def _make_fig(
+        words: pd.DataFrame,
+        fix: pd.DataFrame,
+        settings: dict,
+        x_range: list[float] | None = None,
+    ):
+        x_field, y_field = axes if set(axes) <= set(fix.columns) else ("x", "y")
+        fig = _panel_figure(
             words,
             fix,
             {
@@ -13973,8 +14016,8 @@ def render_multiple_comparison_tab(
                 "canvas_height": int(canvas_height),
                 "base_font_size": int(base_font_size),
                 "font_family": font_family,
-                "x_field": "x",
-                "y_field": "y",
+                "x_field": x_field,
+                "y_field": y_field,
                 "column_labels": active_figure_labels(
                     st.session_state, words=words.columns, fixations=fix.columns
                 ),
@@ -13982,6 +14025,9 @@ def render_multiple_comparison_tab(
                 **settings,
             },
         )
+        if x_range is not None and (x_field, y_field) == axes:
+            fig.update_xaxes(range=x_range, autorange=False)
+        return fig
 
     with st.container():
         # Score the matches against the selected scanpath — at most
@@ -14091,9 +14137,20 @@ def render_multiple_comparison_tab(
                     ),
                 ],
             )
+        # On chart axes the page's panels share one X range, so a longer
+        # scanpath reads as longer rather than as the same width squeezed.
+        page_x_range = (
+            _shared_chart_range(
+                [candidates[name] for name in grid_names] + [trial_fixations],
+                axes[0],
+            )
+            if on_chart
+            else None
+        )
         # Estimate a uniform cell height from the figure aspect + column count so
-        # panels line up and don't leave a tall whitespace band below each.
-        aspect = float(canvas_height) / float(canvas_width or 1)
+        # panels line up and don't leave a tall whitespace band below each. A
+        # chart has no screen, so it takes a fixed landscape aspect.
+        aspect = 0.6 if on_chart else float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
@@ -14113,7 +14170,7 @@ def render_multiple_comparison_tab(
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
-                        _make_fig(words, fix, panel_settings),
+                        _make_fig(words, fix, panel_settings, page_x_range),
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )

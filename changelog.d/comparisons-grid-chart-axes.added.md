@@ -1,0 +1,1 @@
+The Comparisons grid draws its panels on the plot's axes, so a reading chart such as fixation index by word compares readings the way the main plot draws one, with one shared horizontal range per page.

@@ -213,7 +213,8 @@ def test_raw_gaze_reads_two_sessions_at_a_time_by_default(tmp_path, monkeypatch)
     monkeypatch.setattr(eyelink, "_read_sessions", spy)
     eyelink.import_eyelink(experiment, tmp_path / "study", raw_gaze=True)
     eyelink.import_eyelink(experiment, tmp_path / "events")
-    assert seen[0] == eyelink.RAW_GAZE_WORKERS == 2
+    assert eyelink.RAW_GAZE_WORKERS == 2
+    assert seen[0] == min(2, max(1, (os.cpu_count() or 1) - 1))
     assert seen[1] == max(1, (os.cpu_count() or 1) - 1)
 
 
@@ -263,7 +264,9 @@ def test_add_eyelink_dataset_raw_gaze_participants_only(tmp_path, cache_dir):
     assert session["_datasets"]["No gaze"]["raw_gaze"].empty
 
 
-def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys):
+def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys, monkeypatch):
+    # On a 2-CPU machine raw gaze is read one session at a time.
+    monkeypatch.setattr(os, "cpu_count", lambda: 2)
     experiment = _experiment(tmp_path, pids=())
     study_dir = tmp_path / "study"
     cli.main(
@@ -281,7 +284,7 @@ def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys):
     )
     captured = capsys.readouterr()
     assert "[1/1] p01 ok" in captured.out and "Added 'Gaze CLI'" in captured.out
-    assert "Reading 2 sessions at a time" in captured.err
+    assert "Reading 1 session at a time" in captured.err
     assert (study_dir / "raw_gaze" / f"{SESSION}.parquet").is_file()
 
 

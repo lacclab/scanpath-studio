@@ -1077,7 +1077,8 @@ class SessionTables:
     ``TRIAL_VAR`` values; ``raw_gaze``, when asked for, has one row per eye
     per sample shown on a screen (`RAW_GAZE_COLUMNS`); ``display`` is the
     tracker's display size; ``notes`` says what could not be read or was left
-    out.
+    out; ``session_dir`` is the session folder its files were read from
+    (`resolve_session_dir`), ``None`` when none was found.
     """
 
     words: pd.DataFrame
@@ -1086,6 +1087,7 @@ class SessionTables:
     raw_gaze: pd.DataFrame | None
     display: tuple[int, int] | None
     notes: list[str]
+    session_dir: Path | None = None
 
 
 def compose_display(display: Display, out_dir: Path, size: tuple[int, int]) -> Path:
@@ -1418,6 +1420,7 @@ def session_tables(
         raw_gaze=gaze,
         display=rec.display,
         notes=notes,
+        session_dir=session,
     )
 
 
@@ -1574,16 +1577,35 @@ def _write_manifest(study_dir: Path, manifest: dict) -> None:
     _replace_atomically(study_dir / _MANIFEST, write)
 
 
-def _unchanged(entry: dict | None, stat: os.stat_result, raw_gaze: bool) -> bool:
-    """Whether a session's manifest entry still holds for its recording."""
+def _unchanged(entry: dict | None, key: dict, raw_gaze: bool) -> bool:
+    """Whether a session's manifest entry still holds for its recording and
+    the folders it is read with (``key``, `_session_key`).  An entry left
+    ``"writing"`` by an import that stopped part way never holds."""
     return (
         entry is not None
         and entry.get("status") == "ok"
-        and entry.get("size") == stat.st_size
-        and entry.get("mtime_ns") == stat.st_mtime_ns
-        and entry.get("parser_version") == PARSER_VERSION
+        and all(entry.get(name) == value for name, value in key.items())
         and (bool(entry.get("raw_gaze")) or not raw_gaze)
     )
+
+
+def _session_key(
+    source: Path,
+    stat: os.stat_result,
+    session_dir: Path | None,
+    experiment_dir: Path | None,
+) -> dict:
+    """What a session's tables are read from: its recording (path, size and
+    modification time), the folders given to find its session files in and
+    the parser version.  A change in any of them reads it again."""
+    return {
+        "source": str(source),
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "session_dir": None if session_dir is None else str(session_dir),
+        "experiment_dir": None if experiment_dir is None else str(experiment_dir),
+        "parser_version": PARSER_VERSION,
+    }
 
 
 def _ok_sessions(sessions: dict) -> list[str]:
@@ -1591,7 +1613,26 @@ def _ok_sessions(sessions: dict) -> list[str]:
 
 
 def _failure(exc: BaseException) -> str:
-    return f"{type(exc).__name__}: {exc}"
+    message = str(exc)
+    return f"{type(exc).__name__}: {message}" if message else type(exc).__name__
+
+
+def default_workers(*, raw_gaze: bool) -> int:
+    """The sessions `import_eyelink` reads at once by default: one fewer than
+    the CPUs, and with ``raw_gaze`` at most `RAW_GAZE_WORKERS`."""
+    spare = max(1, (os.cpu_count() or 1) - 1)
+    return min(RAW_GAZE_WORKERS, spare) if raw_gaze else spare
+
+
+def _check_dependencies(sources: Iterable[Path]) -> None:
+    """Raise once, before any session is read, when what reading them needs
+    is missing: pymovements, and ``edf2asc`` for an ``.edf``."""
+    try:
+        import pymovements  # noqa: F401
+    except ImportError as exc:
+        raise ImportError(_MISSING_PYMOVEMENTS) from exc
+    if any(source.suffix.lower() == ".edf" for source in sources):
+        find_edf2asc()
 
 
 def _read_session(job: dict) -> SessionTables | str:
@@ -1749,16 +1790,21 @@ def import_eyelink(
     study folder; ``manifest.json`` records each session as it finishes.
     ``raw_gaze`` also writes each session's samples to
     ``raw_gaze/<participant>.parquet``, one row group per trial.  A session
-    whose recording and parser version are unchanged since it was read is
+    whose recording (path, size, modification time), ``session_dir``,
+    ``experiment_dir`` and parser version are unchanged since it was read is
     skipped, unless ``rebuild`` -- also when it was read with raw gaze and
     ``raw_gaze`` is off (it keeps its raw gaze), but not when ``raw_gaze`` asks
     for raw gaze it was read without.  One that fails is reported and the
-    others go on.
+    others go on; one whose files were being written when an import stopped is
+    read again.  A participant the folder holds from another recording file is
+    refused (``ValueError``) unless ``rebuild``.  pymovements, and ``edf2asc``
+    when there is an ``.edf`` to read, are checked once before any session is
+    read.
 
     ``session_dir`` is the session folder of a single recording; for several,
     ``experiment_dir`` finds each in ``results/<participant>/``.  Sessions are
-    read by ``workers`` processes (default: one fewer than the CPUs, or
-    `RAW_GAZE_WORKERS` with ``raw_gaze``; ``1`` reads them in this process).
+    read by ``workers`` processes (default: `default_workers`; ``1`` reads
+    them in this process).
     ``keep_asc`` keeps the ASC converted from an ``.edf`` in ``asc/``.  ``progress(done, total, participant)`` is called
     as each session to read finishes.
     """
@@ -1771,27 +1817,36 @@ def import_eyelink(
             "results/<participant>/ holds each session."
         )
     if workers is None:
-        workers = RAW_GAZE_WORKERS if raw_gaze else max(1, (os.cpu_count() or 1) - 1)
+        workers = default_workers(raw_gaze=raw_gaze)
     if workers < 1:
         raise ValueError(f"workers must be at least 1, not {workers}.")
+    session_dir = None if session_dir is None else Path(session_dir).resolve()
+    experiment_dir = None if experiment_dir is None else Path(experiment_dir).resolve()
     study_dir = Path(study_dir).resolve()
     study_dir.mkdir(parents=True, exist_ok=True)
     with file_lock(study_dir / ".lock"):
         manifest = _read_manifest(study_dir)
         sessions = manifest["sessions"]
         report = StudyReport(study_dir, [], [], {}, {})
-        pending: list[tuple[str, Path, os.stat_result]] = []
+        pending: list[tuple[str, Path, dict]] = []
         for source in sources:
-            pid, stat = source.stem, source.stat()
+            pid = source.stem
+            key = _session_key(source, source.stat(), session_dir, experiment_dir)
+            stored = sessions.get(pid, {}).get("source")
+            if stored is not None and stored != key["source"] and not rebuild:
+                raise ValueError(
+                    f"The study folder {study_dir} holds participant {pid} read "
+                    f"from {stored}, not {source}. A recording's file name is its "
+                    "participant id; rename one of them, or pass rebuild=True "
+                    "(--rebuild) to read this one in its place."
+                )
             written = (study_dir / "fixations" / f"{pid}.parquet").is_file()
-            if (
-                written
-                and not rebuild
-                and _unchanged(sessions.get(pid), stat, raw_gaze)
-            ):
+            if written and not rebuild and _unchanged(sessions.get(pid), key, raw_gaze):
                 report.skipped.append(pid)
             else:
-                pending.append((pid, source, stat))
+                pending.append((pid, source, key))
+        if pending:
+            _check_dependencies(source for _, source, _ in pending)
         asc_dir = study_dir / "asc" if keep_asc else None
         if asc_dir is not None and any(
             s.suffix.lower() == ".edf" for _, s, _ in pending
@@ -1801,22 +1856,18 @@ def import_eyelink(
             {
                 "source": source,
                 "image_dir": study_dir / "images",
-                "session_dir": None if session_dir is None else Path(session_dir),
-                "experiment_dir": None
-                if experiment_dir is None
-                else Path(experiment_dir),
+                "session_dir": session_dir,
+                "experiment_dir": experiment_dir,
                 "raw_gaze": raw_gaze,
                 "asc_dir": asc_dir if source.suffix.lower() == ".edf" else None,
             }
             for _, source, _ in pending
         ]
         for done, (i, result) in enumerate(_read_sessions(jobs, workers), start=1):
-            pid, source, stat = pending[i]
+            pid, source, key = pending[i]
             entry = {
-                "source": str(source),
-                "size": stat.st_size,
-                "mtime_ns": stat.st_mtime_ns,
-                "parser_version": PARSER_VERSION,
+                **key,
+                "session_folder": None,
                 "raw_gaze": False,
                 "status": "failed",
                 "error": None,
@@ -1824,12 +1875,18 @@ def import_eyelink(
                 "display": None,
             }
             if isinstance(result, SessionTables):
+                # Marked before its files are written: an import that stops
+                # part way through them leaves an entry that is read again.
+                sessions[pid] = {**entry, "status": "writing"}
+                _write_manifest(study_dir, manifest)
                 try:
                     _write_session(study_dir, pid, result)
                 except Exception as exc:
                     result = _failure(exc)
             if isinstance(result, SessionTables):
+                found = result.session_dir
                 entry.update(
+                    session_folder=None if found is None else str(found),
                     raw_gaze=result.raw_gaze is not None,
                     status="ok",
                     notes=list(result.notes),

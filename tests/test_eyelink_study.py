@@ -4,6 +4,7 @@ import gc
 import json
 import os
 import shutil
+import sys
 import weakref
 from pathlib import Path
 
@@ -359,3 +360,103 @@ def test_image_paths_outside_the_study_dropped(study):
     )
     dropped = [n for n in data.notes["p01"] if "outside the study folder" in n]
     assert len(dropped) == 2
+
+
+def test_rerun_with_an_experiment_folder_redoes_the_session(tmp_path):
+    """Read first without the experiment folder (no session folder, so no
+    words), then with it: the session is read again, now with its words."""
+    asc = write_experiment(tmp_path)
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    shutil.copy(asc, loose / asc.name)
+    study_dir = tmp_path / "study"
+    first = eyelink.import_eyelink(loose / asc.name, study_dir, workers=1)
+    assert first.imported == ["p01"]
+    assert pd.read_parquet(study_dir / "words" / "p01.parquet").empty
+    entry = _manifest(study_dir)["sessions"]["p01"]
+    assert entry["experiment_dir"] is None and entry["session_dir"] is None
+    again = eyelink.import_eyelink(
+        loose / asc.name, study_dir, workers=1, experiment_dir=tmp_path / "exp"
+    )
+    assert again.imported == ["p01"] and again.skipped == []
+    assert len(pd.read_parquet(study_dir / "words" / "p01.parquet"))
+    entry = _manifest(study_dir)["sessions"]["p01"]
+    assert entry["experiment_dir"] == str((tmp_path / "exp").resolve())
+    assert entry["session_folder"] == str(asc.parent.resolve())
+    # Unchanged since: skipped.
+    third = eyelink.import_eyelink(
+        loose / asc.name, study_dir, workers=1, experiment_dir=tmp_path / "exp"
+    )
+    assert third.skipped == ["p01"]
+
+
+def test_another_recording_of_a_participant_is_refused(study):
+    experiment, study_dir = study
+    eyelink.import_eyelink(experiment, study_dir, workers=1)
+    other = experiment.parent / "elsewhere"
+    other.mkdir()
+    shutil.copy(experiment / "results" / "p02" / "p02.asc", other / "p02.asc")
+    stored = experiment / "results" / "p02" / "p02.asc"
+    with pytest.raises(ValueError) as refused:
+        eyelink.import_eyelink(other / "p02.asc", study_dir, workers=1)
+    assert str(stored.resolve()) in str(refused.value)
+    assert str((other / "p02.asc").resolve()) in str(refused.value)
+    assert _manifest(study_dir)["sessions"]["p02"]["source"] == str(stored.resolve())
+    report = eyelink.import_eyelink(
+        other / "p02.asc", study_dir, workers=1, rebuild=True
+    )
+    assert report.imported == ["p02"]
+    entry = _manifest(study_dir)["sessions"]["p02"]
+    assert entry["source"] == str((other / "p02.asc").resolve())
+
+
+def test_a_session_left_writing_is_redone(study, monkeypatch):
+    experiment, study_dir = study
+    states = []
+    real = eyelink._write_session
+
+    def spy(study_dir_, pid, tables):
+        states.append(_manifest(study_dir_)["sessions"][pid]["status"])
+        real(study_dir_, pid, tables)
+
+    monkeypatch.setattr(eyelink, "_write_session", spy)
+    eyelink.import_eyelink(experiment, study_dir, workers=1)
+    # Marked before its files are written, so a crash leaves it "writing".
+    assert states == ["writing"] * len(PIDS)
+    manifest = _manifest(study_dir)
+    manifest["sessions"]["p02"]["status"] = "writing"
+    (study_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    report = eyelink.import_eyelink(experiment, study_dir, workers=1)
+    assert report.imported == ["p02"]
+    assert sorted(report.skipped) == ["p01", "p03"]
+
+
+def test_missing_pymovements_stops_before_any_session(study, monkeypatch):
+    experiment, study_dir = study
+    monkeypatch.setitem(sys.modules, "pymovements", None)
+    with pytest.raises(ImportError, match=r"scanpath-studio\[edf\]"):
+        eyelink.import_eyelink(experiment, study_dir, workers=1)
+    assert not (study_dir / "manifest.json").exists()
+
+
+def test_missing_edf2asc_stops_before_any_session(tmp_path, monkeypatch):
+    folder = tmp_path / "edf"
+    folder.mkdir()
+    (folder / "p01.edf").write_bytes(b"")
+    (folder / "p02.edf").write_bytes(b"")
+    monkeypatch.setenv(eyelink.EDF2ASC_ENV, str(tmp_path / "nowhere" / "edf2asc"))
+    with pytest.raises(eyelink.Edf2AscNotFoundError):
+        eyelink.import_eyelink(folder, tmp_path / "study", workers=1)
+    assert not (tmp_path / "study" / "manifest.json").exists()
+
+
+def test_failure_without_a_message_is_its_type():
+    assert eyelink._failure(MemoryError()) == "MemoryError"
+    assert eyelink._failure(ValueError("bad")) == "ValueError: bad"
+
+
+@pytest.mark.parametrize(("cpus", "expected"), [(1, 1), (2, 1), (8, 2), (None, 1)])
+def test_raw_gaze_workers_never_exceed_the_cpus(monkeypatch, cpus, expected):
+    monkeypatch.setattr(os, "cpu_count", lambda: cpus)
+    assert eyelink.default_workers(raw_gaze=True) == expected
+    assert eyelink.default_workers(raw_gaze=False) == max(1, (cpus or 1) - 1)

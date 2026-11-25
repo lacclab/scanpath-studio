@@ -4499,8 +4499,8 @@ def _import_eyelink_parser() -> argparse.ArgumentParser:
         "--workers",
         type=int,
         metavar="N",
-        help="Sessions read at once (default: one fewer than the CPUs, or 2 "
-        "with --raw-gaze; 1 reads them in this process).",
+        help="Sessions read at once (default: one fewer than the CPUs, and at "
+        "most 2 with --raw-gaze; 1 reads them in this process).",
     )
     parser.add_argument(
         "--rebuild", action="store_true", help="Read every session again."
@@ -4513,7 +4513,9 @@ def _import_eyelink_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--add",
         metavar="NAME",
-        help="Then add the study to the app's dataset list under NAME, as `add` does.",
+        help="Then add the study to the app's dataset list under NAME, as `add` "
+        "does. The study is added even when some sessions failed (without them), "
+        "and the command still exits 1.",
     )
     parser.add_argument(
         "--raw-gaze-participants",
@@ -4536,11 +4538,12 @@ def import_eyelink(argv: list[str]) -> None:
         print(f"[{done}/{total}] {pid}", file=sys.stderr)
 
     if args.raw_gaze and args.workers is None:
-        from .eyelink import RAW_GAZE_WORKERS
+        from .eyelink import default_workers
 
+        workers = default_workers(raw_gaze=True)
         print(
-            f"Reading {RAW_GAZE_WORKERS} sessions at a time, since raw gaze takes "
-            "much memory; --workers N changes it.",
+            f"Reading {workers} session{'s' if workers != 1 else ''} at a time, "
+            "since raw gaze takes much memory; --workers N changes it.",
             file=sys.stderr,
         )
     try:

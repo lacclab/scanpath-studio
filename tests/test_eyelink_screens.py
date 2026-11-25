@@ -212,8 +212,68 @@ def test_ias_group_far_from_every_display_is_reported(tmp_path):
         [],
     ]
     assert notes == [
-        "Trial 4: interest areas in aoi/IA_4.ias at 11820 ms match no "
-        "display; they were left out."
+        "Trial 4: interest areas in aoi/IA_4.ias at 11820 ms match no display "
+        "(the nearest begins 80 ms away); they were left out."
+    ]
+
+
+def test_older_layout_groups_bind_to_their_displays(tmp_path):
+    asc = write_experiment(tmp_path, older_layout=True)
+    _, _, screens, notes = _tables(asc, asc.parent)
+    expected = EXPECTED["older_layout_trials"]
+    five = screens[screens["trial_id"] == "5"]
+    assert _screen_rows(five) == _expected_screens(expected)
+    assert list(five["ias"]) == [
+        None if s["ias"] is None else asc.parent / s["ias"]
+        for s in expected[5]["screens"]
+    ]
+    assert [_words(b) for b in five["boxes"]] == [
+        s["words"] for s in expected[5]["screens"]
+    ]
+    assert notes == []
+
+
+def _move_line(asc: Path, old: str, new: str) -> None:
+    text = asc.read_text(encoding="utf-8")
+    assert text.count(old) == 1
+    asc.write_text(text.replace(old, new), encoding="utf-8")
+
+
+def test_ias_file_more_than_a_refresh_off_is_reported(tmp_path):
+    asc = write_experiment(tmp_path, older_layout=True)
+    # Logged at 21014, 30 ms before the paragraph display: groups at 21014 and
+    # 25397, 30 and 29 ms from their displays.
+    _move_line(
+        asc,
+        "MSG\t21023\t-11 !V IAREA FILE",
+        "MSG\t21003\t-11 !V IAREA FILE",
+    )
+    _, _, screens, notes = _tables(asc, asc.parent)
+    five = screens[screens["trial_id"] == "5"]
+    assert five["boxes"].isna().all()
+    assert notes == [
+        "Trial 5: interest areas in aoi/IA_5.ias at 21014 ms match no display "
+        "(the nearest begins 30 ms away); they were left out.",
+        "Trial 5: interest areas in aoi/IA_5.ias at 25397 ms match no display "
+        "(the nearest begins 29 ms away); they were left out.",
+    ]
+
+
+def test_groups_of_one_ias_file_move_together(tmp_path):
+    asc = write_experiment(tmp_path, older_layout=True)
+    ias = asc.parent / "aoi" / "IA_5.ias"
+    # The second group now falls 1 ms after its display while the first stays
+    # 10 ms before its own: no one shift brings both within IAS_MATCH_MS, so the
+    # first is not moved on its own.
+    ias.write_text(ias.read_text(encoding="utf-8").replace("-4383", "-4393"))
+    _, _, screens, notes = _tables(asc, asc.parent)
+    five = screens[screens["trial_id"] == "5"]
+    groups = EXPECTED["older_layout_trials"][5]["screens"]
+    assert [_words(b) for b in five["boxes"]] == [[], [], [], groups[3]["words"]]
+    assert notes == [
+        "Trial 5: interest areas in aoi/IA_5.ias at 21034 ms match no display "
+        "(the nearest begins 10 ms away, out of step with the file's other "
+        "groups); they were left out."
     ]
 
 

@@ -292,6 +292,12 @@ def read_asc(path: Path, *, samples: bool = False) -> AscRecording:
 # ms of it.  Experiment Builder logs a group up to 3 ms off its display (OneStop
 # sessions: -2 to +3 ms), and two displays are hundreds of ms apart.
 IAS_MATCH_MS = 5
+# An ``.ias`` file's group offsets count from the same onset as its draw list's
+# displays, but the ``IAREA FILE`` message that anchors them can be logged up to
+# one 60 Hz refresh away from that onset (OneStop's older experiments: 6 to 12
+# ms, every group of the file alike).  A file's groups therefore move together
+# by one shift of at most this many ms before each is matched.
+IAS_SHIFT_MS = 17
 
 _WHITE = (255, 255, 255)
 _BOX_COLUMNS = ["word_id", "x", "y", "width", "height", "text"]
@@ -637,9 +643,11 @@ def _trial_displays(
 ):
     """The trial's displays as ``(begin, display)``, ``display`` ``None`` for
     a draw list whose ``.vcl`` is missing, and its interest-area groups as
-    ``(time, boxes, .ias path, .ias name)``."""
+    ``(time, boxes, .ias path, .ias name, file)``; ``file`` numbers the
+    ``IAREA FILE`` message a group came from, ``None`` for inline boxes."""
     displays: list[tuple[int, Display | None]] = []
-    groups: list[tuple[int, pd.DataFrame, Path | None, str | None]] = []
+    groups: list[tuple[int, pd.DataFrame, Path | None, str | None, int | None]] = []
+    files = 0
     inline: dict[int, Display] = {}
     inline_boxes: dict[int, list] = {}
     for time, text in zip(messages["time"], messages["text"]):
@@ -667,7 +675,8 @@ def _trial_displays(
             notes.extend(f"{name}: skipped {line}" for line in boxes.attrs["skipped"])
             for offset, group in boxes.groupby("offset", sort=False):
                 group = group[_BOX_COLUMNS].reset_index(drop=True)
-                groups.append((time - int(offset), group, path, name))
+                groups.append((time - int(offset), group, path, name, files))
+            files += 1
         elif parts[:2] == ["!V", "CLEAR"] and _colour(parts[2:]):
             inline[time] = Display(0, _colour(parts[2:]), [])
         elif parts[:2] == ["!V", "IMGLOAD"]:
@@ -692,8 +701,34 @@ def _trial_displays(
             notes.append(f"Trial {trial.trial_id}: skipped {text}")
     displays += sorted(inline.items())
     for time, rows in inline_boxes.items():
-        groups.append((time, pd.DataFrame(rows, columns=_BOX_COLUMNS), None, None))
+        frame = pd.DataFrame(rows, columns=_BOX_COLUMNS)
+        groups.append((time, frame, None, None, None))
     return displays, groups
+
+
+def _nearest(begins: list[int], time: int) -> int:
+    """The index of the display whose begin is nearest ``time``."""
+    return min(range(len(begins)), key=lambda k: abs(begins[k] - time))
+
+
+def _matched(begins: list[int], time: int) -> bool:
+    return abs(begins[_nearest(begins, time)] - time) <= IAS_MATCH_MS
+
+
+def _ias_shift(begins: list[int], times: list[int]) -> int:
+    """The one shift, within `IAS_SHIFT_MS`, that brings the most of a file's
+    group times within `IAS_MATCH_MS` of a display; the smallest such shift,
+    so 0 whenever no shift matches more groups."""
+    shifts = {0} | {
+        begin - time
+        for begin in begins
+        for time in times
+        if abs(begin - time) <= IAS_SHIFT_MS
+    }
+    return max(
+        sorted(shifts, key=lambda s: (abs(s), s)),
+        key=lambda s: sum(_matched(begins, t + s) for t in times),
+    )
 
 
 def screen_table(
@@ -711,7 +746,10 @@ def screen_table(
     the next display or the trial's end; a trial without one is one screen.
     ``boxes`` holds the interest areas (``.ias`` groups or ``!V IAREA
     RECTANGLE`` messages) logged within ``IAS_MATCH_MS`` of its begin, and
-    ``ias`` the file they came from.  A draw list whose ``.vcl`` is missing
+    ``ias`` the file they came from.  The groups of one ``.ias`` file are first
+    moved together by the shift `_ias_shift` finds (at most ``IAS_SHIFT_MS``),
+    since the message that anchors the file can be logged off its displays'
+    onset; a group still matching no display is noted with the reason.  A draw list whose ``.vcl`` is missing
     still starts a screen, with no ``display``.  The files and images the
     recording names are confined to the session's `_experiment_root`.
     """
@@ -729,13 +767,22 @@ def screen_table(
         ends = begins[1:] + [trial.end]
         boxes: dict[int, list[pd.DataFrame]] = {}
         sources: dict[int, Path | None] = {}
-        for time, group, path, name in groups:
-            i = min(range(len(begins)), key=lambda k: abs(begins[k] - time))
-            if abs(begins[i] - time) > IAS_MATCH_MS:
+        shifts = {
+            file: _ias_shift(begins, [g[0] for g in groups if g[4] == file])
+            for file in {g[4] for g in groups if g[4] is not None}
+        }
+        for time, group, path, name, file in groups:
+            shift = shifts.get(file, 0)
+            i = _nearest(begins, time + shift)
+            if abs(begins[i] - (time + shift)) > IAS_MATCH_MS:
                 where = f"in {name} " if name else ""
+                away = abs(begins[_nearest(begins, time)] - time)
+                why = f"the nearest begins {away} ms away"
+                if file is not None and away <= IAS_SHIFT_MS + IAS_MATCH_MS:
+                    why += ", out of step with the file's other groups"
                 notes.append(
                     f"Trial {trial.trial_id}: interest areas {where}at {time} ms "
-                    "match no display; they were left out."
+                    f"match no display ({why}); they were left out."
                 )
                 continue
             boxes.setdefault(i, []).append(group)
@@ -1060,7 +1107,7 @@ def session_tables(
 
 #: Bumped whenever the tables read from the same recording change, so that a
 #: study folder reads every session again.
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 MANIFEST_VERSION = 1
 _MANIFEST = "manifest.json"
 # The per-participant tables of a study folder, one subfolder each.

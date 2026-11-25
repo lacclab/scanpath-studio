@@ -16,6 +16,11 @@ Two optional readings follow them: an aborted trial 3 (no ``END``, no
 groups at negative offsets.  ``inline=True`` logs every display and interest
 area as ``!V CLEAR`` / ``!V IMGLOAD`` / ``!V IAREA RECTANGLE`` messages instead
 of ``.vcl`` / ``.ias`` files.
+
+``older_layout=True`` adds trial 5, logged as OneStop's older experiments log
+some readings: the ``IAREA FILE`` message is timed 10 ms before the display its
+``.vcl`` places, so each interest-area group is that far from its display while
+the groups' own offsets agree with the draw list's.
 """
 
 from __future__ import annotations
@@ -100,6 +105,30 @@ _MULTI_DISPLAY_TRIAL = [
     "MSG\t15020\tTRIAL_RESULT 0",
 ]
 
+# A reading laid out as in OneStop's older experiments (l10_202, trial 5):
+# the draw list is logged with the fixation target, at 20083, and its displays
+# begin at 20083 (target), 21044 (paragraph), 23225 (question target) and
+# 25426 (question).  The IAREA FILE message is logged with DISPLAY_PARAG at
+# 21034, 10 ms before the paragraph display, so the groups at offsets 0 and
+# -4383 fall at 21034 and 25417: 10 and 9 ms before their displays.
+_OLDER_LAYOUT_TRIAL = [
+    "MSG\t20000\tTRIALID 5",
+    "START\t20016 \tRIGHT\tEVENTS",
+    "MSG\t20071\t-12 DISPLAY_PARAG_TARGET",
+    "MSG\t20071\t-12 !V DRAW_LIST graphics/VC_5.vcl",
+    "MSG\t21023\t-11 DISPLAY_PARAG",
+    "MSG\t21023\t-11 !V IAREA FILE aoi/IA_5.ias",
+    "EFIX\tR\t21100\t21299\t200\t150.0\t200.0\t1000",
+    "MSG\t23205\t-11 DISPLAY_Q_TARGET",
+    "MSG\t25406\t-11 DISPLAY_Q",
+    "EFIX\tR\t25500\t25699\t200\t160.0\t420.0\t1000",
+    "END\t26000 \tEVENTS\tRES\t80.26\t60.44",
+    "MSG\t26010\t!V TRIAL_VAR condition Ele",
+    "MSG\t26010\t!V TRIAL_VAR item 5",
+    "MSG\t26010\t!V TRIAL_VAR Session_Name_ p01",
+    "MSG\t26020\tTRIAL_RESULT 0",
+]
+
 _IAS = {
     "IA_1.ias": [
         (1, 100, 150, 200, 250, "The"),
@@ -121,6 +150,16 @@ _IAS_GROUPS = {
         -6623: [
             (1, 358, 153, 548, 264, "According"),
             (2, 548, 153, 605, 264, "to"),
+        ],
+    },
+    "IA_5.ias": {
+        0: [
+            (1, 100, 150, 180, 250, "Rising"),
+            (2, 180, 150, 260, 250, "seas"),
+        ],
+        -4383: [
+            (1, 100, 370, 160, 470, "Why"),
+            (2, 160, 370, 240, 470, "now?"),
         ],
     },
 }
@@ -151,6 +190,14 @@ _VCL = {
         "-6620 IMGLOAD TOP_LEFT ../../runtime/images/bg.png 0 0",
         "-6620 IMGLOAD TOP_LEFT ../../runtime/images/text2.png 100 150",
         "-9204 CLEAR 200 200 200",
+    ],
+    "VC_5.vcl": [
+        f"{_BOM}0 CLEAR 255 255 255",
+        "-961 CLEAR 255 255 255",
+        "-961 IMGLOAD TOP_LEFT  ../../runtime/images/text1.png 100 150 300 100",
+        "-3142 CLEAR 200 200 200",
+        "-5343 CLEAR 255 255 255",
+        "-5343 IMGLOAD TOP_LEFT ../../runtime/images/text2.png 100 370",
     ],
 }
 
@@ -194,6 +241,8 @@ _M1 = [
 ]
 _M2 = [_fix("R", 11950, 12149, 200, 380.0, 210.0)]
 _M3 = [_fix("R", 14400, 14599, 200, 900.0, 700.0)]
+_O2 = [_fix("R", 21100, 21299, 200, 150.0, 200.0)]
+_O4 = [_fix("R", 25500, 25699, 200, 160.0, 420.0)]
 
 EXPECTED = {
     "display": DISPLAY,
@@ -304,6 +353,53 @@ EXPECTED = {
             ],
         },
     },
+    # Each group binds to the display it was shown with, 10 and 9 ms away.
+    "older_layout_trials": {
+        5: {
+            "begin": 20000,
+            "start": 20016,
+            "end": 26020,
+            "vars": {"condition": "Ele", "item": "5", "Session_Name_": "p01"},
+            "screens": [
+                {
+                    "drawn": 20083,
+                    "begin": 20083,
+                    "end": 21044,
+                    "vcl": "graphics/VC_5.vcl",
+                    "ias": None,
+                    "words": [],
+                    "fixations": [],
+                },
+                {
+                    "drawn": 20083,
+                    "begin": 21044,
+                    "end": 23225,
+                    "vcl": "graphics/VC_5.vcl",
+                    "ias": "aoi/IA_5.ias",
+                    "words": _IAS_GROUPS["IA_5.ias"][0],
+                    "fixations": _O2,
+                },
+                {
+                    "drawn": 20083,
+                    "begin": 23225,
+                    "end": 25426,
+                    "vcl": "graphics/VC_5.vcl",
+                    "ias": None,
+                    "words": [],
+                    "fixations": [],
+                },
+                {
+                    "drawn": 20083,
+                    "begin": 25426,
+                    "end": 26020,
+                    "vcl": "graphics/VC_5.vcl",
+                    "ias": "aoi/IA_5.ias",
+                    "words": _IAS_GROUPS["IA_5.ias"][-4383],
+                    "fixations": _O4,
+                },
+            ],
+        },
+    },
     # Interest-area boxes as (word_id, left, top, right, bottom, text).
     "words": _IAS,
     "images": {name: size for name, size, _ in _IMAGES},
@@ -364,6 +460,7 @@ def _asc_text(
     latin1: bool,
     multi_display: bool,
     inline: bool,
+    older_layout: bool,
 ) -> str:
     eyes = "LEFT\tRIGHT" if binocular else "RIGHT"
     header = [_BOM + _COMMON_HEADER[0], *_COMMON_HEADER[1:]]
@@ -385,6 +482,8 @@ def _asc_text(
         trials += _ABORTED_TRIAL
     if multi_display:
         trials += _MULTI_DISPLAY_TRIAL
+    if older_layout:
+        trials += _OLDER_LAYOUT_TRIAL
     lines += _inline(trials) if inline else trials
     return "\n".join(lines) + "\n"
 
@@ -398,6 +497,7 @@ def write_experiment(
     latin1: bool = False,
     multi_display: bool = False,
     inline: bool = False,
+    older_layout: bool = False,
 ) -> Path:
     """Write the experiment under ``root`` and return the ``.asc`` path,
     ``root/exp/results/p01/p01.asc``.
@@ -415,6 +515,7 @@ def write_experiment(
         latin1=latin1,
         multi_display=multi_display,
         inline=inline,
+        older_layout=older_layout,
     )
     if latin1:
         # The BOM stays UTF-8 bytes while the body is latin-1, as in OneStop's files.

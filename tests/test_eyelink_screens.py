@@ -338,8 +338,13 @@ def test_ambiguous_shift_leaves_the_file_unbound(tmp_path):
         ([1000, 5000, 9000], [991, 4991, 8991], (9, False)),
         # A shift that matches the rest would move 1017 off the display it
         # matches as logged (onto 1003, or nowhere).
-        ([1003, 1017, 5000, 9000], [1017, 5009, 9009], (0, False)),
-        ([1000, 1017, 5000, 9000], [1017, 5009, 9009], (0, False)),
+        ([1003, 1017, 5000, 9000], [1017, 5012, 9012], (0, False)),
+        ([1000, 1017, 5000, 9000], [1017, 5012, 9012], (0, False)),
+        # -4 keeps 1017 where it is and brings the others within reach.
+        ([1003, 1017, 5000, 9000], [1017, 5009, 9009], (-4, False)),
+        # No shift lands a group exactly on a display, but 3 brings both within
+        # IAS_MATCH_MS of theirs.
+        ([1000, 5000], [992, 5002], (3, False)),
         # -8 and +9 both match every group, to different displays.
         ([1000, 1017, 5000, 5017], [1008, 5008], (0, True)),
         # Beyond IAS_SHIFT_MS.

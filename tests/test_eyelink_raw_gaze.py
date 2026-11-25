@@ -283,3 +283,27 @@ def test_import_eyelink_cli_raw_gaze(tmp_path, cache_dir, capsys):
     assert "[1/1] p01 ok" in captured.out and "Added 'Gaze CLI'" in captured.out
     assert "Reading 2 sessions at a time" in captured.err
     assert (study_dir / "raw_gaze" / f"{SESSION}.parquet").is_file()
+
+
+def test_eye_switch_keeps_fixations_and_drops_raw_gaze(tmp_path):
+    """A session whose second recording block tracks the other eye: its
+    samples cannot be told apart by eye, so its raw gaze is left out and said
+    so; its fixations, each an event of its own eye, stay."""
+    asc = write_experiment(tmp_path, samples=True)
+    text = asc.read_text(encoding="utf-8").replace(
+        "START\t3010 \tRIGHT\tSAMPLES\tEVENTS", "START\t3010 \tLEFT\tSAMPLES\tEVENTS"
+    )
+    text = text.replace("EFIX\tR\t3050", "EFIX\tL\t3050").replace(
+        "EFIX\tR\t3260", "EFIX\tL\t3260"
+    )
+    asc.write_text(text, encoding="utf-8")
+    rec = eyelink.read_asc(asc, samples=True)
+    assert rec.eyes_switched and rec.samples is not None and rec.samples.empty
+    t = eyelink.session_tables(asc, image_dir=tmp_path / "images", raw_gaze=True)
+    assert t.raw_gaze is not None and t.raw_gaze.empty
+    assert (
+        "The recording tracks different eyes in different blocks (R, then L), "
+        "so its samples cannot be told apart by eye; its raw gaze was left out."
+    ) in t.notes
+    by_trial = t.fixations.groupby("trial_id")["eye"].unique().to_dict()
+    assert list(by_trial["1"]) == ["R"] and list(by_trial["2"]) == ["L"]

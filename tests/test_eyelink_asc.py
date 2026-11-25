@@ -266,3 +266,33 @@ def test_samples_binocular_has_a_row_per_eye(tmp_path):
         {"time": 1001, "x": 100.0, "y": 200.0, "pupil": 1300.0, "eye": "L"},
         {"time": 1001, "x": 110.0, "y": 210.0, "pupil": 1310.0, "eye": "R"},
     ]
+
+
+def test_events_only_read_skips_the_sample_lines(tmp_path, monkeypatch):
+    """Read events only, a recording with samples gives what a read with them
+    gives, and pymovements is never handed a sample line."""
+    asc = write_experiment(tmp_path, samples=True, binocular=True)
+    full = eyelink.read_asc(asc, samples=True)
+    real = eyelink._parse_asc
+    handed: list[list[str]] = []
+
+    def recording(lines, name):
+        handed.append(list(lines))
+        return real(lines, name)
+
+    monkeypatch.setattr(eyelink, "_parse_asc", recording)
+    events = eyelink.read_asc(asc, samples=False)
+    assert events.samples is None
+    assert handed and not any(line[:1].isdigit() for line in handed[0])
+    pd.testing.assert_frame_equal(events.fixations, full.fixations)
+    pd.testing.assert_frame_equal(events.messages, full.messages)
+    pd.testing.assert_frame_equal(events.blocks, full.blocks)
+    assert (events.display, events.pupil) == (full.display, full.pupil)
+
+
+def test_decoded_lines_refuse_a_partial_read():
+    stream = eyelink._DecodedLines(["a\n", "b\n"], "x.asc")
+    assert stream.read() == "a\nb\n"
+    assert stream.read(0) == ""
+    with pytest.raises(io.UnsupportedOperation):
+        stream.read(1)

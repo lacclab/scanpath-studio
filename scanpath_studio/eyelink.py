@@ -136,6 +136,15 @@ class AscRecording:
     # What the samples' pupil values measure, from the PUPIL line: "area" or
     # "diameter" (None when the file does not say).
     pupil: str | None = None
+    # The eyes each recording block tracks, each set once in file order.  A
+    # sample line does not name its eyes, so when blocks differ the samples
+    # are left out (``samples`` is empty).
+    eyes: tuple[tuple[str, ...], ...] = ()
+
+    @property
+    def eyes_switched(self) -> bool:
+        """Whether recording blocks track different eyes."""
+        return len(self.eyes) > 1
 
 
 _MISSING_PYMOVEMENTS = (
@@ -205,9 +214,11 @@ def _join_long_messages(data: bytes) -> bytes:
     return b"".join(out)
 
 
-def _asc_lines(path: Path) -> list[str]:
+def _asc_lines(path: Path, *, samples: bool = True) -> list[str]:
     """The file's lines, each ending in ``\\n``, with Experiment Builder's
-    long messages joined back into one line (`_join_long_messages`).
+    long messages joined back into one line (`_join_long_messages`).  Without
+    ``samples`` the sample lines (those beginning with their tick's time) are
+    left out: they are nearly all of a recording, and events need none.
 
     Each line is decoded as UTF-8, or as latin-1 (which decodes any bytes)
     when that one line is not UTF-8: ``edf2asc -utf8`` writes UTF-8, and a
@@ -234,6 +245,8 @@ def _asc_lines(path: Path) -> list[str]:
         lines[row] = lines[row].encode("utf-8", "surrogateescape").decode("latin-1")
     if lines and lines[-1] == "":
         lines.pop()
+    if not samples:
+        lines = [line for line in lines if not line[:1].isdigit()]
     for i in range(len(lines)):
         lines[i] += "\n"
     return lines
@@ -262,7 +275,10 @@ class _DecodedLines(io.TextIOBase):
         return iter(self._lines)
 
     def read(self, size: int | None = -1) -> str:
-        return "".join(self._lines)
+        """The whole text; a read of part of it is not supported."""
+        if size is not None and size > 0:
+            raise io.UnsupportedOperation("read(size) is not supported")
+        return "" if size == 0 else "".join(self._lines)
 
 
 def _parse_asc(lines: list[str], name: str):
@@ -278,11 +294,12 @@ def _parse_asc(lines: list[str], name: str):
 
 def _scan_lines(lines: list[str]):
     """The facts pymovements does not keep: each EFIX line's position and
-    duration, the START / END lines, the eyes recorded and what the ``PUPIL``
-    line says the samples' pupil values measure (``"area"`` / ``"diameter"``)."""
+    duration, the START / END lines, the eyes each START line records (in
+    order, each set once) and what the ``PUPIL`` line says the samples' pupil
+    values measure (``"area"`` / ``"diameter"``)."""
     efix: dict[tuple[str, int], tuple[int, float, float]] = {}
     order: list[tuple[str, int]] = []
-    eyes: tuple[str, ...] = ()
+    eyes: list[tuple[str, ...]] = []
     pupil: str | None = None
     for line in lines:
         if line.startswith("EFIX"):
@@ -292,10 +309,11 @@ def _scan_lines(lines: list[str]):
             f = line.split()
             time = int(f[1])
             order.append(("start", time))
-            if not eyes:
-                eyes = tuple(
-                    _EYE_LETTER[t.lower()] for t in f[2:] if t.lower() in _EYE_LETTER
-                )
+            recorded = tuple(
+                _EYE_LETTER[t.lower()] for t in f[2:] if t.lower() in _EYE_LETTER
+            )
+            if recorded and recorded not in eyes:
+                eyes.append(recorded)
         elif line.startswith("END"):
             f = line.split()
             order.append(("end", int(f[1])))
@@ -391,20 +409,26 @@ def read_asc(path: Path, *, samples: bool = False) -> AscRecording:
     and display size, and with ``samples`` its raw gaze samples."""
     _require_enabled("read_asc")
     path = Path(path)
-    lines = _asc_lines(path)
+    lines = _asc_lines(path, samples=samples)
     gaze = _parse_asc(lines, str(path))
     efix, blocks, eyes, pupil = _scan_lines(lines)
     del lines
     messages = _message_frame(gaze.messages)
+    frame = None
+    if samples:
+        # Each sample is labelled with the eyes of the blocks; when blocks
+        # track different eyes, no label would be right.
+        frame = _sample_frame(gaze.samples, eyes[0] if len(eyes) == 1 else ())
     return AscRecording(
         fixations=_fixation_frame(gaze.events.frame, efix),
         messages=messages,
         blocks=pd.DataFrame(blocks, columns=["start", "end"]).astype(
             {"start": "int64", "end": "Int64"}
         ),
-        samples=_sample_frame(gaze.samples, eyes) if samples else None,
+        samples=frame,
         display=_display_size(messages),
         pupil=pupil,
+        eyes=tuple(eyes),
     )
 
 
@@ -656,14 +680,28 @@ def trial_table(rec: AscRecording) -> pd.DataFrame:
         {"start": "int64", "begin": "int64", "end": "int64"}
     )
     # A TRIALID logged again is a repeated reading: its second occurrence is
-    # ``<id>_r2``, its third ``<id>_r3``, as the app names repeated readings.
-    occurrence = table.groupby("trial_id", sort=False).cumcount() + 1
+    # ``<id>_r2``, its third ``<id>_r3``, as the app names repeated readings;
+    # a number some TRIALID already is (``1, 1, 1_r2``) is passed over.
+    logged = table["trial_id"].tolist()
+    taken, seen = set(logged), Counter()
     repeated: dict[str, list[str]] = {}
-    for i, (trial_id, n) in enumerate(zip(table["trial_id"].tolist(), occurrence)):
-        if n > 1:
-            table.loc[i, "trial_id"] = f"{trial_id}_r{n}"
-            repeated.setdefault(trial_id, []).append(f"{trial_id}_r{n}")
+    passed_over: dict[str, list[str]] = {}
+    ids = []
+    for trial_id in logged:
+        seen[trial_id] += 1
+        if seen[trial_id] == 1:
+            ids.append(trial_id)
+            continue
+        n = max(seen[trial_id], 2)
+        while f"{trial_id}_r{n}" in taken:
+            passed_over.setdefault(trial_id, []).append(f"{trial_id}_r{n}")
+            n += 1
+        taken.add(f"{trial_id}_r{n}")
+        ids.append(f"{trial_id}_r{n}")
+        repeated.setdefault(trial_id, []).append(f"{trial_id}_r{n}")
+    table["trial_id"] = ids
     table.attrs["repeated"] = repeated
+    table.attrs["passed_over"] = passed_over
     return table
 
 
@@ -680,11 +718,14 @@ def _trial_messages(rec: AscRecording, trials: pd.DataFrame):
         yield trial, messages[inside]
 
 
-def trial_vars(rec: AscRecording) -> pd.DataFrame:
+def trial_vars(rec: AscRecording, trials: pd.DataFrame | None = None) -> pd.DataFrame:
     """``trial_id`` and one column per ``!V TRIAL_VAR name value``, in the
-    order the names first appear; values are strings."""
+    order the names first appear; values are strings.  ``trials`` is the
+    recording's `trial_table`, built when not given."""
+    if trials is None:
+        trials = trial_table(rec)
     rows, names = [], {}
-    for trial, messages in _trial_messages(rec, trial_table(rec)):
+    for trial, messages in _trial_messages(rec, trials):
         row = {"trial_id": trial.trial_id}
         for text in messages["text"]:
             if text.startswith("!V TRIAL_VAR "):
@@ -855,10 +896,19 @@ def _ias_shift(begins: list[int], times: list[int]) -> tuple[int, bool]:
     if all(i is not None for i in logged):
         return 0, False
     fits: dict[tuple[int, ...], int] = {}
-    candidates = {
-        b - t for b in begins for t in times if 0 < abs(b - t) <= IAS_SHIFT_MS
-    }
-    for shift in sorted(candidates, key=lambda s: (abs(s), s)):
+    # The shifts that match the groups to one set of displays form a range
+    # whose ends are some ``b - t ± IAS_MATCH_MS``, so trying those finds every
+    # set a shift can reach.  A shift that lands a group on its display's
+    # onset (``b - t``) is preferred, then the smallest.
+    exact = {b - t for b in begins for t in times}
+    edges = {s + d for s in exact for d in (-IAS_MATCH_MS, IAS_MATCH_MS)}
+    candidates = [
+        s
+        for s in sorted(exact, key=lambda s: (abs(s), s))
+        + sorted(edges - exact, key=lambda s: (abs(s), s))
+        if 0 < abs(s) <= IAS_SHIFT_MS
+    ]
+    for shift in candidates:
         moved = [_match(begins, t + shift) for t in times]
         if any(i is None for i in moved):
             continue
@@ -1114,15 +1164,30 @@ def _screen_images(
     return paths
 
 
-def _text_ids(screens: pd.DataFrame, session: Path | None) -> dict[str, str]:
-    """Each trial's ``text_id``: its first interest-area file, relative to the
-    session folder and without its suffix, else ``trial_<id>``."""
+def _text_id(boxes: pd.DataFrame) -> str:
+    """``ias_`` and the first 12 hex digits of the SHA-256 of ``boxes``' rows
+    (word id, text and box, in order): the same words in the same places get
+    the same id in every session, whatever their file is called."""
+    digest = hashlib.sha256()
+    for row in boxes[["word_id", "text", "x", "y", "width", "height"]].itertuples(
+        index=False, name=None
+    ):
+        digest.update("\x1f".join(map(str, row)).encode("utf-8") + b"\x1e")
+    return f"ias_{digest.hexdigest()[:12]}"
+
+
+def _text_ids(screens: pd.DataFrame) -> dict[str, str]:
+    """Each trial's ``text_id``: `_text_id` of the interest areas of its first
+    screen that has any, else ``trial_<id>``.
+
+    Experiment Builder numbers a session's ``.ias`` files as it writes them, so
+    one file name holds different texts in different sessions: the id comes
+    from what the file holds, not its name.
+    """
     ids: dict[str, str] = {}
-    for trial_id, ias in zip(screens["trial_id"], screens["ias"]):
-        if trial_id not in ids and ias is not None and session is not None:
-            ids[trial_id] = (
-                Path(os.path.relpath(ias, session)).with_suffix("").as_posix()
-            )
+    for trial_id, boxes in zip(screens["trial_id"], screens["boxes"]):
+        if trial_id not in ids and boxes is not None and len(boxes):
+            ids[trial_id] = _text_id(boxes)
     for trial_id in screens["trial_id"]:
         ids.setdefault(trial_id, f"trial_{trial_id}")
     return ids
@@ -1305,15 +1370,25 @@ def session_tables(
         session = session.resolve()
     trials = trial_table(rec)
     screens, notes = screen_table(rec, trials, session, experiment_dir=experiment_dir)
-    notes += [
-        f"TRIALID {trial_id} is logged more than once; its later readings are "
-        f"{', '.join(ids)}."
-        for trial_id, ids in trials.attrs.get("repeated", {}).items()
-    ]
+    passed_over = trials.attrs.get("passed_over", {})
+    for trial_id, ids in trials.attrs.get("repeated", {}).items():
+        note = (
+            f"TRIALID {trial_id} is logged more than once; its later readings "
+            f"are {', '.join(ids)}"
+        )
+        if trial_id in passed_over:
+            taken = list(dict.fromkeys(passed_over[trial_id]))
+            what = (
+                "is a TRIALID of its own"
+                if len(taken) == 1
+                else "are TRIALIDs of their own"
+            )
+            note += f" ({', '.join(taken)} {what})"
+        notes.append(note + ".")
     image_paths = _screen_images(screens, rec.display, Path(image_dir), notes)
     screens = screens.assign(image_path=image_paths)
     participant = source.stem
-    text_ids = _text_ids(screens, session)
+    text_ids = _text_ids(screens)
 
     def _finish(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
         frame = frame.assign(
@@ -1323,10 +1398,17 @@ def session_tables(
 
     fixations = _finish(_fixation_table(rec, trials, screens, notes), FIXATION_COLUMNS)
     words = _finish(_word_table(screens), WORD_COLUMNS)
-    metadata = trial_vars(rec)
+    metadata = trial_vars(rec, trials)
     metadata.insert(0, "participant_id", participant)
     gaze = None
-    if raw_gaze:
+    if raw_gaze and rec.eyes_switched:
+        switch = ", then ".join("+".join(eyes) for eyes in rec.eyes)
+        notes.append(
+            f"The recording tracks different eyes in different blocks ({switch}), "
+            "so its samples cannot be told apart by eye; its raw gaze was left out."
+        )
+        gaze = pd.DataFrame(columns=RAW_GAZE_COLUMNS)
+    elif raw_gaze:
         gaze = _raw_gaze_table(rec, trials, screens, notes)
         gaze.insert(0, "participant_id", participant)
     return SessionTables(
@@ -1345,7 +1427,7 @@ def session_tables(
 
 #: Bumped whenever the tables read from the same recording change, so that a
 #: study folder reads every session again.
-PARSER_VERSION = 4
+PARSER_VERSION = 5
 MANIFEST_VERSION = 1
 _MANIFEST = "manifest.json"
 # The per-participant tables of a study folder, one subfolder each.

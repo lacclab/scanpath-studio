@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -8,7 +9,7 @@ import pytest
 from PIL import Image
 
 from scanpath_studio import api, eyelink
-from tests.eyelink_fixtures import EXPECTED, write_experiment
+from tests.eyelink_fixtures import _IAS, _IAS_GROUPS, EXPECTED, write_experiment
 
 FIXATION_COLUMNS = [
     "participant_id",
@@ -38,7 +39,26 @@ WORD_COLUMNS = [
     "height",
     "image_path",
 ]
-TEXT_IDS = {"1": "aoi/IA_1", "2": "aoi/IA_2", "4": "aoi/IA_4"}
+
+
+def _content_id(boxes: list[tuple]) -> str:
+    """The text id of interest areas given as the fixture's
+    ``(word_id, left, top, right, bottom, text)`` rows."""
+    frame = pd.DataFrame(
+        [
+            (i, left, top, right - left, bottom - top, word)
+            for i, left, top, right, bottom, word in boxes
+        ],
+        columns=["word_id", "x", "y", "width", "height", "text"],
+    )
+    return eyelink._text_id(frame)
+
+
+TEXT_IDS = {
+    "1": _content_id(_IAS["IA_1.ias"]),
+    "2": _content_id(_IAS["IA_2.ias"]),
+    "4": _content_id(_IAS_GROUPS["IA_4.ias"][0]),
+}
 
 
 @pytest.fixture(autouse=True)
@@ -126,7 +146,7 @@ def test_session_fixations_match_expected(tmp_path):
     assert list(t.fixations.columns) == FIXATION_COLUMNS
     assert _fixation_rows(t.fixations) == _expected_fixations(EXPECTED["trials"])
     assert (t.fixations["participant_id"] == "p01").all()
-    assert t.fixations["text_id"].tolist() == ["aoi/IA_1"] * 4 + ["aoi/IA_2"] * 2
+    assert t.fixations["text_id"].tolist() == [TEXT_IDS["1"]] * 4 + [TEXT_IDS["2"]] * 2
     assert t.display == EXPECTED["display"]
     assert t.raw_gaze is None
     assert t.notes == []
@@ -197,7 +217,7 @@ def test_question_screen_has_no_words(tmp_path):
     question = t.fixations[
         (t.fixations["trial_id"] == "1") & (t.fixations["screen_index"] == 2)
     ]
-    assert question["text_id"].tolist() == ["aoi/IA_1"]
+    assert question["text_id"].tolist() == [TEXT_IDS["1"]]
     assert Path(question["image_path"].iloc[0]).is_file()
 
 
@@ -205,6 +225,27 @@ def test_text_id_without_ias(tmp_path):
     asc = write_experiment(tmp_path, with_session_files=False)
     t = _tables(asc, tmp_path)
     assert t.fixations["text_id"].tolist() == ["trial_1"] * 4 + ["trial_2"] * 2
+
+
+def test_text_id_is_the_interest_areas_content(tmp_path):
+    """Experiment Builder numbers ``.ias`` files per session, so one file name
+    holds different texts in two sessions: the id follows the content."""
+    first = write_experiment(tmp_path / "a")
+    second = write_experiment(tmp_path / "b")
+    # Session b's IA_1.ias holds IA_2's words, and its IA_2.ias IA_1's.
+    aoi = second.parent / "aoi"
+    one, two = (aoi / "IA_1.ias").read_bytes(), (aoi / "IA_2.ias").read_bytes()
+    (aoi / "IA_1.ias").write_bytes(two)
+    (aoi / "IA_2.ias").write_bytes(one)
+    a = _tables(first, tmp_path / "a")
+    b = _tables(second, tmp_path / "b")
+    ids_a = a.words.groupby("trial_id")["text_id"].first().to_dict()
+    ids_b = b.words.groupby("trial_id")["text_id"].first().to_dict()
+    assert ids_a == {"1": TEXT_IDS["1"], "2": TEXT_IDS["2"]}
+    # The same file name, a different text: a different id; the same text
+    # under another name: the same id.
+    assert ids_b == {"1": TEXT_IDS["2"], "2": TEXT_IDS["1"]}
+    assert all(re.fullmatch(r"ias_[0-9a-f]{12}", i) for i in ids_a.values())
 
 
 def test_image_composed_once_per_identical_display(tmp_path):
@@ -414,8 +455,8 @@ def test_repeated_trial_ids_kept_apart(tmp_path):
     )
     assert _word_rows(t.words) == _expected_words({1: EXPECTED["trials"][1], **second})
     assert t.words.groupby("trial_id")["text_id"].first().to_dict() == {
-        "1": "aoi/IA_1",
-        "1_r2": "aoi/IA_2",
+        "1": TEXT_IDS["1"],
+        "1_r2": TEXT_IDS["2"],
     }
     assert t.trial_metadata["trial_id"].tolist() == ["1", "1_r2"]
     assert t.trial_metadata["condition"].tolist() == ["Adv", "Ele"]
@@ -452,3 +493,19 @@ def test_loose_session_folder_is_its_own_root(tmp_path):
     assert t.notes == []
     with Image.open(_image_of(t.fixations, "1", 1)) as image:
         assert image.getpixel((100, 150)) == (230, 40, 40)
+
+
+def test_repeated_trial_id_never_takes_a_logged_one(tmp_path):
+    """TRIALIDs ``1, 1, 1_r2``: the second ``1`` cannot be ``1_r2``, which the
+    third reading is logged as."""
+    asc = write_experiment(tmp_path, aborted_trial=True)
+    text = asc.read_text(encoding="utf-8")
+    text = text.replace("TRIALID 2", "TRIALID 1").replace("TRIALID 3", "TRIALID 1_r2")
+    asc.write_text(text, encoding="utf-8")
+    t = _tables(asc, tmp_path)
+    assert t.trial_metadata["trial_id"].tolist() == ["1", "1_r3", "1_r2"]
+    assert sorted(t.fixations["trial_id"].unique()) == ["1", "1_r2", "1_r3"]
+    assert t.notes[-1] == (
+        "TRIALID 1 is logged more than once; its later readings are 1_r3 "
+        "(1_r2 is a TRIALID of its own)."
+    )

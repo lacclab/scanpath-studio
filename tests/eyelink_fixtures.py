@@ -584,7 +584,11 @@ def _asc_text(
         trial_1.insert(4, _LEFT_TRIAL_1[0])
         trial_1.insert(7, _LEFT_TRIAL_1[1])
         trial_1[1] = "START\t990 \tLEFT\tRIGHT\tEVENTS"
-    trials = trial_1 + _RIGHT_TRIAL_2
+    trial_2 = list(_RIGHT_TRIAL_2)
+    if binocular:
+        # Every block of a binocular recording tracks both eyes.
+        trial_2[1] = "START\t3010 \tLEFT\tRIGHT\tEVENTS"
+    trials = trial_1 + trial_2
     if aborted_trial:
         trials += _ABORTED_TRIAL
     if multi_display:

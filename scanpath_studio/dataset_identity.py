@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from uuid import uuid4
 
 from .constants import DATASET_ALIASES_KEY
@@ -44,6 +45,24 @@ def dataset_key_for_display_name(session, name: str) -> str | None:
     aliases = session.get(DATASET_ALIASES_KEY) or {}
     matches = [token for token in uploads if aliases.get(token, token) == name]
     return matches[0] if len(matches) == 1 else None
+
+
+def unique_name(requested: str, taken: Iterable[str], *, max_chars: int) -> str:
+    """A dataset name that no name in ``taken`` matches (ignoring case) and that
+    fits ``max_chars``: ``requested`` cut to fit, or with the first free
+    ``" (n)"`` suffix, the base shortened to make room for it.
+
+    The one rule for naming an upload, a saved drawing and a renamed built-in;
+    each caller passes the names it must not collide with.
+    """
+    base = requested.strip()[:max_chars].rstrip()
+    used = {str(name).casefold() for name in taken}
+    name, n = base, 2
+    while name.casefold() in used:
+        suffix = f" ({n})"
+        name = base[: max(0, max_chars - len(suffix))].rstrip() + suffix
+        n += 1
+    return name
 
 
 def forget_dataset_identity(session, token: str) -> None:

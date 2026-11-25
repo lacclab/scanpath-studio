@@ -61,6 +61,7 @@ from .constants import (
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
+    FIXATION_FLAG_THRESHOLD_BOUNDS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
@@ -97,6 +98,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     SELF_SCALED_HEATMAP_STYLES,
     SNAP_POSITION_BOUNDS,
+    STIMULUS_IMAGE_OFFSET_BOUNDS,
     TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
@@ -146,6 +148,7 @@ from .fields import (
     tooltip,
 )
 from .plot_navigation import detail_section, render_setting_finder
+from .reruns import rerun
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
     COMPARE_IDENTITY_STATE_KEY,
@@ -246,14 +249,29 @@ def _popover_rows(slug: str):
     ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
     for every popover.
     """
-    # Remember which menu rendered each pending value. Its open event and
-    # the user's first edit can reach the server together on the next run.
+    with (
+        _menu_draws_pending_writes(slug),
+        _rail_label_width(_POPOVER_LABEL_W),
+        st.container(key=f"rail_rows_{slug}"),
+    ):
+        yield
+
+
+@contextmanager
+def _menu_draws_pending_writes(slug: str):
+    """Remember which menu draws each pending value (`write_through`) inside.
+
+    The menu's open event and the user's first edit can reach the server
+    together on the next run, so `reassert_pending_writes` releases the value
+    of a menu that is open. `_popover_rows` does this for a menu's own rows;
+    rows drawn into a menu's container after its block has closed need it
+    around them too.
+    """
     pending = st.session_state.get(_PENDING_WRITES_KEY)
     ctx = get_script_run_ctx() if pending else None
     drawn = ctx.shared.widget_user_keys_this_run if ctx else None
     waiting = [key for key in pending if key not in drawn] if drawn is not None else []
-    with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
-        yield
+    yield
     if waiting:
         section = slug.split("_", 1)[0]
         menu_key = (
@@ -390,6 +408,21 @@ def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
 # canonical value is mirrored back into the box *before* either widget renders,
 # so a slider drag, a deep link, a restored config and a Quick-view preset all
 # move the box too — one-way sync each direction, no feedback loop.
+#
+# In shadow mode (``value=``) neither is seeded: the slider and each box are
+# drawn under `shadow_widget_key` names of their own, and each moves to a fresh
+# key when the value changes without it — the boxes after a drag, the slider
+# after a typed value — since Streamlit ignores a new ``value=`` under a key
+# it already holds.
+
+
+def _shadow_stem(widget_key: str) -> str:
+    """The name a `shadow_widget_key` key was made from (``_{name}__w{n}``),
+    or ``widget_key`` itself when it is not one."""
+    name, sep, generation = widget_key.rpartition("__w")
+    if sep and name.startswith("_") and generation.isdigit():
+        return name[1:]
+    return widget_key
 
 
 def _shadow_key_missing(*keys: str) -> bool:
@@ -468,6 +501,10 @@ def _numeric_slider(
         # A shadow (`shadow_widget_key(seed=False)`): both halves take ``value``
         # as their own default and hand a change to ``on_change(new_value)``;
         # neither is seeded through session state (see `shadow_widget_key`).
+        # The box is a shadow of its own, so it moves to a fresh key showing
+        # the new value after a drag.
+        num_key = shadow_widget_key(f"{_shadow_stem(key)}__num", value, seed=False)
+
         def _from(widget_key: str):
             def call() -> None:
                 if _shadow_key_missing(widget_key):
@@ -559,8 +596,13 @@ def _range_slider(
     lead=None,
     field_host=None,
     number_bounds: tuple | None = None,
+    value: tuple | None = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
+
+    ``value`` draws it as a shadow (`shadow_widget_key(seed=False)`), as in
+    `_numeric_slider`: all three take ``value`` as their own default, nothing is
+    seeded through session state, and a change reaches ``on_change(new_range)``.
 
     ``number_bounds`` bounds the two number boxes when it differs from the
     slider's (``None`` on either side = unbounded); a typed value outside the
@@ -581,17 +623,45 @@ def _range_slider(
     """
     disabled, help = _layer_gate(disabled, help)  # greyed while the layer is off
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
-    current = st.session_state.get(key)
-    if isinstance(current, (tuple, list)) and len(current) == 2:
-        st.session_state[lo_key], st.session_state[hi_key] = current
+    slider_change = on_change
+    defaults: dict = {key: {}, lo_key: {}, hi_key: {}}
+    if value is not None:
+        # Each box a shadow of its own endpoint, so a drag moves it to a fresh
+        # key showing the new one.
+        stem = _shadow_stem(key)
+        lo_key = shadow_widget_key(f"{stem}__num_lo", value[0], seed=False)
+        hi_key = shadow_widget_key(f"{stem}__num_hi", value[1], seed=False)
+        defaults = {
+            key: {"value": tuple(value)},
+            lo_key: {"value": value[0]},
+            hi_key: {"value": value[1]},
+        }
 
-    def _apply() -> None:
-        if _shadow_key_missing(lo_key, hi_key):
-            return
-        lo, hi = st.session_state[lo_key], st.session_state[hi_key]
-        st.session_state[key] = (min(lo, hi), max(lo, hi))
-        if on_change is not None:
-            on_change()
+        def slider_change() -> None:
+            if _shadow_key_missing(key):
+                return
+            if on_change is not None:
+                on_change(tuple(st.session_state[key]))
+
+        def _apply() -> None:
+            # A box not yet sent by the browser still shows its default.
+            lo = st.session_state.get(lo_key, value[0])
+            hi = st.session_state.get(hi_key, value[1])
+            if on_change is not None:
+                on_change((min(lo, hi), max(lo, hi)))
+
+    else:
+        current = st.session_state.get(key)
+        if isinstance(current, (tuple, list)) and len(current) == 2:
+            st.session_state[lo_key], st.session_state[hi_key] = current
+
+        def _apply() -> None:
+            if _shadow_key_missing(lo_key, hi_key):
+                return
+            lo, hi = st.session_state[lo_key], st.session_state[hi_key]
+            st.session_state[key] = (min(lo, hi), max(lo, hi))
+            if on_change is not None:
+                on_change()
 
     if field_host is not None:
         weights = [*([2.2] if lead is not None else []), 5, 1.5, 1.5]
@@ -621,11 +691,12 @@ def _range_slider(
         key=key,
         help=help,
         disabled=disabled,
-        on_change=on_change,
+        on_change=slider_change,
         persist_state=persist_state,
         label_visibility=(
             "collapsed" if label_left or field_host is not None else "visible"
         ),
+        **defaults[key],
     )
     fmt = number_format if number_format is not None else slider_format
     num_min, num_max = (
@@ -638,12 +709,17 @@ def _range_slider(
             max_value=num_max,
             step=step,
             format=_number_box_format(
-                fmt, min_value, max_value, step, st.session_state.get(num_key)
+                fmt,
+                min_value,
+                max_value,
+                step,
+                st.session_state.get(num_key, defaults[num_key].get("value")),
             ),
             key=num_key,
             on_change=_apply,
             label_visibility="collapsed",
             disabled=disabled,
+            **defaults[num_key],
         )
 
 
@@ -691,7 +767,7 @@ _ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
 # render paths consume it. Unsupported controls stay visible but disabled so the
 # reason is discoverable, and their stored values survive mode switches, deep
 # links, and restored configs. Keep the authoritative setting → render-path
-# table in `AGENTS.md` in sync with these gates.
+# table in `RENDER_PATHS.md` in sync with these gates.
 
 
 def _mode_gate(
@@ -1078,7 +1154,8 @@ def _render_fixation_cleaning(
         if spec.has_threshold:
             cols[2].number_input(
                 f"{label} threshold (ms)",
-                min_value=1,
+                min_value=FIXATION_FLAG_THRESHOLD_BOUNDS[0],
+                max_value=FIXATION_FLAG_THRESHOLD_BOUNDS[1],
                 step=10,
                 key=f"{prefix}_fixclass_{category}_threshold_ms",
                 persist_state="session",
@@ -1244,7 +1321,7 @@ _CUSTOM_VIEW = "custom"
 DESIGN_PRESETS_KEY = _DESIGN_PRESETS_WIRE_KEY
 #: Which saved design the ✏️ button has open for editing, if any.
 _DESIGN_EDIT_KEY = "_design_preset_editing"
-#: Whether the 💾 "Save current view" modal is open.
+#: Whether the 💾 "Save current preset" modal is open.
 _DESIGN_SAVE_PENDING_KEY = "_design_save_pending"
 #: Which saved design the 🗑️ confirmation is asking about, if any.
 _DESIGN_DELETE_PENDING_KEY = "_design_delete_pending"
@@ -1337,7 +1414,7 @@ def delete_design_preset(name: str) -> None:
 
 #: The saved-design file: `{"kind": DESIGNS_FILE_KIND, "designs": {…}}` — the
 #: portable copy of the library, written by *Export* and read by *Import* in
-#: My views.
+#: My presets.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
 #: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
 #: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
@@ -1449,12 +1526,12 @@ def _import_designs() -> None:
         incoming = designs_from_json(uploaded.getvalue().decode("utf-8"), report=report)
     except (ValueError, UnicodeDecodeError):
         st.session_state[_DESIGN_IMPORT_NOTE_KEY] = (
-            "error:Choose a file saved with **My views** → **Export**."
+            "error:Choose a file saved with **My presets** → **Export**."
         )
         return
     st.session_state[DESIGN_PRESETS_KEY] = {**design_presets(), **incoming}
     count = len(incoming)
-    note = f"Imported {count} view{'' if count == 1 else 's'}."
+    note = f"Imported {count} preset{'' if count == 1 else 's'}."
     if report:
         note = f"warning:{note} " + "; ".join(report) + "."
     st.session_state[_DESIGN_IMPORT_NOTE_KEY] = note
@@ -1481,19 +1558,19 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
         key="design_export",
         disabled=not saved,
         width="stretch",
-        help="Download your saved views as a JSON file, to use on another "
+        help="Download your saved presets as a JSON file, to use on another "
         "computer or share.",
     )
     with row.popover("Import", icon=ICONS["upload"], width="stretch"):
         st.file_uploader(
-            "Saved views file (JSON)",
+            "Saved presets file (JSON)",
             type=["json"],
             key=_DESIGN_IMPORT_KEY,
             on_change=_import_designs,
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "Import a file from **My views** → **Export**. A view with the same "
+            "Import a file from **My presets** → **Export**. A preset with the same "
             "name replaces the saved copy."
         )
 
@@ -1635,7 +1712,7 @@ def _apply_view_preset(
     }
     # Callbacks receive the browser's values before the script reconciles
     # closed popovers. Snapshot the design that was actually on screen.
-    reassert_pending_writes()
+    _reassert_in_callback()
     kept = {key: ss[key] for key in keep if key in ss}
     try:
         _apply_view_preset_state(ss, name, saved)
@@ -1662,8 +1739,9 @@ def _hold_view_writes(
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        # The rail derives the palette name from its colors; the tiles have no value to echo.
-        if key == "global_palette" or key in _MOUNTED_VIEW_KEYS or key not in ss:
+        # No widget draws these keys, so nothing echoes them; a hold would
+        # only read a later pick equal to the old value as an echo and undo it.
+        if key in _UNDRAWN_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
@@ -1674,6 +1752,90 @@ def _hold_view_writes(
             # previous design would overwrite it when the script starts.
             pending.pop(key)
 
+
+def design_state() -> dict:
+    """The plot settings a design records (`_is_design_key`), as they are now:
+    what `hold_script_writes` compares against."""
+    ss = st.session_state
+    return {key: deepcopy(ss[key]) for key in list(ss) if _is_design_key(key)}
+
+
+def hold_script_writes(before: dict) -> None:
+    """Hold the plot settings the script changed since ``before`` (a
+    `design_state`) against a closed popover's echo (see `write_through`).
+
+    For writes made in the script before the widgets draw, such as a settings
+    file's. By then `reassert_pending_writes` has put back any held value, so
+    the browser shows what an earlier hold recorded, not what ``before`` has;
+    a key the script left as it was keeps its hold. The browser answers on the
+    next run; a rerun the script starts first goes through `reruns.rerun`,
+    which keeps the holds for it. Keys no widget draws, and keys drawn outside
+    every popover, are written plainly, as in `_hold_view_writes`.
+    """
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY) or {}
+    for key, old in before.items():
+        if key in _UNDRAWN_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
+            continue
+        if _write_match_key(ss[key]) == _write_match_key(old):
+            continue
+        earlier = pending.get(key)
+        shown = earlier.stale_echo if earlier is not None else old
+        write_through(key, ss[key], shown=shown, in_callback=False)
+
+
+def keep_holds_through_rerun() -> None:
+    """Keep the held writes through a rerun the script starts itself.
+
+    `reassert_pending_writes` reads a held key that still has its written value
+    as the browser having taken it, and ends the hold. A rerun the script
+    starts (`st.rerun()`, `st.switch_page`) brings no values from the browser,
+    so every hold would read that way and end before the browser's echo
+    arrives. Marked, the next run keeps a hold whose key has its written value
+    instead of ending it, and checks any other value as always: a value the
+    user picked ends the hold.
+
+    A dialog's or fragment's run is not marked: no hold was re-applied in it,
+    so the values in place are the browser's own, an echo or the written value
+    it already shows, and the next run's check reads them right."""
+    ctx = get_script_run_ctx()
+    if ctx is not None and ctx.fragment_ids_this_run:
+        return
+    for write in (st.session_state.get(_PENDING_WRITES_KEY) or {}).values():
+        write.through_rerun = True
+
+
+def _reassert_in_callback() -> None:
+    """`reassert_pending_writes`, for a callback about to write over the
+    browser's values. It puts each held value back; the run's own reassert,
+    with no newer values from the browser, would then read them as taken and
+    end every hold the callback does not write again, so they are kept for it
+    (`keep_holds_through_rerun`)."""
+    reassert_pending_writes()
+    keep_holds_through_rerun()
+
+
+#: Design keys no widget draws, which `_hold_view_writes` and
+#: `hold_script_writes` write plainly, never held. The
+#: palette name is derived from the colours (the rail's tiles hold no value);
+#: the highlight style, the replay's quality and the typeface are shown through
+#: shadows (`shadow_widget_key`), whose own keys move instead; the screen's
+#: size and geometry come from the dataset's recording setup, which no widget
+#: on the rail edits. `tests/test_viz_palette.py` checks that no widget draws
+#: them.
+_UNDRAWN_VIEW_KEYS = frozenset(
+    {
+        "global_palette",
+        "global_critical_span_style",
+        "global_anim_quality",
+        "global_font_family",
+        "global_canvas_width",
+        "global_canvas_height",
+        "global_monitor_width_mm",
+        "global_viewing_distance_mm",
+        "global_display_dpi",
+    }
+)
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
 #: preset clears their guards — see `_hold_view_writes`.
@@ -1718,6 +1880,7 @@ _MOUNTED_VIEW_KEYS = frozenset(
 def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
     """The body of `_apply_view_preset`: write the chosen design's state."""
     ss.pop(_QUICK_VIEW_DRIFTED_FROM, None)
+    forget_set_aside_values(ss)
     current = ss.get(_QUICK_VIEW_SELECTION_KEY)
     if current == _CUSTOM_VIEW:
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
@@ -1741,7 +1904,10 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
         for key, value in sanitize_design(saved[name])[0].items():
             ss[key] = deepcopy(value)
         ss.pop("_canvas_seeded_for", None)
-        ss.pop("_font_seeded_for", None)
+        # A design that names its font keeps it; one that doesn't lets the
+        # dataset's declared font snap back.
+        if "global_font_family" not in saved[name]:
+            ss.pop("_font_seeded_for", None)
         ss.pop("_palette_picked", None)
         ss.pop(_PRE_ILLUSTRATION_STATE, None)
         _drop_linked_view_params()
@@ -1787,6 +1953,10 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
 
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = deepcopy(value)
+    # Compare draws each reading's markers at its own size, so the view's
+    # marker size is written to both readings too, as a palette's colours are.
+    for idx, _ in _COMPARE_SCANPATHS:
+        ss[f"cmp{idx}_marker_size_range"] = deepcopy(ss["global_marker_size_range"])
     ss[_QUICK_VIEW_SELECTION_KEY] = name
     # The complete baseline is captured by `_active_quick_view` after the
     # next rerun has restored data-dependent defaults.
@@ -1857,15 +2027,15 @@ def _render_saved_designs(host) -> None:
     saved = design_presets()
     active = selected_design_name()
     label = (
-        f"{ICONS['designs']} My views ({len(saved)})"
+        f"{ICONS['designs']} My presets ({len(saved)})"
         if saved
-        else f"{ICONS['designs']} My views"
+        else f"{ICONS['designs']} My presets"
     )
     shell = host.container(key="design_shell")
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
         if not saved:
             st.caption(
-                "No saved views yet. Set up the figure, then "
+                "No saved presets yet. Set up the figure, then "
                 f"click {ICONS['save']} to save them here. You can then apply them "
                 "to any trial in one click."
             )
@@ -1890,34 +2060,34 @@ def _render_saved_designs(host) -> None:
             # baseline the platform font decides, which sits them high and unaligned
             # in their buttons. `spoken` names each icon for screen readers.
             cells[1].button(
-                spoken(f"Rename view {name}"),
+                spoken(f"Rename preset {name}"),
                 icon=ICONS["edit"],
                 wrap=True,
                 key=f"design_edit_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Rename this view.",
+                help="Rename this preset.",
                 on_click=_toggle_design_editor,
                 args=(name,),
             )
             cells[2].button(
-                spoken(f"Delete view {name}"),
+                spoken(f"Delete preset {name}"),
                 icon=ICONS["delete"],
                 wrap=True,
                 key=f"design_delete_{name}",
                 type="tertiary",
                 width="stretch",
-                help="Delete this view.",
+                help="Delete this preset.",
                 on_click=_ask_delete_design,
                 args=(name,),
             )
         _render_design_file_row(st, saved)
     if shell.button(
-        spoken("Save the plot settings as a view"),
+        spoken("Save the plot settings as a preset"),
         icon=ICONS["save"],
         wrap=True,
         key="design_save",
-        help="Save the plot settings on screen now as a named view.",
+        help="Save the plot settings on screen now as a named preset.",
     ):
         st.session_state[_DESIGN_SAVE_PENDING_KEY] = True
         st.session_state[_DESIGN_SAVE_MODE_KEY] = _SAVE_MODE_NEW
@@ -1932,7 +2102,7 @@ def _ask_delete_design(name: str) -> None:
     """🗑️ arms the confirmation instead of deleting.
 
     A design is a handful of choices the user made and cannot get back by
-    undoing anything, so it gets the same confirm step ♻️ Reset visualization
+    undoing anything, so it gets the same confirm step ♻️ Reset
     has — and for the same reason, an `on_click` that only sets a flag, because
     a callback may not open a dialog.
     """
@@ -1945,7 +2115,7 @@ def _close_design_delete_dialog() -> None:
     st.session_state.pop(_DESIGN_DELETE_PENDING_KEY, None)
 
 
-@st.dialog("Delete this view?", on_dismiss=_close_design_delete_dialog)
+@st.dialog("Delete this preset?", on_dismiss=_close_design_delete_dialog)
 @guarded()
 def _design_delete_dialog(name: str) -> None:
     """Confirm forgetting one saved design."""
@@ -1961,10 +2131,10 @@ def _design_delete_dialog(name: str) -> None:
     ):
         delete_design_preset(name)
         _close_design_delete_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if no.button("Cancel", key="design_delete_cancel", width="stretch"):
         _close_design_delete_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 #: The 💾 dialog's name field and its *replace* pick — the draft that closing
@@ -1972,11 +2142,11 @@ def _design_delete_dialog(name: str) -> None:
 _DESIGN_NEW_NAME_KEY = "design_new_name"
 _DESIGN_REPLACE_TARGET_KEY = "design_replace_target"
 #: The name the 💾 dialog offers, so saving needs no naming at all.
-_DEFAULT_DESIGN_NAME = "My view {n}"
+_DEFAULT_DESIGN_NAME = "My preset {n}"
 
 
 def next_design_name(taken) -> str:
-    """The first of "My view 1", "My view 2", … that no design in
+    """The first of "My preset 1", "My preset 2", … that no design in
     ``taken`` is called — a number freed by a delete is offered again."""
     taken = set(taken)
     n = 1
@@ -1997,7 +2167,7 @@ def _close_design_save_dialog() -> None:
 # modal in the browser without running a line of the body, so without this the
 # flag would stay armed and the dialog reopen on the very next rerun — clicking
 # a preset, toggling a layer, anything.
-@st.dialog("Save current view", on_dismiss=_close_design_save_dialog)
+@st.dialog("Save current preset", on_dismiss=_close_design_save_dialog)
 @guarded()
 def _design_save_dialog() -> None:
     """Name the settings on screen and keep them.
@@ -2026,7 +2196,7 @@ def _design_save_dialog() -> None:
             "Save the settings on screen as",
             options=(_SAVE_MODE_NEW, _SAVE_MODE_REPLACE),
             format_func=lambda choice: (
-                "A new view"
+                "A new preset"
                 if choice == _SAVE_MODE_NEW
                 else "A replacement for one I saved"
             ),
@@ -2035,22 +2205,22 @@ def _design_save_dialog() -> None:
     with st.form("design_save_form", border=False):
         if mode == _SAVE_MODE_REPLACE:
             name = st.selectbox(
-                "View to replace",
+                "Preset to replace",
                 options=list(saved),
                 key=_DESIGN_REPLACE_TARGET_KEY,
             )
             st.warning(
-                "The chosen view is **overwritten** with the settings on "
+                "The chosen preset is **overwritten** with the settings on "
                 "screen. Its old settings can't be recovered.",
                 icon=ICONS["warning"],
             )
         else:
-            # Filled with the next free "My view N": saving needs no
+            # Filled with the next free "My preset N": saving needs no
             # name thought up, and typing over it is one select-all away.
             # `setdefault`, so a name being typed survives the radio's rerun.
             st.session_state.setdefault(_DESIGN_NEW_NAME_KEY, next_design_name(saved))
             name = st.text_input(
-                "View name",
+                "Preset name",
                 key=_DESIGN_NEW_NAME_KEY,
                 placeholder="e.g. Paper figure",
                 help="Saves every plot setting on screen: layers, colors, "
@@ -2068,13 +2238,13 @@ def _design_save_dialog() -> None:
         )
     if cancel:
         _close_design_save_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if save:
         if not save_design_preset(name or ""):
-            st.error("Give the view a name first.")
+            st.error("Give the preset a name first.")
         else:
             _close_design_save_dialog()
-            st.rerun(scope="app")
+            rerun(scope="app")
 
 
 def _render_design_rename(row, name: str) -> None:
@@ -2175,29 +2345,55 @@ def _capture_quick_view_state() -> dict[str, object]:
 
 
 #: `global_*` keys that *mirror* a setting rather than hold one, so
-#: they are left out of the drift check below. The highlight-span pair is
-#: re-derived from `global_critical_span_style` on every run the Stimulus
-#: popover draws, and each `__num*` key is the typed box beside a slider,
-#: registered the first time its popover renders — neither is anything the user
-#: set apart from the canonical key, which the check does compare.
+#: they are left out of the drift check below. The highlight-span pair is an
+#: older form of `global_critical_span_style` that a saved design can still
+#: hold; no widget draws it. Each `__num*` key is the typed box beside
+#: a slider, registered the first time its popover renders. Neither is anything
+#: the user set apart from the canonical key, which the check does compare.
 _DRIFT_MIRROR_KEYS = frozenset(
     {"global_highlight_span_on", "global_highlight_span_mode"}
 )
+#: The highlight styles, in the order the Style control lists them.
+_SPAN_STYLES = ("Mark text", "Mark border", "Underline")
+#: The style the Style control shows while the highlight is off: the last one
+#: in use, so switching the highlight back on keeps it.
+_SPAN_STYLE_SHOWN_KEY = "_highlight_span_style_shown"
 _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
-#: Compare and Animate are ways of *viewing* a design, not part of
-#: it: switching one on leaves the design's highlight where it is. (A design
-#: still records whether Compare was on, so applying it restores that.)
-_VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
+#: Compare and the replay are ways of *viewing* a design, not part of it:
+#: switching one on, or changing how the replay plays, leaves the design's
+#: highlight where it is, and every view tile, Custom included, keeps them as
+#: they are. (A saved design still records whether Compare was on and the
+#: replay speed, so applying it restores them.) See `_is_view_mode_key`.
+_VIEW_MODE_KEYS = frozenset(
+    {SINGLE_COMPARE_TOGGLE, SINGLE_ANIMATE, SINGLE_PLAYBACK_SPEED}
+)
 #: The dataset the applied design's baseline was taken on; see
 #: `_active_quick_view`.
 _QUICK_VIEW_DATASET = "_quick_view_dataset"
 
 
+def forget_quick_view_dataset(session, dataset: str) -> None:
+    """Forget that the design baseline was taken on ``dataset`` once it is
+    removed, so whatever opens next retakes it. A marker naming no dataset,
+    not a missing one: `_active_quick_view` reads a missing marker as "the
+    same dataset", which would keep the old baseline and drop the design's
+    highlight on the next change."""
+    if (session.get(_QUICK_VIEW_DATASET) or (None,))[0] == dataset:
+        session[_QUICK_VIEW_DATASET] = (None, None)
+
+
 def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
+
+
+def _is_view_mode_key(key: object) -> bool:
+    """Whether a session key sets how a design is viewed rather than the design:
+    one of `_VIEW_MODE_KEYS`, or a replay setting (`global_anim_*`)."""
+    name = str(key)
+    return name in _VIEW_MODE_KEYS or name.startswith("global_anim_")
 
 
 def _design_drifted(applied: dict, current: dict) -> bool:
@@ -2205,13 +2401,14 @@ def _design_drifted(applied: dict, current: dict) -> bool:
 
     Every design key counts — a named view resets *all* of them to the widget
     defaults, so changing any plot control is a departure from it — except the
-    mirrors above. A key present on only one side is compared against its
-    widget default: a control registered late (its popover opened after the
-    baseline was taken) at its default value has not been changed, while a key
-    with no default (an explicit colour range) appearing *has*.
+    mirrors above and the view-mode keys, which every view tile keeps as they
+    are (`_is_view_mode_key`). A key present on only one side is compared
+    against its widget default: a control registered late (its popover opened
+    after the baseline was taken) at its default value has not been changed,
+    while a key with no default (an explicit colour range) appearing *has*.
     """
     for key in applied.keys() | current.keys():
-        if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
+        if _is_drift_mirror(key) or _is_view_mode_key(key):
             continue
         default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
         if applied.get(key, default) != current.get(key, default):
@@ -2292,7 +2489,7 @@ def _initial_plot_design(current: dict) -> str:
             for key, value in current.items()
             if key in expected
             and key != "global_palette"
-            and key not in _VIEW_MODE_KEYS
+            and not _is_view_mode_key(key)
             and not _is_drift_mirror(key)
         ):
             return name
@@ -2447,14 +2644,10 @@ def _choose_plot_view(name: str, current: str | None) -> None:
     """A static view ends the replay. Custom brings back its own palette too."""
     leave_animation()
     if name != current:
-        keep = (
-            *_palette_keys(),
-            "_palette_picked",
-            *(k for k in _VIZ_WIDGET_DEFAULTS if k.startswith("global_anim_")),
-        )
-        _apply_view_preset(
-            name, keep=() if name == _CUSTOM_VIEW else keep, built_in=True
-        )
+        keep = tuple(key for key in st.session_state if _is_view_mode_key(key))
+        if name != _CUSTOM_VIEW:
+            keep += (*_palette_keys(), "_palette_picked")
+        _apply_view_preset(name, keep=keep, built_in=True)
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
@@ -2511,16 +2704,164 @@ def _draw_view_grid(
         )
 
 
+#: The rail's foldable sections, top to bottom.
+RAIL_SECTIONS = ("view", "palette", "modes", "customize")
+#: The sections this browser has folded away, as a set. Seeded once per session
+#: from `RAIL_FOLD_COOKIE`; how the column is laid out, never the figure, so no
+#: link, settings file or saved preset carries it.
+_RAIL_FOLDED_KEY = "_rail_folded_sections"
+#: Set once the reader folds or unfolds a section: only then is the cookie
+#: written, so a browser that never touched a chevron keeps no cookie.
+_RAIL_FOLD_CHOSEN_KEY = "_rail_fold_chosen"
+RAIL_FOLD_COOKIE = "sps_rail_folded"
+_RAIL_FOLD_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+
+def parse_folded_sections(value: object) -> frozenset[str]:
+    """The known section names in a ``RAIL_FOLD_COOKIE`` value (``view.modes``);
+    anything else in it is ignored."""
+    if not isinstance(value, str):
+        return frozenset()
+    return frozenset(part for part in value.split(".") if part in RAIL_SECTIONS)
+
+
+def format_folded_sections(folded) -> str:
+    """The ``RAIL_FOLD_COOKIE`` value for ``folded``, in rail order."""
+    return ".".join(name for name in RAIL_SECTIONS if name in folded)
+
+
+def folded_sections() -> frozenset[str]:
+    """The sections folded in this session, seeded from the browser's cookie."""
+    ss = st.session_state
+    if _RAIL_FOLDED_KEY not in ss:
+        try:
+            cookie = st.context.cookies.get(RAIL_FOLD_COOKIE)
+        except Exception:  # no request behind the run (AppTest, bare mode)
+            cookie = None
+        ss[_RAIL_FOLDED_KEY] = parse_folded_sections(cookie)
+    return frozenset(ss[_RAIL_FOLDED_KEY])
+
+
+def _set_rail_section(name: str, fold: bool) -> None:
+    folded = set(folded_sections())
+    if fold:
+        folded.add(name)
+    else:
+        folded.discard(name)
+    st.session_state[_RAIL_FOLDED_KEY] = frozenset(folded)
+    st.session_state[_RAIL_FOLD_CHOSEN_KEY] = True
+
+
+def render_rail_fold_cookie(host) -> None:
+    """Keep the folded sections in a year-long cookie for the next visit.
+
+    The container is drawn every run and holds the same-origin script only once
+    the reader has used a chevron; the script writes the parent document's
+    cookie, the one place a browser-side preference can live without an account.
+    """
+    box = host.container(key="rail_fold_cookie")
+    if not st.session_state.get(_RAIL_FOLD_CHOSEN_KEY):
+        return
+    from scanpath_studio.html_embed import embed_html_iframe
+
+    with box:
+        embed_html_iframe(rail_fold_cookie_script(folded_sections()), height=0)
+
+
+def rail_fold_cookie_script(folded) -> str:
+    """A same-origin script that keeps ``folded`` in a year-long cookie. Only
+    known section names reach it, so the value needs no escaping."""
+    value = format_folded_sections(folded)
+    return (
+        "<script>window.parent.document.cookie = "
+        f'"{RAIL_FOLD_COOKIE}={value}; max-age={_RAIL_FOLD_COOKIE_MAX_AGE}; '
+        'path=/; SameSite=Lax";</script>'
+    )
+
+
+def rail_section(host, name: str, title: str, current: str = ""):
+    """A rail section's label with a fold chevron, and the body under it.
+
+    The body is always drawn and only hidden by CSS while folded, so its
+    widgets keep their place and state; the folded label names the current
+    pick, so the choice stays readable with the tiles away. While a guide runs
+    every section shows, since its steps point into them; what is stored is
+    left as it is.
+    """
+    folded = name in folded_sections() and not st.session_state.get("tutorial_active")
+    section = host.container(key=f"rail_{name}_section")
+    head = section.container(
+        key=f"rail_{name}_head{'_folded' if folded else ''}",
+        horizontal=True,
+        vertical_alignment="center",
+        gap=None,
+    )
+    shown = f"{title} · {html.escape(current)}" if folded and current else title
+    head.markdown(
+        f'<div class="sps-control-label">{shown}</div>',
+        unsafe_allow_html=True,
+        width="content",
+    )
+    head.button(
+        spoken(f"{'Show' if folded else 'Hide'} {title}"),
+        key=f"rail_{name}_fold",
+        icon=ICONS["menu_arrow" if folded else "menu_arrow_up"],
+        type="tertiary",
+        help=f"{'Show' if folded else 'Hide'} {title}.",
+        on_click=_set_rail_section,
+        args=(name, not folded),
+    )
+    return section.container(key=f"rail_{name}_body")
+
+
+def _folded_preset_label(design: str | None) -> str:
+    """What the folded Presets line names: a saved preset by its own name, a
+    built-in tile by its label, and ``+ Animation`` while the replay is on."""
+    label = (
+        selected_design_name()
+        or _VIEW_TILES.get(design or _CUSTOM_VIEW, ("Custom",))[0]
+    )
+    if st.session_state.get(SINGLE_ANIMATE):
+        label = f"{label} + Animation"
+    return label
+
+
+def modes_summary() -> str:
+    """What the folded Modes line names: the modes switched on, or *Off*."""
+    on = [
+        label
+        for key, label in (
+            (SINGLE_COMPARE_TOGGLE, "Compare"),
+            (SINGLE_ANIMATE, "Playback"),
+        )
+        if st.session_state.get(key)
+    ]
+    return " + ".join(on) or "Off"
+
+
+def _palette_tile_label(name: str) -> str:
+    return {
+        DEFAULT_PALETTE: "Colorblind-safe",
+        "Print / grayscale": "Grayscale",
+    }.get(name, name)
+
+
 def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
     """Render the shared views, playback switch and palette at the top of the rail."""
     design = _active_quick_view()
     st.session_state["_custom_plot_in_use"] = (
         design == _CUSTOM_VIEW or design not in _VIEW_TILES
     )
-    host.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
+    render_rail_fold_cookie(host)
+    view_body = rail_section(
+        host,
+        "view",
+        "Presets",
+        _folded_preset_label(design),
+    )
     draw = partial(
         _draw_view_grid,
-        host.container(key="tour_grp_views"),
+        view_body.container(key="tour_grp_views"),
         design=design,
         has_time=has_time,
     )
@@ -2529,23 +2870,20 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
     else:
         # Wait for the comparison picker to resolve B, including another dataset.
         slots["view_tiles"] = draw
-    _render_saved_designs(advanced_only(host, "rail_designs"))
+    _render_saved_designs(advanced_only(view_body, "rail_designs"))
     palette = _active_palette() or CUSTOM_PALETTE
     st.session_state["global_palette"] = palette
-    host.markdown(
-        '<div class="sps-control-label">Palette</div>', unsafe_allow_html=True
+    palette_body = rail_section(
+        host, "palette", "Palette", _palette_tile_label(palette)
     )
-    grid = host.container(key="rail_palette_tiles")
+    grid = palette_body.container(key="rail_palette_tiles")
     names = list(PALETTES)
     if palette == CUSTOM_PALETTE:
         names.append(CUSTOM_PALETTE)
     for index, name in enumerate(names):
         if index % 2 == 0:
             row = grid.columns(2, gap="small", wrap=False)
-        label = {
-            DEFAULT_PALETTE: "Colorblind-safe",
-            "Print / grayscale": "Grayscale",
-        }.get(name, name)
+        label = _palette_tile_label(name)
         row[index % 2].button(
             f"{label} {spoken('selected')}" if name == palette else label,
             key=palette_tile_key(name),
@@ -2558,7 +2896,6 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
             on_click=_on_palette_change,
             args=(name,),
         )
-    host.container(key="palette_layers_divider").divider()
 
 
 # Palette setting name → the session key it writes. A palette is applied
@@ -2631,6 +2968,8 @@ class _PendingWidgetWrite:
     stale_echo: object
     fresh: bool  # The script run that made the write hasn't started yet.
     popover_key: str | None = None
+    #: The next run is one the script started itself (`keep_holds_through_rerun`).
+    through_rerun: bool = False
 
 
 _PENDING_WRITES_KEY = "_pending_widget_writes"
@@ -2705,6 +3044,7 @@ def reassert_pending_writes() -> None:
         return
     kept = {}
     for key, write in pending.items():
+        through_rerun, write.through_rerun = write.through_rerun, False
         if write.fresh:
             # The run the callback wrote in: the write itself is what reads
             # back, and the browser has not answered yet.
@@ -2717,7 +3057,11 @@ def reassert_pending_writes() -> None:
             continue
         current = _write_match_key(ss.get(key))
         if current == _write_match_key(write.value):
-            continue  # the browser has it
+            if through_rerun:
+                # A run the script started: nothing came from the browser,
+                # so the value in place is ours, not its answer.
+                kept[key] = write
+            continue  # otherwise the browser has it
         if write.stale_echo == _ECHO_UNKNOWN:
             write.stale_echo = deepcopy(ss.get(key))
         elif current != _write_match_key(write.stale_echo):
@@ -2728,6 +3072,29 @@ def reassert_pending_writes() -> None:
         ss[_PENDING_WRITES_KEY] = kept
     else:
         ss.pop(_PENDING_WRITES_KEY, None)
+
+
+def echoes_a_held_write(*keys: str) -> bool:
+    """Whether a key's value is a closed popover's echo of what its widget
+    showed before a `write_through` that is still held, not the user's change.
+
+    A widget's ``on_change`` runs on that echo before the script starts, and
+    so before `reassert_pending_writes` puts the write back. A callback that
+    acted on the echo would undo the write by other means (a preset's name, a
+    derived setting), so it returns when this is true and the hold restores
+    the written value."""
+    ss = st.session_state
+    pending = ss.get(_PENDING_WRITES_KEY) or {}
+    for key in keys:
+        write = pending.get(key)
+        if write is None or write.fresh or write.stale_echo == _ECHO_UNKNOWN:
+            continue
+        if write.popover_key and ss.get(write.popover_key):
+            continue  # its menu is open: the widget is mounted, the value a pick
+        shown = _write_match_key(ss.get(key))
+        if shown == _write_match_key(write.stale_echo):
+            return True
+    return False
 
 
 def _palette_match_key(value):
@@ -4332,6 +4699,10 @@ def numeric_field_options(
         fields.extend(
             f for f in charts.SAMPLE_FIELDS if f in raw_gaze and f not in fields
         )
+        # Samples recorded with a clock are numbered when the chart is drawn
+        # (`chart_axes.with_sample_index`), so the sample number is always an axis.
+        if charts.SAMPLE_INDEX not in fields:
+            fields.append(charts.SAMPLE_INDEX)
     return fields
 
 
@@ -4357,6 +4728,71 @@ def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
         if col not in cols and pd.api.types.is_bool_dtype(words[col]):
             cols.append(col)
     return cols
+
+
+#: The rail's choices of a dataset's own columns (colour by, the highlight
+#: column, the hover fields) held while the current data lacks them, by session
+#: key: ``{"held": value, "fallback": what the control shows instead}``. A trip
+#: to another dataset and back keeps the choice (`_hold_unavailable`); a choice
+#: made in between, a reset, a design or a settings file replaces it
+#: (`forget_set_aside_values`).
+_SET_ASIDE_KEY = "_set_aside_values"
+
+
+def forget_set_aside_values(session=None) -> None:
+    """Forget every held choice: what was just applied decides the rail."""
+    (st.session_state if session is None else session).pop(_SET_ASIDE_KEY, None)
+
+
+def _hold_unavailable(
+    state_key: str, options: list, held: dict, *, multi: bool = False
+) -> None:
+    """`_drop_stale` (or `_drop_stale_multi`) for one of the rail's column
+    choices: bring back a value held earlier that ``options`` offer again, then
+    drop what they don't, noting it in ``held`` for `_set_aside`."""
+    _bring_back(state_key, options, multi=multi)
+    before = deepcopy(st.session_state.get(state_key))
+    (_drop_stale_multi if multi else _drop_stale)(state_key, options)
+    if before is not None and st.session_state.get(state_key) != before:
+        held[state_key] = before
+
+
+def _set_aside(held: dict) -> None:
+    """Hold what `_hold_unavailable` dropped, each with the fallback seeding has
+    put in its place by now — the value a later choice is told apart from."""
+    if not held:
+        return
+    ss = st.session_state
+    aside = ss.setdefault(_SET_ASIDE_KEY, {})
+    for state_key, value in held.items():
+        aside[state_key] = {"held": value, "fallback": deepcopy(ss.get(state_key))}
+
+
+def _bring_back(state_key: str, options: list, *, multi: bool) -> None:
+    """Restore a held value once ``options`` offer it again, while the control
+    still shows its fallback; anything else there is a newer choice, and the
+    held value is forgotten. Written through, as the controls sit in popovers
+    the browser may still be echoing the fallback from."""
+    ss = st.session_state
+    aside = ss.get(_SET_ASIDE_KEY) or {}
+    entry = aside.get(state_key)
+    if entry is None:
+        return
+    current = ss.get(state_key)
+    if current != entry["fallback"]:
+        aside.pop(state_key, None)
+        return
+    held = entry["held"]
+    if multi:
+        restored = [item for item in held if item in options]
+        if restored != current:
+            write_through(state_key, restored, in_callback=False)
+            entry["fallback"] = list(restored)
+        if len(restored) == len(held):
+            aside.pop(state_key, None)
+    elif held in options:
+        write_through(state_key, held, in_callback=False)
+        aside.pop(state_key, None)
 
 
 def _drop_stale(state_key: str, options: list) -> None:
@@ -4408,9 +4844,9 @@ def _explicit_pair(val) -> tuple | None:
 # The canonical `global_*` key therefore means **explicit**: it is present only
 # when a range was chosen — dragged or typed here, un-ticking *Auto*, or
 # arriving on a Share link / saved config / saved design — and `None` reaches
-# the builders otherwise, i.e. the API's rule, not a copy of it. The slider
-# draws a private *view* key instead, seeded from the canonical value or (auto)
-# the dataset span it is bounded by, so rendering it never pins a number into
+# the builders otherwise, i.e. the API's rule, not a copy of it. The slider is
+# a shadow instead (`_render_color_range`), showing the canonical value or
+# (auto) the dataset span it is bounded by, so rendering it never pins a number into
 # every link, config and bulk export. (Seeding the canonical key with the
 # dataset's span would put the app's heatmap on the dataset's longest single
 # fixation while the headless one used the trial's own per-word values.) The
@@ -4422,13 +4858,13 @@ _COLOR_RANGE_URL_PARAMS = {
 
 
 def _color_range_view_key(state_key: str) -> str:
-    """The private key the rail's slider draws for ``state_key``."""
-    return f"_{state_key.removeprefix('global_')}_view"
+    """The shadow name of ``state_key``'s range slider (`shadow_widget_key`)."""
+    return f"{state_key.removeprefix('global_')}_view"
 
 
 def _color_range_auto_key(state_key: str) -> str:
-    """The private key of ``state_key``'s *Auto* checkbox."""
-    return f"_{state_key.removeprefix('global_')}_auto"
+    """The shadow name of ``state_key``'s *Auto* checkbox (`shadow_widget_key`)."""
+    return f"{state_key.removeprefix('global_')}_auto"
 
 
 def forget_color_range(state_key: str) -> None:
@@ -4445,11 +4881,9 @@ def forget_color_range(state_key: str) -> None:
 
 
 def pin_word_heatmap_range(bounds: tuple[float, float]) -> None:
-    """Use the current word-box legend limits on subsequent readings."""
-    key = "global_heatmap_color_range"
-    st.session_state[key] = bounds
-    write_through(_color_range_view_key(key), bounds)
-    write_through(_color_range_auto_key(key), False)
+    """Use the current word-box legend limits on subsequent readings. The rail's
+    range and *Auto* are shadows of the setting, so they follow it."""
+    st.session_state["global_heatmap_color_range"] = bounds
 
 
 #: The reading's grain, in the order a per-word dwell groups by: one word of one
@@ -4632,8 +5066,6 @@ def _render_color_range(
     endpoint, beyond the observed span too.
     """
     ss = st.session_state
-    view_key = _color_range_view_key(state_key)
-    auto_key = _color_range_auto_key(state_key)
     explicit = _explicit_pair(ss.get(state_key))
     if explicit is None:
         ss.pop(state_key, None)  # a malformed value is not a range
@@ -4641,21 +5073,31 @@ def _render_color_range(
         lo = min(lo, float(math.floor(explicit[0])))
         hi = max(hi, float(math.ceil(explicit[1])))
         hi = hi if hi > lo else lo + 1.0
-    shown = explicit if explicit is not None else (lo, hi)
-    if ss.get(view_key) != shown:
-        ss[view_key] = shown
-    ss[auto_key] = explicit is None
+    shown = (
+        (float(explicit[0]), float(explicit[1]))
+        if explicit is not None
+        else (float(lo), float(hi))
+    )
+    # Shadows (`shadow_widget_key`): *Auto* and the range show the setting and
+    # write it only from their own callbacks. A change made elsewhere (a
+    # settings file, a link, another trial's span) moves them to fresh keys,
+    # so a closed menu's last-shown values have nowhere to land.
+    view_key = shadow_widget_key(_color_range_view_key(state_key), shown, seed=False)
+    auto_key = shadow_widget_key(
+        _color_range_auto_key(state_key), explicit is None, seed=False
+    )
 
-    def _commit_view() -> None:
-        view = ss.get(view_key)
+    def _commit_view(view) -> None:
         if isinstance(view, (tuple, list)) and len(view) == 2:
             ss[state_key] = (float(min(view)), float(max(view)))
 
     def _toggle_auto() -> None:
-        if ss.get(auto_key):
+        if _shadow_key_missing(auto_key):
+            return
+        if ss[auto_key]:
             forget_color_range(state_key)
         else:
-            _commit_view()
+            _commit_view(shown)
 
     auto_text = (
         "Auto (default): the range fits each trial's values; in Compare, A and "
@@ -4670,6 +5112,7 @@ def _render_color_range(
     def _auto(col) -> None:
         col.checkbox(
             "Auto",
+            value=explicit is None,
             key=auto_key,
             on_change=_toggle_auto,
             disabled=auto_disabled,
@@ -4694,6 +5137,7 @@ def _render_color_range(
         # Any endpoint can be typed: the slider spans the data, but a common
         # scale often reaches past this pool's largest value.
         number_bounds=(None, None),
+        value=shown,
     )
 
 
@@ -4794,6 +5238,7 @@ def _check_row(
     on_change=None,
     args: tuple = (),
     persist_state: str | None = None,
+    value: bool | None = None,
 ):
     """A ``label | ☑ Show | …`` row; return ``(value, rest)``.
 
@@ -4803,7 +5248,9 @@ def _check_row(
     hiding them. The help goes on the title's tooltip, not the checkbox, so the
     row carries no ``?`` icon. ``persist_state`` is forwarded to the checkbox,
     and every caller on a wire-format key spells out ``"session"`` —
-    `test_widget_value_sync` checks for it at the call site.
+    `test_widget_value_sync` checks for it at the call site. ``value`` is for a
+    shadow (`shadow_widget_key` with ``seed=False``), which takes its value as
+    its own default; a wire-format key never passes one.
     """
     disabled, help = _layer_gate(disabled, help)
     label_w = _label_w()
@@ -4822,6 +5269,7 @@ def _check_row(
             on_change=on_change,
             args=args,
             persist_state=persist_state,
+            **({} if value is None else {"value": value}),
         ),
         rest_col,
     )
@@ -6067,8 +6515,9 @@ def _render_fix_range_slider(
     checkbox opts into the sticky behaviour (the window is re-applied to every
     trial, clamped to each one's length).
 
-    The settings file restores the window and its all-trials scope. A URL,
-    CLI command or API call addresses one reading and only carries its window.
+    The settings file and a Share link restore the window and its all-trials
+    scope. A CLI command or API call addresses one reading and only carries
+    its window.
 
     ``single_fix_range`` itself reaches all four surfaces: the
     ``?fix_range=lo,hi`` link param, ``render --fix-index-range`` and ``api``'s
@@ -6218,24 +6667,30 @@ def _seed_viz_state(
         _pin(_key, _default)
     _seed_compare_styles()
 
+    # Column choices the current data lacks, set aside at the end of seeding.
+    held: dict = {}
     color_fields = color_field_options(trial_fixations)
-    _drop_stale("global_color_by", color_fields)
+    _hold_unavailable("global_color_by", color_fields, held)
     # One flat colour by default — see `color_field_options`.
     _pin("global_color_by", UNIFORM_COLOR_FIELD)
 
     numeric_fields = numeric_field_options(trial_fixations, raw_gaze)
     if numeric_fields:
         ss = st.session_state
-        if (
-            charts.ELAPSED not in numeric_fields
-            and (ss.get("global_x_field"), ss.get("global_y_field"))
-            == charts.GAZE_OVER_TIME
+        axes = (ss.get("global_x_field"), ss.get("global_y_field"))
+        if any(
+            key in ss and ss[key] not in numeric_fields
+            for key in ("global_x_field", "global_y_field")
         ):
-            # Both fields belong to this preset. Falling back one field at a
-            # time would leave horizontal position plotted against itself.
+            # The two fields make one chart. Falling back one field at a time
+            # would plot the other against a default it was never paired
+            # with, such as horizontal position against itself.
             ss.pop("global_x_field", None)
             ss.pop("global_y_field", None)
-            if ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time":
+            if (
+                axes == charts.GAZE_OVER_TIME
+                and ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time"
+            ):
                 forget_design_selection(ss)
         x_default = "x" if "x" in numeric_fields else numeric_fields[0]
         y_default = (
@@ -6243,16 +6698,14 @@ def _seed_viz_state(
             if "y" in numeric_fields
             else numeric_fields[min(1, len(numeric_fields) - 1)]
         )
-        _drop_stale("global_x_field", numeric_fields)
         _pin("global_x_field", x_default)
-        _drop_stale("global_y_field", numeric_fields)
         _pin("global_y_field", y_default)
 
     # Highlight-column default + stale-clear run every time (even when the Text
     # styling popover isn't rendered this run) so a restored config on data with
     # no boolean columns can't carry a dangling pick.
     highlight_options = highlight_column_options(words)
-    _drop_stale("global_highlight_column", highlight_options)
+    _hold_unavailable("global_highlight_column", highlight_options, held)
     # A column the app seeded is re-derived for each dataset; only the user's own
     # pick survives a switch. Only the bundled demo is seeded (its answer span),
     # so ticking **Highlight words** there marks it at once; the switch itself
@@ -6278,8 +6731,10 @@ def _seed_viz_state(
     # explicit lists.
     word_hover_options = hover_field_options(words, words=True)
     fix_hover_options = hover_field_options(trial_fixations)
-    _drop_stale_multi("global_word_hover_fields", word_hover_options)
-    _drop_stale_multi("global_fixation_hover_fields", fix_hover_options)
+    _hold_unavailable("global_word_hover_fields", word_hover_options, held, multi=True)
+    _hold_unavailable(
+        "global_fixation_hover_fields", fix_hover_options, held, multi=True
+    )
     if "global_word_hover_fields" not in st.session_state:
         legacy = st.session_state.get(
             "global_word_hover_measure", "total_fixation_duration_ms"
@@ -6300,6 +6755,7 @@ def _seed_viz_state(
                 if field in fix_hover_options
             ],
         )
+    _set_aside(held)
     before_reset = ss.pop("_viz_before_reset", None)
     if before_reset is not None:
         _hold_view_writes(ss, before_reset, defaults_pending=False, in_callback=False)
@@ -6751,7 +7207,9 @@ def _collect_viz_settings(
         anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
         anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
-        fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
+        fixation_opacity=float(
+            ss.get("global_fixation_opacity", FIXATION_OPACITY.default)
+        ),
         # Uniform fixation colour + marker shape.
         fixation_color=ss.get("global_fixation_color") or DEFAULT_FIXATION_COLOR,
         fixation_symbol=ss.get("global_fixation_symbol") or DEFAULT_FIXATION_SYMBOL,
@@ -6926,14 +7384,24 @@ def corpus_style_controls(
     ) as style_panel:
         active = _active_palette()
         options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
-        st.session_state["global_palette"] = active or CUSTOM_PALETTE
+        shown = active or CUSTOM_PALETTE
+        st.session_state["global_palette"] = shown
+        # A shadow of the palette the colours make: a settings file or a
+        # design changes them without this control, and under the palette's
+        # own key a closed menu would send its last pick back and re-apply it.
+        palette_key = shadow_widget_key("corpus_palette", shown, seed=False)
+
+        def _pick_palette() -> None:
+            if palette_key in st.session_state:
+                _on_palette_change(st.session_state[palette_key])
+
         st.selectbox(
             "Palette",
             options=options,
-            key="global_palette",
-            persist_state="session",
-            on_change=_on_palette_change,
-            help="Same palette as the Scanpath view; designs and Share links keep it.",
+            index=options.index(shown),
+            key=palette_key,
+            on_change=_pick_palette,
+            help="Same palette as the Scanpath View; designs and Share links keep it.",
         )
         columns = st.columns(2)
         columns[0].color_picker(
@@ -7049,7 +7517,7 @@ def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
     return box
 
 
-#: The ♻️ Reset visualization button's confirmation flag.
+#: The ♻️ Reset button's confirmation flag.
 _RESET_VIZ_PENDING_KEY = "_reset_viz_pending"
 
 
@@ -7086,10 +7554,10 @@ def _reset_viz_confirmation_dialog() -> None:
     ):
         reset_viz_settings()
         _close_reset_viz_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if no.button("Cancel", key="reset_viz_cancel", width="stretch"):
         _close_reset_viz_dialog()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 _PLOT_HISTORY = "_plot_edit_history"
@@ -7167,7 +7635,7 @@ def _step_plot_history(redo: bool) -> None:
                 st.query_params.pop(param, None)
             keys.remove(key)
     shown = {key: ss.get(key) for key in keys}
-    reassert_pending_writes()
+    _reassert_in_callback()
     for key in keys:
         if key in values:
             ss[key] = deepcopy(values[key])
@@ -7202,13 +7670,13 @@ def render_viz_reset(host) -> None:
             key=f"viz_{action.lower()}",
             help=label if stack else f"No plot change to {action.lower()}.",
             disabled=not stack,
+            width="stretch",
             on_click=_step_plot_history,
             args=(action == "Redo",),
         )
     if row.button(
-        f"{ICONS['reset']} Reset visualization",
+        f"{ICONS['reset']} Reset",
         key="reset_viz_settings_btn",
-        width="stretch",
         help="Reset every plot setting, Filters & highlights included. Annotations, "
         "trial filters, data and the selected trial are kept.",
     ):
@@ -7292,7 +7760,9 @@ def render_plot_controls(
         and (not compare_meta or charts.has_clock(compare_meta["fixations"])),
         slots=slots,
     )
-    viz = rail.container(key="tour_grp_viz_controls")
+    viz = rail_section(
+        rail.container(key="tour_grp_viz_controls"), "customize", "Customize"
+    )
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
     editor = advanced_only(viz, "plot_editor")
     render_setting_finder(editor)
@@ -7345,6 +7815,13 @@ def render_plot_controls(
     has_fixations = has_fixations or (b_fix is not None and not b_fix.empty)
     sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
     screen_help = "Choose screen X and Y to draw this layer."
+    # Why Fixations greys when the trial has fixations but none of them can be
+    # placed on the chosen axes (a pupil-area chart, say).
+    fix_axis_help = (
+        "Both axes must be fields available in the fixations."
+        if chart_axes
+        else "No fixation has a screen position to draw."
+    )
     # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
@@ -7364,6 +7841,20 @@ def render_plot_controls(
             else ""
         )
     )
+    # A replay draws only fixations and saccades, so it always keeps one of
+    # them: a replay opened with both off (a link, a settings file or a saved
+    # session) shows fixations, as switching Animation on does, and the switch
+    # of the one layer left is greyed while the replay runs. The API and CLI
+    # refuse a replay with both off, so Share → Code stays runnable.
+    ss = st.session_state
+    if animating and not (
+        ss.get("global_show_fix", True) or ss.get("global_show_saccades", True)
+    ):
+        ss["global_show_fix"] = True
+        ss[_AUTO_REPLAY_FIXATIONS] = True
+    replay_layer_help = "A replay draws fixations or saccades. Turn the other on first."
+    last_replay_fix = animating and not ss.get("global_show_saccades", True)
+    last_replay_sac = animating and not ss.get("global_show_fix", True)
     show_fix, fix_grp = _layer_row(
         layers,
         "Fixations",
@@ -7371,8 +7862,12 @@ def render_plot_controls(
         slug="fix",
         visibility_key="global_show_fix",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or not has_markers,
-        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
+        disabled=not has_fixations or not has_markers or last_replay_fix,
+        help=_greyed_help(
+            (not has_fixations, "This trial has no fixations."),
+            (not has_markers, fix_axis_help),
+            (last_replay_fix, replay_layer_help),
+        ),
     )
     show_saccades, sac_grp = _layer_row(
         layers,
@@ -7381,10 +7876,11 @@ def render_plot_controls(
         slug="sac",
         visibility_key="global_show_saccades",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or (chart_axes and not sequence),
+        disabled=not has_fixations or (chart_axes and not sequence) or last_replay_sac,
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
             (chart_axes and not sequence, screen_help),
+            (last_replay_sac, replay_layer_help),
             (sequence, "Connect successive fixation indices in reading order."),
         ),
     )
@@ -7452,21 +7948,29 @@ def render_plot_controls(
     # The comparison builder draws each reading's samples; the replay
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
-    raw_axis_off = (chart_axes or has_raw_gaze) and not (
+    # Only samples on this trial can fail the axes; a trial with none is
+    # `raw_nothing`'s to decide.
+    raw_axis_off = has_raw_gaze and not (
         charts.drawable_raw_samples(fields, trial_samples, primary_fix)
         or charts.drawable_raw_samples(fields, b_samples, b_fix)
     )
     raw_axis_help = "Both axes must be fields available in the raw samples."
+    # The switch is one setting for every trial, so a trial with no samples of
+    # its own keeps it live while the dataset has samples elsewhere: switched on
+    # elsewhere, it says above the plot that nothing is drawn here, and it can
+    # be switched off from here. The gate never reads the switch's own value —
+    # greying it in the rerun that turns it off would drop the click.
+    raw_nothing = not has_raw_gaze and (raw_gaze is None or raw_gaze.empty)
     show_raw_gaze, raw_gaze_grp = _layer_row(
         layers,
         "Raw gaze",
         icon=ICONS["raw_gaze"],
         slug="rawgaze",
         visibility_key="global_show_raw_gaze",
-        disabled=not has_raw_gaze or raw_disabled or raw_axis_off,
+        disabled=raw_nothing or raw_disabled or raw_axis_off,
         help=_greyed_help(
             (raw_axis_off, raw_axis_help),
-            (not has_raw_gaze, "This trial has no raw gaze samples."),
+            (raw_nothing, "No raw gaze samples in the trials shown."),
             (raw_disabled, _ANIMATE_GREYS["rawgaze"]),
         ),
         note=_gated_help(
@@ -7515,7 +8019,7 @@ def render_plot_controls(
         _layer_off(
             f"{ICONS['fixations']} Fixations",
             off=not show_fix or not has_fixations or not has_markers,
-            reason=no_fixations_note or None,
+            reason=no_fixations_note or (None if has_markers else fix_axis_help),
         ),
         _popover_rows("fix"),
     ):
@@ -8204,8 +8708,7 @@ def render_plot_controls(
     # drawn in. "Show only the regressions" is the figure a reading paper asks
     # for. The static and comparison builders honour it (Compare per scanpath);
     # the animation has no classification to filter on, so the picker greys out
-    # there rather than silently dropping the filter (see the render-path table
-    # in AGENTS.md).
+    # there rather than silently dropping the filter (see `RENDER_PATHS.md`).
     _cls_dis, _cls_reason = _mode_gate(animating, comparing, in_animation=False)
     with (
         _rail_subsection(
@@ -8278,34 +8781,39 @@ def render_plot_controls(
         with detail_section("Word highlights", key="plot_detail_stim_highlight"):
             # "Highlight a span": the canonical value lives in
             # `global_critical_span_style` (the chosen style or "None"),
-            # which is what deep links / Share / restore carry — the on/off and the
-            # mode widgets are derived from it each run, and their callbacks write
-            # it back on interaction.
+            # which is what deep links / Share / restore carry. The on/off and
+            # the style are shadows of it (`shadow_widget_key`): Undo, a design
+            # or a settings file changes it without them, and under fixed keys
+            # a closed menu would send back the switch and style it last
+            # showed, and their callbacks would write that old style back.
             canonical = st.session_state.get("global_critical_span_style", "None")
+            if canonical in _SPAN_STYLES:
+                st.session_state[_SPAN_STYLE_SHOWN_KEY] = canonical
+            span_style = st.session_state.get(_SPAN_STYLE_SHOWN_KEY, _SPAN_STYLES[0])
+            on_key = shadow_widget_key(
+                "highlight_span_on", canonical != "None", seed=False
+            )
+            mode_key = shadow_widget_key("highlight_span_mode", span_style, seed=False)
 
             def _on_span_toggle():
+                if on_key not in st.session_state:
+                    return  # the menu was not drawn: no change to apply
                 st.session_state["global_critical_span_style"] = (
-                    st.session_state.get("global_highlight_span_mode", "Mark text")
-                    if st.session_state["global_highlight_span_on"]
-                    else "None"
+                    span_style if st.session_state[on_key] else "None"
                 )
 
             def _on_span_mode():
-                st.session_state["global_critical_span_style"] = st.session_state[
-                    "global_highlight_span_mode"
-                ]
-
-            st.session_state["global_highlight_span_on"] = canonical != "None"
-            if canonical in ("Mark text", "Mark border", "Underline"):
-                st.session_state["global_highlight_span_mode"] = canonical
-            else:
-                st.session_state.setdefault("global_highlight_span_mode", "Mark text")
+                if mode_key not in st.session_state:
+                    return
+                chosen = st.session_state[mode_key]
+                st.session_state[_SPAN_STYLE_SHOWN_KEY] = chosen
+                st.session_state["global_critical_span_style"] = chosen
 
             span_on, span_rest = _check_row(
                 "Highlight words",
-                key="global_highlight_span_on",
+                key=on_key,
+                value=canonical != "None",
                 disabled=not has_words or not highlight_options,
-                persist_state="session",
                 on_change=_on_span_toggle,
                 help="Mark the words where the chosen true/false column is true "
                 "(e.g. a target span).",
@@ -8344,10 +8852,10 @@ def render_plot_controls(
             )
             span_mode = mode_col.radio(
                 "Style",
-                options=["Mark text", "Mark border", "Underline"],
+                options=list(_SPAN_STYLES),
+                index=_SPAN_STYLES.index(span_style),
                 horizontal=True,
-                key="global_highlight_span_mode",
-                persist_state="session",
+                key=mode_key,
                 on_change=_on_span_mode,
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
@@ -8442,6 +8950,8 @@ def render_plot_controls(
                 _sub_caption(x_cap, "X")
                 x_col.number_input(
                     "Image X offset (px)",
+                    min_value=STIMULUS_IMAGE_OFFSET_BOUNDS[0],
+                    max_value=STIMULUS_IMAGE_OFFSET_BOUNDS[1],
                     step=5.0,
                     key="global_stimulus_image_offset_x",
                     persist_state="session",
@@ -8451,6 +8961,8 @@ def render_plot_controls(
                 _sub_caption(y_cap, "Y")
                 y_col.number_input(
                     "Image Y offset (px)",
+                    min_value=STIMULUS_IMAGE_OFFSET_BOUNDS[0],
+                    max_value=STIMULUS_IMAGE_OFFSET_BOUNDS[1],
                     step=5.0,
                     key="global_stimulus_image_offset_y",
                     persist_state="session",
@@ -8916,7 +9428,7 @@ def render_plot_controls(
         # The typography rows always draw, greyed while *Text* is off
         # (`text_disabled`), at the popovers' label width. They belong to
         # 📄 Stimulus → Text and must never fall back into this one.
-        with _rail_label_width(_POPOVER_LABEL_W):
+        with _rail_label_width(_POPOVER_LABEL_W), _menu_draws_pending_writes("stim"):
             canvas_renderer(
                 screen_rows,
                 text_host=stim_text_slot,
@@ -9006,7 +9518,7 @@ def render_plot_controls(
         if axis_disabled:
             st.caption(axis_help)
         st.selectbox(
-            "Axis preset",
+            "Axis layout",
             list(available),
             key=picker_key,
             placeholder="Custom axes",
@@ -9693,7 +10205,10 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_canvas_seeded_for", None)
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
+    # The highlight's style comes back to the first one, as on a fresh start.
+    st.session_state.pop(_SPAN_STYLE_SHOWN_KEY, None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
+    forget_set_aside_values()
     # And the raw-gaze layer's dataset default, the same way.
     _forget_raw_gaze_default(st.session_state)
     for param in (*_sk.URL_PRESET_PARAMS, *_sk.LEGEND_PARAMS):
@@ -10209,34 +10724,41 @@ def render_trial_chip_picker(
     if shown_now:
         host.caption("Field colors: an optional highlight for each shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
+        generations = dict(st.session_state.get("_trial_chip_color_gen") or {})
 
         def _reset_to_gray(field: str) -> None:
-            # Only the picker goes back to the default gray; the loop below
-            # reads that as "no highlight", as it does a gray picked by hand.
-            # Through `write_through`, since the picker sits in a popover and
-            # the browser would otherwise send its old color back.
-            write_through(f"trial_chip_color_{field}", _neutral)
+            # A fresh key gives the field a new picker, drawn at the default
+            # gray, which the loop below reads as "no highlight". Writing the
+            # old key would not hold: the picker sits in a popover, and the
+            # browser would send its old color back.
+            stored = dict(st.session_state.get("trial_chip_colors") or {})
+            stored.pop(field, None)
+            st.session_state["trial_chip_colors"] = stored
+            gens = dict(st.session_state.get("_trial_chip_color_gen") or {})
+            gens[field] = gens.get(field, 0) + 1
+            st.session_state["_trial_chip_color_gen"] = gens
 
         for key in shown_now:
             label_col, swatch_col, clear_col = host.columns(
                 [3, 1, 1], vertical_alignment="center"
             )
             label_col.caption(key_to_label[key])
-            widget_key = f"trial_chip_color_{key}"
-            # The stored color seeds a picker the first time it is drawn; after
-            # that its own state holds it (a value= beside a written key would
-            # draw Streamlit's double-default warning).
-            seed = (
-                {}
-                if widget_key in st.session_state
-                else {"value": colors.get(key) or _neutral}
+            generation = generations.get(key, 0)
+            widget_key = f"trial_chip_color_{key}" + (
+                f"_{generation}" if generation else ""
             )
+            # The stored color is the picker's value on every run, never only
+            # the first. The menu's pickers mount in the browser only when it
+            # opens, and one the browser has not shown yet mounts at the value
+            # sent as its default and sends that back on the next rerun.
+            # Without `value=`, that default is Streamlit's black. Nothing
+            # writes this key, so the value never meets a Session State write.
             picked = swatch_col.color_picker(
                 key_to_label[key],
+                value=colors.get(key) or _neutral,
                 key=widget_key,
                 label_visibility="collapsed",
                 help="Highlight this field in a color.",
-                **seed,
             )
             if picked.lower() == _neutral.lower():
                 colors.pop(key, None)

@@ -26,7 +26,7 @@ Open a dataset in the :material/route: **Scanpath View**. The filter
 (:material/filter_alt:) beside **Select trial** selects whole trials.
 :material/filter_list: **Filters & highlights** in the Plot controls changes
 which fixations and saccades the figure draws.
-Switch to **Full** at the top of the Scanpath view to use trial filters,
+Switch to **Full** at the top of the Scanpath View to use trial filters,
 fixation highlights, and batch export
 ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 

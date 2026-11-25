@@ -31,16 +31,18 @@ from __future__ import annotations
 import io
 import json
 import re
+import struct
 import zipfile
-from collections.abc import Callable, Iterable, Mapping
+import zlib
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, nullcontext, suppress
 from contextvars import copy_context
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
-from pathlib import PurePosixPath
-from time import perf_counter
+from pathlib import Path, PurePosixPath
+from time import localtime, perf_counter
 
 import pandas as pd
 
@@ -88,6 +90,7 @@ from .plots import (
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _plotly_literal,
+    category_vocabulary,
     make_scanpath_figure,
     reading_stimulus_image,
     split_scanpath_layers,
@@ -164,11 +167,38 @@ def png_save_kwargs(
 def set_png_dpi(path, dpi: int) -> None:
     """Stamp ``dpi`` into a PNG's header (``pHYs``), so a layout program
     places it at its print size. The pixels are untouched."""
-    from PIL import Image
+    path = Path(path)
+    path.write_bytes(png_with_dpi(path.read_bytes(), dpi))
 
-    with Image.open(path) as image:
-        image.load()
-        image.save(path, format="PNG", dpi=(dpi, dpi))
+
+def png_with_dpi(data: bytes, dpi: int) -> bytes:
+    """``data`` with a ``pHYs`` chunk for ``dpi`` before its image data,
+    replacing one already there. Every other chunk, the compressed pixels
+    included, is copied byte for byte, so stamping costs no re-encoding and
+    leaves the image's own compression to `export_png.compact_png`."""
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("not a PNG")
+    per_metre = int(dpi / 0.0254 + 0.5)
+    body = struct.pack(">IIB", per_metre, per_metre, 1)
+    chunk = (
+        struct.pack(">I", len(body))
+        + b"pHYs"
+        + body
+        + struct.pack(">I", zlib.crc32(b"pHYs" + body) & 0xFFFFFFFF)
+    )
+    parts, offset, placed = [data[:8]], 8, False
+    while offset + 8 <= len(data):
+        kind = data[offset + 4 : offset + 8]
+        end = offset + 12 + int.from_bytes(data[offset : offset + 4], "big")
+        if kind != b"pHYs":
+            if kind == b"IDAT" and not placed:
+                parts.append(chunk)
+                placed = True
+            parts.append(data[offset:end])
+        offset = end
+    if not placed:
+        raise ValueError("no IDAT chunk")
+    return b"".join(parts)
 
 
 # --- Customizable export paths -----------------------------------------------
@@ -1134,9 +1164,12 @@ def _write_table(
         zf.writestr(path, data)
         return len(data)
     # csv.writer sends complete rows to the member. Only a chunk of converted
-    # values is kept in memory, even for a multi-gigabyte gaze table.
+    # values is kept in memory, even for a multi-gigabyte gaze table. A bare
+    # name would date the member 1980-01-01; writestr dates the others now.
+    info = zipfile.ZipInfo(path, localtime()[:6])
+    info.compress_type = zf.compression
     with (
-        zf.open(path, "w", force_zip64=True) as member,
+        zf.open(info, "w", force_zip64=True) as member,
         io.TextIOWrapper(member, encoding="utf-8", newline="") as text,
     ):
         df.to_csv(text, index=False, chunksize=5000)
@@ -1936,6 +1969,11 @@ def _print_dimensions(options, fmt, width, height):
     }
 
 
+class _SettingsFailure(ValueError):
+    """A figure file the bundle's own settings rule out. A retry keeps those
+    settings, so it would fail the same way and is not offered for this file."""
+
+
 def _bundle_image(renderer, figure, fmt, width, height, options):
     """Set physical size without changing the layout of source text and markers."""
     from PIL import Image
@@ -1948,7 +1986,7 @@ def _bundle_image(renderer, figure, fmt, width, height, options):
     raster = fmt in {"png", "tiff"}
     scale = options.image_scale(fmt, width)
     if raster and width * height * scale**2 > 64_000_000:
-        raise ValueError("Use a smaller raster width or DPI, or export as SVG.")
+        raise _SettingsFailure("Use a smaller raster width or DPI, or export as SVG.")
     data = renderer(figure, "png" if fmt == "tiff" else fmt, width, height, scale)
     if fmt == "svg" and mm is not None:
         return size_svg(data, width, height, mm)
@@ -3001,6 +3039,7 @@ def bulk_export(
     annotation_dataset: str | None = None,
     column_names: Mapping[str, ColumnNames] | None = None,
     stimulus_image_resolver: Callable | None = None,
+    color_categories: Sequence[str] | None = None,
     _retry=None,
     _archive: zipfile.ZipFile | None = None,
 ) -> tuple[bytes | None, ExportProgress]:
@@ -3028,6 +3067,11 @@ def bulk_export(
     ``annotation_dataset`` is the dataset they were made on, which the file
     names (annotations file schema 3).
 
+    ``color_categories`` is every label of a categorical ``color_by`` in the
+    dataset (`plots.category_vocabulary`), which each figure assigns its
+    category colours over; the app passes the whole dataset's, so the files
+    match the figure on screen. Without it they are read off ``fixations``.
+
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
 
@@ -3037,6 +3081,10 @@ def bulk_export(
     pattern_problem = path_structure_error(options.path_pattern)
     if pattern_problem:
         raise ValueError(pattern_problem)
+    if color_categories is None:
+        color_categories = category_vocabulary(settings.get("color_by"), fixations)
+    else:
+        color_categories = tuple(color_categories)
     combos = _apply_scope(combos, options)
     units = export_units(
         combos,
@@ -3461,6 +3509,7 @@ def bulk_export(
             # colouring.
             color_by_line=bool(settings.get("color_by_line", False))
             or fig_fix is not trial_fix,
+            color_categories=color_categories,
         )
         # The trial's own samples, as the live figure
         # gets them (the layer self-gates on `show_raw_gaze`).
@@ -3584,7 +3633,8 @@ def bulk_export(
 
             def record_failure(path, artifact, fmt, exc, unit=unit_ids, name=slug):
                 progress.figures_failed += 1
-                progress.retryable_figures += 1
+                if not isinstance(exc, _SettingsFailure):
+                    progress.retryable_figures += 1
                 label = "layer" if artifact == "layers" else f"{fmt.upper()} {artifact}"
                 progress.errors.append(f"{name}: {label} export failed ({exc})")
                 _inventory(path, artifact, "failed", unit, str(exc), fmt=fmt)

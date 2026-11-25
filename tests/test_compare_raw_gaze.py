@@ -17,8 +17,10 @@ B = (PID, "l37_273_2_1_1_Ele")
 
 @pytest.fixture(scope="module")
 def demo():
+    """The demo's paragraph screens, so each reading draws all of its samples."""
     words, fixations = sps.load_sample_data(names="canonical")
-    return words, fixations, sps.load_sample_raw_gaze(names="canonical")
+    raw = sps.load_sample_raw_gaze(names="canonical")
+    return tuple(f[f["screen_id"] == "Paragraph"] for f in (words, fixations, raw))
 
 
 def _raw_traces(fig):

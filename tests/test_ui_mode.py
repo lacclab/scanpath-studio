@@ -9,7 +9,14 @@ from scanpath_studio import session_keys as sk
 from scanpath_studio import tabs, ui_mode
 from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
-from tests.conftest import APP_SCRIPT, pin_view
+from tests.conftest import (
+    APP_SCRIPT,
+    find_keyed,
+    iframe_sources,
+    keys_around,
+    page_nodes,
+    pin_view,
+)
 
 SWITCH = "ui_mode_switch"
 SYNTHETIC_SOURCE = "Synthetic test trial"
@@ -261,15 +268,15 @@ def test_the_cookie_script_takes_no_room_in_the_switch_box():
     )
     assert rule in ui_mode.switch_css(True)
     assert rule in ui_mode.switch_css(False)
-    import inspect
-
-    source = inspect.getsource(ui_mode.render_switch)
-    assert "box.container(key=COOKIE_BOX_KEY)" in source
-    assert "with cookie:" in source
     at = _boot()
+    # In the switch's box on every run, empty until the switch is used.
+    assert keys_around(at, ui_mode.COOKIE_BOX_KEY)[-1] == ui_mode.SWITCH_BOX_KEY
+    cookie, _ = find_keyed(at, ui_mode.COOKIE_BOX_KEY)
+    assert not list(page_nodes(cookie))
     at.segmented_control(key=SWITCH).set_value("full").run()
     assert not at.exception
-    assert _has_cookie_embed(at)
+    cookie, _ = find_keyed(at, ui_mode.COOKIE_BOX_KEY)
+    assert any("sps_ui_mode" in doc for doc in iframe_sources(cookie))
 
 
 def test_switch_is_hidden_outside_scanpath():
@@ -307,13 +314,13 @@ def test_more_lists_cover_the_spec():
     for word in ("filter", "sort", "slider", "trial summary table"):
         assert word in titles("picker")
     for word in (
-        "animation",
+        "playback",
         "compare",
         "layers",
         "filters & highlights",
         "axes",
         "figure",
-        "my views",
+        "my presets",
     ):
         assert word in titles("rail")
     assert [t.split(" ", 1)[1] for t, _ in more["subtabs"]] == [
@@ -542,6 +549,47 @@ def test_animation_preserves_custom_scanpath_and_comparison_across_modes():
     assert at.session_state["single_compare_toggle"]
 
 
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_replay_settings_leave_the_view_highlighted(mode):
+    """How the replay plays is not part of the design: changing it keeps the
+    view's tile lit, and Essentials does not list it as a setting from Full."""
+    at = _boot(mode=mode)
+    at.toggle(key="single_animate").set_value(True).run()
+    assert _lit_tiles(at) == ["scanpath"]
+    at.select_slider(key="single_playback_speed").set_value(2.0).run()
+    at.checkbox(key="global_anim_autoplay").uncheck().run()
+    _smoothness(at).set_value("Fine").run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["scanpath"]
+    assert at.session_state["_quick_view_selection"] == "scanpath"
+    assert "hidden_note_to_advanced" not in {button.key for button in at.button}
+    at.button(key="viz_view_heatmap").click().run()
+    assert _lit_tiles(at) == ["heatmap"]
+    assert at.session_state["single_playback_speed"] == 2.0
+    assert at.session_state["global_anim_autoplay"] is False
+    assert at.session_state["global_anim_quality"] == "Fine"
+
+
+@pytest.mark.parametrize("compare", [True, False], ids=["on", "off"])
+def test_the_custom_tile_leaves_compare_as_it_is(compare):
+    """Compare is a way of viewing the figure: like every other tile, Custom
+    brings back its own design without switching Compare on or off."""
+    at = _boot(mode="full")
+    at.toggle(key="single_animate").set_value(False).run()
+    at.color_picker(key="global_fixation_color").pick("#123456").run()
+    at.toggle(key="single_compare_toggle").set_value(not compare).run()
+    assert _lit_tiles(at) == ["custom"]
+    at.button(key="viz_view_heatmap").click().run()
+    at.toggle(key="single_compare_toggle").set_value(compare).run()
+    assert _lit_tiles(at) == ["heatmap"]
+    at.button(key="viz_view_custom").click().run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["custom"]
+    assert at.session_state["global_fixation_color"] == "#123456"
+    assert at.session_state["single_compare_toggle"] is compare
+    assert at.toggle(key="single_compare_toggle").value is compare
+
+
 @pytest.mark.parametrize("cross_dataset", [False, True])
 def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
     cross_dataset,
@@ -563,47 +611,36 @@ def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
     assert _lit_tiles(at) == ["illustration"]
 
 
-def test_rail_wrappers_are_keyed_for_the_mode_css():
-    """Every Full-only rail part sits in an ``adv_only_*`` container, and the
-    Essentials parts in ``simple_only_*`` ones, so `mode_css` hides them."""
-    import inspect
-    import re
+#: A control in each mode-only part of the Scanpath view → the container that
+#: holds the part: the rail's and the trial picker's Full-only parts, then the
+#: ＋ More lists that stand in for them in Essentials.
+_MODE_ONLY_PARTS = {
+    "single_animate": "adv_only_rail_animation",
+    "reset_viz_settings_btn": "adv_only_rail_reset",
+    "design_shell": "adv_only_rail_designs",
+    "plot_setting_finder": "adv_only_plot_editor",
+    "iconpop_filter_trials": "adv_only_trial_filters",
+    "iconpop_chip_fields": "adv_only_chip_fields",
+    "tour_grp_chips": f"adv_only_{ui_mode.TRIAL_CHIPS}",
+    "iconpop_sort_trial_single": f"adv_only_{ui_mode.TRIAL_SORT}",
+    "single_trial_pos": f"adv_only_{ui_mode.TRIAL_SLIDER}",
+    "iconpop_more_rail": "simple_only_rail_more",
+    "iconpop_more_picker": "simple_only_picker_more",
+}
 
-    from scanpath_studio import controls, tabs
 
-    rail = inspect.getsource(tabs.render_single_trial_tab)
-    for name in ("rail_animation", "rail_reset"):
-        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
-    source = inspect.getsource(controls.render_plot_controls) + inspect.getsource(
-        controls._render_view_controls
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_mode_only_parts_sit_in_the_containers_mode_css_hides(mode):
+    """Each mode-only part is drawn in both modes, inside the container whose
+    key `mode_css` hides in the other mode — so a switch changes what shows,
+    never what is drawn, and no widget loses its value."""
+    at = _boot(mode=mode)
+    for control, container in _MODE_ONLY_PARTS.items():
+        assert container in keys_around(at, control), control
+    other = "simple_only_" if mode == "full" else "adv_only_"
+    assert f'[class*="st-key-{other}"] {{ display: none !important; }}' in (
+        ui_mode.mode_css(mode)
     )
-    for name in ("rail_designs", "plot_editor"):
-        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', source), name
-    assert 'simple_only(viz, "rail_more")' in source
-
-
-def test_picker_wrappers_are_keyed_for_the_mode_css():
-    """The trial picker's Full-only parts (the filter funnel, the chips'
-    menu, the summary table, the sort popover and the slider) each sit in an
-    ``adv_only_*`` container, and the ＋ More list in a ``simple_only_*`` one."""
-    import inspect
-    import re
-
-    from scanpath_studio import tabs, utils
-
-    picker = inspect.getsource(tabs.render_single_trial_tab)
-    for name in ('"trial_filters"', '"chip_fields"', r"ui_mode\.TRIAL_CHIPS"):
-        assert re.search(rf"ui_mode\.advanced_only\(\s*\w+,\s*{name}\s*\)", picker), (
-            name
-        )
-    assert re.search(r'ui_mode\.simple_only\(\s*host,\s*"picker_more"\s*\)', picker)
-    trials = inspect.getsource(utils._select_trial_none_mode)
-    for name in ("TRIAL_SORT", "TRIAL_SLIDER"):
-        assert re.search(
-            rf"_advanced_part\(\s*\w+,\s*ui_mode\.{name},\s*key_prefix\s*\)", trials
-        ), name
-    helper = inspect.getsource(utils._advanced_part)
-    assert "ui_mode.advanced_only(host, name)" in helper
 
 
 def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "essentials") -> AppTest:
@@ -648,7 +685,9 @@ def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
         *sps.load_sample_data(names="canonical"), names="canonical"
     )
     gaze = api.load_sample_raw_gaze(names="canonical")
-    extra = gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
+    # One reading's samples, screens and all, under a trial id of their own.
+    first = gaze["trial_id"].eq(gaze["trial_id"].iloc[0])
+    extra = gaze[first].assign(trial_id="samples_only", unique_trial_id="samples_only")
     at = _open_gaze_dataset(words, fixations, pd.concat([gaze, extra]))
     picker = at.selectbox(key="single_trial_id")
     picker.set_value(next(o for o in picker.options if "samples_only" in str(o)))
@@ -674,6 +713,11 @@ def _open_samples_only(mode: str = "essentials") -> AppTest:
 
 
 SIMPLE_TILES = ("scanpath", "heatmap", "illustration", "gaze_over_time", "custom")
+
+
+def _smoothness(at: AppTest):
+    """The replay's Smoothness selectbox, drawn under a shadow key that moves."""
+    return next(box for box in at.selectbox if box.key.startswith("_anim_quality__w"))
 
 
 def _lit_tiles(at: AppTest) -> list[str]:
@@ -1117,3 +1161,104 @@ def test_cookie_follows_the_viewers_choice_not_the_session_mode():
         ui_mode._choose_mode("essentials")
         state[sk.UI_MODE] = "full"
         assert ui_mode.cookie_mode() == "essentials"
+
+
+_PANEL_WIDGETS = (
+    "checkbox",
+    "toggle",
+    "selectbox",
+    "radio",
+    "segmented_control",
+    "pills",
+    "multiselect",
+    "number_input",
+    "text_input",
+)
+
+
+def _move_off_current_value(widget, kind: str) -> bool:
+    """Give `widget` a different valid value; False when it has none to give."""
+    if kind in ("checkbox", "toggle"):
+        widget.set_value(not widget.value)
+        return True
+    if kind in ("multiselect", "pills", "segmented_control") and isinstance(
+        widget.value, (list, tuple)
+    ):
+        # Choosing every option reveals whatever depends on one (PNG's options).
+        chosen = list(widget.value)
+        if any(o not in chosen for o in widget.options):
+            widget.set_value(list(widget.options))
+        elif chosen:
+            widget.set_value(chosen[:-1])
+        else:
+            return False
+        return True
+    if kind in ("selectbox", "radio", "segmented_control", "pills"):
+        # By position: `options` are the shown labels, `value` the raw value,
+        # and a format function makes them differ.
+        current = getattr(widget, "index", None)
+        others = [o for i, o in enumerate(widget.options) if i != current]
+        if current is None:
+            others = [o for o in widget.options if o != widget.value]
+        if not others:
+            return False
+        widget.set_value(others[-1])
+        return True
+    if kind == "number_input":
+        step = widget.step or 1
+        value = widget.value if widget.value is not None else (widget.min or 0)
+        upper = widget.max if widget.max is not None else value + step
+        widget.set_value(value + step if value + step <= upper else value - step)
+        return True
+    if kind == "text_input":
+        widget.set_value((widget.value or "") + "x")
+        return True
+    return False
+
+
+def test_a_trip_through_essentials_keeps_every_export_choice():
+    """The bulk-export panel's choices survive Full → Essentials → Full.
+
+    Essentials draws no bulk-export panel, so a control there without
+    `persist_state` loses its value on the trip. Every keyed control the panel
+    draws, and every one those choices reveal, is moved off its value first."""
+    prefix = "bulk_export"
+    at = _boot(mode="full")
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception, at.exception
+    moved: list[str] = []
+    # A choice can reveal more controls (a PNG format, its options), so keep
+    # moving whatever is newly drawn until nothing new appears.
+    for _ in range(4):
+        fresh = []
+        for kind in _PANEL_WIDGETS:
+            for widget in getattr(at, kind):
+                key = getattr(widget, "key", None) or ""
+                if (
+                    key.startswith(prefix)
+                    and key not in moved
+                    and not widget.disabled
+                    and _move_off_current_value(widget, kind)
+                ):
+                    fresh.append(key)
+        if not fresh:
+            break
+        moved += fresh
+        at.run()
+        assert not at.exception, at.exception
+    assert len(moved) >= 5, f"too few export controls found to test: {moved}"
+    before = {key: at.session_state[key] for key in moved if key in at.session_state}
+
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
+    assert not at.exception, at.exception
+    at.segmented_control(key=SWITCH).set_value("full").run()
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception, at.exception
+    lost = {
+        key: (value, at.session_state[key] if key in at.session_state else "<gone>")
+        for key, value in before.items()
+        if key not in at.session_state or at.session_state[key] != value
+    }
+    assert not lost, f"export choices reset by a trip through Essentials: {lost}"

@@ -351,6 +351,9 @@ FIXATION_FLAG_CATEGORIES = {
 FIXATION_DURATION_FLAGS = frozenset(
     k for k, category in FIXATION_FLAG_CATEGORIES.items() if category.has_threshold
 )
+#: A duration flag's threshold, in ms, on the rail and in a link or settings
+#: file: at most a minute, past which no fixation reaches.
+FIXATION_FLAG_THRESHOLD_BOUNDS = (1, 60_000)
 FIXATION_FLAG_MODES = ("Off", "Highlight", "Hide")
 FIXATION_FLAG_MARKERS = {
     "x": "✕ Cross",
@@ -561,6 +564,9 @@ CANVAS_PAD_FRACTION = 0.05
 #: *Auto* is unticked, and the range a link or settings file is held to.
 DEFAULT_CROP_MARGIN_PX = 50.0
 CROP_MARGIN_BOUNDS = (0.0, 2000.0)
+#: The stimulus image's nudge from its place, in screen px, on the rail and in a
+#: link or settings file.
+STIMULUS_IMAGE_OFFSET_BOUNDS = (-5000.0, 5000.0)
 
 # --- Figure design settings ----------------------------------------------------
 # Each `*_BOUNDS` is the range the rail, a link, a settings file and `render`
@@ -879,6 +885,14 @@ PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_CHOICE = "PoTeC — Potsdam Textbook Corpus"
 POTEC_DEFAULT_DIR = "data/PoTeC"
 ONESTOP_CHOICE = "OneStop (local export)"
+# OneStop's typeface, as its experiment drew every screen: Lucida Sans
+# Typewriter in a 19 px letter cell (Berzak et al. 2025, Methods), and the
+# experiment's own screen images show exactly that font. The size is the cell
+# over the font's advance (1234 / 2048 em), so a label drawn in the font steps
+# 19 px per letter as the images do. The font is not free to ship: where it is
+# not installed the label falls back to the browser's monospace.
+ONESTOP_FONT_FAMILY = "'Lucida Sans Typewriter', monospace"
+ONESTOP_FONT_PX = 19 / (1234 / 2048)
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
 # flat data-source picker, holding every part of that regime; these are their
@@ -910,6 +924,24 @@ ONESTOP_REGIME_SOURCE_TOKENS = {
     regime: f"onestop_{regime}" for regime in ONESTOP_REGIME_LABELS
 }
 ONESTOP_LEGACY_SOURCE_TOKEN = "onestop_public"
+
+#: Every built-in data-source label, which no added dataset may take: the
+#: fixed sources and every public corpus. ``app.reserved_source_names`` reads
+#: the same set from the live registry; this copy is for callers that must not
+#: import the app (`api.add_dataset`), and a test holds the two equal.
+RESERVED_SOURCE_NAMES = frozenset(
+    {
+        UPLOAD_CHOICE,
+        AUTHOR_CHOICE,
+        MANUAL_SAMPLE_CHOICE,
+        DEMO_CHOICE,
+        SYNTHETIC_CHOICE,
+        PUBLIC_DATASETS_CHOICE,
+        POTEC_CHOICE,
+        ONESTOP_CHOICE,
+        *ONESTOP_REGIME_CHOICES.values(),
+    }
+)
 
 
 def onestop_regime_for_choice(choice: str | None) -> str | None:
@@ -1237,6 +1269,7 @@ ICONS: dict[str, str] = {
     # The chevron Streamlit draws on every popover button, for prose that names
     # an icon-only button by its appearance.
     "menu_arrow": ":material/expand_more:",
+    "menu_arrow_up": ":material/expand_less:",
     "views": ":material/dashboard:",
     "nav": ":material/explore:",
     "preview": ":material/visibility:",

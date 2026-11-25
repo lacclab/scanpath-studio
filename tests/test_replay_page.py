@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 from plotly.io.json import to_json_plotly
 
-from scanpath_studio import api, tabs
+from scanpath_studio import api, data, tabs
 from scanpath_studio.plots import (
     _CONTROLS_MARGIN_PX,
     _CONTROLS_SAFETY_PX,
@@ -40,7 +40,20 @@ LONGEST = ("l7_183", "l7_183_2_1_5_Adv")
 
 @functools.cache
 def _demo():
-    return api.load_sample_data(names="canonical")
+    """The demo's paragraph screens as single-screen tables, on the demo's
+    recorded screen: each replay plays a whole paragraph, its fixations
+    numbered from the paragraph's first, as `fix_index_range` below counts."""
+    recorded = api.load_sample_data(names="canonical")[0].attrs
+    words, fixations = api.load_scanpath_data(
+        *(
+            table[table["part"] == "Paragraph"].drop(columns=["part", "screen_index"])
+            for table in data.read_sample_tables()
+        ),
+        names="canonical",
+    )
+    for frame in (words, fixations):
+        frame.attrs.update(recorded)
+    return words, fixations
 
 
 @functools.cache
@@ -117,8 +130,7 @@ def _as_written(frames) -> list:
     return json.loads(to_json_plotly(frames))
 
 
-@pytest.mark.parametrize("show_saccades", [True, False])
-def test_replay_with_fixations_hidden(show_saccades):
+def test_replay_with_fixations_hidden():
     from scanpath_studio.synthetic import load_synthetic_data
 
     words, fixations = load_synthetic_data()
@@ -129,7 +141,6 @@ def test_replay_with_fixations_hidden(show_saccades):
         pid,
         tid,
         show_fixations=False,
-        show_saccades=show_saccades,
         show_saccade_arrows=True,
         show_order=True,
         show_word_labels=False,
@@ -139,23 +150,18 @@ def test_replay_with_fixations_hidden(show_saccades):
         fixation_flags={"short": {"mode": "Highlight", "threshold_ms": 110}},
         anim_grid_step_ms=100,
     )
-    assert [t.name for t in fig.data] == (
-        ["saccades", "saccade direction"] if show_saccades else []
-    )
+    assert [t.name for t in fig.data] == ["saccades", "saccade direction"]
     times = fig.layout.meta["scanpath_frame_times_ms"]
     assert len(times) == len(fig.frames) > 1
     assert times[-1] == fixations.timestamp_ms.iloc[-1] + fixations.duration_ms.iloc[-1]
     for time_ms, frame in zip(times, fig.frames, strict=True):
-        if show_saccades:
-            lines, arrows = frame.data
-            reached = fixations[fixations.timestamp_ms <= time_ms]
-            segments = list(zip(reached.x, reached.x.iloc[1:]))
-            assert [x for x in lines.x if x is not None] == [
-                x for segment in segments for x in segment
-            ]
-            assert sum(x is not None for x in arrows.x) == len(segments)
-        else:
-            assert not frame.data
+        lines, arrows = frame.data
+        reached = fixations[fixations.timestamp_ms <= time_ms]
+        segments = list(zip(reached.x, reached.x.iloc[1:]))
+        assert [x for x in lines.x if x is not None] == [
+            x for segment in segments for x in segment
+        ]
+        assert sum(x is not None for x in arrows.x) == len(segments)
 
 
 class TestTheBrowserGetsTheSameFrames:

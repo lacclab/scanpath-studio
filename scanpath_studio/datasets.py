@@ -578,7 +578,7 @@ def load_potec(
 # interest-area (word) + fixation reports, split by reading **regime** and by
 # trial **part** (which screen of a trial — title / question preview /
 # paragraph / questions / answers / QA / feedback). The reports share the
-# bundled demo's schema (the demo is a 3-pid subset of the Paragraph part), so
+# bundled demo's schema (the demo is a small subset of these parts), so
 # the generic auto-detect → normalize pipeline handles every part with no
 # part-specific column mapping — this loader only fetches, reads, and (when more
 # than one part is loaded) folds the part into the trial identity so the parts
@@ -1136,6 +1136,10 @@ def onestop_raw_frames(
     fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
     if len(part_list) > 1:
         words, fixations = _onestop_drop_unmatched_screens(words, fixations)
+    from .constants import ONESTOP_FONT_FAMILY, ONESTOP_FONT_PX
+    from .data import with_stimulus_font
+
+    words = with_stimulus_font(words, ONESTOP_FONT_PX, ONESTOP_FONT_FAMILY)
     return _onestop_parts_as_screens(words, fixations)
 
 
@@ -2144,11 +2148,13 @@ def _multipleye_questions_by_stimulus(xlsx_path: Path) -> dict:
     """Read the comprehension workbook and return ``{stimulus -> questions JSON}``.
 
     Comprehension questions are optional enrichment (a per-stimulus JSON column);
-    reading the ``.xlsx`` needs the optional ``openpyxl`` dependency. If it isn't
-    installed, skip the enrichment (empty map) rather than failing the whole load
-    — the scanpaths/word-boxes don't depend on it."""
+    reading the ``.xlsx`` needs the workbook engine (``python-calamine``). If it
+    isn't installed, skip the enrichment (empty map) rather than failing the whole
+    load — the scanpaths/word-boxes don't depend on it."""
+    from .data import EXCEL_ENGINE
+
     try:
-        frame = pd.read_excel(xlsx_path, sheet_name=0)
+        frame = pd.read_excel(xlsx_path, sheet_name=0, engine=EXCEL_ENGINE)
     except ImportError:
         return {}
     return _multipleye_questions_from_frame(frame)
@@ -2498,13 +2504,9 @@ def _multipleye_stamp_font(
     The values are dataset-constant (`MultiplEYEScreen`); the app snaps its font
     controls to them so the reading text renders at the exact size
     and typeface the stimulus images were drawn with."""
-    if df.empty or font_px is None:
-        return df
-    df = df.copy()
-    df["stimulus_font_px"] = float(font_px)
-    if family:
-        df["stimulus_font_family"] = family
-    return df
+    from .data import with_stimulus_font
+
+    return with_stimulus_font(df, font_px, family)
 
 
 def multipleye_inventory(

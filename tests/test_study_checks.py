@@ -162,6 +162,54 @@ def test_inclusion_reports_overlapping_failures_once():
     )
 
 
+def test_the_open_inclusion_report_is_reused_until_what_it_reads_changes(
+    monkeypatch,
+):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import api, app
+
+    app._c_inclusion_report.clear()
+    reports = []
+    original = study_checks.inclusion_report
+
+    def counted(*args, **kwargs):
+        reports.append(original(*args, **kwargs))
+        return reports[-1]
+
+    monkeypatch.setattr(study_checks, "inclusion_report", counted)
+    _, fixations = api.load_sample_data(names="canonical")
+    first, other = (
+        (p, str(fixations.loc[fixations["participant_id"].eq(p), "trial_id"].iloc[0]))
+        for p in ("l7_183", "l37_273")
+    )
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    at.session_state["filter_participants"] = [first[0]]
+    at.run()
+    pin_view(at, "Corpus Analysis")
+    at.session_state["corpus_pool_popover"] = True
+    at.session_state["study_inclusion"] = True
+    at.run()
+    assert not at.exception
+    assert len(reports) == 1
+    assert reports[-1][0]["readings"].tolist() == [24, 12, 12]
+    at.run()
+    assert len(reports) == 1  # A rerun reads the cached report.
+
+    # An annotation filter reads the stars: starring a reading that another
+    # filter excludes changes its reasons but not the kept readings.
+    star = {"star": True, "tags": [], "note": ""}
+    at.session_state["trial_annotations"] = {first: star}
+    at.checkbox(key="filter_favorites").check().run()
+    assert reports[-1][0]["readings"].tolist() == [24, 1, 23]
+    at.session_state["trial_annotations"] = {first: star, other: star}
+    at.run()
+    assert not at.exception
+    reasons = reports[-1][1].set_index(["participant_id", "trial_id"])
+    assert reports[-1][0]["readings"].tolist() == [24, 1, 23]
+    assert reasons.loc[other, "exclusion_reasons"] == "Participant (1 selected)"
+
+
 def test_repeated_readings_missing_values_and_a_changed_observation():
     frame = pd.DataFrame(
         [
@@ -256,7 +304,63 @@ def test_trial_index_is_reused_and_released_with_its_source():
     del frame
     gc.collect()
     assert ref() is None
+    # The collected frame's entry is dropped by the next index access, never
+    # from inside the garbage collector's callback.
+    utils._trial_positions(other)
     assert ident not in utils._TRIAL_INDICES
+
+
+def test_copies_with_one_assigned_fingerprint_share_one_trial_index():
+    from scanpath_studio.data import assign_fingerprint
+
+    frame = pd.DataFrame(
+        {"participant_id": ["p", "p"], "trial_id": ["b", "a"], "value": [10, 1]}
+    )
+    assign_fingerprint(frame, ("test", "shared index"))
+    copy = frame.copy(deep=False)
+    assign_fingerprint(copy, ("test", "shared index"))
+    other = frame.copy(deep=False)
+    assign_fingerprint(other, ("test", "another frame"))
+    assert utils._trial_positions(copy) is utils._trial_positions(frame)
+    assert utils._trial_positions(other) is not utils._trial_positions(frame)
+    assert utils.extract_trial(copy, "p", "a").value.to_list() == [1]
+    # The copy keeps the index alive after the frame that built it is gone.
+    del frame
+    gc.collect()
+    assert utils.extract_trial(copy, "p", "b").value.to_list() == [10]
+
+
+def test_a_trial_slice_is_named_by_its_source_and_reading(monkeypatch):
+    """A rerun slices the reading again, so hashing the slice to key a cache
+    would cost a full pass over its samples every time."""
+    from scanpath_studio import data
+    from scanpath_studio.data import assign_fingerprint, frame_fingerprint
+
+    frame = pd.DataFrame(
+        {"participant_id": ["p", "p", "q"], "trial_id": ["a", "a", "a"], "x": [1, 2, 3]}
+    )
+    assign_fingerprint(frame, ("test", "named slices"))
+    edited = frame.assign(x=[1, 2, 30])
+    assign_fingerprint(edited, ("test", "named slices, edited"))
+    hashed = []
+    real = data._compute_frame_fingerprint
+    monkeypatch.setattr(
+        data, "_compute_frame_fingerprint", lambda df: hashed.append(df) or real(df)
+    )
+    slices = {
+        name: utils.extract_trial(source, participant, "a")
+        for name, source, participant in (
+            ("p", frame, "p"),
+            ("p again", frame, "p"),
+            ("q", frame, "q"),
+            ("q edited", edited, "q"),
+        )
+    }
+    keys = {name: frame_fingerprint(rows) for name, rows in slices.items()}
+    assert not hashed
+    assert keys["p"][0] == "assigned"
+    assert keys["p"] == keys["p again"]
+    assert len({keys["p"], keys["q"], keys["q edited"]}) == 3
 
 
 @pytest.mark.parametrize("width", [None, -1, float("inf")])

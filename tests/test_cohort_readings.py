@@ -263,6 +263,7 @@ def test_group_field_keeps_values_with_different_filter_spellings():
 
 
 def test_group_means_select_only_the_reader_and_measure(monkeypatch):
+    tabs._c_group_means.clear()
     mean = tabs.reader_means
     selected = []
 
@@ -277,14 +278,55 @@ def test_group_means_select_only_the_reader_and_measure(monkeypatch):
     at.session_state["cmp_setB_difficulty_level"] = ["Ele"]
     at.run()
     assert not at.exception
-    assert selected == [
+    expected = [
         ({"participant_id", "duration_ms"}, ["p_adv"]),
         ({"participant_id", "duration_ms"}, ["p_ele"]),
     ]
-    assert (
-        next(m.value for m in at.metric if m.label == "Difference (A − B)")
-        == "-200.00 ms"
-    )
+    assert selected == expected
+
+    def difference():
+        return next(m.value for m in at.metric if m.label == "Difference (A − B)")
+
+    assert difference() == "-200.00 ms"
+    # A rerun with the same groups reads the cached means.
+    at.run()
+    assert selected == expected
+    assert difference() == "-200.00 ms"
+    # Swapping the groups selects their readings again.
+    at.session_state["cmp_setA_difficulty_level"] = ["Ele"]
+    at.session_state["cmp_setB_difficulty_level"] = ["Adv"]
+    at.run()
+    assert selected[2:] == expected[::-1]
+    assert difference() == "200.00 ms"
+
+
+def test_a_participants_cohort_distribution_is_reused_until_the_choice_changes(
+    monkeypatch,
+):
+    tabs._c_reader_vs_cohort.clear()
+    split = tabs.reader_vs_cohort_values
+    calls = []
+
+    def record(frame, participant_id, measure, *, normalize=False):
+        calls.append((participant_id, normalize))
+        return split(frame, participant_id, measure, normalize=normalize)
+
+    monkeypatch.setattr(tabs, "reader_vs_cohort_values", record)
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at._page_hash = calc_hash("corpus-analysis")
+    at.query_params["corpus_subtab"] = "Per participant"
+    at.session_state["prdr_view"] = "Distribution vs cohort"
+    at.run()
+    assert not at.exception
+    first = at.selectbox(key="prdr_pid").value
+    assert calls == [(first, False)]
+    at.run()
+    assert calls == [(first, False)]
+    at.toggle(key="prdr7_norm").set_value(True).run()
+    other = next(p for p in at.selectbox(key="prdr_pid").options if p != first)
+    at.selectbox(key="prdr_pid").select(other).run()
+    assert not at.exception
+    assert calls == [(first, False), (first, True), (other, True)]
 
 
 def test_group_means_without_reader_ids_pool_recorded_values():

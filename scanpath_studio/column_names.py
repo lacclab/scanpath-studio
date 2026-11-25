@@ -758,7 +758,8 @@ def from_schema(
     if text_id := _id_entry(schema.get("text_id")):
         # The mapped Text ID wins over a literal `unique_paragraph_id`,
         # which `normalize_*` then fill `unique_text_id` from. A remap fills
-        # it from the mapped Text ID too (`data.remap_normalized_frame`); a
+        # it from the mapped Text ID when the stored frame held one
+        # (`data.remap_normalized_frame`); a
         # first load with neither has no such column, and an entry for an
         # absent column names nothing. A `unique_text_id` the file itself has
         # is the user's own column, under its own name.

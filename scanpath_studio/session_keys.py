@@ -529,6 +529,17 @@ COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
 #: a link may legitimately not carry it.
 FIX_RANGE_PARAM = "fix_range"
+#: *Keep this range across trials*: the fixation window applies to every
+#: trial, clamped to each one's length.
+SINGLE_FIX_RANGE_ALL_TRIALS = "single_fix_range_all_trials"
+#: …on the wire, as "1" and only while it is on (off is the default).
+FIX_RANGE_ALL_TRIALS_PARAM = "fix_range_all_trials"
+#: Whether a linked replay draws fixations. Share writes ``replay_fixations=0``
+#: beside ``show_fixations=0`` when the link opens a replay with the fixations
+#: hidden. A link that opens a replay with ``show_fixations=0`` and no
+#: ``replay_fixations`` was shared while a replay always drew fixations, so it
+#: opens with them shown; ``show_fixations`` then sets the static figure's.
+REPLAY_FIXATIONS_PARAM = "replay_fixations"
 #: Where an arriving `compare=` selection waits until the candidate list exists.
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
@@ -587,6 +598,9 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         **_compare_style_params("hollow"),
         # The trial chips above the plot.
         "show_chips": SINGLE_SHOW_CHIPS,
+        # The fixation window's scope. Optional on the wire (see
+        # `URL_OPTIONAL_PARAMS`): only a window kept across trials says so.
+        FIX_RANGE_ALL_TRIALS_PARAM: SINGLE_FIX_RANGE_ALL_TRIALS,
     }
 )
 
@@ -926,7 +940,9 @@ URL_OPTIONAL_PARAMS = frozenset(
         PARAM_DATASET_DIGEST,
         PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
+        FIX_RANGE_ALL_TRIALS_PARAM,
         COMPARE_FIX_RANGE_PARAM,
+        REPLAY_FIXATIONS_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
         *EXPORT_PARAMS,
@@ -1272,6 +1288,44 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
 def compare_state_keys(index: int) -> frozenset:
     """The `cmp{index}_*` session keys one `compare` config entry restores."""
     return frozenset(t.format(idx=index) for t in COMPARE_STATE_KEY_TEMPLATES)
+
+
+#: Every setting a share link carries, as the session keys it writes. The reading
+#: and the one-shot handoffs a link also seeds (`URL_SEEDED_STATE_KEYS`) are its
+#: navigation, not settings.
+LINK_STATE_KEYS = (
+    frozenset(SHARE_PARAMS.values())
+    | frozenset(SETUP_PARAMS.values())
+    | frozenset(EXPORT_PARAMS.values())
+    | frozenset(COMPARE_B_FILTER_PARAMS.values())
+    | frozenset(COMPARE_STYLE_PARAMS.values())
+    | LEGEND_STATE_KEYS
+)
+
+#: Every session key a 🔗 Share → File settings file restores.
+SETTINGS_FILE_STATE_KEYS = (
+    PLOT_CONFIG_STATE_KEYS
+    | PLOT_CONFIG_OTHER_STATE_KEYS
+    | compare_state_keys(0)
+    | compare_state_keys(1)
+)
+
+#: Link settings a settings file leaves out, each with the reason. Any other link
+#: setting must be in the file: `tests/test_saved_state_contract.py` fails on one
+#: the file lacks, so a new link setting gets a file field or an entry here.
+NOT_IN_SETTINGS_FILE: Mapping[str, str] = MappingProxyType(
+    {
+        SINGLE_SHOW_CHIPS: (
+            "The trial summary is view chrome above the plot, not part of the "
+            "figure the file restores; the recovery cache keeps it."
+        ),
+        "global_word_hover_measure": (
+            "Superseded by global_word_hover_fields, which the file carries: the "
+            "app draws word hover from that list, and an old link's single "
+            "measure is folded into it when the session is seeded."
+        ),
+    }
+)
 
 
 #: Session keys that were renamed, each to the keys it now sets. A recovery

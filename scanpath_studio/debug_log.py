@@ -27,6 +27,7 @@ from streamlit.runtime.scriptrunner import StopException
 
 from .constants import ICONS
 from .crash_report import guarded
+from .reruns import rerun
 
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
@@ -366,7 +367,7 @@ def render_debug_panel(host=None) -> None:
                 _buffer().clear()
                 # The dialog body is a fragment: an app-scoped rerun would close
                 # the modal on the empty log it just asked for.
-                st.rerun(scope="fragment")
+                rerun(scope="fragment")
 
         threshold = _LEVELS.index(min_level)
         shown = [

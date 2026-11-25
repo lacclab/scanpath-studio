@@ -10,6 +10,8 @@ about its own geometry.
 
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 import pytest
 
@@ -141,7 +143,8 @@ class TestAlignCompareColumns:
         a = _fixations("p1", "t1").assign(only_a=[1, 2, 3])
         b = _fixations("p2", "t2").assign(only_b=[4, 5, 6])
         a_out, b_out, _ = tabs._align_compare_columns(a, b)
-        with pd.option_context("mode.chained_assignment", "raise"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             merged = pd.concat([a_out, b_out])
         assert len(merged) == 6
         assert merged["only_a"].isna().sum() == 3
@@ -744,11 +747,15 @@ class TestResolveCompareSource:
 
 @pytest.fixture(scope="module")
 def _synthetic_vs_demo():
-    """A = the synthetic trial, B = the Bundled demo's raw-gaze trial, with the
-    gaze-sample chip on and every other setting at its default."""
+    """A = the synthetic trial, B = the paragraph screen of a Bundled demo
+    reading with raw gaze, with the gaze-sample chip on and every other setting
+    at its default."""
     import re
 
-    from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+    from scanpath_studio.session_keys import (
+        COMPARE_SOURCE_STATE_KEY,
+        SINGLE_COMPARE_SCREEN_ID,
+    )
     from tests.conftest import APP_SCRIPT
 
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
@@ -759,6 +766,7 @@ def _synthetic_vs_demo():
     at.run()
     at.session_state["single_compare_trial"] = "l37_273_2_2_2_Adv"
     at.session_state["single_compare_pos"] = "l37_273_2_2_2_Adv"
+    at.session_state[SINGLE_COMPARE_SCREEN_ID] = "Paragraph"
     at.run()
     assert not at.exception, at.exception
     texts = [

@@ -6,6 +6,7 @@ import streamlit as st
 
 from .aggregation import MEASURES, Measure
 from .constants import sentence_analysis_enabled
+from .menu import ARRIVED_KEY
 from .session_keys import CORPUS_GROUP_BY, CORPUS_MEASURE, CORPUS_SUBTAB
 
 DESTINATION_KEY = "corpus_destination"
@@ -91,7 +92,12 @@ def render_chooser(host, *, has_text: bool, measures: list[Measure]) -> tuple[st
     restoring = (
         last_address is not None and query != last_address and local == last_state
     )
-    if state.pop("_corpus_route_requested", False):
+    # Coming back from another view, or from a Help action's bounce, arrives
+    # with the page's parameters dropped. That empty address is not browser
+    # history: the route stays where the viewer left it, and
+    # `update_bookmark` writes it back to the URL.
+    returned = state.get(ARRIVED_KEY, False) and not any(query)
+    if state.pop("_corpus_route_requested", False) or returned:
         section, group, measure = local
         restoring = False
     elif last_address is None:

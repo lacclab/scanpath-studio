@@ -16,7 +16,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 Pick a dataset in **Select dataset** above the plot or open **Dataset library**
 on the :material/database: **Data Management** page.
 
-- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. The 1,000 Hz EyeLink samples run from paragraph onset to the keypress that ended reading. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates are blank. The demo records a pupil area of zero on those samples.
+- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. Each reading keeps every screen the reader saw: the article's title (first paragraph only), the question preview, the paragraph, the question, the answers and the feedback. Each screen shows the experiment's own stimulus image, placed where the experiment drew it. The 1,000 Hz EyeLink samples cover each screen from its onset to the response that ended it. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates and the pupil area are blank.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text,
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each
@@ -124,7 +124,7 @@ For a walkthrough inside the import wizard, choose **Setup help → Show setup g
 4. Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.
 5. Click :material/check: **Add dataset**, then :material/route: **Open in
-   Scanpath view** to see its first trial. You can also open the figure from
+   Scanpath View** to see its first trial. You can also open the figure from
    **Data Management → Current dataset**.
 
 To import similar files again, click :material/download: **Download setup file**
@@ -164,6 +164,110 @@ the app does.
     For raw gaze, metadata and explicit column mappings, see the
     [loaders](../../api.md#load-your-data) and [CLI input options](../../cli.md#flags-input).
 
+### Add a dataset from a script
+
+On your own computer, a script can add a dataset to the app's list. Use it to
+prepare the tables in code and then look at them in the app. Start the app
+afterwards and it opens on the new dataset. If the app is already open, reload
+its browser tab right away: changes you make in it before the reload are not
+saved.
+
+=== "Python"
+
+    ```python
+    import scanpath_studio as sps
+
+    sps.add_dataset(
+        "Pilot 3",
+        words="ia.csv",
+        fixations="fixations.csv",
+        canvas_size=(1920, 1080),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+    ```
+
+The tables load as `load_scanpath_data` loads them, and the dataset is saved
+with your other [saved work](../../cli.md#cache). Adding again under the same
+name is an error unless you pass `replace=True` (`--replace`). That swaps the
+tables and keeps the dataset's annotations, metadata tables, share links,
+description and recording setup, unless you give a new description or screen.
+Without a screen size, the app uses one the data records, or estimates one from
+the extent of the data. To set it later, use :material/edit: **Edit dataset**.
+See [`add_dataset`][scanpath_studio.api.add_dataset] for every option.
+
+To open the app on one reading of it, with the figure you want, write a link.
+It names the dataset, the participant and trial, and the figure in
+`plot_scanpath`'s options or `render`'s flags. From the CLI, `open` opens it in
+your browser, and starts the app first if it isn't running.
+
+=== "Python"
+
+    ```python
+    url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+    ```
+
+=== "CLI"
+
+    ```bash
+    scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap
+    ```
+
+The link is the one :material/share: **Share** → **Link** writes for that view, so
+settings it leaves out keep the values the app has. See
+[`app_link`][scanpath_studio.api.app_link] and [`open`](../../cli.md#open).
+
+To take a dataset off the list again, use
+[`remove_dataset`][scanpath_studio.api.remove_dataset] or
+`scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this
+way, with its annotations and metadata tables, as its **Remove** on the Data
+Management page does.
+
+### Annotations from a script { #annotations-from-a-script }
+
+A script can also read and write the favorites, tags and notes on a dataset
+you added. A quality-control script can tag the readings it flags, and
+reviewers find them in the app with the tag filter. An analysis can read back
+what the reviewers marked.
+
+=== "Python"
+
+    ```python
+    import pandas as pd
+    import scanpath_studio as sps
+
+    flags = pd.DataFrame(
+        {"participant_id": ["p01", "p02"], "trial_id": ["3", "7"], "tags": "Short"}
+    )
+    result = sps.write_annotations("Pilot 3", flags)
+    print(result.unknown)  # readings the dataset does not have, left out
+
+    marked = sps.read_annotations("Pilot 3")
+    excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+    ```
+
+=== "CLI"
+
+    ```bash
+    scanpath-studio annotations import "Pilot 3" flags.csv
+    scanpath-studio annotations export "Pilot 3" -o annotations.csv
+    ```
+
+The table has one row per reading: `participant_id`, `trial_id`, `screen_id`
+for one screen of a trial recorded over several, and any of `favorite`, `tags`
+and `note`. In a CSV file, separate tags with `;`. The app's exported
+`annotations.json` works too. Writing adds a reading's tags to the ones it
+has, and a favorite or note you give replaces its own. Pass `mode="replace"`
+(`--replace`) to make the dataset's annotations exactly the ones given; it is
+refused when none of the given readings is in the dataset. A
+reading the dataset does not have is left out and listed. An app already open
+shows the new annotations once its browser tab is reloaded. See
+[`write_annotations`][scanpath_studio.api.write_annotations] for every option.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials
@@ -178,7 +282,8 @@ participant, trial or text metadata file, that table shows the complete file.
 
 **Data checks** looks for unusable values in the whole dataset, including trials
 outside the filters. **Annotations** lets you review, import and export the
-dataset’s favorites, tags and notes.
+dataset’s favorites, tags and notes. A script can read and write them too; see
+[Annotations from a script](#annotations-from-a-script).
 
 To switch datasets, open **Dataset library**. Search by name or filter by
 source, then click a dataset to open its overview. **Saved work** shows what

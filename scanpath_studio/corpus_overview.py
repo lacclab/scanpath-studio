@@ -211,7 +211,10 @@ def render_corpus_overview(
     if measured.empty:
         chart.info("This measure has no recorded values in the selected readings.")
     else:
-        explanation = f"Dots show means. Lines show the range across {contributors}."
+        explanation = (
+            f"Dots show means, with each {contributors.removesuffix('s')} counting "
+            f"equally. Lines show the range across {contributors}."
+        )
         rank = (
             pd.Index(measured[field]).get_indexer([selected])[0]
             if selected is not None

@@ -3,8 +3,9 @@
 `prepare_data` has a recovery path for a mapping that is merely
 **incomplete** (a required field unmapped → `problems` → the raw tables plus the
 still-editable Column mapping panels). A mapping that is complete but
-**impossible** — the one-sided `screen_id` below, which `multipart` rejects
-because two coordinate spaces must not be joined — must take it too: escaping
+**impossible** — the fixations' `screen_id` below, naming screens the words
+report does not have, which `multipart` rejects because two coordinate spaces
+must not be joined — must take it too: escaping
 as a raw `ValueError` out of `main()` would kill the run *before* it rendered
 the mapping panels, the source picker or the signpost to them, leaving
 everything the user could click to undo it on the far side of the exception.
@@ -26,8 +27,11 @@ from tests.conftest import (
     pin_view,
 )
 
-#: Any real fixation column: mapping it as `screen_id` on one report only is
-#: what `multipart.validate_matching_parts` refuses.
+#: The column both of the demo's reports map as `screen_id`.
+DEMO_SCREEN_COLUMN = "part"
+#: Any other real fixation column: as the fixations' `screen_id` it names
+#: screens the words report does not have, which
+#: `multipart.validate_matching_parts` refuses.
 BOGUS_SCREEN_COLUMN = "TRIAL_INDEX"
 
 
@@ -46,7 +50,7 @@ def _remap(at: AppTest, picks: dict) -> AppTest:
 
 
 def _break_the_mapping(at: AppTest) -> AppTest:
-    """Map `screen_id` on the fixations report and nowhere else."""
+    """Map the fixations' `screen_id` to a column the words' screens don't match."""
     return _remap(at, {"col_map_fix_screen_id": BOGUS_SCREEN_COLUMN})
 
 
@@ -76,7 +80,7 @@ def test_the_rejected_mapping_stays_editable_so_it_can_be_undone():
     open_dataset_editor(at, timeout=180)
     assert at.selectbox(key="col_map_fix_screen_id").value == BOGUS_SCREEN_COLUMN
 
-    _remap(at, {"col_map_fix_screen_id": None})
+    _remap(at, {"col_map_fix_screen_id": DEMO_SCREEN_COLUMN})
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
@@ -92,7 +96,7 @@ def test_resetting_the_column_mapping_recovers_a_wedged_dataset():
     reset[0].click().run(timeout=180)
 
     assert not at.exception
-    assert at.session_state["col_map_fix_screen_id"] is None
+    assert at.session_state["col_map_fix_screen_id"] == DEMO_SCREEN_COLUMN
 
 
 # --- the escape hatches that don't go through the 🗂️ Data page -----------------
@@ -109,7 +113,7 @@ def test_a_wedged_dataset_can_be_abandoned_without_visiting_the_data_page():
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
-    assert at.session_state["col_map_fix_screen_id"] is None
+    assert at.session_state["col_map_fix_screen_id"] == DEMO_SCREEN_COLUMN
 
 
 def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
@@ -484,7 +488,7 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
 
     assert not at.exception
     (notice,) = [w.value for w in at.warning if "Data checks found problems" in w.value]
-    assert "**Fixations lasting 0 ms or less**: 1,883 of 1,894 fixation rows." in (
+    assert "**Fixations lasting 0 ms or less**: 3,009 of 3,020 fixation rows." in (
         notice
     )
     (open_checks,) = [b for b in at.button if b.key == "data_health_notice_open"]

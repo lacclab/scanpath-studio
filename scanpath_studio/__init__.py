@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 __all__ = [
+    "AnnotationsWriteResult",
     "ScanpathData",
     "__version__",
+    "add_dataset",
     "animate_scanpath",
+    "app_link",
     "attach_stimulus_images",
     "build_authored_scanpath",
     "cache_status",
@@ -33,6 +36,8 @@ __all__ = [
     "plot_scanpath",
     "propose_schema",
     "publication_figure",
+    "read_annotations",
+    "remove_dataset",
     "render_parent_trial",
     "run_analysis_recipe",
     "save_figure",
@@ -40,13 +45,14 @@ __all__ = [
     "save_panel_proof",
     "save_publication",
     "version_info",
+    "write_annotations",
 ]
 # The release this tree descends from: the number `/release` bumps (with
 # CITATION.cff), `pyproject.toml` builds with, and publish.yml checks a tag
 # against. `__version__` is the exact build, worked out from it lazily
 # (build_info.py) — "0.35.0" at the release itself,
 # "0.35.0.post3+g8f18219" three commits after it.
-__release__ = "0.48.0"
+__release__ = "0.49.0"
 
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/

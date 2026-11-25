@@ -10,6 +10,7 @@ import html
 import io
 import itertools
 import json
+import os
 import pickle
 import re
 import warnings
@@ -127,6 +128,7 @@ from scanpath_studio.column_names import (
 from scanpath_studio.column_names import active as active_column_names
 from scanpath_studio.compare_source import (
     COMPARE_SOURCE_KEY,
+    COMPARE_SOURCE_RESOLVED_KEY,
     THIS_DATASET,
     SecondaryDataset,
     load_secondary_dataset,
@@ -150,6 +152,7 @@ from scanpath_studio.constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     FIXATION_LABEL_OPTIONS,
+    FIXATION_OPACITY,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -214,14 +217,17 @@ from scanpath_studio.controls import (
     compare_b_filters,
     corpus_style_controls,
     current_dataset_name,
+    echoes_a_held_write,
     field_help,
     format_filter_item,
     has_active_trial_filters,
     leave_animation,
     metadata_readings,
+    modes_summary,
     on_animation_change,
     pin_word_heatmap_range,
     plot_popover_on_change,
+    rail_section,
     read_trial_filters,
     render_compare_filters,
     render_narrow_by,
@@ -252,12 +258,13 @@ from scanpath_studio.data import (
     carries_mapped_text,
     coerce_bool_or_na,
     compute_word_metrics,
+    declared_font_family,
     derive_trial_index,
     distinct_key_codes,
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
-    filter_to_keys,
+    filter_to_keys_cached,
     forget_frame_cache,
     frame_cache,
     frame_fingerprint,
@@ -276,6 +283,7 @@ from scanpath_studio.data import (
     repeat_bases,
     respell_reading,
     select_trials_cached,
+    set_digest,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
@@ -297,6 +305,7 @@ from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
     DEFAULT_PRINT_DPI,
     HTML_SELF_CONTAINED_KEY,
+    BundleContents,
     ExportOptions,
     annotate_figure,
     apply_export_scope,
@@ -362,6 +371,7 @@ from scanpath_studio.plots import (
     apply_legend_layout,
     break_at_gaps,
     build_scanpath_replay,
+    category_vocabulary,
     make_comparison_figure,
     make_density_scatter_figure,
     make_difference_profile_figure,
@@ -478,6 +488,24 @@ def _step_screen(key_prefix: str, options: tuple[str, ...], delta: int) -> None:
     st.session_state[id_key] = options[max(0, min(len(options) - 1, position + delta))]
 
 
+def _demo_opening_screen(*, compare: bool = False) -> str | None:
+    """The screen a bundled-demo reading opens on, or ``None`` elsewhere.
+
+    The demo keeps every screen a reader saw, from the article's title to the
+    answer feedback; it opens on the paragraph, the screen the reading is about
+    and the one a link naming no screen opens (`url_state.DEMO_UNNAMED_SCREEN`).
+    ``compare`` asks about scanpath B, whose dataset is A's unless the
+    comparison picker names another."""
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.session_keys import DATA_SOURCE_CHOICE
+    from scanpath_studio.url_state import DEMO_UNNAMED_SCREEN
+
+    source = st.session_state.get(DATA_SOURCE_CHOICE)
+    if compare:
+        source = _compare_source_name() or source
+    return DEMO_UNNAMED_SCREEN if source == DEMO_CHOICE else None
+
+
 def _render_screen_navigator(
     catalog: pd.DataFrame, *, key_prefix: str = "single", host=None
 ) -> str | None:
@@ -502,7 +530,8 @@ def _render_screen_navigator(
     options = tuple(catalog[SCREEN_ID].astype(str))
     current = st.session_state.get(id_key)
     if current not in options:
-        st.session_state[id_key] = options[0]
+        opening = _demo_opening_screen(compare=key_prefix == "single_compare")
+        st.session_state[id_key] = opening if opening in options else options[0]
     labels = {
         str(row.screen_id): f"{int(row.screen_index)}/{len(catalog)} · {row.screen_id}"
         for row in catalog.itertuples()
@@ -521,9 +550,20 @@ def _render_screen_navigator(
         key=id_key,
         format_func=labels.get,
         help="Which screen of this trial to draw. The trial stays selected.",
+        # The navigator is drawn only on the Scanpath view; a trip to another
+        # view must not drop the screen the reader was on.
+        persist_state="session",
     )
     # Narrow, but its menu opens as wide as the longest screen name.
     widen_menu(id_key, labels.values())
+    # On a phone this line of text stands in for the dropdown (`styles.py`), so
+    # the screen steps fit on the trial's ◀ ▶ line without making it taller.
+    # The dropdown's label leaves with it, so a screen reader hears it here.
+    whose = "Screen B" if key_prefix == "single_compare" else "Screen"
+    cell.container(key=f"{key_prefix}_screen_brief").markdown(
+        f'<span class="sps-sr-only">{whose} </span>{md_literal(labels[str(selected)])}',
+        unsafe_allow_html=True,
+    )
     # Both steps in ONE keyed `railbtn_*` container, so they take the pill
     # shape and 3px spacing of the ◀ ▶ ⇅ cluster beside them.
     trail = cell.container(key=f"railbtn_{key_prefix}_screen_trail", width="content")
@@ -2163,7 +2203,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             "fixation_snap_position", DEFAULT_SNAP_POSITION
         ),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
-        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
+        fixation_opacity=viz_settings.get("fixation_opacity", FIXATION_OPACITY.default),
         fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
         fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
@@ -2234,6 +2274,7 @@ def _publish_snippet_state(
     caption: str,
     playback_speed: float,
     compare: CompareTarget | None,
+    declared_font_family: str | None = None,
     full_fix_range: tuple[int, int] | None = None,
     fix_index_range_b: tuple[int, int] | None = None,
     own_pages: dict | None = None,
@@ -2268,6 +2309,7 @@ def _publish_snippet_state(
         canvas=(int(canvas[0]), int(canvas[1])),
         base_font_size=int(base_font_size),
         font_family=str(font_family),
+        declared_font_family=declared_font_family,
         title=title,
         caption=caption,
         fix_index_range=window,
@@ -2391,6 +2433,22 @@ def _amend_snippet_compare_labels(labels: tuple[str, str]) -> None:
     )
 
 
+#: Build inputs that name an image file the figure embeds (`plots._image_to_data_uri`).
+_IMAGE_PATH_INPUTS = frozenset({"background_image", "background_image_b"})
+
+
+def _file_version(path: str) -> tuple[int, int, int, int] | None:
+    """The file at ``path`` as of now, or ``None`` when there is none: what
+    tells a file replaced at the same path apart. The inode changes when a new
+    file is renamed over the old one, and the change time on every write,
+    including a copy that keeps the old modification time and size."""
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
+
 def _figure_input_key(
     words: pd.DataFrame, fixations: pd.DataFrame, build_kwargs: dict
 ) -> tuple:
@@ -2406,10 +2464,15 @@ def _figure_input_key(
     ]
     for k in sorted(build_kwargs):
         v = build_kwargs[k]
-        if isinstance(v, pd.DataFrame):
+        if k in _IMAGE_PATH_INPUTS and isinstance(v, str) and not v.startswith("data:"):
+            # The figure embeds the page's bytes, so a page re-exported over
+            # the old one at the same path must build a new figure.
+            parts.append((k, (v, _file_version(v))))
+        elif isinstance(v, pd.DataFrame):
             parts.append((k, frame_fingerprint(v)))
         elif isinstance(v, dict):
-            parts.append((k, tuple(sorted((str(a), str(b)) for a, b in v.items()))))
+            # `repr`, not `str`: `{1: …}` and `{"1": …}` must not share a key.
+            parts.append((k, tuple(sorted((repr(a), repr(b)) for a, b in v.items()))))
         elif isinstance(v, (list, tuple)):
             parts.append((k, tuple(v)))
         else:
@@ -2421,7 +2484,39 @@ def _figure_input_key(
     return tuple(parts)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_category_vocabulary(
+    column: str,
+    _fixations: pd.DataFrame | None,
+    _fixations_b: pd.DataFrame | None,
+    frame_keys: tuple,
+) -> tuple[str, ...] | None:
+    """`plots.category_vocabulary`, cached on the frames' fingerprints."""
+    return category_vocabulary(column, _fixations, _fixations_b)
+
+
+def _dataset_color_categories(
+    color_by: str | None,
+    fixations: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None = None,
+) -> tuple[str, ...] | None:
+    """`FigureSettings.color_categories` for a figure coloured by ``color_by``:
+    every label it takes in the whole dataset's ``fixations`` — unfiltered, so a
+    trial filter moves no colour — and in a second dataset's for Compare."""
+    if not color_by or color_by in (UNIFORM_COLOR_FIELD, "line"):
+        return None
+    return _c_category_vocabulary(
+        str(color_by),
+        fixations,
+        fixations_b,
+        tuple(
+            None if frame is None else frame_fingerprint(frame)
+            for frame in (fixations, fixations_b)
+        ),
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
 def _cached_scanpath_figure(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
@@ -2433,7 +2528,9 @@ def _cached_scanpath_figure(
 
     Frames and settings are passed un-hashed; ``fig_key`` (from
     ``_figure_input_key``) is the cache key, so a rerun with the same trial and
-    settings reuses the figure instead of rebuilding all its traces/shapes."""
+    settings reuses the figure instead of rebuilding all its traces/shapes.
+    The cache is shared by every session of the server, so it keeps the most
+    recent 32 figures, not every trial and setting ever drawn."""
     # The single most expensive thing a rerun can do, and invisible from
     # outside — a cache hit and a miss look identical on screen. The line only
     # appears on a miss, which is what makes it worth reading.
@@ -2445,6 +2542,75 @@ def _cached_scanpath_figure(
         return make_scanpath_figure(
             _words, _fixations, settings=_settings, raw_gaze=_raw_gaze
         )
+
+
+def _comparison_figure_key(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    settings: FigureSettings,
+    raw_gaze: pd.DataFrame | None,
+    trials: tuple,
+) -> tuple:
+    """Cache key for a comparison figure: both readings' frames, the two
+    trials, the samples, and every field of its settings. Every field, not the
+    comparison's own options: its layout, both styles, B's screen and page and
+    the per-render overrides all live in the settings."""
+    inputs = {
+        field.name: getattr(settings, field.name)
+        for field in dataclass_fields(settings)
+    }
+    return _figure_input_key(
+        words, fixations, {**inputs, "raw_gaze": raw_gaze, "trials": trials}
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _cached_comparison_figure(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _trials: tuple,
+    _settings: FigureSettings,
+    _raw_gaze: pd.DataFrame | None,
+    fig_key,
+):
+    """Build + cache a comparison figure, as `_cached_scanpath_figure` does for
+    the static one, so a click that changes nothing in it reuses it."""
+    with timed(
+        "build comparison figure (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_comparison_figure(
+            _words, _fixations, *_trials, settings=_settings, raw_gaze=_raw_gaze
+        )
+
+
+@st.cache_data(show_spinner=False, max_entries=48)
+def _cached_panel_figure(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _options: dict,
+    fig_key,
+):
+    """Build + cache one panel of a grid of readings, as
+    `_cached_scanpath_figure` does for the main figure. Enough entries for a
+    few pages of `_GEN_PAGE_SIZE` panels, so paging back draws nothing new."""
+    with timed(
+        "build grid panel (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_scanpath_figure(_words, _fixations, **_options)
+
+
+def _panel_figure(words: pd.DataFrame, fixations: pd.DataFrame, options: dict):
+    """A grid panel's static figure, keyed on its frames and every option."""
+    return _cached_panel_figure(
+        words,
+        fixations,
+        options,
+        fig_key=_figure_input_key(words, fixations, options),
+    )
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -2648,10 +2814,7 @@ def _compare_source_name() -> str | None:
 #: the user just switched *away* from (see ``_resolve_compare_source``).
 _NO_COMPARE_NARROWING: dict = {"participants": None, "metadata": {}, "ranges": {}}
 
-#: The comparison dataset the last run resolved, so a switch can be told from a
-#: re-render. Not a widget key — the picker's own key is the user's *pick*, and
-#: this is what was actually loaded and filtered against.
-_COMPARE_SOURCE_RESOLVED_KEY = "_compare_source_resolved"
+_COMPARE_SOURCE_RESOLVED_KEY = COMPARE_SOURCE_RESOLVED_KEY
 
 
 def _compare_source_choices() -> tuple[list[str], dict[str, bool], dict[str, str]]:
@@ -2698,6 +2861,14 @@ def _claim_compare_task(task_key: tuple) -> None:
     if previous is not None and tuple(previous) != task_key:
         progress.cancel(tuple(previous))
     st.session_state[COMPARE_TASK_KEY] = task_key
+
+
+def _second_dataset_load(token: str) -> dict:
+    """`CompareTarget`'s ``schemas`` and ``caveats`` for B's dataset ``token``."""
+    from scanpath_studio.url_state import second_dataset_load
+
+    schemas, caveats = second_dataset_load(token)
+    return {"schemas": schemas, "caveats": caveats}
 
 
 def _dataset_label(token: str) -> str:
@@ -2760,6 +2931,7 @@ def _resolve_compare_source(
         return None, ""
     if not ready_by_name.get(chosen, False):
         _abandon_compare_task()
+        _forget_compare_narrowing()
         return None, f"{ICONS['warning']} {reason_by_name.get(chosen, '')}"
     if loading_slot is None:
         source = load_secondary_dataset(chosen)
@@ -2786,6 +2958,7 @@ def _resolve_compare_source(
             source = load_secondary_dataset(chosen)
         _release_compare_task(task_key)
     if source is None:
+        _forget_compare_narrowing()
         return (
             None,
             f"{ICONS['warning']} Couldn't load **{md_literal(_dataset_label(chosen))}** "
@@ -2903,6 +3076,22 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     )
 
 
+#: The `frame_cache` slots `_narrow_secondary` keeps its copies of B's pool in.
+COMPARE_NARROWING_SLOTS = (
+    "cmp_trial_filters",
+    "cmp_trial_metadata_filter",
+    "cmp_annotation_filter_readings",
+    "cmp_annotation_filter",
+)
+
+
+def _forget_compare_narrowing() -> None:
+    """Drop B's narrowed copies of its pool once nothing narrows B: Compare is
+    off, or B's dataset did not load."""
+    for slot in COMPARE_NARROWING_SLOTS:
+        forget_frame_cache(slot)
+
+
 def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
     """Apply B's own (``cmp``-prefixed) trial filters to a comparison source.
 
@@ -2925,17 +3114,20 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         (source.words, source.fixations),
         trial_filter_params(filters),
     )
-    selected_keys = filters.get("trial_keys")
-    if selected_keys is not None:
-        pool = (words, fixations)
-        words, fixations = filter_to_keys(words, fixations, set(selected_keys))
-        assign_derived((words, fixations), "filter_to_keys", pool, set(selected_keys))
+    words, fixations = filter_to_keys_cached(
+        words, fixations, filters.get("trial_keys"), slot="cmp_trial_metadata_filter"
+    )
+    kept = None
     if (
         filters.get("favorites_only")
         or filters.get("required_tags")
         or filters.get("excluded_tags")
     ):
-        present = trial_keys(words) | trial_keys(fixations)
+        present = frame_cache(
+            "cmp_annotation_filter_readings",
+            (frame_fingerprint(words), frame_fingerprint(fixations)),
+            lambda: trial_keys(words) | trial_keys(fixations),
+        )
         kept = set(
             filter_keys(
                 list(present),
@@ -2945,9 +3137,11 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
                 prefix=_COMPARE_FILTER_PREFIX,
             )
         )
-        pool = (words, fixations)
-        words, fixations = filter_to_keys(words, fixations, kept)
-        assign_derived((words, fixations), "filter_to_keys", pool, kept)
+    else:
+        forget_frame_cache("cmp_annotation_filter_readings")
+    words, fixations = filter_to_keys_cached(
+        words, fixations, kept, slot="cmp_annotation_filter"
+    )
     if fixations is source.fixations and words is source.words:
         return source
     combos, _, _ = build_combo_options_for(fixations, source.composite_trial_columns)
@@ -3647,8 +3841,15 @@ def _stimulus_fields(trial_words: pd.DataFrame) -> tuple[list[str], list[str]]:
         or _STIMULUS_QA_KEY not in st.session_state
     ):
         st.session_state[_STIMULUS_SIG_KEY] = signature
-        st.session_state[_STIMULUS_SPAN_KEY] = _detect_span_columns(trial_words)
-        st.session_state[_STIMULUS_QA_KEY] = _detect_question_columns(trial_words)
+        # Held (`write_through`): a browser that had the ⚙ Fields menu open
+        # sends back the previous dataset's columns, which this one lacks, and
+        # the panel would show none of its own.
+        write_through(
+            _STIMULUS_SPAN_KEY, _detect_span_columns(trial_words), in_callback=False
+        )
+        write_through(
+            _STIMULUS_QA_KEY, _detect_question_columns(trial_words), in_callback=False
+        )
     spans = [
         c for c in st.session_state.get(_STIMULUS_SPAN_KEY, []) if c in span_options
     ]
@@ -4020,6 +4221,7 @@ def _render_paragraph_panel(
     trial_words: pd.DataFrame,
     *,
     trial_fixations: pd.DataFrame | None = None,
+    reading_words: pd.DataFrame | None = None,
     expanded: bool = True,
     bare: bool = False,
 ) -> None:
@@ -4032,7 +4234,13 @@ def _render_paragraph_panel(
     and span colours. Each span is annotated
     with whether it was fixated when ``trial_fixations`` is given. Skips silently
     when no word text is available. ``bare=True`` drops the expander wrapper so
-    the panel can sit directly inside a subtab."""
+    the panel can sit directly inside a subtab.
+
+    ``reading_words`` is the whole reading when ``trial_words`` is one screen
+    of it. Which columns the panel offers and picks by default is decided on
+    the whole reading, so a screen none of whose words is in a span (a title)
+    neither drops the reader's span choice nor leaves the later screens without
+    one."""
     if "text" not in trial_words.columns or trial_words.empty:
         if bare:
             # The subtab is on screen, so an empty body reads as broken.
@@ -4045,7 +4253,9 @@ def _render_paragraph_panel(
         return
     # The name-hint detection supplies the defaults; the ⚙️ Fields popover
     # is what lets a corpus whose columns are named differently use the panel.
-    span_cols, qa_cols, span_options, qa_options = _stimulus_fields(trial_words)
+    span_cols, qa_cols, span_options, qa_options = _stimulus_fields(
+        trial_words if reading_words is None or reading_words.empty else reading_words
+    )
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
 
     container = (
@@ -6452,9 +6662,10 @@ def render_single_trial_tab(
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
     # built for the everything-beside-the-plot workflow. The selection menus +
-    # chips + plot + per-trial subtabs live in the left column. The narrow rail
-    # stays in page flow, so it can extend below a short plot without pushing
-    # the subtabs away from the figure.
+    # chips + plot + per-trial subtabs live in the left column. The narrow rail's
+    # column sticks and scrolls on its own (styles.py), as tall as the room
+    # under the page's top band, so a long rail never pushes the subtabs away
+    # from the figure.
     with st.container(key="scanpath_workspace"):
         plot_col, rail_col = st.columns([4, 1], gap="large")
     # Rail containers filled after the rail itself (B's filters).
@@ -6610,6 +6821,10 @@ def render_single_trial_tab(
         trial_words = screen_rows(parent_words, selected_screen)
         trial_fixations = screen_rows(parent_fixations, selected_screen)
         trial_raw_gaze = screen_rows(parent_raw_gaze, selected_screen)
+        # Named like the reading's slice, so its samples are not hashed per rerun.
+        assign_derived(
+            trial_raw_gaze, "screen_rows", parent_raw_gaze, str(selected_screen)
+        )
         for label, parent in (
             ("Words", parent_words),
             ("Fixations", parent_fixations),
@@ -6732,8 +6947,9 @@ def render_single_trial_tab(
             )
     else:
         # Compare off loads no second dataset — stop the one an
-        # earlier run left loading for B.
+        # earlier run left loading for B — and keeps no copy of B's pool.
         _abandon_compare_task()
+        _forget_compare_narrowing()
         compare_words_pool = words_filtered
         compare_fixations_pool = fixations_filtered
 
@@ -6784,7 +7000,12 @@ def render_single_trial_tab(
         # Reserve the first block before resolving the detailed controls. Its
         # tiles need the defaults seeded by render_plot_controls further below.
         view_host = rail.container(key="rail_view_controls")
-        modes = rail.container(key="tour_grp_view_modes")
+        modes = rail_section(
+            rail.container(key="tour_grp_view_modes"),
+            "modes",
+            "Modes",
+            modes_summary(),
+        )
         with modes:
             compare_host = modes.container(key="rail_compare")
             anim_disabled = not animate
@@ -6793,7 +7014,7 @@ def render_single_trial_tab(
                 if animate
                 else f"{ICONS['warning']} This trial has no fixations to animate."
                 if animate_requested
-                else f"{ICONS['warning']} Turn on **Animation** to change playback."
+                else f"{ICONS['warning']} Turn on **Playback** to change these settings."
             )
             animation_row = ui_mode.advanced_only(modes, "rail_animation").container(
                 horizontal=True,
@@ -6803,7 +7024,7 @@ def render_single_trial_tab(
                 key="split_mode_animation",
             )
             animation_row.toggle(
-                f"{ICONS['animate']} Animation",
+                f"{ICONS['animate']} Playback",
                 key=SINGLE_ANIMATE,
                 persist_state="session",
                 wrap=True,
@@ -6811,11 +7032,11 @@ def render_single_trial_tab(
                 help="Switch between the replay and the current static view.",
             )
             animation_settings = animation_row.popover(
-                "Animation settings",
+                "Playback settings",
                 width="content",
                 key="plot_menu_animation",
                 on_change=plot_popover_on_change(),
-                help="Animation settings. Adjust playback speed, autoplay and frame timing.",
+                help="Playback settings. Adjust speed, autoplay and frame timing.",
             )
             with animation_settings, _popover_rows("animation"):
                 st.session_state.setdefault(
@@ -6853,8 +7074,11 @@ def render_single_trial_tab(
                 # count, which is what export size and render time are made of —
                 # so the user sets it, and `_render_anim_info` says when the
                 # frame limit coarsened it.
-                def _apply_anim_quality() -> None:
-                    quality = st.session_state.get("global_anim_quality")
+                def _apply_anim_quality(widget_key: str) -> None:
+                    if widget_key not in st.session_state:
+                        return  # the menu was not drawn: no pick to apply
+                    quality = st.session_state[widget_key]
+                    st.session_state["global_anim_quality"] = quality
                     if quality == "Custom":
                         st.session_state["plot_detail_frame_timing"] = True
                     elif quality in _ANIM_QUALITY_PRESETS:
@@ -6890,15 +7114,24 @@ def render_single_trial_tab(
                     f"{name} uses a {step} ms interval with up to {cap} frames."
                     for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
                 )
+                # A shadow of the quality worked out above: Undo, Reset, a
+                # design or a settings file changes the grid, and with it the
+                # quality, without this control. Under one fixed key, a closed
+                # menu would send its last-shown quality back, and the callback
+                # would apply that preset's grid over the change.
+                quality_options = [*_ANIM_QUALITY_PRESETS, "Custom"]
+                quality = st.session_state["global_anim_quality"]
+                quality_key = shadow_widget_key("anim_quality", quality, seed=False)
                 _labeled(
                     st,
                     "selectbox",
                     "Animation smoothness",
                     display="Smoothness",
-                    options=[*_ANIM_QUALITY_PRESETS, "Custom"],
-                    key="global_anim_quality",
-                    persist_state="session",
+                    options=quality_options,
+                    index=quality_options.index(quality),
+                    key=quality_key,
                     on_change=_apply_anim_quality,
+                    args=(quality_key,),
                     disabled=anim_disabled,
                     help="More frames give smoother motion and take longer to build. "
                     + presets_help,
@@ -6906,7 +7139,11 @@ def render_single_trial_tab(
                 anim_frames_slot = st.container() if animate else None
 
                 def _mark_anim_quality_custom() -> None:
-                    write_through("global_anim_quality", "Custom")
+                    if echoes_a_held_write(
+                        "global_anim_grid_step_ms", "global_anim_max_frames"
+                    ):
+                        return  # a closed menu's echo, not a change to the grid
+                    st.session_state["global_anim_quality"] = "Custom"
 
                 # Both values remain mounted inside the disclosure, including
                 # when a preset changes them or a settings file restores them.
@@ -7469,6 +7706,16 @@ def render_single_trial_tab(
             fixations=trial_fixations.columns,
             raw_gaze=trial_raw_gaze.columns,
         ),
+        # A category's colour comes from every label in the dataset — both
+        # datasets' for a cross-dataset Compare — so it is the same in every
+        # trial, the replay, Compare and the bulk export.
+        color_categories=_dataset_color_categories(
+            figure_settings.get("color_by"),
+            fixations_all,
+            compare_source.fixations
+            if comparing and cross_dataset and compare_source is not None
+            else None,
+        ),
     )
 
     # Drift correction — hoisted ABOVE the render-mode split, so the two
@@ -7704,6 +7951,7 @@ def render_single_trial_tab(
         canvas=(canvas_width, canvas_height),
         base_font_size=base_font_size,
         font_family=font_family,
+        declared_font_family=declared_font_family(trial_words),
         title=_snippet_title,
         caption=_snippet_caption,
         playback_speed=playback_speed,
@@ -7742,6 +7990,14 @@ def render_single_trial_tab(
                     else None
                 ),
                 primary_raw_gaze=has_raw_gaze,
+                # An uploaded B's column mapping, so the recipe reads B's
+                # files as the app did, and what its add did that the
+                # recipe cannot repeat.
+                **(
+                    _second_dataset_load(compare_meta["dataset"])
+                    if compare_meta.get("dataset")
+                    else {}
+                ),
             )
             # An animation names B only when it co-animates B. Where it falls
             # back to A alone (B empty, or two screens), a snippet naming B
@@ -7790,8 +8046,15 @@ def render_single_trial_tab(
     with plot_slot:
         if not animate:
             _abandon_animation_task()
+        # The replay draws no raw gaze, and with no samples anywhere the rail
+        # greys the switch, so neither has anything missing to say.
+        any_samples = (
+            trial_has_raw_gaze
+            or (raw_gaze is not None and not raw_gaze.empty)
+            or (comparing and not compare_raw_gaze.empty)
+        )
         raw_gaze_missing = _raw_gaze_missing_note(
-            global_raw_toggle,
+            global_raw_toggle and not animate and any_samples,
             trial_has_raw_gaze=trial_has_raw_gaze,
             comparing=comparing and not animate,
             compare_has_raw_gaze=not compare_raw_gaze.empty,
@@ -7986,8 +8249,9 @@ def render_single_trial_tab(
                     build_inputs["reading_origin_ms"] = (
                         None if pd.isna(origin) else origin
                     )
-                # Not an option, but the figure's text: a renamed column redraws.
+                # Not options, but the figure's text and its category colours.
                 build_inputs["column_labels"] = static_settings.column_labels
+                build_inputs["color_categories"] = static_settings.color_categories
                 displayed_fig = _cached_scanpath_figure(
                     trial_words,
                     plot_fixations,
@@ -8090,6 +8354,7 @@ def render_single_trial_tab(
                                 **original.for_builder(STATIC_FIGURE_OPTIONS),
                                 "raw_gaze": figure_raw_gaze,
                                 "column_labels": original.column_labels,
+                                "color_categories": original.color_categories,
                             },
                         ),
                     )
@@ -8172,7 +8437,10 @@ def render_single_trial_tab(
             # and a trial whose context it cannot render costs only this tab.
             if tab_stim.open:
                 _render_paragraph_panel(
-                    trial_words, trial_fixations=trial_fixations, bare=True
+                    trial_words,
+                    trial_fixations=trial_fixations,
+                    reading_words=parent_words,
+                    bare=True,
                 )
     with tab_compare if tab_compare is not None else contextlib.nullcontext():
         # Only the selected tab's body runs (see the st.tabs call).
@@ -8198,7 +8466,13 @@ def render_single_trial_tab(
                     scale_text_to_boxes=scale_text_to_boxes,
                     trial_raw_gaze=trial_raw_gaze,
                     raw_gaze=raw_gaze,
+                    color_categories=_dataset_color_categories(
+                        viz_settings.get("color_by"), fixations_all
+                    ),
                 )
+        else:
+            # Closed, the subtab keeps no copy of its matches.
+            forget_frame_cache("comparison_matches")
 
     # Absent entirely while drift correction is gated off.
     with tab_align if tab_align is not None else contextlib.nullcontext():
@@ -8275,6 +8549,32 @@ def render_single_trial_tab(
 #: the wire, never in the recovery cache.
 _BULK_EXPORT_STOPPED = "_bulk_export_stopped"
 
+#: The session's replaced disk bundle, which `DiskBundle.retire` keeps on disk
+#: for a while so a download already under way can finish. One per session.
+#: Internal: never on the wire, never in the recovery cache.
+_BULK_EXPORT_RETIRED = "_bulk_export_retired"
+
+
+def _retire_bulk_bundle(bundle) -> None:
+    """Let go of a replaced bundle without cutting off its download.
+
+    A disk bundle is deleted after a grace period, or at once when the session
+    retires another. A bundle held in memory needs nothing."""
+    if not isinstance(bundle, DiskBundle):
+        return
+    earlier = st.session_state.get(_BULK_EXPORT_RETIRED)
+    if earlier is not None and earlier is not bundle:
+        earlier.close()
+    st.session_state[_BULK_EXPORT_RETIRED] = bundle
+    bundle.retire()
+
+
+def _drop_bulk_export_cache() -> None:
+    """Forget the session's bundle; its download keeps working for a while."""
+    cache = st.session_state.pop("_bulk_export_cache", None)
+    if cache:
+        _retire_bulk_bundle(cache["data"])
+
 
 def _bulk_export_task_key() -> tuple:
     """The bundle build's progress task — one per session."""
@@ -8286,7 +8586,7 @@ def _stop_bulk_export(task_key: tuple, retry: bool = False) -> None:
     progress.cancel(task_key)
     st.session_state[_BULK_EXPORT_STOPPED] = "retry" if retry else "build"
     if not retry:
-        st.session_state.pop("_bulk_export_cache", None)
+        _drop_bulk_export_cache()
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -8319,6 +8619,44 @@ def _c_export_unit_count(
         return count_export(scoped, _words, _fixations, _raw_gaze, screens)
     except ValueError:
         return None
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_bundle_contents(
+    _combos: pd.DataFrame,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    _options: ExportOptions,
+    _settings: dict,
+    _column_names: dict,
+    _annotation_records: list | None,
+    axes: tuple[str, str],
+    frame_keys: tuple,
+    key: tuple,
+) -> BundleContents | str:
+    """*Preview bundle contents*, which walks every reading and takes seconds
+    over a large corpus for a custom path pattern. Cached on the four frames'
+    fingerprints (``frame_keys``), the axes and ``key``: the options, the
+    settings (with the attached metadata tables' fingerprints), the names of
+    the metadata fields a pattern can use, the column names and the annotations.
+
+    An invalid plan's message is returned, not raised, so it is cached too."""
+    try:
+        return bundle_contents(
+            _combos,
+            _words,
+            _fixations,
+            _raw_gaze,
+            options=_options,
+            settings=_settings,
+            axes=axes,
+            column_names=_column_names,
+            metadata_rows_for=_metadata_mod.pattern_rows,
+            annotation_records=_annotation_records,
+        )
+    except ValueError as error:
+        return str(error)
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -8487,6 +8825,18 @@ def _render_bulk_export(
         from scanpath_studio.app import _dataset_display_name
 
         annotation_dataset = _dataset_display_name(annotation_owner)
+    settings_key = json.dumps(figure_settings, sort_keys=True, default=str)
+    # The figure on screen assigns category colours over the whole dataset's
+    # labels, whichever trials the bundle exports.
+    color_categories = _dataset_color_categories(
+        figure_settings.get("color_by"), fixations_all
+    )
+    annotations_key = json.dumps(annotation_records, sort_keys=True, default=str)
+    table_names = _dataset_table_names()
+    # A renamed column changes every table's header.
+    names_key = json.dumps(
+        {t: n.to_payload() for t, n in table_names.items()}, sort_keys=True
+    )
     preview = st.expander(
         "Preview bundle contents", key="bulk_export_contents", on_change="rerun"
     )
@@ -8498,21 +8848,31 @@ def _render_bulk_export(
                 for grain in ("participant", "trial", "text")
             },
         }
-        try:
-            contents = bundle_contents(
-                active_combos,
-                active_words,
-                active_fix,
-                active_raw_gaze,
-                options=options,
-                settings=preview_settings,
-                axes=(x_field, y_field),
-                column_names=_dataset_table_names(),
-                metadata_rows_for=_metadata_mod.pattern_rows,
-                annotation_records=annotation_records,
+        # The settings carry the attached tables' fingerprints; a pattern can
+        # also name a field the table declares.
+        metadata_fields = tuple(
+            None if table is None else table.names
+            for table in (
+                _metadata_mod.active(),
+                _metadata_mod.active_trials(),
+                _metadata_mod.active_texts(),
             )
-        except ValueError as error:
-            preview.error(str(error))
+        )
+        contents = _c_bundle_contents(
+            active_combos,
+            active_words,
+            active_fix,
+            active_raw_gaze,
+            options,
+            preview_settings,
+            table_names,
+            annotation_records,
+            (x_field, y_field),
+            frame_keys,
+            (repr(options), settings_key, metadata_fields, names_key, annotations_key),
+        )
+        if isinstance(contents, str):
+            preview.error(contents)
         else:
             if options.print_width_mm and options.raster_formats():
                 sizing = f"{options.print_width_mm:g} mm wide"
@@ -8530,20 +8890,17 @@ def _render_bulk_export(
         str(font_family),
         str(x_field),
         str(y_field),
-        json.dumps(figure_settings, sort_keys=True, default=str),
+        settings_key,
+        color_categories,
         repr(options),
-        json.dumps(annotation_records, sort_keys=True, default=str),
+        annotations_key,
         annotation_dataset,
         EXPORTER_VERSION,
-        # A renamed column changes every table's header.
-        json.dumps(
-            {t: n.to_payload() for t, n in _dataset_table_names().items()},
-            sort_keys=True,
-        ),
+        names_key,
     )
     cache = st.session_state.get("_bulk_export_cache")
     if cache and cache.get("sig") != sig:
-        st.session_state.pop("_bulk_export_cache", None)
+        _drop_bulk_export_cache()
         cache = None
 
     retry = bool(
@@ -8614,20 +8971,25 @@ def _render_bulk_export(
                     status_callback=on_status,
                     # The tables go out under the dataset's own names.
                     column_names=_dataset_table_names(),
+                    color_categories=color_categories,
                 )
         except Exception as exc:
             stop_slot.empty()
             progress_slot.empty()
             status_box.update(label="Export failed", state="error")
             if not retry:
-                st.session_state.pop("_bulk_export_cache", None)
+                _drop_bulk_export_cache()
                 cache = None
             st.warning(f"Couldn't build the export bundle: {exc}")
         else:
             stop_slot.empty()
             progress_slot.empty()
+            replaced = cache["data"] if cache else None
             cache = {"sig": sig, "data": bundle, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
+            # A retry with nothing left to repair hands back the same bundle.
+            if replaced is not bundle:
+                _retire_bulk_bundle(replaced)
             # The status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
             built = summarize_export(built_progress, len(bundle))
@@ -8973,13 +9335,19 @@ def _render_comparison_figure(
             overrides["heatmap_metric"] = "duration_ms"
     comparison_settings = settings.with_overrides(**overrides)
     _amend_snippet_settings(comparison_settings, "comparison")
-    fig_compare = make_comparison_figure(
-        words_filtered,
-        fixations_filtered,
+    trials = (
         (selected_participant, selected_trial),
         (frame_participant_b, compare_trial),
-        settings=comparison_settings,
-        raw_gaze=raw_gaze,
+    )
+    fig_compare = _cached_comparison_figure(
+        words_filtered,
+        fixations_filtered,
+        trials,
+        comparison_settings,
+        raw_gaze,
+        fig_key=_comparison_figure_key(
+            words_filtered, fixations_filtered, comparison_settings, raw_gaze, trials
+        ),
     )
     add_illustration_label(
         fig_compare,
@@ -9181,7 +9549,7 @@ def _c_trial_summary(_words, _fix, fwkey, ffkey):
     return trial_summary_table(_words, _fix)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4)
 def _c_enrich_fix(_fix, _words, ffkey, fwkey):
     return ensure_fixation_enrichment(_fix, _words)
 
@@ -9201,6 +9569,45 @@ def _c_trial_keys(_frame, fkey):
     """`data.trial_keys`, cached per frame — a trial-metadata group
     needs the loaded readings on every rerun, once per group per frame."""
     return trial_keys(_frame)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_group_means(_frame, mkey, _readings, _specs, key):
+    """Group means' two value arrays: one mean per participant, or every value
+    when the frame names no participants.
+
+    ``key`` is the frame's fingerprint and what selects each group — its
+    readings, or its spec on a frame without the reading key
+    (:func:`_group_means_key`).
+    """
+    measure = MEASURES[mkey]
+    if not _frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(_frame):
+        # Each row's already-resolved reading, looked up on the frame's codes.
+        codes, reading_keys = distinct_key_codes(_frame, _TRIAL_KEY_COLUMNS)
+        masks = [reading_keys.isin(group)[codes] for group in _readings]
+    else:
+        masks = [group_mask(_frame, spec) for spec in _specs]
+    values = reader_means if "participant_id" in _frame else measure_values
+    columns = _frame.columns.intersection(["participant_id", measure.column])
+    return tuple(values(_frame.loc[mask, columns], measure) for mask in masks)
+
+
+def _group_means_key(frame, readings, specs) -> tuple:
+    """`_c_group_means`'s key: the readings as exact, order-free digests
+    (`data.set_digest`), or the specs when the frame has no reading key to
+    look them up by."""
+    if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
+        groups = tuple(set_digest(group) for group in readings)
+    else:
+        groups = hashable_key(specs)
+    return (frame_fingerprint(frame), groups)
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_reader_vs_cohort(_frame, participant_id, mkey, normalize, fkey):
+    return reader_vs_cohort_values(
+        _frame, participant_id, MEASURES[mkey], normalize=normalize
+    )
 
 
 # --- Cross-cutting analysis controls -----------------------------------------
@@ -9334,11 +9741,14 @@ _SPREAD_NOTES = {
 def _spread_note(host, spread: str, agg: str | None = None) -> None:
     """One caption under an error-bar selector saying what the choice shows.
 
-    With Aggregate = sum, SD and SEM are drawn as a bootstrap interval of the
-    sum (`aggregation.spread_bounds`), so the note says that instead."""
+    With Aggregate = sum, SD, SEM and IQR are drawn as a bootstrap interval of
+    the sum (`aggregation.spread_bounds`), so the note says that instead."""
     note = _SPREAD_NOTES.get(spread)
-    if agg == "sum" and spread in ("SD", "SEM"):
-        note = "With Sum, SD and SEM are drawn as a 95% bootstrap interval of the sum."
+    if effective_spread(spread, agg) != spread:
+        note = (
+            "With Sum, SD, SEM and IQR are drawn as a 95% bootstrap interval "
+            "of the sum."
+        )
     if note:
         host.caption(note)
 
@@ -9573,7 +9983,7 @@ def _render_trials_with_open_button(
                 "",
                 type="tertiary",
                 width="small",
-                help="Show this trial's scanpath in the Scanpath view.",
+                help="Show this trial's scanpath in the Scanpath View.",
                 on_click=_open,
                 key=click_key,
             ),
@@ -10321,7 +10731,7 @@ def render_analysis_pool_bar(
         "Edit filters",
         icon=ICONS["trial_filter"],
         width="content",
-        help="The same trial filters the Scanpath view uses.",
+        help="The same trial filters the Scanpath View uses.",
         key=_POOL_POPOVER_KEY,
         on_change="rerun",
     )
@@ -10342,7 +10752,7 @@ def render_analysis_pool_bar(
             key="corpus_pool_clear",
             on_click=_clear_pool_filters,
             width="content",
-            help="Clear all trial filters, here and on the Scanpath view.",
+            help="Clear all trial filters, here and on the Scanpath View.",
         )
     return {
         "trial_filters": items,
@@ -10659,7 +11069,7 @@ def _chart(fig) -> None:
 
     title = _figure_alt(fig, "Corpus chart")
     publication_ui.render(
-        fig, title=title, kind="chart", key="chart_" + st._main._get_delta_path_str()
+        fig, title=title, kind="chart", key=publication_ui.chart_key(fig)
     )
 
 
@@ -11233,6 +11643,8 @@ def render_per_text_tab(
             st.warning(
                 "This text has different wording or word boxes across readings. Choose the version to include in the figure."
             )
+            # A version chosen for another text or screen names no option here.
+            _drop_stale("ptext_stimulus_revision", list(revisions))
             chosen = st.selectbox(
                 "Stimulus version, by representative reading",
                 list(revisions),
@@ -11241,6 +11653,7 @@ def render_per_text_tab(
                     f"{' / '.join(map(str, k))} · {len(revisions[k])} reading(s)"
                 ),
                 key="ptext_stimulus_revision",
+                persist_state="session",
             )
             if chosen is None:
                 return
@@ -11417,7 +11830,9 @@ def _render_reader_comparison(
         if measure.frame == "fixations"
         else words
     )
-    groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
+    groups = _c_reader_vs_cohort(
+        frame, pid, measure.key, normalize, frame_fingerprint(frame)
+    )
     participant = f"Participant {pid}"
     if not groups:
         st.info(
@@ -12466,19 +12881,15 @@ def render_group_comparison_tab(
         if measure is None:
             return
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        # Lookup each row's already-resolved reading on the original frame,
-        # then take just the measurement and reader needed for the two means.
-        if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
-            codes, reading_keys = distinct_key_codes(frame, _TRIAL_KEY_COLUMNS)
-            masks = (
-                reading_keys.isin(group)[codes] for group in (readings_a, readings_b)
-            )
-        else:
-            masks = (group_mask(frame, spec) for spec in (use_a, use_b))
         by_reader = "participant_id" in frame
-        values = reader_means if by_reader else measure_values
-        columns = frame.columns.intersection(["participant_id", measure.column])
-        a, b = (values(frame.loc[mask, columns], measure) for mask in masks)
+        readings, specs = (readings_a, readings_b), (use_a, use_b)
+        a, b = _c_group_means(
+            frame,
+            measure.key,
+            readings,
+            specs,
+            _group_means_key(frame, readings, specs),
+        )
         observations = "fixations" if measure.frame == "fixations" else "words"
         observation = (
             f"For each participant, the mean includes all {observations} with a value "
@@ -12815,19 +13226,21 @@ def render_alignment_comparison_tab(
         if connectors is not None:
             kwargs["show_connectors"] = True
             kwargs["connector_y"] = tuple(pd.to_numeric(connectors, errors="coerce"))
-        return make_scanpath_figure(
+        return _panel_figure(
             trial_words,
             fix,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            x_field="x",
-            y_field="y",
-            column_labels=active_figure_labels(
-                st.session_state, words=trial_words.columns, fixations=fix.columns
-            ),
-            **kwargs,
+            {
+                "canvas_width": int(canvas_width),
+                "canvas_height": int(canvas_height),
+                "base_font_size": int(base_font_size),
+                "font_family": font_family,
+                "x_field": "x",
+                "y_field": "y",
+                "column_labels": active_figure_labels(
+                    st.session_state, words=trial_words.columns, fixations=fix.columns
+                ),
+                **kwargs,
+            },
         )
 
     # Naive baseline (nearest-line) to count how many fixations each algorithm
@@ -13010,6 +13423,13 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
     return sorted(cols, key=_rank)
 
 
+@st.cache_data(show_spinner=False, max_entries=8)
+def _c_generation_column_options(_fixations: pd.DataFrame, fixations_key) -> list:
+    """`_generation_column_options`, once per pool: it groups the whole pool
+    by reading for every field, so a rerun must not repeat it."""
+    return _generation_column_options(_fixations)
+
+
 #: The two Match choices that come before the dataset's fields.
 _MATCH_SAME_TEXT = "@same_text"
 _MATCH_SAME_PARTICIPANT = "@same_participant"
@@ -13045,7 +13465,7 @@ def _match_options(fixations: pd.DataFrame, names: ColumnNames) -> list[str]:
         options += [_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT]
     seen: set[str] = set()
     text_col = _match_text_column(fixations)
-    for column in _generation_column_options(fixations):
+    for column in _c_generation_column_options(fixations, frame_fingerprint(fixations)):
         if column in _MATCH_NOT_A_CONDITION or column == text_col:
             continue
         label = names.field_label(column)
@@ -13352,6 +13772,7 @@ def render_multiple_comparison_tab(
     scale_text_to_boxes: bool = True,
     trial_raw_gaze: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
+    color_categories: tuple[str, ...] | None = None,
 ) -> None:
     """Render the **Comparisons** subtab.
 
@@ -13361,6 +13782,8 @@ def render_multiple_comparison_tab(
 
     ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
     filtered pool's, for the chip table's gaze-sample count.
+    ``color_categories`` is the dataset's `FigureSettings.color_categories`, so
+    each panel colours a category as the main figure does.
     """
     st.caption(
         "Browse related readings by selecting a field they share with this trial."
@@ -13414,13 +13837,26 @@ def render_multiple_comparison_tab(
     )
     gen_col, differ_col = _resolve_match(choice, fixations_filtered)
 
-    candidates = _collect_generations(
-        fixations_filtered,
-        trial_fixations,
-        gen_col,
-        selected_participant,
-        selected_trial,
-        differ_col,
+    # Masks and groups the whole pool, so the matches are kept until the pool,
+    # the selected reading or the Match choice changes.
+    candidates = frame_cache(
+        "comparison_matches",
+        (
+            frame_fingerprint(fixations_filtered),
+            frame_fingerprint(trial_fixations),
+            gen_col,
+            str(selected_participant),
+            str(selected_trial),
+            differ_col,
+        ),
+        lambda: _collect_generations(
+            fixations_filtered,
+            trial_fixations,
+            gen_col,
+            selected_participant,
+            selected_trial,
+            differ_col,
+        ),
     )
     if not candidates:
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
@@ -13438,19 +13874,22 @@ def render_multiple_comparison_tab(
     panel_settings = _comparison_panel_settings(base_settings)
 
     def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
-        return make_scanpath_figure(
+        return _panel_figure(
             words,
             fix,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            x_field="x",
-            y_field="y",
-            column_labels=active_figure_labels(
-                st.session_state, words=words.columns, fixations=fix.columns
-            ),
-            **settings,
+            {
+                "canvas_width": int(canvas_width),
+                "canvas_height": int(canvas_height),
+                "base_font_size": int(base_font_size),
+                "font_family": font_family,
+                "x_field": "x",
+                "y_field": "y",
+                "column_labels": active_figure_labels(
+                    st.session_state, words=words.columns, fixations=fix.columns
+                ),
+                "color_categories": color_categories,
+                **settings,
+            },
         )
 
     with st.container():
@@ -13769,6 +14208,10 @@ _RECORDING_TABLES = {
         "One row per eye-tracker sample, including samples with missing positions.",
     ),
 }
+
+# The Texts table's column naming the screens its readers saw differently.
+STIMULUS_VERSIONS_COLUMN = "Differs by reader"
+
 _ENTITY_TABLES = {
     "participant": (
         "Participants",
@@ -13966,6 +14409,11 @@ def _render_raw_metadata_tab(
             else f"No {label.lower()} found."
         )
         return
+    if STIMULUS_VERSIONS_COLUMN in derived.columns:
+        description += (
+            " Where readers saw different versions of a text, each version is"
+            " shown with the readers who saw it."
+        )
     st.caption(description)
     names = active_column_names(st.session_state, "fixations")
     st.dataframe(
@@ -13997,12 +14445,19 @@ def _build_stimuli_table_cached(
     screen of a text with more than one opens with its own ``[screen id]``
     marker — naming the screen's kind when the data has one — with a
     *# Screens* column beside.
+
+    Readers need not all have seen the same words (:func:`_reader_versions`):
+    a screen — or a single-screen text — that two readers saw differently is
+    shown once per version, the most-seen first, each marked ``seen by`` its
+    readers, and the *Differs by reader* column names those screens. *# Words*
+    counts the text as most of its readers saw it.
     """
     empty = pd.DataFrame(columns=["Text ID", "# Words", "Text"])
     if _words.empty or "text_id" not in _words.columns or "text" not in _words.columns:
         return empty
 
     multipart = SCREEN_ID in _words.columns
+    reading = [c for c in ("participant_id", "trial_id") if c in _words.columns]
     cols = [
         c
         for c in (
@@ -14018,7 +14473,7 @@ def _build_stimuli_table_cached(
         if c in _words.columns
     ]
     if _reading_texts is None:
-        sub = _words[cols].copy()
+        sub = _words[[*reading, *cols]].copy()
     else:
         # A text table uses the same identity as its participant and trial counts.
         # A default copied from the trial ID may be superseded by another table.
@@ -14051,17 +14506,38 @@ def _build_stimuli_table_cached(
 
     # Collapse identical word rows coming from multiple participants (stimulus
     # AoIs are shared by every reader; per-participant tables repeat them). On
-    # a multipart text a word is only the same word on the same screen.
+    # a multipart text a word is only the same word on the same screen, and of
+    # the same version of it.
     word_key = ["text_id", *([SCREEN_ID] if multipart else [])]
-    if "word_id" in sub.columns:
-        sub = sub.drop_duplicates(subset=[*word_key, "word_id"])
+    # The word as the passage shows it: a blank cell shows nothing.
+    sub["_word"] = sub["text"].astype("string").replace({"": pd.NA, "nan": pd.NA})
+    seen_by = None
+    if "word_id" in sub.columns and reading:
+        sub["_version"], seen_by = _reader_versions(sub, word_key, reading)
     else:
-        sub = sub.drop_duplicates(subset=[c for c in sub.columns if c != SCREEN_INDEX])
+        sub["_version"] = 0
+    if "word_id" in sub.columns:
+        # Of a word id listed twice, keep the first that shows a word — the one
+        # its version was told apart by.
+        shown_first = np.argsort(sub["_word"].isna().to_numpy(), kind="stable")
+        sub = sub.iloc[shown_first].drop_duplicates(
+            subset=[*word_key, "_version", "word_id"]
+        )
+    else:
+        sub = sub.drop_duplicates(
+            subset=[c for c in sub.columns if c not in (SCREEN_INDEX, *reading)]
+        )
+    if seen_by is not None and not seen_by.empty:
+        sub = sub.merge(seen_by, on=[*word_key, "_version"], how="left")
+        sub["_seen_by"] = sub["_seen_by"].fillna("")
+    else:
+        sub["_seen_by"] = ""
 
     screen_sort = ["_screen_order", SCREEN_ID] if multipart else []
     sort_cols = (
         ["text_id"]
         + screen_sort
+        + ["_version"]
         + [c for c in ("line_idx", "word_id") if c in sub.columns]
     )
     sub = sub.sort_values(sort_cols, kind="stable", na_position="last")
@@ -14072,34 +14548,83 @@ def _build_stimuli_table_cached(
         sub["unique_text_id"].astype(str).eq(sub["text_id"].astype(str)).all()
     )
 
-    def _words_of(frame: pd.DataFrame) -> list[str]:
-        return [w for w in frame["text"].astype(str).tolist() if w and w != "nan"]
+    # One part per version of each screen (of each text, without screens), in
+    # reading order, its words joined in one pass over the whole table.
+    part_key = [*word_key, "_version"]
+    kept = sub.dropna(subset=["_word"])
+    # The sort keeps each part's words consecutive: split them where it changes.
+    part_id = kept.groupby(part_key, sort=False).ngroup().to_numpy()
+    starts = np.flatnonzero(np.diff(part_id, prepend=-1))
+    chunks = (
+        np.split(kept["_word"].to_numpy(dtype=object), starts[1:])
+        if starts.size
+        else []
+    )
+    joined = kept.iloc[starts][part_key].assign(
+        _n_words=np.array([len(chunk) for chunk in chunks], dtype=int),
+        _words=np.array([" ".join(chunk) for chunk in chunks], dtype=object),
+    )
+    parts = (
+        sub.drop_duplicates(part_key)[[*part_key, "_seen_by"]]
+        .merge(joined, on=part_key, how="left")
+        .fillna({"_n_words": 0, "_words": ""})
+    )
+    if multipart and "screen_kind" in sub.columns:
+        kinds = sub.groupby(word_key, sort=False)["screen_kind"].agg(
+            ["nunique", "first"]
+        )
+        kinds = kinds["first"].where(kinds["nunique"] == 1).rename("_kind")
+        parts = parts.merge(kinds.reset_index(), on=word_key, how="left")
+    unique_ids = (
+        sub.groupby("text_id", sort=False)["unique_text_id"].agg(
+            lambda ids: ", ".join(ids.dropna().astype(str).unique())
+        )
+        if has_unique
+        else None
+    )
 
-    def _screen_marker(screen_id: str, frame: pd.DataFrame) -> str:
-        label = screen_id or "(no screen id)"
-        if "screen_kind" in frame.columns:
-            kinds = frame["screen_kind"].dropna().astype(str).unique().tolist()
-            if len(kinds) == 1 and kinds[0].lower() not in label.lower():
-                label = f"{label} · {kinds[0]}"
-        return f"[{label}]"
+    def _screen_marker(part: dict) -> str:
+        labels = []
+        if multipart:
+            label = part[SCREEN_ID] or "(no screen id)"
+            kind = part.get("_kind")
+            if pd.notna(kind) and str(kind).lower() not in label.lower():
+                label = f"{label} · {kind}"
+            labels.append(label)
+        if part["_seen_by"]:
+            labels.append(f"seen by {part['_seen_by']}")
+        return f"[{' · '.join(labels)}]"
 
     rows = []
-    for text_id, grp in sub.groupby("text_id", sort=False):
-        words_list = _words_of(grp)
-        n_screens = grp[SCREEN_ID].nunique() if multipart else 1
-        if n_screens > 1:
-            text = " ".join(
-                " ".join([_screen_marker(str(screen), page), *_words_of(page)])
-                for screen, page in grp.groupby(SCREEN_ID, sort=False)
-            )
-        else:
-            text = " ".join(words_list)
-        row = {"Text ID": text_id, "# Words": len(words_list), "Text": text}
+    # `sub` is sorted by text first, so each text's parts are consecutive.
+    records = parts.to_dict("records")
+    for text_id, text_parts in itertools.groupby(records, key=lambda p: p["text_id"]):
+        screens: dict[str | None, list[dict]] = {}
+        for part in text_parts:
+            screens.setdefault(part[SCREEN_ID] if multipart else None, []).append(part)
+        pieces, differing = [], []
+        for screen, versions in screens.items():
+            if len(versions) > 1:
+                count = f"{len(versions)} versions"
+                if len({part["_words"] for part in versions}) < len(versions):
+                    count += "; some differ only in word ids"
+                where = None if screen is None else screen or "(no screen id)"
+                differing.append(count if where is None else f"{where} ({count})")
+            for part in versions:
+                marked = len(screens) > 1 or bool(part["_seen_by"])
+                marker = _screen_marker(part) if marked else ""
+                pieces.append(" ".join(p for p in (marker, part["_words"]) if p))
+        row = {
+            "Text ID": text_id,
+            # The text as most of its readers saw it: each screen's version 0.
+            "# Words": sum(int(v[0]["_n_words"]) for v in screens.values()),
+            STIMULUS_VERSIONS_COLUMN: ", ".join(differing),
+            "Text": " ".join(pieces),
+        }
         if multipart:
-            row["# Screens"] = n_screens
-        if has_unique:
-            uniques = grp["unique_text_id"].dropna().astype(str).unique().tolist()
-            row["Unique Text ID"] = ", ".join(uniques)
+            row["# Screens"] = len(screens)
+        if unique_ids is not None:
+            row["Unique Text ID"] = unique_ids[text_id]
         rows.append(row)
 
     result = pd.DataFrame(rows)
@@ -14108,8 +14633,97 @@ def _build_stimuli_table_cached(
         ordered.append("Unique Text ID")
     if multipart:
         ordered.append("# Screens")
-    ordered += ["# Words", "Text"]
+    ordered.append("# Words")
+    if result[STIMULUS_VERSIONS_COLUMN].ne("").any():
+        ordered.append(STIMULUS_VERSIONS_COLUMN)
+    ordered.append("Text")
     return result[[c for c in ordered if c in result.columns]]
+
+
+def _reader_versions(
+    sub: pd.DataFrame, unit: list[str], reading: list[str]
+) -> tuple[np.ndarray, pd.DataFrame]:
+    """Each word row's version of its ``unit`` (a text, or one screen of it).
+
+    A reading's version is the set of its ``(word id, word)`` pairs, taking
+    the words the passage shows (``_word``: no blank cells, the first word of an
+    id listed twice): readings that saw the same words under the same ids share
+    one, while an answer order drawn per reader, or feedback on the reader's own
+    answer, makes another. Returns the version's rank within its unit for every
+    row of ``sub`` — 0 for the one the most participants saw, then by the first
+    reader's name — and, for each unit with more than one version, who saw each:
+    one row per ``unit`` and ``_version``, with ``_seen_by`` naming the
+    participants, or the trial where a reading has no participant id (a
+    words-only table's placeholder is blank). A participant who read the unit
+    more than once and saw more than one version is named with the trial of each.
+    """
+    reading_id = (
+        sub.groupby([*unit, *reading], sort=False, dropna=False).ngroup().to_numpy()
+    )
+    word_hash = pd.util.hash_pandas_object(
+        sub[["word_id", "_word"]], index=False
+    ).to_numpy()
+    # Each reading's first shown word per word id; the uint64 sum wraps, so it
+    # names the set whatever the row order.
+    shown = np.flatnonzero(sub["_word"].notna().to_numpy())
+    repeated = pd.DataFrame(
+        {"r": reading_id[shown], "w": sub["word_id"].to_numpy()[shown]}
+    ).duplicated()
+    once = np.zeros(len(sub), dtype="uint64")
+    once[shown[~repeated.to_numpy()]] = 1
+    signature = (
+        pd.Series(word_hash * once).groupby(reading_id).transform("sum").to_numpy()
+    )
+    # One row per reading from here on; ngroup numbers them 0, 1, ….
+    first = np.flatnonzero(~pd.Series(reading_id).duplicated().to_numpy())
+    readings = sub.iloc[first][unit].reset_index(drop=True)
+    readings["_reading"] = reading_id[first]
+    readings["_signature"] = signature[first]
+    n_versions = readings.groupby(unit, dropna=False)["_signature"].transform("nunique")
+    differs = (n_versions > 1).to_numpy()
+    version = np.zeros(len(first), dtype=int)
+    if not differs.any():
+        return version[reading_id], pd.DataFrame(
+            columns=[*unit, "_version", "_seen_by"]
+        )
+    readings = readings[differs].reset_index(drop=True)
+    picked = first[differs]
+
+    def _names(column: str) -> pd.Series:
+        names = sub[column].iloc[picked].astype("string").reset_index(drop=True)
+        return names.mask(names.str.strip().eq("").fillna(True))
+
+    participant = _names(reading[0])
+    trial = _names(reading[-1]).fillna("(no id)")
+    readings["_person"] = participant.fillna(trial)
+    readings["_reader"] = readings["_person"]
+    if len(reading) > 1:
+        again = (
+            readings.groupby([*unit, "_person"], dropna=False)["_signature"]
+            .transform("nunique")
+            .gt(1)
+            & participant.notna()
+        )
+        readings.loc[again, "_reader"] = (participant + " (" + trial + ")")[again]
+    seen = (
+        readings[[*unit, "_signature", "_reader", "_person"]]
+        .drop_duplicates()
+        .sort_values("_reader", kind="stable")
+        .groupby([*unit, "_signature"], sort=False, dropna=False)
+        .agg(
+            _seen_by=("_reader", ", ".join),
+            _first=("_reader", "first"),
+            _n=("_person", "nunique"),
+        )
+        .reset_index()
+        .sort_values(
+            ["_n", "_first", "_seen_by"], ascending=[False, True, True], kind="stable"
+        )
+    )
+    seen["_version"] = seen.groupby(unit, dropna=False).cumcount()
+    readings = readings.merge(seen, on=[*unit, "_signature"])
+    version[readings["_reading"].to_numpy()] = readings["_version"].to_numpy()
+    return version[reading_id], seen[[*unit, "_version", "_seen_by"]]
 
 
 def _render_data_provenance() -> None:
@@ -14610,7 +15224,11 @@ def _apply_remap() -> None:
         schema = pending[table_key]
         try:
             new_entry[table_key] = remap_normalized_frame(
-                frame, schema, kind=table_key, repeat_of=repeat_of
+                frame,
+                schema,
+                kind=table_key,
+                repeat_of=repeat_of,
+                stored_schema=(stored.get("schemas") or {}).get(table_key),
             )
         except Exception as exc:
             # A complete mapping the data does not fit (a Screen ID that maps

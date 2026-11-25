@@ -29,6 +29,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Fixations | Full → Layers → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
 | Saccades | Full → Layers → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |
 | Stimulus image | Full → Layers → **Stimulus** | `global_show_stimulus` | Page image behind the words at its offset / scale / opacity |
+| Demo screens | Bundled demo → **Screen** picker, any trial | `?source=demo&trial_id=…&screen=Answers&show_stimulus_image=1` | Each of a demo trial's screens (Title on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers, Feedback) draws the experiment's own image with every word's text inside its box; a demo link naming no screen opens the Paragraph |
 | Word underlines | Full → Layers → Stimulus → Word highlights → Style → Underline | `global_critical_span_style` | Each flagged word has its own underline in the text color. |
 | Word boxes | Full → Layers → **Word boxes** | `global_show_words` | Boxes exactly as the data gave them (`x .. x + width`) |
 | Heatmap | Full → Layers → **Heatmap** | `global_show_heatmap` | Word-level shading on its own colour bar |
@@ -44,7 +45,8 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Comparison charts and span borders | Full → Figure & canvas → Axis preset, Stimulus → Highlight words | `global_x_field`, `global_show_fix`, `single_fix_range`, `single_compare_stimulus` | Hiding markers keeps an index–position sequence visible within its window. Panels share their ranges. A co-replay with stimulus B outlines B’s selected words. |
 | Compare readings | Below the palette tiles | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
-| Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
+| Undo and Redo | Full → foot of Plot controls, beside Reset | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
+| Fold Presets / Palette / Modes / Customize | Chevron beside each rail label | `rail_view_fold`, `rail_palette_fold`, `rail_modes_fold`, `rail_customize_fold` (`_rail_folded_sections`, kept in the `sps_rail_folded` cookie) | Fold, reload the page: still folded; tiles hidden, the label names the current pick (a saved design by name); unfold restores them |
 
 ### Subtabs under the plot
 
@@ -57,7 +59,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Comparisons | Full only; NLD similarity scores only with `SCANPATH_EXPERIMENTAL=1` |
 | Line assignment | Experimental only |
 | Export | Figures + tables for the filtered trials; every file carries the citation |
-| Smaller PNG files | Build a PNG bundle with separate layers at the same scale with the toggle off and on. The compact files preserve the decoded pixels and embedded citation. |
+| Smaller PNG files | Build a PNG bundle with separate layers at the same scale with the toggle off and on, and run `render -o a.png --separable-layers` with and without `--compact-png` (`save_figure` / `save_figure_layers` take `compact_png=True`). The compact files preserve the decoded pixels, dpi and embedded citation. |
 | Large export download | Download a bundle over 32 MiB, open the ZIP and check its figures against `index.csv`. A browser with service workers disabled offers numbered parts that join into the same ZIP. |
 | Export retry | Fail one layer format and one whole layer set in a multi-reading bundle. Retry lists just the remaining failures in `index.csv` and preserves the contents and names of every successful file. |
 | Share → Link / Code / File | The link reopens both readings from uploads or locally available public corpora. Missing B leaves A open with recovery instructions. The code reproduces the figure (`test_render_every_option`) and the settings file restores it |
@@ -85,6 +87,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Saved work | Local recovery and downloaded corpora are accessible even when the current dataset fails to load. |
 | Mapping recovery | Upload a Fixations table with an unrecognized duration, press Add dataset, activate the blocker with Enter, and map a seconds column. The duration picker receives focus and shows two converted values. |
 | Dataset credit | Credit an unpublished lab dataset and a second comparison dataset. The saved README identifies which supplies the exported trials and BibTeX contains both references. |
+| Texts table | On the demo, each text lists every screen once, except Answers (and Feedback where a reader answered wrong): one copy per reader, marked *seen by*, with the *Differs by reader* column naming them. |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |
 | Data checks | Each check that found rows says how many, where, and what happens to them |
 | Run sheet | A missing planned reading, a raw-gaze-only reading and a planned omission have separate outcomes |
@@ -98,4 +101,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Input counts | Check a header-only and an all-unkeyed fixation file with `--json-report`. The findings-only `--json` still returns a list. |
 | Cohort recipe | `recipe profile.recipe.json --sample -o profile.csv` reproduces the CSV downloaded for a demo Per text cohort profile |
 | CLI | `scanpath-studio render --sample -o out.html` writes a figure; `--list-trials` lists 24 |
+| Add a dataset from a script | With `SCANPATH_STUDIO_STATE_DIR` set to a scratch folder, `add_dataset("Pilot 3", words, fixations)` or `scanpath-studio add`, then launch the app on that folder: it opens on *Pilot 3* and draws its first reading. Adding the same name again fails unless `--replace`, which keeps its annotations and setup. `remove_dataset` / `scanpath-studio remove` then takes it off the list, and the next launch opens on the default dataset with no saved key naming it. |
+| Annotations from a script | With `SCANPATH_STUDIO_STATE_DIR` set to a scratch folder and a dataset added there, `write_annotations("Pilot 3", frame)` or `scanpath-studio annotations import "Pilot 3" flags.csv`, then launch the app on that folder: The tag is offered under the trial filters' *With any of these tags*, filtering by it leaves exactly the tagged readings, and the trial's Annotations panel shows it. Readings the dataset lacks are listed and not written. `read_annotations` / `annotations export` give back what the app saved (`.json` is the app's own export) |
+| Open the app on a reading from a script | `api.app_link("Pilot 3", p, t, show_heatmap=True)` returns `http://localhost:8501/?dataset=Pilot+3&participant=…&trial_id=…&show_heatmap=1…`; `scanpath-studio open "Pilot 3" -p P -t T --heatmap --print` prints the same link, and without `--print` opens it in a running app or starts one. Opened (with the dataset added on a scratch `SCANPATH_STUDIO_STATE_DIR`), the app shows *Pilot 3* at that reading with the heatmap on. A render-only flag (`--sample`, `--stimulus-image`) or `background_image=` is refused by name. |
 | API | `load_sample_data()` → `plot_scanpath(..., participant=, trial=)` → `save_figure` |

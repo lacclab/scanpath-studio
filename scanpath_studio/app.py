@@ -77,6 +77,7 @@ from scanpath_studio import (
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
+    ANNOTATIONS_STATE_KEY,
     filter_keys,
     render_dataset_annotations,
 )
@@ -176,6 +177,7 @@ from scanpath_studio.controls import (
     column_mapping_from_state,
     column_mapping_ui,
     has_active_trial_filters,
+    hold_script_writes,
     metadata_readings,
     read_trial_filters,
     reassert_pending_writes,
@@ -208,7 +210,9 @@ from scanpath_studio.data import (
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
+    filter_to_keys_cached,
     filter_trials,
+    forget_frame_cache,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
@@ -238,6 +242,7 @@ from scanpath_studio.data import (
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     select_trials_cached,
+    set_digest,
     stamp_source,
     stimulus_image_source,
     text_ids,
@@ -334,6 +339,7 @@ from scanpath_studio.session_keys import (
     PARAM_DATASET_ID,
 )
 from scanpath_studio.styles import compact_css, get_app_css, widen_menu
+from scanpath_studio.subtab_scroll import render_subtab_scroll
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
     _REMAP_DIRTY_KEY,
@@ -404,7 +410,8 @@ from scanpath_studio.utils import (
     trial_id_layout,
 )
 
-from .dataset_identity import dataset_share_id
+from .dataset_identity import dataset_share_id, unique_name
+from .reruns import rerun
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -973,35 +980,97 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
     return steps
 
 
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_inclusion_report(_words, _fixes, _samples, _kept, _steps, cache_key):
+    """`study_checks.inclusion_report` once per pool, filter set and kept readings.
+
+    ``cache_key`` (:func:`_inclusion_cache_key`) names everything the report
+    reads; the frames, the kept readings and the step closures are not hashed.
+    """
+    from .study_checks import inclusion_report
+
+    w, f = pool_filter_frames(_words, _fixes, _samples)
+    # Samples-only readings beside the main tables have unknown conditions.
+    # Supply their IDs to the same predicates that decide the normal pool.
+    samples = (
+        set()
+        if _samples is None or _samples.empty
+        else raw_gaze_trial_keys(_samples, cache_key=cache_key[0][2])
+    )
+    extra = samples - trial_keys(w) - trial_keys(f)
+    if extra:
+        extra_ids = pd.DataFrame(sorted(extra), columns=["participant_id", "trial_id"])
+        w = pd.concat([w, extra_ids], ignore_index=True)
+    return inclusion_report(w, f, _kept, _steps)
+
+
+def _inclusion_cache_key(frames, kept: set, filters: dict, steps: list) -> tuple:
+    """What the inclusion report depends on, cheap enough to build every rerun.
+
+    The tables by fingerprint; each step by its label and the filter values it
+    decides on (an annotation filter also by the stars and tags it reads); and
+    the kept readings. The two reading sets go in as exact, order-free digests
+    (`data.set_digest`).
+    """
+    annotations = None
+    if (
+        filters.get("favorites_only")
+        or filters.get("required_tags")
+        or filters.get("excluded_tags")
+    ):
+        store = st.session_state.get(ANNOTATIONS_STATE_KEY) or {}
+        annotations = set_digest(
+            (
+                key,
+                bool(entry.get("star")),
+                tuple(sorted(map(str, entry.get("tags") or ()))),
+            )
+            for key, entry in store.items()
+        )
+    allowed = filters.get("trial_keys")
+    return (
+        tuple(frame_fingerprint(df) for df in frames),
+        tuple(label for label, _, _ in steps),
+        hashable_key(trial_filter_params(filters)),
+        None if allowed is None else set_digest(allowed),
+        (
+            bool(filters.get("favorites_only")),
+            tuple(filters.get("required_tags") or ()),
+            tuple(filters.get("excluded_tags") or ()),
+        ),
+        annotations,
+        set_digest(kept),
+    )
+
+
 def _render_inclusion_report(words, fixes, samples, selected_readings, filters) -> None:
     panel = st.expander(
         "Study inclusion and exclusions", key="study_inclusion", on_change="rerun"
     )
     if not panel.open:
         return
-    from .study_checks import inclusion_report
-
-    w, f = pool_filter_frames(words, fixes, samples)
-    # Samples-only readings beside the main tables have unknown conditions.
-    # Supply their IDs to the same predicates that decide the normal pool.
-    extra = trial_keys(samples) - trial_keys(w) - trial_keys(f)
-    if extra:
-        extra_ids = pd.DataFrame(sorted(extra), columns=["participant_id", "trial_id"])
-        w = pd.concat([w, extra_ids], ignore_index=True)
-    summary, detail = inclusion_report(
-        w, f, trial_keys(selected_readings), _filter_diagnosis_steps(filters)
+    kept = trial_keys(selected_readings)
+    steps = _filter_diagnosis_steps(filters)
+    summary, detail = _c_inclusion_report(
+        words,
+        fixes,
+        samples,
+        kept,
+        steps,
+        _inclusion_cache_key((words, fixes, samples), kept, filters, steps),
     )
     panel.dataframe(summary, hide_index=True)
+    # The CSVs are written when a download is clicked, not on every rerun.
     panel.download_button(
         "Download inclusion counts",
-        data=summary.to_csv(index=False),
+        data=lambda: summary.to_csv(index=False),
         file_name="inclusion_counts.csv",
         mime="text/csv",
         on_click="ignore",
     )
     panel.download_button(
         "Download readings and exclusion reasons",
-        data=detail.to_csv(index=False),
+        data=lambda: detail.to_csv(index=False),
         file_name="reading_exclusions.csv",
         mime="text/csv",
         on_click="ignore",
@@ -1429,7 +1498,7 @@ def _delete_download_dialog(choice: str) -> None:
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_delete_cancel", width="stretch"):
-        st.rerun()
+        rerun()
     confirm.button(
         "Delete",
         icon=ICONS["delete"],
@@ -1440,7 +1509,7 @@ def _delete_download_dialog(choice: str) -> None:
         args=(choice,),
     )
     if st.session_state.get(DOWNLOAD_DELETED_KEY):
-        st.rerun()  # the whole page, which closes this dialog
+        rerun()  # the whole page, which closes this dialog
 
 
 def _show_dataset_library() -> None:
@@ -1674,7 +1743,7 @@ def _clear_saved_dialog(app_url: str) -> None:
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
-        st.rerun()
+        rerun()
     # A callback, so the delete happens before anything else in the rerun
     # (the nav may rerun the script before this dialog is reached again).
     confirm.button(
@@ -1686,7 +1755,7 @@ def _clear_saved_dialog(app_url: str) -> None:
         on_click=_clear_and_start_over,
     )
     if st.session_state.get(STARTED_OVER_KEY):
-        st.rerun()  # the whole page, which closes this dialog
+        rerun()  # the whole page, which closes this dialog
 
 
 def _arm_about() -> None:
@@ -1802,7 +1871,7 @@ def _about_dialog() -> None:
                 key="about_open_feedback",
             ):
                 _arm_feedback()
-                st.rerun()
+                rerun()
             if st.button(
                 "Debug",
                 icon=ICONS["debug"],
@@ -1811,7 +1880,7 @@ def _about_dialog() -> None:
                 help="Open the debug log and a snapshot of what's loaded.",
             ):
                 _arm_debug()
-                st.rerun()
+                rerun()
 
 
 def _update_check_offered() -> bool:
@@ -2331,7 +2400,7 @@ def _dataset_dir_input(
         chosen = _pick_directory_dialog()
         if chosen:
             st.session_state[f"{dir_key}_picked"] = chosen
-            st.rerun()
+            rerun()
         else:
             cfg.caption("Enter or paste the folder path.")
     resolved = _resolve_data_dir(raw)
@@ -2512,7 +2581,7 @@ def _switch_missing_corpus_to_demo() -> None:
         return
     st.session_state[_UNAVAILABLE_CARRIED_KEY] = note
     st.session_state["_pending_source_choice"] = DEMO_CHOICE
-    st.rerun()
+    rerun()
 
 
 def _dismiss_carried_unavailable_note() -> None:
@@ -2619,7 +2688,7 @@ def _render_dataset_unavailable() -> None:
                     "another computer and copy them into the folder named above."
                 )
                 return
-            st.rerun()
+            rerun()
 
 
 def _dataset_access_status(
@@ -2691,7 +2760,7 @@ def _dataset_access_status(
         except (OSError, ValueError) as exc:
             cfg.error(f"Download failed: {exc}. Check your connection and retry.")
             return False
-        st.rerun()
+        rerun()
     return False
 
 
@@ -3040,15 +3109,18 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "Participants": 2,
             "Texts": 12,
             "Trials": 24,
-            "Words": 2614,
-            "Fixations": 1894,
-            "Gaze points": 401_200,
+            "Screens": 124,
+            "Words": 4004,
+            "Fixations": 3020,
+            "Gaze points": 640_441,
         },
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
         ),
-        reading_note="Raw gaze comes from the EyeLink recordings for all 24 paragraph readings. "
-        "Gaps mark samples without a recorded position.",
+        reading_note="Each reading keeps every screen the reader saw, from the "
+        "article's title to the answer feedback, each with the experiment's own "
+        "stimulus image. Raw gaze comes from the EyeLink recordings for every "
+        "screen. Gaps mark samples without a recorded position.",
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",
@@ -3199,10 +3271,10 @@ SETUP_DEFAULTS = {
 
 #: The font controls a declared stimulus typeface overwrites, and where
 #: `seed_canvas_state` parks their pre-snap values so leaving that corpus can put
-#: them back. All three are wire format (share link + saved config), which is why
-#: leaking one across a source switch outlives the session that caused it.
+#: them back. All are wire format (share link + saved config), which is why
+#: leaking one across a source switch outlives the session that caused it. The
+#: base size is not one: it is the axis, legend and hover text, the user's own.
 _FONT_SNAP_KEYS = (
-    "global_base_font_size",
     "global_font_family",
     "global_scale_text_to_boxes",
     "global_use_stimulus_font_pt",
@@ -3367,7 +3439,9 @@ def _dataset_font(words: pd.DataFrame) -> tuple[float | None, str | None]:
     return float(px.iloc[0]), family
 
 
-def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | None:
+def _stimulus_font_install_hint(
+    css_family: str | None,
+) -> tuple[str, str | None] | None:
     """``(primary font name, download URL)`` for a stimulus font's CSS stack.
 
     The overlaid reading text only matches the stimulus image when the exact
@@ -3376,13 +3450,16 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
     drifts (URLs/digits render too wide). Returns the human-readable family name
     (first quoted entry of the stack) + a best-effort download link, or None when
     the stack names no specific (quoted) family — a bare CSS generic like
-    ``monospace`` has nothing to install."""
+    ``monospace`` has nothing to install. A commercial font Google Fonts does
+    not carry (`_UNLINKED_FONTS`) is named with no link."""
     if not css_family:
         return None
     match = re.search(r"'([^']+)'", css_family)
     if match is None:
         return None
     name = match.group(1)
+    if name.lower() in _UNLINKED_FONTS:
+        return name, None
     # Best-effort source: the experiment fonts are from Google's Noto project.
     url = (
         "https://github.com/notofonts/noto-cjk"
@@ -3390,6 +3467,27 @@ def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | Non
         else f"https://fonts.google.com/?query={name.replace(' ', '+')}"
     )
     return name, url
+
+
+#: Commercial fonts that come with an operating system or Office, not from
+#: Google Fonts, so a search link there would find nothing.
+_UNLINKED_FONTS = frozenset(
+    name.lower()
+    for name in (
+        "Lucida Sans Typewriter",
+        "Lucida Console",
+        "Courier New",
+        "Consolas",
+        "Menlo",
+        "Monaco",
+        "Calibri",
+        "Arial",
+        "Helvetica",
+        "Verdana",
+        "Times New Roman",
+        "Georgia",
+    )
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -5210,12 +5308,15 @@ def _save_authored_dataset(name_key: str, *, as_copy: bool = False) -> None:
         for key in ("_author_text_for_events", "_authored_events_frame", "author_text"):
             st.session_state.pop(key, None)
     st.session_state.pop(_AUTHOR_EDITING_KEY, None)
-    # The draft's annotations were made on the scanpath being saved,
-    # so they become the saved dataset's. The name is safe, so it holds none.
+    # The draft's annotations and attached tables were made on the scanpath
+    # being saved, so they become the saved dataset's, and the next draft
+    # starts without them. The name is safe, so it holds none of its own.
     if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
         import scanpath_studio.annotations as _annotations
+        from scanpath_studio import metadata as _metadata
 
         _annotations.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
+        _metadata.rename_dataset(st.session_state, AUTHOR_CHOICE, name)
     st.session_state["_pending_source_choice"] = name
     st.session_state["main_nav"] = _VIEW_SCANPATH
     st.session_state["setup_complete"] = True
@@ -5708,7 +5809,7 @@ def _delete_confirmation_dialog(
             st.session_state[HIDDEN_DATASETS_KEY] = sorted(hidden)
             if st.session_state.get("data_source_choice") == pending:
                 st.session_state["_pending_source_choice"] = remaining[0]
-        st.rerun(scope="app")
+        rerun(scope="app")
     if not remaining:
         st.caption("At least one dataset must remain available.")
     if no.button(
@@ -5717,7 +5818,7 @@ def _delete_confirmation_dialog(
         width="stretch",
     ):
         st.session_state.pop(PENDING_DELETE_KEY, None)
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
@@ -5748,15 +5849,11 @@ def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     """A non-empty display name that does not duplicate another table row."""
     base = requested.strip()[:DATASET_NAME_MAX_CHARS].rstrip()
     base = base or _dataset_display_name(token)
-    used = {
-        _dataset_display_name(other).casefold() for other in tokens if other != token
-    }
-    candidate = base
-    suffix = 2
-    while candidate.casefold() in used:
-        candidate = f"{base} ({suffix})"
-        suffix += 1
-    return candidate
+    return unique_name(
+        base,
+        (_dataset_display_name(other) for other in tokens if other != token),
+        max_chars=DATASET_NAME_MAX_CHARS,
+    )
 
 
 def _overview_sentence(text: str) -> tuple[str, str]:
@@ -6203,11 +6300,11 @@ def render_dataset_inspection_head(token: str) -> None:
                 kwargs={"settings_only": True},
             )
         actions.button(
-            "Open in Scanpath view",
+            "Open in Scanpath View",
             icon=ICONS["view_scanpath"],
             key="data_open_in_scanpath",
             on_click=_go_scanpath,
-            help=f"Show **{md_literal(name)}** in the Scanpath view.",
+            help=f"Show **{md_literal(name)}** in the Scanpath View.",
         )
         _render_dataset_overview(token, registry=registry)
 
@@ -6406,7 +6503,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         help=f"Open {ICONS['edit']} Edit dataset at the Trial ID mapping.",
     ):
         _open_mapping_editor()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if keep_col.button(
         "Keep it as is",
         key="trial_identity_alert_keep",
@@ -6414,7 +6511,7 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         help=f"Dismiss. Nothing changes. The check's result stays under "
         f"{ICONS['view_data']} Data Management → Edit dataset → Trial identity.",
     ):
-        st.rerun(scope="app")
+        rerun(scope="app")
     if asked_by == "add":
         st.caption(
             "Checked automatically because the dataset was just added. The "
@@ -6429,7 +6526,7 @@ def _dataset_added_dialog(message: str) -> None:
 
     Raised once by ``main`` on the run after ✅ Add dataset, once the new
     dataset's frames are loaded, so ``message`` carries its counts. Closing it
-    keeps the user on the current dataset, where **Open in Scanpath view**
+    keeps the user on the current dataset, where **Open in Scanpath View**
     opens the figure later. Buttons are handled by their return
     value, never ``on_click`` — a dialog body is a fragment (see
     ``_leave_dataset_editor_dialog``).
@@ -6437,14 +6534,14 @@ def _dataset_added_dialog(message: str) -> None:
     st.markdown(message)
     open_col, again_col = st.columns(2, gap="small")
     if open_col.button(
-        f"{ICONS['view_scanpath']} Open in Scanpath view",
+        f"{ICONS['view_scanpath']} Open in Scanpath View",
         key="dataset_added_open",
         type="primary",
         width="stretch",
-        help="Show the new dataset's first trial in the Scanpath view.",
+        help="Show the new dataset's first trial in the Scanpath View.",
     ):
         _go_scanpath()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if again_col.button(
         f"{ICONS['add']} Add another",
         key="dataset_added_again",
@@ -6454,10 +6551,10 @@ def _dataset_added_dialog(message: str) -> None:
         from scanpath_studio.wizard import _enter_add_data_wizard
 
         _enter_add_data_wizard()
-        st.rerun(scope="app")
+        rerun(scope="app")
     st.caption(
         f"Close this to stay on {ICONS['view_data']} Data Management. "
-        "Choose **Open in Scanpath view** to open it later."
+        "Choose **Open in Scanpath View** to open it later."
     )
 
 
@@ -6796,10 +6893,10 @@ def _leave_dataset_editor_dialog() -> None:
         width="stretch",
     ):
         _leave_dataset_editor()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if stay.button("Keep editing", key="dataset_editor_leave_cancel", width="stretch"):
         _dismiss_leave_dataset_editor()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _render_dataset_editor_bar(host, data_choice: str) -> None:
@@ -7048,7 +7145,7 @@ def _unreachable_dataset_dialog(token: str) -> None:
     )
     if st.button("OK", key="dataset_unreachable_ok", type="primary"):
         _dismiss_unreachable_dataset()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _open_dataset_row(token: str) -> None:
@@ -7444,7 +7541,7 @@ def render_dataset_table(
     # whole-app one. Opening a dataset asks for the app rerun here, because a
     # callback may not.
     if st.session_state.pop(_TABLE_NEEDS_APP_RERUN, False):
-        st.rerun(scope="app")
+        rerun(scope="app")
     rows = _dataset_table_rows(
         active=active, words=words, fixations=fixations, raw_gaze=raw_gaze
     )
@@ -7913,6 +8010,13 @@ def seed_canvas_state(
         line_spacing, scale_text_to_boxes). The text-sizing pair keeps the reading
         text true-to-scale: see `plots._word_label_font_px`.
     """
+    # The snaps below write these in the script, and a menu the user had open
+    # sends back what it showed for the dataset before (`hold_script_writes`).
+    setup_before = {
+        key: copy.deepcopy(st.session_state[key])
+        for key in SETUP_OVERRIDE_SESSION_KEYS
+        if key in st.session_state
+    }
     # OneStop local export + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440 — cited at `constants.DEFAULT_FIGURE_SIZE`).
     # Data-derived extents undershoot — text only fills part of the screen — so
@@ -7993,18 +8097,17 @@ def seed_canvas_state(
 
     # Authoritative reading font: a dataset can carry its stimulus font size +
     # family on the words. Snap the font controls to it when the source
-    # changes (same gate as the canvas), so the reading text renders at the exact
-    # size and (CJK) typeface the stimulus images were drawn with. We also turn off
-    # "scale text to boxes" since the precise px is known — box geometry can only
-    # approximate it. Manual edits within a source stick (the key is unchanged, so
-    # the snap doesn't re-fire); a returning source re-snaps to the known font.
+    # changes (same gate as the canvas), so the reading text renders in the
+    # typeface the stimulus images were drawn with, and "scale text to boxes"
+    # on, under which the labels take the declared size itself. Manual edits
+    # within a source stick (the key is unchanged, so the snap doesn't
+    # re-fire); a returning source re-snaps to the known font.
     #
     # **And the snap is undone on the way out.** Otherwise a source that
-    # declares no typeface simply inherits the previous corpus': Demo → a
-    # font-declaring corpus → Demo would come back with that corpus' px, its
-    # font stack, and *scale-to-boxes off* — the demo's reading text visibly
-    # smaller, with nothing on screen saying why, for the rest of the session
-    # (and into the recovery cache, and into any link or config saved from it).
+    # declares no typeface simply inherits the previous corpus': PoTeC → the
+    # demo → PoTeC would come back in Lucida Sans Typewriter, with nothing on
+    # screen saying why, for the rest of the session (and into the recovery
+    # cache, and into any link or config saved from it).
     #
     # The general shape, worth stating because the other two source-switch snaps
     # in this file share it: a snap writes **session**-scoped state to express a
@@ -8015,11 +8118,15 @@ def seed_canvas_state(
     # it overwrote and put it back.
     #
     # Restoring the *stashed* values rather than the factory defaults is what
-    # keeps a hand-tuned font across a detour: tune the demo, look at a
-    # font-declaring corpus, come back, and your own size is still there. Stashed
+    # keeps a hand-tuned font across a detour: tune PoTeC, look at the demo,
+    # come back, and your own font is still there. Stashed
     # only on the **first** snap of a run of them, so one font-declaring corpus →
-    # another → Demo restores the state before the first and not the first's.
-    if st.session_state.get("_font_seeded_for") != source_key:
+    # another → PoTeC restores the state before the first and not the first's.
+    # A list once it has been through the recovery cache's JSON.
+    font_seeded_for = st.session_state.get("_font_seeded_for")
+    if isinstance(font_seeded_for, list):
+        font_seeded_for = tuple(font_seeded_for)
+    if font_seeded_for != source_key:
         # Read only when the snap can fire: on a font-declaring corpus it is a
         # numeric parse over every word row, and every other run discards it.
         font_px, font_css = _dataset_font(words_filtered)
@@ -8034,9 +8141,11 @@ def seed_canvas_state(
                     for key in _FONT_SNAP_KEYS
                 },
             )
+            # The base size is left alone: it is the axis, legend and hover
+            # text, and the labels take the declared size under "scale text
+            # to boxes", which is turned on for them.
             snapped = {
-                "global_base_font_size": font_size_px(font_px, "px", None),
-                "global_scale_text_to_boxes": False,
+                "global_scale_text_to_boxes": True,
                 # The size is in px — a point size left on would replace it.
                 "global_use_stimulus_font_pt": False,
             }
@@ -8130,6 +8239,7 @@ def seed_canvas_state(
             2,
         ),
     )
+    hold_script_writes(setup_before)
     # Point-specified stimulus typography converts to px through the DPI above.
     # The rendering path recomputes this from its own widget values (which is
     # what makes an edit apply the same run); this keeps the non-rendering
@@ -8396,10 +8506,13 @@ def _rail_text_rows(
         hint = _stimulus_font_install_hint(font_css)
         if hint is not None:
             font_name, font_url = hint
+            get_it = (
+                f"[download]({font_url}) and install it" if font_url else "install it"
+            )
             st.caption(
                 f"{ICONS['info']} This corpus was rendered in **{font_name}**, "
                 "which isn't bundled. To make the overlaid text match the "
-                f"stimulus image, [download]({font_url}) and install it, then "
+                f"stimulus image, {get_it}, then "
                 "reload. Without it, labels can drift, especially URLs and Latin "
                 "text. Or turn on the stimulus **Image** to see the original text."
             )
@@ -8762,7 +8875,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.session_state["_authored_events_frame"] = cleared
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
             st.session_state[_AUTHOR_STALE_TARGETS_KEY].pop(source, None)
-            st.rerun()
+            rerun()
 
     fixations = authored_fixations(words, effective_events)
     _, canvas_height = canvas_size(words, layout)
@@ -8796,7 +8909,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             # client-side base (the same invariant as the table's stable
             # `seed` above, in the other direction).
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
-            st.rerun()
+            rerun()
 
     name_key = f"author_dataset_name_{source}"
     st.text_input(
@@ -9040,6 +9153,30 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     return preprocessing
 
 
+def forget_source_state(session, token: str) -> None:
+    """Drop what this module keeps for the dataset ``token`` once it is removed.
+
+    Its stashed trial filters, the marker that its filters are the live ones
+    (left in place, the next switch would stash them under ``token`` again),
+    its *Loaded* status and the share selection resolved on it. A dataset that
+    later takes the same token, as the wizard's next "Dataset 1" does, starts
+    without them.
+    """
+    stash = session.get("_filter_stash") or {}
+    if any(key[0] == token for key in stash):
+        session["_filter_stash"] = {k: v for k, v in stash.items() if k[0] != token}
+    if (session.get("_filters_for") or (None,))[0] == token:
+        session.pop("_filters_for", None)
+    loaded = session.get(LOADED_THIS_SESSION_KEY)
+    if loaded and token in loaded:
+        session[LOADED_THIS_SESSION_KEY] = set(loaded) - {token}
+    if session.get("_share_selection_source") == token:
+        session.pop("_share_selection", None)
+        session.pop("_share_selection_source", None)
+    if session.get(LAST_LOADED_SOURCE_KEY) == token:
+        session.pop(LAST_LOADED_SOURCE_KEY, None)
+
+
 #: The last dataset a run left on screen — where Cancel goes back to
 #: (`_remember_open_dataset`). Not the wizard's `_prev_source`, which only
 #: records where leaving the add-dataset wizard returns to.
@@ -9105,20 +9242,39 @@ def _retry_load(token: str) -> None:
 
 
 def _render_cancelled_load_notice(host) -> None:
-    """The "Stopped loading X · Try again" notice, once, where the notices go."""
+    """The "Stopped loading X · Try again" banner, once, where the notices go.
+
+    The note is popped as it is drawn, so any rerun clears it; the ✕ is that
+    rerun on purpose, for a reader who wants it gone without doing anything
+    else first.
+    """
     note = st.session_state.pop(CANCELLED_LOAD_KEY, None)
     if not note:
         return
     row = host.container(
-        key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
+        key="sps_cancelled_notice",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
     )
     # As wide as its words, so Try again sits beside them, not across the page.
-    row.caption(f"Stopped loading **{md_literal(note['name'])}**.", width="content")
+    row.markdown(
+        f"{ICONS['info']} Stopped loading **{md_literal(note['name'])}**.",
+        width="content",
+    )
     row.button(
         "Try again",
         key="sps_try_again",
+        icon=ICONS["refresh"],
         on_click=_retry_load,
         args=(note["token"],),
+    )
+    row.space("stretch")
+    row.button(
+        spoken("Dismiss"),
+        key="sps_cancelled_notice_close",
+        icon=ICONS["close"],
+        help="Dismiss",
         type="tertiary",
     )
 
@@ -9312,6 +9468,14 @@ def main() -> None:
     """
     with loading.run_scope():
         _run_app()
+
+
+#: The `frame_cache` slots the annotation filter keeps its copies of the pool in.
+ANNOTATION_FILTER_SLOTS = (
+    "annotation_filter_readings",
+    "annotation_filter",
+    "raw_gaze_annotations",
+)
 
 
 def _run_app() -> None:
@@ -9676,6 +9840,8 @@ def _run_app() -> None:
         render_color_picker_commit()
         # In the desktop app's window, a download opens a Save-as dialog.
         render_save_dialog()
+        # A subtab switch keeps the bar where it is on screen.
+        render_subtab_scroll()
         # These Help dialogs can open before the figures and data tables load.
         maybe_show_about()
         maybe_show_feedback()
@@ -10440,10 +10606,10 @@ def _run_app() -> None:
             st.session_state[TRIAL_IDENTITY_CHECK_KEY] = asked_by
     if added:
         # Say what ✅ Add dataset brought in, and offer the next step: a
-        # dialog with Open in Scanpath view / Add another. The Trial ID verdict
+        # dialog with Open in Scanpath View / Add another. The Trial ID verdict
         # takes the run's one dialog when it has something to say, and any
         # other dialog already open wins too; the counts then go to a toast,
-        # and **Open in Scanpath view** above the list is the way on.
+        # and **Open in Scanpath View** above the list is the way on.
         message = dataset_added_message(
             _dataset_display_name(str(added)), words_all, fixations_all
         )
@@ -10523,10 +10689,9 @@ def _run_app() -> None:
         if samples_only_dataset
         else None,
     )
-    if trialmeta_keys is not None:
-        pool = (words_df, fixations_df)
-        words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
-        assign_derived((words_df, fixations_df), "filter_to_keys", pool, trialmeta_keys)
+    words_df, fixations_df = filter_to_keys_cached(
+        words_df, fixations_df, trialmeta_keys, slot="trial_metadata_filter"
+    )
     # The raw-gaze samples table has to travel through the same annotation
     # filter as words + fixations, or a sample row for an unstarred trial
     # survives "⭐ Favorites only" — which would also keep the all-three-empty
@@ -10542,7 +10707,14 @@ def _run_app() -> None:
         # union all three so every frame's trials get judged by the filter.
         sample_key = frame_fingerprint(raw_gaze_df)
         sample_trials = raw_gaze_trial_keys(raw_gaze_df, cache_key=sample_key)
-        present_keys = trial_keys(words_df) | trial_keys(fixations_df) | sample_trials
+        # Both steps read every row of both frames, so each is kept until its
+        # inputs change: a click elsewhere must not mask the corpus again.
+        pool_key = (frame_fingerprint(words_df), frame_fingerprint(fixations_df))
+        present_keys = frame_cache(
+            "annotation_filter_readings",
+            (*pool_key, sample_key),
+            lambda: trial_keys(words_df) | trial_keys(fixations_df) | sample_trials,
+        )
         kept = set(
             filter_keys(
                 list(present_keys),
@@ -10551,15 +10723,23 @@ def _run_app() -> None:
                 excluded_tags=trial_filters["excluded_tags"],
             )
         )
-        pool = (words_df, fixations_df)
-        words_df, fixations_df = filter_to_keys(words_df, fixations_df, kept)
-        assign_derived((words_df, fixations_df), "filter_to_keys", pool, kept)
+        kept_digest = set_digest(kept)  # once: the set can be the whole corpus
+        words_df, fixations_df = filter_to_keys_cached(
+            words_df, fixations_df, kept, slot="annotation_filter", digest=kept_digest
+        )
         if not sample_trials.issubset(kept):
             raw_gaze_scoped = frame_cache(
                 "raw_gaze_annotations",
-                (sample_key, hashable_key(kept)),
+                (sample_key, kept_digest),
                 lambda: filter_frame_to_keys(raw_gaze_df, kept),
             )
+        else:
+            # Every sample's reading is kept: no copy of the samples to hold.
+            forget_frame_cache("raw_gaze_annotations")
+    else:
+        # The filtered copies of the pool are not kept once the filter is off.
+        for slot in ANNOTATION_FILTER_SLOTS:
+            forget_frame_cache(slot)
 
     # Apply filters (participant/trial/text selection). For a raw-gaze-only
     # dataset (no words/fixations) derive the participant/trial options from the

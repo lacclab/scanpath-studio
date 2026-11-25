@@ -242,7 +242,7 @@ def test_peak_speed_uses_one_eye_and_never_spans_a_missing_position_or_unassigne
             "trial_id": "t",
             "screen_id": "page",
             "timestamp_ms": [1, 2, 3, 4],
-            "x": [2, np.nan, 30, 31],
+            "x": [29, 30, 30.5, 31],
             "y": 0,
             "eye": "Left",
         }
@@ -255,6 +255,7 @@ def test_peak_speed_uses_one_eye_and_never_spans_a_missing_position_or_unassigne
         ].item()
 
     assert peak(fix, gaze) == 20
+    assert np.isnan(peak(fix, left.assign(x=[29, np.nan, 30.5, 31])))
     assert np.isnan(peak(fix.drop(columns="eye"), gaze))
     assert np.isnan(peak(fix, gaze.drop(columns="screen_id")))
     assert np.isnan(peak(fix.assign(_timestamp_synthesized=True), gaze))
@@ -264,6 +265,34 @@ def test_peak_speed_uses_one_eye_and_never_spans_a_missing_position_or_unassigne
     uncalibrated = saccade_table(fix, raw_gaze=gaze, pixels_per_degree=-50)
     assert uncalibrated[["peak_velocity_deg_s", "amplitude_deg"]].isna().all().all()
     assert np.isnan(peak(fix, left.assign(timestamp_ms=[1, np.nan, 4, 4])))
+
+
+def test_peak_speed_is_unknown_for_a_saccade_holding_a_tracking_gap():
+    # Two saccades; the first spans a blink whose edges the lid distorts into
+    # off-screen jumps that never touch a missing sample.
+    fix = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "timestamp_ms": [0, 20, 40],
+            "duration_ms": 5,
+            "x": [0, 10, 20],
+            "y": 0,
+        }
+    )
+    samples = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "timestamp_ms": [*range(5, 21), *range(25, 41)],
+            "x": [0, 1, 3, 400, -300, *[np.nan] * 6, 900, 50, 12, 10, 10]
+            + [10, 11, 13, 15, 17, 19, 20, *[20] * 9],
+            "y": 0,
+        }
+    )
+    peaks = saccade_table(fix, raw_gaze=samples, pixels_per_degree=50)
+    assert np.isnan(peaks["peak_velocity_deg_s"].iloc[0])
+    assert peaks["peak_velocity_deg_s"].iloc[1] == 40
 
 
 def test_peak_speed_resolves_legacy_fixation_onsets_before_exclusions():

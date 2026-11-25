@@ -1,5 +1,7 @@
 """Pytest configuration and fixtures for scanpath visualization tests."""
 
+import os
+import zlib
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +17,35 @@ from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 #: it, not the process CWD, so ``"streamlit_app.py"`` would look for
 #: ``tests/streamlit_app.py``. Always pass this constant.
 APP_SCRIPT = str(Path(__file__).resolve().parents[1] / "streamlit_app.py")
+
+#: ``k/n``: run only the k-th of n disjoint shares of the suite, so CI can
+#: split one run over n machines. Each test goes to the share its node id hashes
+#: to, the same in every process (xdist workers collect independently), and
+#: the n shares together are the whole suite.
+SHARD_ENV = "SCANPATH_TEST_SHARD"
+
+
+def shard_of(nodeid: str, total: int) -> int:
+    """The 1-based share of ``total`` that the test ``nodeid`` belongs to."""
+    return zlib.crc32(nodeid.encode("utf-8")) % total + 1
+
+
+def pytest_collection_modifyitems(config, items):
+    spec = os.environ.get(SHARD_ENV)
+    if not spec:
+        return
+    usage = f"{SHARD_ENV}={spec}: expected k/n with 1 <= k <= n"
+    try:
+        index, total = (int(part) for part in spec.split("/"))
+    except ValueError:
+        raise pytest.UsageError(usage) from None
+    if not 1 <= index <= total:
+        raise pytest.UsageError(usage)
+    kept = [item for item in items if shard_of(item.nodeid, total) == index]
+    config.hook.pytest_deselected(
+        items=[item for item in items if shard_of(item.nodeid, total) != index]
+    )
+    items[:] = kept
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -237,6 +268,53 @@ def pin_data_view(at, *, section: str | None = None) -> None:
         section = at.session_state[DATA_WORKSPACE_KEY]
     if section is not None:
         at.session_state[DATA_WORKSPACE_REQUEST] = section
+
+
+def page_nodes(node, around: tuple = ()):
+    """Every element and block under ``node`` in screen order, each as
+    ``(node, around)``: the blocks it sits in, outermost first.
+
+    Pass ``at._tree`` for the whole page. A keyed container's node carries
+    its key, which is how a test finds the parts of a layout that ``AppTest``
+    has no accessor for.
+    """
+    children = getattr(node, "children", None) or {}
+    for index in sorted(children):
+        child = children[index]
+        yield child, around
+        yield from page_nodes(child, (*around, child))
+
+
+def find_keyed(at, key: str):
+    """The one node keyed ``key`` on the page, with the blocks around it."""
+    found = [
+        (node, around)
+        for node, around in page_nodes(at._tree)
+        if getattr(node, "key", None) == key
+    ]
+    assert len(found) == 1, f"{key!r} is drawn {len(found)} times"
+    return found[0]
+
+
+def keys_around(at, key: str) -> list[str]:
+    """The keys of the keyed containers around the node keyed ``key``,
+    outermost first."""
+    _node, around = find_keyed(at, key)
+    return [k for block in around if (k := getattr(block, "key", None))]
+
+
+def keys_in_screen_order(node) -> list[str]:
+    """The key of every keyed node under ``node``, in screen order."""
+    return [k for child, _ in page_nodes(node) if (k := getattr(child, "key", None))]
+
+
+def iframe_sources(node) -> list[str]:
+    """The document of every ``st.iframe`` under ``node``, in screen order."""
+    return [
+        child.proto.srcdoc
+        for child, _ in page_nodes(node)
+        if getattr(child, "type", None) == "iframe"
+    ]
 
 
 def picked_trial_id(value) -> str | None:

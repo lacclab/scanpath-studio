@@ -180,9 +180,20 @@ def test_render_animate_warns_drift_is_ignored(tmp_path, monkeypatch, capsys):
 
 def test_render_drift_correction_snaps_fixations(tmp_path, monkeypatch):
     """End to end: the corrected figure's fixations sit on the line centers, and
-    --drift-connectors adds the single original→corrected connector trace."""
+    --drift-connectors adds the single original→corrected connector trace.
+
+    Drawn on the demo reading's Paragraph screen, its multi-line text."""
     captured = _spy_static(monkeypatch, wrap_real=True)
-    cli.main(["render", "--sample", "-o", str(tmp_path / "raw.html")])
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--screen",
+            "Paragraph",
+            "-o",
+            str(tmp_path / "raw.html"),
+        ]
+    )
     raw_ys = _marker_ys(captured["fig"])
     assert not any(trace.name == "drift" for trace in captured["fig"].data)
 
@@ -190,6 +201,8 @@ def test_render_drift_correction_snaps_fixations(tmp_path, monkeypatch):
         [
             "render",
             "--sample",
+            "--screen",
+            "Paragraph",
             "--drift-correction",
             "attach",
             "--drift-connectors",

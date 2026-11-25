@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import weakref
+from collections import deque
 from collections.abc import Callable, Iterable
 
 import numpy as np
@@ -22,6 +23,7 @@ from .constants import (
     spoken,
 )
 from .data import (
+    assign_derived,
     assign_fingerprint,
     distinct_key_codes,
     frame_fingerprint,
@@ -279,25 +281,54 @@ def _build_combo_options_cached(
 
 _TRIAL_INDICES: dict = {}
 _TRIAL_INDEX_LOCK = threading.Lock()
+#: Entries whose source frame was collected, as ``(identity, ref)``. A weakref
+#: callback can run during garbage collection while this thread holds the
+#: lock, so it only queues here (``deque.append`` is atomic) and code holding
+#: the lock drops them.
+_RELEASED_INDICES: deque = deque()
+
+
+def _drop_released_indices() -> None:
+    """Remove collected frames' entries; call with `_TRIAL_INDEX_LOCK` held."""
+    while _RELEASED_INDICES:
+        identity, ref = _RELEASED_INDICES.popleft()
+        if _TRIAL_INDICES.get(identity, (None,))[0] is ref:
+            del _TRIAL_INDICES[identity]
 
 
 def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
-    """Share a read-only position index for the lifetime of its source frame."""
+    """Share a read-only position index for the lifetime of its source frame.
+
+    Frames with the same assigned fingerprint hold the same rows in the same
+    order, so they share one index too — each session's copy of the demo's
+    samples (`data.normalized_sample_raw_gaze`) reads the first one's.
+    """
     identity = id(frame)
     fingerprint = frame_fingerprint(frame)
+    positions = None
     with _TRIAL_INDEX_LOCK:
+        _drop_released_indices()
         cached = _TRIAL_INDICES.get(identity)
         if cached is not None and cached[0]() is frame and cached[1] == fingerprint:
             return cached[2]
+        if fingerprint[0] == "assigned":
+            positions = next(
+                (
+                    entry[2]
+                    for entry in tuple(_TRIAL_INDICES.values())
+                    if entry[1] == fingerprint and entry[0]() is not None
+                ),
+                None,
+            )
 
     def release(ref):
-        with _TRIAL_INDEX_LOCK:
-            if _TRIAL_INDICES.get(identity, (None,))[0] is ref:
-                del _TRIAL_INDICES[identity]
+        _RELEASED_INDICES.append((identity, ref))
 
-    grouped = frame.groupby(["participant_id", "trial_id"], sort=False).indices
-    positions = {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
+    if positions is None:
+        grouped = frame.groupby(["participant_id", "trial_id"], sort=False).indices
+        positions = {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
     with _TRIAL_INDEX_LOCK:
+        _drop_released_indices()
         _TRIAL_INDICES[identity] = weakref.ref(frame, release), fingerprint, positions
     return positions
 
@@ -307,18 +338,22 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 
     Slice contiguous rows so Arrow can reuse their buffers. Gathering the
     same rows by integer position can copy whole chunks of a string column.
+    The slice is named by its source and reading (`assign_derived`): it is a
+    new object on every rerun, and a 1 kHz recording's trial is tens of
+    thousands of samples to hash for each cache key it feeds.
     """
     if frame is None or getattr(frame, "empty", True):
         return frame
     positions = _trial_positions(frame)
-    pos = positions.get((str(participant_id), str(trial_id)))
+    key = (str(participant_id), str(trial_id))
+    pos = positions.get(key)
     if pos is None or len(pos) == 0:
         return frame.iloc[0:0]
     # Group positions are unique and in source order.
     start, stop = pos[0], pos[-1] + 1
-    if stop - start == len(pos):
-        return frame.iloc[start:stop]
-    return frame.iloc[pos]
+    rows = frame.iloc[start:stop] if stop - start == len(pos) else frame.iloc[pos]
+    assign_derived(rows, "extract_trial", frame, key)
+    return rows
 
 
 # -----------------------------------------------------------------------------
@@ -616,25 +651,49 @@ def _trial_level_columns_from_frame(
     if "participant_id" in scoped.columns and identity != "participant_id":
         group_cols.insert(0, "participant_id")
     grouped = scoped.groupby(group_cols, sort=False, dropna=False)
+    kept = _single_valued_columns(
+        grouped,
+        [
+            col
+            for col in scoped.columns
+            if col != identity and _trial_sort_column_allowed(col)
+        ],
+    )
+    progress.report()
+    # Each reading's first row, in the groups' order. A kept column holds one
+    # value per reading, so that row's cell is it — a missing cell included,
+    # which `GroupBy.first` would skip; `infer_objects` gives an object column
+    # the dtype a per-group aggregation would.
+    firsts = scoped.drop_duplicates(subset=group_cols).set_index(group_cols, drop=False)
     discovered: dict[str, pd.Series] = {}
-    for col in scoped.columns:
-        if col == identity or not _trial_sort_column_allowed(col):
-            continue
-        try:
-            if (grouped[col].nunique(dropna=False) > 1).any():
-                continue
-            if col in group_cols:
-                values = scoped[group_cols].drop_duplicates().copy()
-            else:
-                values = grouped[col].agg(lambda cells: cells.iloc[0]).reset_index()
-        except (TypeError, ValueError):
-            # Nested/list-like event payloads are not sortable scalar metadata.
-            continue
-        series = _by_reading(values.set_index(group_cols, drop=False)[col], by_trial)
+    for col in kept:
+        values = firsts[col] if col in group_cols else firsts[col].infer_objects()
+        series = _by_reading(values, by_trial)
         if series.dropna().empty or _looks_like_free_text(series):
             continue
         discovered[str(col)] = series
     return discovered
+
+
+def _single_valued_columns(grouped, columns: list) -> list:
+    """The ``columns`` with at most one value in every group, a missing cell
+    counting as a value. One pass over all of them; nested/list-like event
+    payloads fail it, and are then left out one column at a time."""
+    if not columns:
+        return []
+    try:
+        counts = grouped[columns].nunique(dropna=False)
+        return [col for col in columns if not (counts[col] > 1).any()]
+    except (TypeError, ValueError):
+        pass
+    kept = []
+    for col in columns:
+        try:
+            if not (grouped[col].nunique(dropna=False) > 1).any():
+                kept.append(col)
+        except (TypeError, ValueError):
+            continue
+    return kept
 
 
 def _merge_trial_level_sources(
@@ -678,6 +737,7 @@ def _trial_level_sort_columns_cached(
 ) -> dict[str, pd.Series]:
     """Cached metadata discovery over the participant-scoped picker frames."""
     del cache_key  # explicit hash input for the underscore-prefixed frames
+    progress.report()  # a miss: real work, so a gated card over it may show
     if _combos is None or _combos.empty or trial_field not in _combos.columns:
         return {}
     picker_ids = set(_combos[trial_field].dropna().astype(str).unique())
@@ -1321,6 +1381,27 @@ def step_linked_compare(delta: int) -> None:
 #: ``{"<key prefix>|<dataset>": trial id}``: the trial each
 #: dataset's picker was last on.
 _TRIAL_BY_DATASET_KEY = "_trial_by_dataset"
+
+
+def forget_trial_memory(session, dataset: str) -> None:
+    """Drop the readings each picker remembers for ``dataset`` once it is
+    removed. A picker last drawn on ``dataset`` also lets go of the reading it
+    holds, so a dataset that later takes the name opens on its own first trial
+    rather than on one of the removed dataset's readings."""
+    remembered = session.get(_TRIAL_BY_DATASET_KEY) or {}
+    if any(key.partition("|")[2] == dataset for key in remembered):
+        session[_TRIAL_BY_DATASET_KEY] = {
+            key: value
+            for key, value in remembered.items()
+            if key.partition("|")[2] != dataset
+        }
+    notes = f"{_TRIAL_BY_DATASET_KEY}_"
+    for key in [k for k in list(session.keys()) if str(k).startswith(notes)]:
+        if session.get(key) == dataset:
+            prefix = str(key)[len(notes) :]
+            session.pop(key, None)
+            session.pop(f"{prefix}_trial_id", None)
+            session.pop(f"{prefix}_trial_pos", None)
 
 
 def row_tail(column, key_prefix: str, reserve_screen_cell):

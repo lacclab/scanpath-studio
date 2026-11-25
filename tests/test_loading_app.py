@@ -677,6 +677,17 @@ def test_cancel_goes_back_to_the_last_dataset_and_try_again_returns(at, monkeypa
     assert at.session_state["data_source_choice"] == demo
 
 
+def test_the_stopped_loading_banner_closes(at):
+    at.run()
+    at.session_state[app.CANCELLED_LOAD_KEY] = {"token": "x", "name": "Other"}
+    at.run()
+    assert at.button(key="sps_try_again")
+    at.button(key="sps_cancelled_notice_close").click().run()
+    assert not at.exception, at.exception
+    assert not [b for b in at.button if b.key == "sps_try_again"]
+    assert app.CANCELLED_LOAD_KEY not in at.session_state
+
+
 def test_picking_another_dataset_mid_load_cancels_the_first(at):
     at.run()
     stale = ("dataset", "an-abandoned-run", "Other")

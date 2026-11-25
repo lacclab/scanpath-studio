@@ -59,6 +59,91 @@ def test_the_data_page_names_the_scope_of_its_counts():
 
 
 @pytest.mark.timeout(180)
+def test_a_star_added_under_favorites_only_joins_the_pool():
+    """The pool under an annotation filter is kept between reruns; a new star
+    changes what the filter keeps, so the pool follows it."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data(names="canonical")
+    readings = [
+        tuple(map(str, row))
+        for row in api.list_trials(words, fixations)
+        .iloc[:2, :2]
+        .itertuples(index=False)
+    ]
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    at.session_state["filter_favorites"] = True
+    at.run(timeout=90)
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert _captions(at, "0 of 24 trials")
+    for count, reading in enumerate(readings, start=1):
+        stars = dict(at.session_state["trial_annotations"])
+        stars[reading] = {"star": True, "tags": [], "note": ""}
+        at.session_state["trial_annotations"] = stars
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert _captions(at, f"{count} of 24 trials"), [c.value for c in at.caption]
+
+
+@pytest.mark.timeout(180)
+def test_the_annotation_filter_keeps_its_copies_of_the_pool_only_while_on():
+    from scanpath_studio import api, app, data
+
+    words, fixations = api.load_sample_data(names="canonical")
+    starred = tuple(map(str, api.list_trials(words, fixations).iloc[0, :2]))
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.session_state["trial_annotations"] = {
+        starred: {"star": True, "tags": [], "note": ""}
+    }
+    at.run(timeout=90)
+
+    def kept_after(favorites_only: bool) -> set[str]:
+        # A filter set from outside its widget applies from the next run.
+        at.session_state["filter_favorites"] = favorites_only
+        at.run(timeout=90)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        store = at.session_state[data._FRAME_CACHE_KEY]
+        return {slot for slot in app.ANNOTATION_FILTER_SLOTS if slot in store}
+
+    assert kept_after(True) == set(app.ANNOTATION_FILTER_SLOTS)
+    assert kept_after(False) == set()
+
+
+@pytest.mark.timeout(180)
+def test_compare_keeps_its_copies_of_b_pool_only_while_on():
+    from scanpath_studio import api, data, tabs
+
+    words, fixations = api.load_sample_data(names="canonical")
+    readings = api.list_trials(words, fixations).iloc[:2, :2]
+    stars = {
+        tuple(map(str, row)): {"star": True, "tags": [], "note": ""}
+        for row in readings.itertuples(index=False)
+    }
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.session_state["trial_annotations"] = stars
+    at.session_state["single_compare_toggle"] = True
+    at.run(timeout=90)
+
+    def kept() -> set[str]:
+        store = at.session_state[data._FRAME_CACHE_KEY]
+        return {slot for slot in tabs.COMPARE_NARROWING_SLOTS if slot in store}
+
+    at.session_state["cmpfilter_favorites"] = True
+    at.run(timeout=90)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert {"cmp_annotation_filter", "cmp_annotation_filter_readings"} <= kept()
+    at.session_state["single_compare_toggle"] = False
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert kept() == set()
+
+
+@pytest.mark.timeout(180)
 def test_empty_trial_filters_leave_the_dataset_open_for_inspection():
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)

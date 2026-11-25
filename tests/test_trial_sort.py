@@ -10,6 +10,7 @@ import pytest
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
+from scanpath_studio import progress  # noqa: E402
 from scanpath_studio.utils import (  # noqa: E402
     TRIAL_SORT_DEFAULT,
     _merge_trial_level_sources,
@@ -143,6 +144,35 @@ class TestTrialSortKeys:
         }
         assert "word_index" not in keys
         assert "duration_ms" not in keys
+
+    def test_a_reading_level_value_may_be_missing_and_payloads_are_skipped(self):
+        """A missing cell is one value: a reading that lacks the column keeps it
+        as missing, and a reading where only some rows lack it varies. A column
+        of lists is left out without costing the others."""
+        combos = pd.DataFrame(
+            {"participant_id": ["p1", "p1"], "trial_id": ["t1", "t2"], "text_id": "a"}
+        )
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1", "t1", "t2", "t2"],
+                "band": pd.Series([None, None, "hard", "hard"], dtype=object),
+                "batch": pd.Series([3, 3, 7, 7], dtype=object),
+                "partly_missing": pd.Series([None, "x", "y", "y"], dtype=object),
+                "payload": [[1], [1], [2], [2]],
+            }
+        )
+        with progress.task(("t", "trial sort keys"), title="Listing trials") as task:
+            keys = trial_sort_keys(combos, "trial_id", words=words)
+        assert task.worked
+        assert pd.isna(keys["band"][reading_key("p1", "t1")])
+        assert keys["band"][reading_key("p1", "t2")] == "hard"
+        assert keys["batch"].to_dict() == {
+            reading_key("p1", "t1"): 3,
+            reading_key("p1", "t2"): 7,
+        }
+        assert "partly_missing" not in keys
+        assert "payload" not in keys
 
     def test_participant_scope_prevents_repeated_trial_ids_from_colliding(self):
         # The picker has already been narrowed to p1, while its source tables

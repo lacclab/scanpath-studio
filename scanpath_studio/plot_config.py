@@ -20,6 +20,7 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     FIXATION_LABEL_OPTIONS,
+    FIXATION_OPACITY,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
@@ -301,7 +302,9 @@ def build_plot_config(
             "drift_correction": str(viz_settings.get("align_algorithm", "Off")),
             "drift_connectors": bool(viz_settings.get("align_connectors", False)),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
-            "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
+            "fixation_opacity": float(
+                viz_settings.get("fixation_opacity", FIXATION_OPACITY.default)
+            ),
             # Uniform fixation colour · marker shape · palette (the palette's
             # colours are already in the individual keys; the name rides along
             # so the picker restores onto the right entry).

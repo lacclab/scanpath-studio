@@ -37,10 +37,14 @@ def demo():
     return api.load_sample_data(names="canonical")
 
 
-def _page(words: pd.DataFrame, reading: tuple[str, str]) -> str:
+def _page(
+    words: pd.DataFrame, reading: tuple[str, str], screen: str | None = None
+) -> str:
     rows = words[
         (words["participant_id"] == reading[0]) & (words["trial_id"] == reading[1])
     ]
+    if screen is not None:
+        rows = rows[rows["screen_id"].astype(str) == screen]
     return str(rows["image_path"].dropna().iloc[0])
 
 
@@ -570,8 +574,12 @@ class TestBsTextGetsBsPage:
     def test_the_overlay(self, demo):
         state = _compare_on_another_text()
         assert (state.kind, state.compare.compare_stimulus) == ("comparison", "b")
-        page_b = _page(demo[0], (state.compare.participant, state.compare.trial))
-        assert page_b != _page(demo[0], (state.participant, state.trial))
+        page_b = _page(
+            demo[0],
+            (state.compare.participant, state.compare.trial),
+            state.compare.screen,
+        )
+        assert page_b != _page(demo[0], (state.participant, state.trial), state.screen)
         assert state.settings["background_image"] == page_b
         code = cs.python_snippet(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
         assert "show_stimulus_image=True" in code
@@ -581,7 +589,11 @@ class TestBsTextGetsBsPage:
     def test_the_co_animation(self, demo):
         state = _compare_on_another_text(single_animate=True)
         assert state.kind == "animation"
-        page_b = _page(demo[0], (state.compare.participant, state.compare.trial))
+        page_b = _page(
+            demo[0],
+            (state.compare.participant, state.compare.trial),
+            state.compare.screen,
+        )
         assert state.settings["background_image"] == page_b
 
     def test_an_upload_stays_the_users_choice(self):

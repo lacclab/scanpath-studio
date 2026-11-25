@@ -27,10 +27,9 @@ mode=${SCANPATH_COMMIT_GATE:-observe}
 input=$(cat)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
-case "$cmd" in
-  *"git commit"*) ;;
-  *) exit 0 ;;
-esac
+# `git commit`, also with git's own options first (`git -C <dir> commit`, as a
+# worktree session writes it, or `git -c key=value commit`).
+printf '%s' "$cmd" | grep -Eq 'git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+)*[[:space:]]+commit' || exit 0
 # An amend that keeps its message, or a merge commit, has nothing to check.
 case "$cmd" in
   *"--no-edit"*) exit 0 ;;
@@ -57,12 +56,21 @@ else
   trailer=no
 fi
 
-# Did the session run anything? A cheap look at the transcript, for the log.
+# Did the session run anything? Only the shell commands it (or one of its
+# subagents) issued count: the project instructions name `verify_change.py`
+# and `pytest` and sit in every transcript. commit-gate-runs.jq reduces each
+# command to the programs it ran, so a commit message, a PR body or a grep
+# pattern that names either is not a run.
 ran=none
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-  if grep -q 'verify_change.py' "$transcript"; then
+  set -- "$transcript"
+  for sub in "${transcript%.jsonl}"/subagents/*.jsonl; do
+    [ -f "$sub" ] && set -- "$@" "$sub"
+  done
+  run=$(jq -R -r -f "$(dirname "$0")/commit-gate-runs.jq" "$@" 2>/dev/null)
+  if printf '%s\n' "$run" | grep -Eq '^(\S*/)?verify_change\.py([[:space:]]|$)'; then
     ran=harness
-  elif grep -q 'pytest' "$transcript"; then
+  elif printf '%s\n' "$run" | grep -Eq '^(\S*/)?pytest([[:space:]]|$)'; then
     ran=tests
   fi
 fi

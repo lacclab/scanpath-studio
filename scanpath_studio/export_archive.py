@@ -10,11 +10,14 @@ import zipfile
 from contextlib import ExitStack, closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Lock
+from threading import Lock, Timer
 from urllib.parse import urlencode
 
 _PART_BYTES = 8 * 1024**2
 _SMALL_ZIP = 32 * 1024**2
+#: How long a replaced bundle stays on disk. Its download page fetches the
+#: pieces one after another, which can take minutes for a large bundle.
+RETIRED_BUNDLE_S = 30 * 60
 _ROOT_LOCK = Lock()
 _root: TemporaryDirectory | None = None
 
@@ -42,6 +45,7 @@ class DiskBundle:
         self.part_size = _PART_BYTES
         self.size = 0
         self.parts = 0
+        self._release: Timer | None = None
 
     def __len__(self) -> int:
         return self.size
@@ -53,7 +57,17 @@ class DiskBundle:
         """Seekable input for zipfile when retrying a partial bundle."""
         return io.BufferedReader(_PartReader(self))
 
+    def retire(self, after_s: float = RETIRED_BUNDLE_S) -> None:
+        """Delete the pieces after ``after_s`` seconds instead of when the session
+        lets go, so a download already under way can finish."""
+        if self._release is None:
+            self._release = Timer(after_s, self.close)
+            self._release.daemon = True
+            self._release.start()
+
     def close(self) -> None:
+        if self._release is not None:
+            self._release.cancel()
         self._directory.cleanup()
 
     def download_url(self, filename: str) -> str:

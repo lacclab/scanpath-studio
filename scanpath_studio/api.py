@@ -29,7 +29,7 @@ import json
 import logging
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
@@ -94,6 +94,13 @@ from .multipart import (  # noqa: E402
     screen_canvas_size,
     screen_rows,
 )
+
+# Re-exported: what `add_dataset` and `remove_dataset` raise for a name that
+# is already saved, or that is not.
+from .persistence import (  # noqa: E402, F401
+    StoredDatasetExistsError,
+    StoredDatasetNotFoundError,
+)
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     COMPARISON_FIGURE_OPTIONS,
@@ -103,6 +110,7 @@ from .plots import (  # noqa: E402
     FigureSettings,
     _resolve_trial_display_name,
     add_illustration_label,
+    category_vocabulary,
     make_comparison_figure,
     make_corpus_overview_figure,
     make_difference_profile_figure,
@@ -852,6 +860,7 @@ def load_scanpath_data(
     names: str = NAMES_SOURCE,
     include_source_cells: bool = False,
     _row_counts: dict | None = None,
+    _schemas: dict | None = None,
 ) -> ScanpathData:
     """Load and normalize a Words table, a Fixations table, or both.
 
@@ -1018,6 +1027,9 @@ def load_scanpath_data(
     else:
         fixations_norm = _data.empty_fixations_frame()
 
+    if _schemas is not None:
+        _schemas["words"] = word_schema if words is not None else None
+        _schemas["fixations"] = fix_schema if fixations is not None else None
     words_norm, fixations_norm, _join, rewrites = _data.harmonize_frames_reporting(
         words_norm, fixations_norm
     )
@@ -1330,7 +1342,9 @@ def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """Load the bundled demo, normalized and ready to plot.
 
     The bundled demo is a subset of OneStop: two participants, twelve trials each, every
-    one with fixations. The frames carry the
+    one with fixations. Each trial has the screens its reader saw (``screen_id``: Title
+    on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers,
+    Feedback), each with the experiment's stimulus image. The frames carry the
     demo's recorded screen (OneStop's 2560×1440), so ``plot_scanpath`` draws them on it
     without a ``canvas_size``, as ``scanpath-studio render --sample`` does.
 
@@ -1378,6 +1392,7 @@ def load_raw_gaze(
     raw_gaze_schema: dict | None = None,
     names: str = NAMES_SOURCE,
     _row_counts: dict | None = None,
+    _schemas: dict | None = None,
 ) -> pd.DataFrame:
     """Load and normalize a raw, sample-level gaze table, for ``raw_gaze=``.
 
@@ -1423,20 +1438,24 @@ def load_raw_gaze(
     normalized = _data.normalize_raw_gaze(frame, schema)
     if _row_counts is not None:
         _row_counts["raw_gaze"] = _data.input_row_counts(frame, schema, len(normalized))
+    names_map = _cn.from_schema("raw_gaze", schema, frame.columns)
+    if _schemas is not None:
+        _schemas["raw_gaze"] = schema
+        _schemas["raw_gaze_names"] = names_map
     if names == NAMES_CANONICAL:
         return normalized
-    return _cn.attach(
-        normalized, "raw_gaze", _cn.from_schema("raw_gaze", schema, frame.columns)
-    )
+    return _cn.attach(normalized, "raw_gaze", names_map)
 
 
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     """Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-    The table includes each sample during paragraph reading, with screen x/y in
+    The table includes each sample while each screen of a reading was shown,
+    with the screen it belongs to (``part`` / ``screen_index``), screen x/y in
     pixels, the tracked eye and pupil area in the tracker's units. Timestamps
     are milliseconds from trial recording start on the fixation report's clock.
-    Samples with missing positions keep their timestamps and recorded pupil values.
+    Samples with missing positions keep their timestamps; their pupil value is
+    missing too, since the tracker measured nothing.
 
     Args:
         names: ``"source"`` or ``"canonical"``, as
@@ -1558,7 +1577,11 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
     columns in ``words`` (EyeLink IA exports) are preserved; anything missing is
     computed from fixations + word bounding boxes. Takes the normalized frames
     from [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], and
-    answers in the names they carry."""
+    answers in the names they carry.
+
+    One row per word of each reading. On multi-screen data a word is one screen's
+    word: the rows keep the words' screen ID and screen number, so they merge
+    back onto ``words`` by participant, trial, screen and word ID."""
     _require_computed_measures("compute_word_metrics")
     words, word_names = _named_in(words, "words")
     fixations, _fix_names = _named_in(fixations, "fixations")
@@ -2699,6 +2722,35 @@ def _check_canvas_size(canvas_size) -> None:
         )
 
 
+#: What ``illustration=True`` sets: the app's *Illustration* design. An
+#: option given beside it wins.
+ILLUSTRATION_PRESET = {
+    "show_words": False,
+    "show_word_labels": True,
+    "show_fixations": True,
+    "show_order": False,
+    "show_saccades": True,
+    "show_saccade_arrows": False,
+    "show_heatmap": False,
+    "color_by": UNIFORM_COLOR_FIELD,
+    "saccade_color_mode": "One color",
+    "saccade_render_mode": "Arc",
+    "fixation_snap_to_line": True,
+    "fixation_opacity": 1.0,
+}
+
+
+def _declared_font_family(words: pd.DataFrame | None, font_family: str | None) -> str:
+    """``font_family``, or, left out (``None``), the stimulus font the words
+    declare (OneStop's Lucida Sans Typewriter), else the generic monospace —
+    as the app's font control snaps to it."""
+    if font_family is not None:
+        return font_family
+    from .data import declared_font_family
+
+    return declared_font_family(words) or FONT_FAMILY
+
+
 def plot_scanpath(
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
@@ -2708,7 +2760,7 @@ def plot_scanpath(
     screen: str | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     raw_gaze: pd.DataFrame | None = None,
     drift_correction: str | None = None,
     drift_connectors: bool = False,
@@ -2735,7 +2787,9 @@ def plot_scanpath(
         words: A normalized words frame from
             [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], or ``None``
             for a dataset recorded as raw gaze alone.
-        fixations: The normalized fixations frame, or ``None`` likewise.
+        fixations: The normalized fixations frame, or ``None`` likewise. A categorical
+            ``color_by`` gives each label of its column in this whole frame a color,
+            so a category keeps its color in every trial drawn from the same frame.
         participant: The participant ID. It may be left out when the frames hold one
             trial.
         trial: The trial ID. It may be left out when the frames hold one trial.
@@ -2745,7 +2799,8 @@ def plot_scanpath(
             data's extent by default; pass the real resolution (``(2560, 1440)`` for
             OneStop) to keep coordinates true to scale.
         base_font_size: The base font size in px.
-        font_family: The font family.
+        font_family: The font family. Left out, the font the data declares for
+            its stimulus (OneStop's Lucida Sans Typewriter), else ``monospace``.
         raw_gaze: Samples from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze],
             filtered to the trial and drawn as recorded, under the fixations. It can be
             the only table: with ``words`` and ``fixations`` ``None``, the trial is
@@ -2803,21 +2858,7 @@ def plot_scanpath(
             PNG). The figure draws none.
     """
     if illustration:
-        figure_overrides = {
-            "show_words": False,
-            "show_word_labels": True,
-            "show_fixations": True,
-            "show_order": False,
-            "show_saccades": True,
-            "show_saccade_arrows": False,
-            "show_heatmap": False,
-            "color_by": UNIFORM_COLOR_FIELD,
-            "saccade_color_mode": "One color",
-            "saccade_render_mode": "Arc",
-            "fixation_snap_to_line": True,
-            "fixation_opacity": 1.0,
-            **figure_overrides,
-        }
+        figure_overrides = {**ILLUSTRATION_PRESET, **figure_overrides}
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
@@ -2912,7 +2953,7 @@ def plot_scanpath(
         canvas_width=int(canvas_size[0]),
         canvas_height=int(canvas_size[1]),
         base_font_size=int(base_font_size),
-        font_family=font_family,
+        font_family=_declared_font_family(trial_words, font_family),
         x_field=x_field,
         y_field=y_field,
         column_labels=_column_labels(
@@ -2923,6 +2964,9 @@ def plot_scanpath(
             raw_gaze=raw_gaze,
             sample_names=sample_side,
         ),
+        # Every reading's labels, not this trial's, so a category wears one
+        # colour in every trial drawn from these frames, as in the app.
+        color_categories=category_vocabulary(settings.get("color_by"), fixations),
     )
     fig = make_scanpath_figure(
         trial_words,
@@ -2946,7 +2990,7 @@ def animate_scanpath(
     screen_b: str | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     playback_speed: float = 1.0,
     autoplay: bool = True,
     fix_index_range: tuple[int, int] | None = None,
@@ -2996,7 +3040,8 @@ def animate_scanpath(
         canvas_size: A's monitor size, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         base_font_size: The base font size in px.
-        font_family: The font family.
+        font_family: The font family. Left out, the font the data declares for
+            its stimulus (OneStop's Lucida Sans Typewriter), else ``monospace``.
         playback_speed: The replay lasts the reading time divided by this. Any other
             value than ``1`` makes the automatic Illustration label say the timing was
             changed.
@@ -3052,6 +3097,8 @@ def animate_scanpath(
         ValueError: An option the replay does not take (the message names the valid
             ones), a style naming ``saccade_classes`` (the replay has no saccade-class
             filter), or B frames holding several trials without ``trial_b``.
+        ValueError: ``show_fixations=False`` with ``show_saccades=False``, which
+            leaves the replay nothing to draw.
         IncomparableScreensError: B's dataset has a different canvas from A's. A
             ``ValueError``.
     """
@@ -3061,6 +3108,12 @@ def animate_scanpath(
             "animate_scanpath replays fixations and has no raw-gaze layer, and "
             "Scanpath Studio does not detect fixations from gaze samples. Draw the "
             "samples with plot_scanpath(..., raw_gaze=...) instead."
+        )
+    if fixations is None:
+        raise ValueError(
+            "This dataset has no fixations to replay (one recorded as raw gaze "
+            "alone) — the replay is built from fixations. Draw its samples with "
+            "plot_scanpath(..., raw_gaze=...); they are not turned into fixations."
         )
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
@@ -3094,6 +3147,16 @@ def animate_scanpath(
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
     animation_overrides = {**_animation_defaults(), **animation_overrides}
+    if not (
+        animation_overrides.get("show_fixations", True)
+        or animation_overrides.get("show_saccades", True)
+    ):
+        raise ValueError(
+            "show_fixations=False and show_saccades=False leave nothing to replay: "
+            "the replay draws the fixations and the saccades between them, and no "
+            "heatmap or raw gaze. Keep one of them on, or draw a static figure "
+            "with plot_scanpath(...)."
+        )
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     names = _call_names(column_names, fixations=fix_names, words=word_names)
@@ -3221,11 +3284,17 @@ def animate_scanpath(
         canvas_width=int(setup_a.canvas_width),
         canvas_height=int(setup_a.canvas_height),
         base_font_size=int(base_font_size),
-        font_family=font_family,
+        font_family=_declared_font_family(trial_words, font_family),
         playback_speed=playback_speed,
         autoplay=autoplay,
         column_labels=_column_labels(
             names, trial_words, trial_fixations, words=word_side
+        ),
+        # A's whole frames and B's own, as the app colours a co-animation.
+        color_categories=category_vocabulary(
+            animation_overrides.get("color_by"),
+            fixations,
+            None if passed_b[1] is None else _cn.to_canonical_frame(passed_b[1]),
         ),
     )
     fig = make_scanpath_animation(
@@ -3619,7 +3688,7 @@ def compare_scanpaths(
     style_a: dict | None = None,
     style_b: dict | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     fix_index_range: tuple[int, int] | None = None,
     fix_index_range_b: tuple[int, int] | None = None,
     drift_correction: str | None = None,
@@ -3704,7 +3773,8 @@ def compare_scanpaths(
         style_a: A's style, with the keys above.
         style_b: B's style.
         base_font_size: The base font size in px.
-        font_family: The font family.
+        font_family: The font family. Left out, the font the data declares for
+            its stimulus (OneStop's Lucida Sans Typewriter), else ``monospace``.
         fix_index_range: ``(start, end)``: draw only that window of both scanpaths'
             fixations.
         fix_index_range_b: B's own window, as the app's B slider sets it.
@@ -3734,6 +3804,8 @@ def compare_scanpaths(
         The Plotly figure.
 
     Raises:
+        ValueError: ``fixations`` is ``None``: a dataset recorded as raw gaze alone
+            has no scanpath to compare.
         ValueError: An overlay of two different screens (see the overlay gate), or a
             ``screen`` / ``screen_b`` the trial does not have or that names a screen of
             a single-screen trial.
@@ -3759,6 +3831,13 @@ def compare_scanpaths(
         _COMPARISON_FIGURE_PARAMS | {"palette"},
         "compare_scanpaths",
     )
+    if fixations is None:
+        raise ValueError(
+            "compare_scanpaths compares two readings' fixations, and this dataset "
+            "has none (one recorded as raw gaze alone). Scanpath Studio does not "
+            "detect fixations from gaze samples; draw each reading's samples with "
+            "plot_scanpath(..., raw_gaze=...)."
+        )
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.
@@ -3994,7 +4073,7 @@ def compare_scanpaths(
         canvas_width=int(setup_a.canvas_width),
         canvas_height=int(setup_a.canvas_height),
         base_font_size=int(base_font_size),
-        font_family=font_family,
+        font_family=_declared_font_family(words, font_family),
         layout=resolved_layout,
         compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
@@ -4009,6 +4088,13 @@ def compare_scanpaths(
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.
         canvas_b=resolved_setup_b.canvas,
+        # Both datasets' labels: a category wears one colour on A and on B,
+        # and the same one in every comparison of these frames.
+        color_categories=category_vocabulary(
+            settings.get("color_by"),
+            fixations,
+            fixations_b if cross_dataset else None,
+        ),
     )
     fig = make_comparison_figure(
         pd.concat([merged_words, merged_words_b], ignore_index=True),
@@ -4114,6 +4200,7 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
     proof_width_mm: float | None = None,
+    compact_png: bool = False,
 ) -> Path:
     """Save a figure as HTML, PNG, SVG or PDF.
 
@@ -4141,10 +4228,15 @@ def save_figure(
         dpi: The resolution for ``width_mm`` / ``width_in``. Default 300.
         proof_width_mm: Total manuscript width of a split comparison SVG, as in
             [`save_panel_proof`][scanpath_studio.api.save_panel_proof].
+        compact_png: Compress the PNG losslessly, as the app's Export bundle does
+            under *Smaller PNG files*: the same pixels and metadata in a smaller file,
+            for a little more time. Only for ``.png``.
 
     Returns:
         The path written.
     """
+    if compact_png and not str(path).lower().endswith(".png"):
+        raise ValueError("compact_png compresses a PNG; save as .png.")
     if str(path).lower().endswith((".publication.json", ".publication.html")):
         if any(v is not None for v in (width, height, proof_width_mm)) or scale != 2:
             raise ValueError("Use width_mm or width_in to size a publication figure.")
@@ -4236,6 +4328,11 @@ def save_figure(
                 _export.set_png_dpi(staged, dpi)
         if suffix == ".html" or dpi is not None:
             stamp_file(staged)
+        if compact_png:
+            # Last, over the finished file: it keeps the dpi and the citation.
+            from .export_png import compact_png as compress
+
+            staged.write_bytes(compress(staged.read_bytes()))
         staged.replace(path)
     return path
 
@@ -4290,6 +4387,7 @@ def save_figure_layers(
     width_mm: float | None = None,
     width_in: float | None = None,
     dpi: int | None = None,
+    compact_png: bool = False,
 ) -> dict[str, Path]:
     """Save a scanpath figure as one file per layer, for editing.
 
@@ -4312,6 +4410,8 @@ def save_figure_layers(
         width_mm: PNG print width in millimetres.
         width_in: PNG print width in inches.
         dpi: Resolution for the print width, shared by every layer.
+        compact_png: Compress each PNG layer losslessly, as
+            [`save_figure`][scanpath_studio.api.save_figure] does. Only for ``png``.
 
     Returns:
         ``{layer: Path}`` for each file written.
@@ -4320,6 +4420,8 @@ def save_figure_layers(
     fmt = fmt.lstrip(".").lower()
     if fmt not in {"html", "png", "svg", "pdf"}:
         raise ValueError("Choose html, png, svg or pdf for the layer format.")
+    if compact_png and fmt != "png":
+        raise ValueError("compact_png compresses PNG layers; choose fmt='png'.")
     created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -4337,6 +4439,7 @@ def save_figure_layers(
                     width_mm=width_mm,
                     width_in=width_in,
                     dpi=dpi,
+                    compact_png=compact_png,
                 )
                 written[layer] = directory / name
             _publish_layers(directory, staged, [p.name for p in written.values()], fmt)
@@ -4346,6 +4449,62 @@ def save_figure_layers(
                 path.rmdir()
         raise
     return written
+
+
+#: What ``figure_code``'s ``compare_source_options`` takes: B's table paths and
+#: their mappings, as ``source_options`` takes A's.
+_COMPARE_SOURCE_KEYS = (
+    "words",
+    "fixations",
+    "raw_gaze",
+    "word_schema",
+    "fix_schema",
+    "raw_gaze_schema",
+)
+
+
+def _snippet_compare_tables(
+    options: dict | None, dataset: str, *, a_has_raw_gaze: bool
+) -> tuple[str, dict]:
+    """``(dataset, fields)``: B's dataset name and `CompareTarget`'s table fields
+    from ``figure_code``'s ``compare_source_options``.
+
+    Tables given with no ``dataset`` are a second dataset all the same, named as
+    ``render --compare-words`` names it. A table left out keeps its placeholder,
+    so a mapping alone still maps it, and a raw-gaze mapping alone loads B's
+    samples from theirs. ``a_has_raw_gaze`` says whether A has samples of its own
+    to load beside B's."""
+    options = dict(options or {})
+    if not options:
+        return dataset, {}
+    unknown = sorted(set(options) - set(_COMPARE_SOURCE_KEYS))
+    if unknown:
+        raise ValueError(
+            f"compare_source_options takes {', '.join(_COMPARE_SOURCE_KEYS)}; got "
+            f"{', '.join(map(repr, unknown))}."
+        )
+
+    def paths(name: str) -> tuple[str, ...]:
+        value = options.get(name) or ()
+        return (
+            (str(value),) if isinstance(value, (str, Path)) else tuple(map(str, value))
+        )
+
+    fields: dict = {
+        "words": paths("words"),
+        "fixations": paths("fixations"),
+        "schemas": {
+            option: dict(options[option])
+            for option in ("word_schema", "fix_schema", "raw_gaze_schema")
+            if options.get(option)
+        },
+    }
+    if options.get("raw_gaze") or options.get("raw_gaze_schema"):
+        fields["raw_gaze"] = paths("raw_gaze")  # () keeps B's placeholder
+        fields["primary_raw_gaze"] = a_has_raw_gaze
+    from .code_snippet import DEFAULT_DATASET_B
+
+    return dataset or DEFAULT_DATASET_B, fields
 
 
 def figure_code(
@@ -4363,12 +4522,14 @@ def figure_code(
     compare_dataset: str = "",
     compare_canvas: tuple[int, int] | None = None,
     compare_labels: tuple[str, str] | None = None,
+    compare_source_options: dict | None = None,
     canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
-    font_family: str = FONT_FAMILY,
+    font_family: str | None = None,
     title: str = "",
     caption: str = "",
     fix_index_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
     illustration_label: str = "auto",
     drift_correction: str | None = None,
     drift_connectors: bool = False,
@@ -4412,14 +4573,21 @@ def figure_code(
         compare_stimulus: Whose stimulus an overlay draws, as
             [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
         compare_dataset: The dataset B was loaded from, when it is a second one. Both
-            forms then load B's own tables, from the placeholder paths ``B_WORDS`` /
-            ``B_FIXATIONS`` that you point at its files (``words_b=`` / ``fixations_b=``
-            / ``dataset_b=``, and ``--compare-words`` / ``--compare-fixations``).
+            forms then load B's own tables (``words_b=`` / ``fixations_b=`` /
+            ``dataset_b=``, and ``--compare-words`` / ``--compare-fixations``), from
+            ``compare_source_options``, else from the placeholder paths ``B_WORDS`` /
+            ``B_FIXATIONS`` that you point at its files.
         compare_canvas: B's screen, ``(width, height)``, with ``compare_dataset``:
             written as ``setup_b=`` and ``--compare-canvas``, which a co-animation
             across datasets needs.
         compare_labels: The two trace labels, when they are not the composed defaults:
             ``labels=`` and ``--label-a`` / ``--label-b``.
+        compare_source_options: How B's tables load when B is a second dataset, as
+            ``source_options`` says it for A's files: ``"words"`` / ``"fixations"``
+            / ``"raw_gaze"`` paths in place of the placeholders, and
+            ``"word_schema"`` / ``"fix_schema"`` / ``"raw_gaze_schema"`` mappings
+            (``--compare-word-schema`` and its siblings). Without
+            ``compare_dataset``, B is named ``"Dataset B"``, as ``render`` names it.
         canvas_size: The monitor size. Defaults to the screen ``render`` assumes for the
             source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the
             same figure.
@@ -4428,6 +4596,10 @@ def figure_code(
         title: As the builders take it.
         caption: As the builders take it.
         fix_index_range: As the builders take it.
+        fix_index_range_b: B's window, with ``compare``, as
+            [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] and
+            [`animate_scanpath`][scanpath_studio.api.animate_scanpath] take it
+            (``--compare-fix-index-range``).
         illustration_label: As the builders take it.
         drift_correction: Experimental, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
@@ -4451,7 +4623,8 @@ def figure_code(
             ``render --print-code`` writes to stderr say it.
 
     Raises:
-        ValueError: An unknown ``flavor``.
+        ValueError: An unknown ``flavor``, or a key ``compare_source_options`` does
+            not take.
         TypeError: An option the builder does not take.
 
     Examples:
@@ -4475,6 +4648,11 @@ def figure_code(
         set(figure_options(kind)) | {"palette"},
         "figure_code",
     )
+    compare_dataset, compare_tables = _snippet_compare_tables(
+        compare_source_options,
+        compare_dataset,
+        a_has_raw_gaze=source == "demo" or bool((source_options or {}).get("raw_gaze")),
+    )
     if canvas_size is None:
         # `render` snaps these sources to their recorded screen while
         # `plot_scanpath` estimates one from the data, so leaving the canvas
@@ -4493,10 +4671,13 @@ def figure_code(
         screen=screen,
         canvas=canvas_size,
         base_font_size=base_font_size,
-        font_family=font_family,
+        font_family=font_family or "",
+        # A font named here is a choice: written even when it is the default.
+        font_named=font_family is not None,
         title=title,
         caption=caption,
         fix_index_range=fix_index_range,
+        fix_index_range_b=fix_index_range_b,
         illustration_label=illustration_label,
         drift_correction=drift_correction,
         drift_connectors=drift_connectors,
@@ -4520,6 +4701,7 @@ def figure_code(
                     if compare_labels
                     else None
                 ),
+                **compare_tables,
             )
             if compare is not None
             else None
@@ -4591,6 +4773,548 @@ def clear_cache() -> dict:
 
     clear_local_state()
     return cache_status()
+
+
+def add_dataset(
+    name: str,
+    words: TablesLike | None = None,
+    fixations: TablesLike | None = None,
+    *,
+    raw_gaze: TablesLike | None = None,
+    word_schema: dict | None = None,
+    fix_schema: dict | None = None,
+    raw_gaze_schema: dict | None = None,
+    trial_parts_manifest: dict | None = None,
+    keep_columns: Iterable[str] | None = None,
+    canvas_size: tuple[int, int] | None = None,
+    setup: SetupSnapshot | None = None,
+    description: str | None = None,
+    select: bool = True,
+    replace: bool = False,
+) -> str:
+    """Add a dataset to the app's dataset list from a script.
+
+    The tables load as [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]
+    and [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze] load them, and the
+    dataset is saved where a local app keeps the datasets added with ➕ **Add
+    dataset** (the recovery cache, see
+    [`cache_status`][scanpath_studio.api.cache_status]). Start the app with
+    ``scanpath-studio`` and it is in the list, opened unless ``select=False``. An
+    app already open shows it once its browser tab is reloaded. The same as
+    ``scanpath-studio add``.
+
+    It works for a local app only: the app on this computer, the desktop app, or a
+    ``scanpath-studio run`` on this machine. A hosted app keeps no saved datasets.
+
+    Args:
+        name: The name the dataset list shows. A built-in source's name is refused.
+        words: The Words table, in any form ``load_scanpath_data`` takes.
+        fixations: The Fixations table, in the same forms.
+        raw_gaze: The Raw gaze table, in the same forms. Any one of the three tables
+            is enough.
+        word_schema: The Words table's column mapping, replacing auto-detection, as
+            ``load_scanpath_data`` takes it. The app shows it as the dataset's
+            mapping, and ✏️ **Edit dataset** starts from it.
+        fix_schema: The same for the Fixations table.
+        raw_gaze_schema: The same for the Raw gaze table, as ``load_raw_gaze`` takes
+            it.
+        trial_parts_manifest: As ``load_scanpath_data`` takes it.
+        keep_columns: As ``load_scanpath_data`` takes it.
+        canvas_size: The recording's screen, ``(width, height)`` px. Without it, the
+            screen a table records is used, else one estimated from the extent of
+            the data, as ➕ **Add dataset** suggests it. With ``replace``, leaving
+            out both this and ``setup`` keeps the saved dataset's setup.
+        setup: The full recording setup, an `experimental_setup.SetupSnapshot`
+            (screen, monitor width, text size), in place of ``canvas_size``.
+        description: The sentence the 🗂️ **Data** page shows under its name.
+        select: Open the app on this dataset next time it starts.
+        replace: Replace the tables of the saved dataset with this name, keeping its
+            annotations, metadata tables, share links, and its description and
+            recording setup unless new ones are given. Without it, a name already
+            saved is an error.
+
+    Returns:
+        The name the dataset was saved under.
+
+    Raises:
+        ValueError: No table was given, a table can't be loaded (as
+            ``load_scanpath_data`` raises), the name is empty, too long or a built-in
+            source's, or the saved work can't be read or was written by another
+            version. Nothing is saved then.
+        StoredDatasetExistsError: A dataset with this name is already saved and
+            ``replace`` is off. A ``ValueError``.
+        TypeError: ``setup`` is not a ``SetupSnapshot``.
+        RuntimeError: Saving is turned off (``SCANPATH_STUDIO_PERSIST=0``).
+
+    Examples:
+        ```python
+        sps.add_dataset(
+            "Pilot 3",
+            words="pilot3/ia_report.csv",
+            fixations="pilot3/fixation_report.csv",
+            canvas_size=(1920, 1080),
+        )
+        ```
+        Then run ``scanpath-studio`` and the app opens on *Pilot 3*. Reload a tab
+        that is already open right away: changes made in it after the dataset was
+        added are not saved, as when two tabs change the same saved work.
+    """
+    from . import persistence as _persistence
+
+    if not _persistence.persistence_enabled("http://localhost"):
+        raise RuntimeError(
+            f"Saving is turned off ({_persistence.PERSIST_ENV_VAR}=0), so the app "
+            "would not see the dataset. Unset it to add one."
+        )
+    if words is None and fixations is None and raw_gaze is None:
+        raise ValueError("Provide at least one of words=, fixations= or raw_gaze=.")
+    if setup is not None and canvas_size is not None:
+        raise ValueError("Pass setup= or canvas_size=, not both.")
+    if setup is not None and not isinstance(setup, SetupSnapshot):
+        raise TypeError(
+            "setup must be an experimental_setup.SetupSnapshot, got "
+            f"{type(setup).__name__}."
+        )
+    schemas: dict = {}
+    if words is not None or fixations is not None:
+        loaded = load_scanpath_data(
+            words,
+            fixations,
+            word_schema=word_schema,
+            fix_schema=fix_schema,
+            trial_parts_manifest=trial_parts_manifest,
+            keep_columns=keep_columns,
+            names=NAMES_CANONICAL,
+            _schemas=schemas,
+        )
+        words_df, fixations_df = loaded
+        names = {
+            table: names_map.to_payload()
+            for table, names_map in loaded.column_names.items()
+            if schemas.get(table)
+        }
+    else:
+        words_df, fixations_df = (
+            _data.empty_words_frame(),
+            _data.empty_fixations_frame(),
+        )
+        names = {}
+        schemas = {"words": None, "fixations": None}
+    raw_gaze_df = pd.DataFrame()
+    schemas["raw_gaze"] = None
+    if raw_gaze is not None:
+        raw_gaze_df = load_raw_gaze(
+            raw_gaze,
+            raw_gaze_schema=raw_gaze_schema,
+            names=NAMES_CANONICAL,
+            _schemas=schemas,
+        )
+        names["raw_gaze"] = schemas.pop("raw_gaze_names").to_payload()
+    keep_setup = setup is None and canvas_size is None
+    if setup is None:
+        extent_fixations = fixations_df if not fixations_df.empty else raw_gaze_df
+        setup = _compare_setup(
+            None, canvas_size, words_df, extent_fixations, side="setup"
+        )
+    # A Trial ID mapped to several columns is a composite id: the app keeps
+    # which, read from the tables in the order `app._normalize_pair` reads them.
+    trial_columns: list = []
+    for table in ("words", "fixations", "raw_gaze"):
+        schema = schemas.get(table)
+        if schema and schema.get("trial"):
+            trial_columns = _data.trial_mapping_columns(schema["trial"])
+            break
+    # How a script loads the files, in their own column names: a table given as
+    # a frame this API already named was mapped under the internal names.
+    recipe = _cn.stored_source_recipe({"schemas": schemas, "column_names": names})
+    recipe["steps"] = ["trial_parts_manifest"] if trial_parts_manifest else []
+    recipe["derived"] = []
+    payload = {
+        "words": words_df,
+        "fixations": fixations_df,
+        "raw_gaze": raw_gaze_df,
+        "filter_fields": _condition_fields(
+            {"words": words_df, "fixations": fixations_df}, schemas
+        ),
+        "composite_trial_columns": list(trial_columns)
+        if len(trial_columns) > 1
+        else [],
+        "schemas": schemas,
+        "source_recipe": recipe,
+        "dropped_columns": {},
+        "setup": setup.to_dict(),
+        "column_names": names,
+    }
+    _persistence.store_dataset(
+        payload,
+        name,
+        description=description,
+        select=select,
+        replace=replace,
+        keep_setup=keep_setup,
+    )
+    return str(name).strip()
+
+
+def remove_dataset(name: str, *, missing_ok: bool = False) -> bool:
+    """Remove a dataset from the app's dataset list from a script.
+
+    The counterpart of [`add_dataset`][scanpath_studio.api.add_dataset], and the
+    same as the dataset's **Remove** on the 🗂️ **Data** page: its tables go, with
+    its annotations, metadata tables, description and share ID. Any dataset you
+    added counts, in the app or from a script; the built-in and public datasets
+    can't be removed. When the app last had it open, it next opens on its default
+    dataset. Reload a tab that is already open right away: changes made in it
+    after the removal are not saved. The same as ``scanpath-studio remove``.
+
+    Args:
+        name: The name the dataset list shows, ignoring case.
+        missing_ok: Return ``False`` when no dataset has the name, instead of
+            raising.
+
+    Returns:
+        Whether a dataset was removed.
+
+    Raises:
+        StoredDatasetNotFoundError: No saved dataset has this name, and
+            ``missing_ok`` is off. A ``LookupError``.
+        ValueError: The saved work can't be read or was written by another
+            version. Nothing is removed then.
+        RuntimeError: Saving is turned off (``SCANPATH_STUDIO_PERSIST=0``).
+
+    Examples:
+        ```python
+        sps.remove_dataset("Pilot 3")
+        ```
+    """
+    from . import persistence as _persistence
+
+    if not _persistence.persistence_enabled("http://localhost"):
+        raise RuntimeError(
+            f"Saving is turned off ({_persistence.PERSIST_ENV_VAR}=0), so the app "
+            "keeps no datasets to remove. Unset it to remove one."
+        )
+    try:
+        _persistence.remove_stored_dataset(name)
+    except StoredDatasetNotFoundError:
+        if missing_ok:
+            return False
+        raise
+    return True
+
+
+@dataclass(frozen=True)
+class AnnotationsWriteResult:
+    """What [`write_annotations`][scanpath_studio.api.write_annotations] did.
+
+    Attributes:
+        dataset: The dataset's name, as the dataset list shows it.
+        written: How many readings the annotations were written on.
+        annotated: How many readings of the dataset are annotated now.
+        unknown: The readings the dataset does not have, which were left out:
+            ``participant_id``, ``trial_id`` and ``screen_id`` (blank on a whole
+            trial). Empty when every reading was found.
+    """
+
+    dataset: str
+    written: int
+    annotated: int
+    unknown: pd.DataFrame
+
+
+def _annotation_entries(annotations: Any) -> dict:
+    """What ``write_annotations`` was given, as `annotations.frame_entries` /
+    `record_entries` read it."""
+    import scanpath_studio.annotations as _annotations
+
+    if isinstance(annotations, pd.DataFrame):
+        return _annotations.frame_entries(_cn.to_canonical_frame(annotations))
+    if isinstance(annotations, (str, Path)):
+        path = Path(annotations).expanduser()
+        if path.suffix.lower() == ".csv":
+            table = pd.read_csv(
+                path,
+                dtype=str,
+                keep_default_na=False,
+                encoding="utf-8-sig",
+            )
+            return _annotations.frame_entries(table)
+        document = _annotations._json_document(path.read_bytes())
+        return _annotations.record_entries(_annotations.document_records(document))
+    if isinstance(annotations, dict):
+        return _annotations.record_entries(_annotations.document_records(annotations))
+    if isinstance(annotations, (list, tuple)):
+        return _annotations.record_entries(list(annotations))
+    raise TypeError(
+        "annotations must be a DataFrame, a list of annotation records, an "
+        f"annotations file's contents or a path to one, not {type(annotations).__name__}."
+    )
+
+
+def read_annotations(dataset: str) -> pd.DataFrame:
+    """Read the favorites, tags and notes saved on a dataset's readings.
+
+    What the 🗂️ **Data** page's **Annotations** shows for a dataset you added
+    (in the app or with [`add_dataset`][scanpath_studio.api.add_dataset]), read
+    from the app's saved work on this computer: what reviewers marked in the app,
+    for an analysis to use. An app that is open saves an edit within moments of
+    it being made.
+
+    Args:
+        dataset: The name the dataset list shows, ignoring case.
+
+    Returns:
+        One row per annotated reading: ``participant_id``, ``trial_id``,
+        ``screen_id`` on a dataset recorded over several screens (blank on an
+        annotation of the whole trial), ``favorite`` (bool), ``tags`` (a list of
+        text) and ``note`` (text, ``""`` when none). Ids are text, spelled as the
+        app's trial picker lists them. The columns carry these names whatever the
+        dataset calls its own, as the app's ``annotations.json`` does. Empty, with
+        the same columns, when the dataset has no annotations.
+
+    Raises:
+        StoredDatasetNotFoundError: No saved dataset has this name. The built-in
+            and public datasets' annotations are exported in the app. A
+            ``LookupError``.
+        ValueError: The saved work can't be read or was written by another version.
+
+    Examples:
+        ```python
+        marked = sps.read_annotations("Pilot 3")
+        excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+        ```
+    """
+    from . import persistence as _persistence
+    from .annotations import store_to_frame
+
+    _, store, multipart = _persistence.stored_annotations(dataset)
+    return store_to_frame(store, screens=multipart)
+
+
+def write_annotations(
+    dataset: str,
+    annotations: pd.DataFrame | list[dict] | dict | str | Path,
+    *,
+    mode: str = "merge",
+) -> AnnotationsWriteResult:
+    """Save favorites, tags and notes on a dataset's readings from a script.
+
+    A quality-control script can tag the readings it flags, and reviewers find
+    them in the app — under the trial's **Annotations**, and with the ⭐ / tag trial
+    filters. The dataset is one you added (in the app or with
+    [`add_dataset`][scanpath_studio.api.add_dataset]); the annotations are saved
+    with it on this computer, as the 🗂️ **Data** page's **Annotations → Import**
+    saves an imported file.
+
+    In ``"merge"`` mode a reading's tags are added to the ones it has, and a
+    favorite or note you give replaces its own; what a row leaves blank, an empty
+    note included, stays as it was. This differs from the app's **Import**, which
+    adds new readings and keeps or swaps a reading's whole entry. ``"replace"``
+    makes the dataset's annotations exactly the ones given, and is refused when
+    none of the given readings is in the dataset, so a file made for another
+    dataset deletes nothing.
+
+    Each reading is looked up in the dataset's tables, as the trial picker lists
+    it. One the dataset does not have is left out and listed in the result's
+    ``unknown``. A browser tab that has the app open shows the new annotations
+    once reloaded. Edits made in it in the meantime are kept beside them, except
+    an edit of the same reading, which the tab reports as a conflict.
+
+    Args:
+        dataset: The name the dataset list shows, ignoring case.
+        annotations: A table with ``participant_id``, ``trial_id`` (or
+            ``unique_trial_id``, which wins when there are both, as the trial
+            picker lists it), optionally ``screen_id``, and any of ``favorite`` (true/false), ``tags`` (a list,
+            or text with tags separated by ``;``) and ``note`` — what
+            [`read_annotations`][scanpath_studio.api.read_annotations] returns.
+            Rows on the same reading add their tags together. Or the app's
+            exported ``annotations.json``: its records, the parsed file, or the
+            path to it, where two records on one reading must agree. A path
+            ending in ``.csv`` is read as a table.
+        mode: ``"merge"`` (the default) or ``"replace"``.
+
+    Returns:
+        An [`AnnotationsWriteResult`][scanpath_studio.api.AnnotationsWriteResult]:
+            how many readings were written, how many are annotated now, and the
+            ones the dataset does not have.
+
+    Raises:
+        StoredDatasetNotFoundError: No saved dataset has this name. A
+            ``LookupError``.
+        ValueError: ``mode`` is neither ``"merge"`` nor ``"replace"``; the
+            annotations are not in a form above (a missing id column, a favorite
+            that is not true or false, two rows on one reading with different
+            notes); ``"replace"`` names no reading the dataset has; or the saved
+            work can't be read or was written by another version. Nothing is
+            saved then.
+        TypeError: ``annotations`` is none of the forms above.
+        RuntimeError: Saving is turned off (``SCANPATH_STUDIO_PERSIST=0``).
+
+    Examples:
+        ```python
+        words, fixations = sps.load_scanpath_data(
+            "pilot3/ia_report.csv", "pilot3/fixation_report.csv", names="canonical"
+        )
+        counts = fixations.groupby(["participant_id", "trial_id"]).size()
+        flagged = counts[counts < 20].reset_index()[["participant_id", "trial_id"]]
+        flagged["tags"] = "Few fixations"
+        result = sps.write_annotations("Pilot 3", flagged)
+        print(result.written, "readings tagged;", len(result.unknown), "not found")
+        ```
+    """
+    from . import persistence as _persistence
+
+    if mode not in ("merge", "replace"):
+        raise ValueError(f"mode must be 'merge' or 'replace', not {mode!r}.")
+    if not _persistence.persistence_enabled("http://localhost"):
+        raise RuntimeError(
+            f"Saving is turned off ({_persistence.PERSIST_ENV_VAR}=0), so the app "
+            "would not see the annotations. Unset it to write them."
+        )
+    incoming = _annotation_entries(annotations)
+    shown, written, unknown, after = _persistence.write_stored_annotations(
+        dataset, incoming, replace=mode == "replace"
+    )
+    unknown_frame = pd.DataFrame(
+        [
+            {
+                "participant_id": key[0],
+                "trial_id": key[1],
+                "screen_id": key[2] if len(key) > 2 else None,
+            }
+            for key in unknown
+        ],
+        columns=["participant_id", "trial_id", "screen_id"],
+        dtype=object,
+    )
+    return AnnotationsWriteResult(
+        dataset=shown, written=written, annotated=len(after), unknown=unknown_frame
+    )
+
+
+def app_link(
+    dataset: str,
+    participant: str | None = None,
+    trial: str | None = None,
+    *,
+    screen: str | None = None,
+    port: int = 8501,
+    animate: bool = False,
+    illustration: bool = False,
+    **figure_options: Any,
+) -> str:
+    """A link that opens the local app on a dataset, a reading and a figure.
+
+    The link names the dataset as the app's dataset list shows it, the reading by
+    its participant and trial IDs, and the figure by the options
+    [`plot_scanpath`][scanpath_studio.api.plot_scanpath] takes, written as 🔗
+    **Share → Link** writes the same view. Open it in a browser while the app runs
+    on this computer (``scanpath-studio`` serves it at ``localhost:8501``), or let
+    ``scanpath-studio open`` start the app and open it. The dataset is one added in
+    the app or with [`add_dataset`][scanpath_studio.api.add_dataset], or one the
+    app has itself: the bundled demo or a public corpus, named as its list shows
+    it. The same as ``scanpath-studio open --print``.
+
+    For a dataset saved on this computer the link also carries its share ID and
+    a digest of its tables, as Share's does, so the app checks it is the same
+    data; its tables are read to compute it. Settings the link leaves out keep
+    the values the app has. A link whose dataset the app doesn't have opens
+    nothing from it, and says which dataset is missing.
+
+    Args:
+        dataset: The dataset's name in the app's dataset list, ignoring case.
+        participant: The participant ID. Without it, a trial ID that only one
+            participant has still opens that reading.
+        trial: The trial ID. Without it, the app opens the participant's first
+            trial, or the reading it last showed.
+        screen: The screen ID of a trial recorded over several screens.
+        port: The port the app listens on.
+        animate: Open the replay instead of the static figure.
+        illustration: The *Illustration* design, as ``plot_scanpath`` takes it;
+            an option given beside it wins.
+        **figure_options: Figure options, as ``plot_scanpath`` takes them, with
+            its ``fix_index_range`` and ``illustration_label``, plus ``palette``
+            and the replay's ``anim_grid_step_ms``, ``anim_max_frames``,
+            ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
+            value, except where it is a choice of its own (``heatmap_metric``
+            counts fixations, ``fixation_flags`` turns them off). A link carries
+            no file, so ``background_image`` and its size and origin are
+            refused (``show_stimulus_image=True`` draws the dataset's own
+            pages), and no ``title`` or ``caption``, which the app writes from
+            its own patterns.
+
+    Returns:
+        The link, ``http://localhost:<port>/?…``.
+
+    Raises:
+        TypeError: An option a link can't carry, or no figure option at all.
+        ValueError: An empty dataset name, a screen without a trial, a port
+            outside 1–65535, or a value the app would ignore or clamp.
+
+    Examples:
+        ```python
+        sps.add_dataset("Pilot 3", words="ia.csv", fixations="fixations.csv")
+        url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+        import webbrowser; webbrowser.open(url)
+        ```
+    """
+    from . import persistence as _persistence
+    from .script_link import link_query, local_url
+
+    options = (
+        {**ILLUSTRATION_PRESET, **figure_options}
+        if illustration
+        else dict(figure_options)
+    )
+    if "palette" in options:
+        options["palette"] = resolve_palette(options["palette"])
+    _check_colorscales(options)
+    saving = _persistence.persistence_enabled("http://localhost")
+    reference = _persistence.stored_dataset_reference(dataset) if saving else None
+    shown, share_id, digest = reference or (dataset, None, None)
+    query = link_query(
+        shown,
+        participant,
+        trial,
+        screen=screen,
+        animate=animate,
+        options=options,
+        share_id=share_id,
+        digest=digest,
+        aliases=_persistence.stored_dataset_aliases() if saving else None,
+    )
+    return local_url(query, port)
+
+
+def _condition_fields(frames: dict, schemas: dict) -> list[str]:
+    """The trial conditions a dataset offers as filters, as ➕ Add dataset
+    picks them: every column the optional-field registry calls a trial-level
+    "meta" field that the tables kept and the mapping did not use."""
+    mapped = {
+        str(column)
+        for schema in schemas.values()
+        if schema
+        for value in schema.values()
+        if value
+        for column in (value if isinstance(value, (list, tuple)) else [value])
+    }
+    fields: list[str] = []
+    for registry, table in (
+        (_data.WORD_OPTIONAL_FIELDS, "words"),
+        (_data.FIX_OPTIONAL_FIELDS, "fixations"),
+    ):
+        frame = frames.get(table)
+        if frame is None:
+            continue
+        for source, dest, _kind, category in registry:
+            if (
+                category == "meta"
+                and source not in mapped
+                and dest in frame.columns
+                and dest not in fields
+            ):
+                fields.append(dest)
+    return fields
 
 
 def version_info() -> BuildInfo:

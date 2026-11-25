@@ -6,7 +6,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from scanpath_studio.update_sample_data import DEFAULT_OUTPUT_DIR, extract_raw_gaze
+from scanpath_studio.update_sample_data import (
+    DEFAULT_OUTPUT_DIR,
+    extract_raw_gaze,
+    without_lost_pupil,
+    write_tables,
+)
 
 
 def _report():
@@ -51,8 +56,27 @@ def test_extracts_the_report_interval_on_the_trial_clock(tmp_path, declared, col
     assert gaze["timestamp_ms"].tolist() == [10, 11, 12, 13]
     np.testing.assert_equal(gaze["x"].to_numpy(), [9.3, np.nan, 3.2, -3.1])
     np.testing.assert_equal(gaze["y"].to_numpy(), [71.2, np.nan, np.nan, 208.8])
-    assert gaze[column].tolist() == [501, 0, 0, 502]
+    # EyeLink's 0 for a sample without a position is no measurement.
+    np.testing.assert_equal(gaze[column].to_numpy(), [501, np.nan, np.nan, 502])
     assert set(gaze["eye"]) == {"Left"}
+
+
+def test_a_lost_eyes_zero_pupil_is_missing_but_a_measured_zero_stays():
+    assert np.isnan(without_lost_pupil(np.nan, np.nan, 0.0))
+    assert np.isnan(without_lost_pupil(3.2, np.nan, 0.0))
+    assert without_lost_pupil(3.2, 4.0, 0.0) == 0
+    assert without_lost_pupil(np.nan, np.nan, 480.0) == 480
+
+
+def test_raw_gaze_ships_as_parquet_alone(tmp_path):
+    (tmp_path / "raw_gaze.csv").write_text("left,over\n")
+    table = pd.DataFrame({"x": [1.0], "y": [2.0]})
+    write_tables(tmp_path, ia=table, raw_gaze=table)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "ia.csv",
+        "ia.parquet",
+        "raw_gaze.parquet",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -73,31 +97,41 @@ def test_mismatched_or_incomplete_recordings_stop_the_build(tmp_path, asc, probl
 
 def test_bundled_samples_match_the_public_recordings_and_report_windows():
     raw = pd.read_parquet(DEFAULT_OUTPUT_DIR / "raw_gaze.parquet")
-    pd.testing.assert_frame_equal(raw, pd.read_csv(DEFAULT_OUTPUT_DIR / "raw_gaze.csv"))
+    assert not (DEFAULT_OUTPUT_DIR / "raw_gaze.csv").exists()
     fixes = pd.read_parquet(DEFAULT_OUTPUT_DIR / "fixations.parquet")
     words = pd.read_parquet(DEFAULT_OUTPUT_DIR / "ia.parquet")
-    keys = ["participant_id", "unique_trial_id"]
-    readings = fixes.groupby(keys)
+    # Every screen of a reading has its own interest period and samples.
+    keys = ["participant_id", "unique_trial_id", "part"]
+    screens = fixes.groupby(keys)
     gaze = raw.groupby(keys)
-    assert set(gaze.groups) == set(readings.groups) == set(words.groupby(keys).groups)
-    assert len(gaze) == 24
+    assert set(gaze.groups) == set(screens.groups) == set(words.groupby(keys).groups)
+    assert raw.groupby(keys[:2]).ngroups == 24
+    assert len(gaze) == 124
     assert raw["unique_paragraph_id"].nunique() == 12
     assert (
         gaze["unique_paragraph_id"]
         .first()
-        .equals(readings["unique_paragraph_id"].first())
+        .equals(screens["unique_paragraph_id"].first())
     )
-    bounds = readings[["IP_START_TIME", "IP_END_TIME", "TRIAL_START_TIME"]].first()
+    assert gaze["screen_index"].first().equals(screens["screen_index"].first())
+    bounds = screens[["IP_START_TIME", "IP_END_TIME", "TRIAL_START_TIME"]].first()
     times = gaze["timestamp_ms"].agg(["min", "max"])
     assert (times["min"] >= bounds["IP_START_TIME"] - bounds["TRIAL_START_TIME"]).all()
     assert (times["max"] < bounds["IP_END_TIME"] - bounds["TRIAL_START_TIME"]).all()
     assert gaze["timestamp_ms"].diff().dropna().eq(1).all()
     assert gaze.size().equals(bounds["IP_END_TIME"] - bounds["IP_START_TIME"])
-    assert len(raw) == 401_200
-    assert raw[["x", "y"]].isna().any(axis=1).sum() == 14_628
-    assert gaze["eye"].first().equals(readings["EYE_TRACKED"].first())
+    assert len(raw) == 640_441
+    assert raw["part"].eq("Paragraph").sum() == 401_200
+    lost = raw[["x", "y"]].isna().any(axis=1)
+    assert lost.sum() == 19_043
+    # A sample without a position has no pupil value either; every measured
+    # pupil is a real size.
+    assert raw["pupil_area"].isna().equals(lost)
+    assert raw["pupil_area"].min() >= 30
+    assert gaze["eye"].first().equals(screens["EYE_TRACKED"].first())
     # First paragraph sample for each reader, transcribed from the two ASCs.
-    first = raw.groupby("participant_id", sort=True).first()
+    passage = raw[raw["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+    first = passage.groupby("participant_id", sort=True).first()
     assert list(first.itertuples(name=None)) == [
         (
             "l37_273",
@@ -116,5 +150,11 @@ def test_bundled_samples_match_the_public_recordings_and_report_windows():
 def test_demo_highlights_match_the_released_per_word_labels():
     words = pd.read_parquet(DEFAULT_OUTPUT_DIR / "ia.parquet")
     assert set(words["auxiliary_span_type"]) == {"critical", "distractor", "outside"}
+    # The spans are ranges of the paragraph's words; the other screens carry the
+    # labels by word position, so only the paragraph's words are flagged.
+    passage = words["part"].eq("Paragraph")
     for flag, label in (("is_in_aspan", "critical"), ("is_in_dspan", "distractor")):
-        assert words[flag].equals(words["auxiliary_span_type"].eq(label))
+        assert words[flag].equals(words["auxiliary_span_type"].eq(label) & passage)
+        assert (
+            words.loc[~passage, flag.replace("is_in_", "") + "_ind_start"].isna().all()
+        )

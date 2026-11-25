@@ -275,18 +275,18 @@ def _files_python(source: SnippetSource) -> list[str]:
         "words, fixations = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
-        *_schema_python(source),
+        *_schema_python(source.options),
         *_keep_python(source),
         ")",
     ]
 
 
-def _schema_python(source: SnippetSource) -> list[str]:
+def _schema_python(options: Mapping) -> list[str]:
     """The ``word_schema=`` / ``fix_schema=`` arguments a file or upload source
-    was loaded with, one field per line."""
+    (or a second dataset, B) was loaded with, one field per line."""
     lines: list[str] = []
     for option in ("word_schema", "fix_schema"):
-        schema = source.options.get(option)
+        schema = options.get(option)
         if schema:
             lines.append(f"    {option}={{")
             lines += [f"        {_py(k)}: {_py(v)}," for k, v in schema.items()]
@@ -410,6 +410,11 @@ UPLOAD_STEP_NOTES = {
         "them in your Words table before running this code; the loader does not "
         "perform that step."
     ),
+    "trial_parts_manifest": (
+        "This dataset was added with a trial-parts manifest, which splits its "
+        "trials into screens. Pass the same manifest as trial_parts_manifest= "
+        "(--trial-parts-manifest); the snippet does not include it."
+    ),
 }
 
 
@@ -434,7 +439,6 @@ def upload_source(
     if isinstance(multipleye := recipe.get("multipleye"), dict):
         return multipleye_source(label, multipleye, edited=bool(recipe.get("schemas")))
     schemas = recipe.get("schemas") if isinstance(recipe.get("schemas"), dict) else {}
-    steps = [str(s) for s in recipe.get("steps") or ()]
     notes = [
         "This dataset was added in the app, so the snippet can't name its files. "
         "Replace "
@@ -449,7 +453,35 @@ def upload_source(
         + " with your files (or a list of files, if you added several). "
         "The snippet includes the dataset's column mapping."
     ]
-    notes += [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
+    notes += upload_caveats(recipe)
+    options: dict = {
+        "words": UPLOAD_WORDS_PLACEHOLDER if words else None,
+        "fixations": UPLOAD_FIXATIONS_PLACEHOLDER if fixations else None,
+    }
+    for table, option in (
+        ("words", "word_schema"),
+        ("fixations", "fix_schema"),
+        ("raw_gaze", "raw_gaze_schema"),
+    ):
+        schema = schemas.get(table)
+        if isinstance(schema, dict) and schema:
+            options[option] = _compact_schema(schema)
+    return SnippetSource(
+        kind=SOURCE_UPLOAD,
+        label=label,
+        options=options,
+        note=" ".join(n.strip() for n in notes if n.strip()),
+    )
+
+
+def upload_caveats(recipe: dict | None) -> list[str]:
+    """What adding a dataset did that loading its files with its mapping does
+    not repeat: the add's own ``steps``, columns ``derived`` from the file
+    names, and fields an edit left ``unresolved``. Said of "this dataset", for
+    A's snippet and, prefixed, for a second dataset's B."""
+    recipe = recipe if isinstance(recipe, dict) else {}
+    steps = [str(s) for s in recipe.get("steps") or ()]
+    notes = [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
     if derived := [str(c) for c in recipe.get("derived") or ()]:
         notes.append(
             "It maps "
@@ -473,24 +505,7 @@ def upload_source(
             + ("those fields" if len(unresolved) > 1 else "that field")
             + " before running it."
         )
-    options: dict = {
-        "words": UPLOAD_WORDS_PLACEHOLDER if words else None,
-        "fixations": UPLOAD_FIXATIONS_PLACEHOLDER if fixations else None,
-    }
-    for table, option in (
-        ("words", "word_schema"),
-        ("fixations", "fix_schema"),
-        ("raw_gaze", "raw_gaze_schema"),
-    ):
-        schema = schemas.get(table)
-        if isinstance(schema, dict) and schema:
-            options[option] = _compact_schema(schema)
-    return SnippetSource(
-        kind=SOURCE_UPLOAD,
-        label=label,
-        options=options,
-        note=" ".join(n.strip() for n in notes if n.strip()),
-    )
+    return notes
 
 
 def multipleye_source(
@@ -548,7 +563,7 @@ def _upload_python(source: SnippetSource) -> list[str]:
     for name in ("words", "fixations"):
         if source.options.get(name):
             lines.append(f"    {name}={_py(source.options[name])},")
-    lines += _schema_python(source)
+    lines += _schema_python(source.options)
     lines += _keep_python(source)
     lines.append(")")
     return lines
@@ -673,6 +688,15 @@ class CompareTarget:
     #: when B's dataset alone brings samples, so the recipe loads B's and not a
     #: placeholder for A's.
     primary_raw_gaze: bool = True
+    #: Only beside a ``dataset``: the column mapping each of B's tables was
+    #: loaded with, under ``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``
+    #: (in its own files' column names), so the recipe reads B's files as the app
+    #: did. Empty when B's columns were auto-detected.
+    schemas: Mapping[str, dict] = field(default_factory=dict)
+    #: Only beside a ``dataset``: what adding B's dataset did that loading its
+    #: files with ``schemas`` does not repeat (`upload_caveats`), said of "this
+    #: dataset"; the snippet's notes name it as B's.
+    caveats: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -692,6 +716,12 @@ class FigureState:
     canvas: tuple[int, int] | None = None
     base_font_size: int = 16
     font_family: str = ""
+    #: The stimulus font the reading's data declares, which the builders draw
+    #: when no ``font_family`` is named.
+    declared_font_family: str | None = None
+    #: The font was named by the caller (``figure_code``, ``render
+    #: --font-family``), so it is written even where it is the default.
+    font_named: bool = False
     title: str = ""
     caption: str = ""
     fix_index_range: tuple[int, int] | None = None
@@ -1707,7 +1737,7 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
         out.append(("canvas_size", (int(state.canvas[0]), int(state.canvas[1]))))
     if explicit or state.base_font_size != 16:
         out.append(("base_font_size", int(state.base_font_size)))
-    if state.font_family and (explicit or _non_default_font(state.font_family)):
+    if state.font_family and (explicit or _non_default_font(state)):
         out.append(("font_family", str(state.font_family)))
     if state.kind == "animation":
         if explicit or state.playback_speed != 1.0:
@@ -1726,7 +1756,7 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
             out.append(("drift_correction", str(state.drift_correction).lower()))
             # Connectors are the static builder's alone (the original→corrected
             # layer has no comparison equivalent), so `compare_scanpaths` takes
-            # no such keyword — see AGENTS.md's render-path table.
+            # no such keyword — see RENDER_PATHS.md.
             if state.drift_connectors and state.kind == "static":
                 out.append(("drift_connectors", True))
     # B's own window, on both builders that draw a B.
@@ -1746,10 +1776,14 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     return out
 
 
-def _non_default_font(name: str) -> bool:
+def _non_default_font(state: FigureState) -> bool:
+    """Whether the figure's font differs from what the builders draw unnamed:
+    the data's declared stimulus font, else the generic monospace."""
     from .constants import FONT_FAMILY
 
-    return str(name) != FONT_FAMILY
+    if state.font_named:
+        return True
+    return str(state.font_family) != (state.declared_font_family or FONT_FAMILY)
 
 
 #: What a snippet names for a raw-gaze table it can't name — one that was
@@ -1854,7 +1888,7 @@ B_WORDS_PLACEHOLDER = "B_WORDS"
 B_FIXATIONS_PLACEHOLDER = "B_FIXATIONS"
 #: `render`'s own default for `--compare-dataset-name` (and `compare_scanpaths`'
 #: for `dataset_b=`), so the CLI half writes the flag only when it differs.
-_DEFAULT_DATASET_B = "Dataset B"
+DEFAULT_DATASET_B = "Dataset B"
 
 
 def second_dataset(state: FigureState) -> CompareTarget | None:
@@ -1888,6 +1922,7 @@ def _second_dataset_python(compare: CompareTarget, keep: list[str]) -> list[str]
         "words_b, fixations_b = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
+        *_schema_python(compare.schemas),
         *([f"    keep_columns={_py(keep)},"] if keep else []),
         ")",
     ]
@@ -1918,10 +1953,17 @@ def _second_dataset_kwargs(compare: CompareTarget) -> list[str]:
 
 def _second_dataset_cli(compare: CompareTarget, *, explicit: bool) -> list[str]:
     words, fixations = _second_dataset_tables(compare)
-    argv = ["--compare-words", *words] if words else []
-    if fixations:
-        argv += ["--compare-fixations", *fixations]
-    if explicit or compare.dataset != _DEFAULT_DATASET_B:
+    argv = []
+    for flag, paths, schema_flag, option in (
+        ("--compare-words", words, "--compare-word-schema", "word_schema"),
+        ("--compare-fixations", fixations, "--compare-fix-schema", "fix_schema"),
+    ):
+        if not paths:
+            continue
+        argv += [flag, *paths]
+        if schema := compare.schemas.get(option):
+            argv += [schema_flag, json.dumps(schema, separators=(",", ":"))]
+    if explicit or compare.dataset != DEFAULT_DATASET_B:
         argv += ["--compare-dataset-name", str(compare.dataset)]
     if compare.canvas:
         width, height = (int(v) for v in compare.canvas)
@@ -1964,7 +2006,12 @@ def python_snippet(
         lines += _second_dataset_python(other, _kept_columns(state.settings))
     raw_gaze_b = _second_raw_gaze(state)
     if raw_gaze_b is not None:
-        lines.append(f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))})")
+        # Only a second dataset brings B's own samples, so `other` is set.
+        schema = other.schemas.get("raw_gaze_schema")
+        extra = f", raw_gaze_schema={_py(schema)}" if schema else ""
+        lines.append(
+            f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))}{extra})"
+        )
     lines.append("")
 
     func = _API_FUNCTION[state.kind]
@@ -2108,7 +2155,7 @@ def cli_snippet(
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
     if explicit or state.base_font_size != 16:
         argv += ["--font-size", str(int(state.base_font_size))]
-    if state.font_family and (explicit or _non_default_font(state.font_family)):
+    if state.font_family and (explicit or _non_default_font(state)):
         argv += ["--font-family", str(state.font_family)]
     if explicit or str(state.illustration_label).lower() != "auto":
         argv += ["--illustration-label", str(state.illustration_label).lower()]
@@ -2170,6 +2217,11 @@ def cli_snippet(
         raw_gaze_b = _second_raw_gaze(state)
         if raw_gaze_b is not None:
             argv += ["--compare-raw-gaze", *raw_gaze_b]
+            if schema := other.schemas.get("raw_gaze_schema"):
+                argv += [
+                    "--compare-raw-gaze-schema",
+                    json.dumps(schema, separators=(",", ":")),
+                ]
         argv += ["--compare-layout", _CLI_COMPARE_LAYOUT.get(compare.layout, "overlay")]
         if explicit or compare.compare_stimulus != "both":
             argv += ["--compare-stimulus", str(compare.compare_stimulus).lower()]
@@ -2232,6 +2284,8 @@ def cli_snippet(
         value = (save_kwargs or {}).get(name)
         if value is not None:
             argv += [f"--{name.replace('_', '-')}", _num(value)]
+    if (save_kwargs or {}).get("compact_png"):
+        argv.append("--compact-png")
 
     argv += ["-o", output]
     unsupported.extend(source.cli_unsupported)
@@ -2358,6 +2412,8 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
                 "give B's screen, as `setup_b=` (`--compare-canvas` on the CLI). "
                 "Without it, B's screen is read from its data and may not match."
             )
+        if other.caveats:
+            note += f" About `{other.dataset}`: " + " ".join(other.caveats)
         notes.append(note)
     return notes
 

@@ -32,6 +32,8 @@ NOT_A_DESIGN_SETTING = {
     "plot_setting_finder",
     "plot_filter_readings",
     "plot_editor_tabs",
+    # The rail's fold chevrons: how the column is laid out, not the figure.
+    *(f"rail_{name}_fold" for name in controls.RAIL_SECTIONS),
 }
 
 B_FILTERS = {
@@ -118,7 +120,7 @@ class TestADesignRecordsTheFilters:
         assert at.session_state["global_fixclass_short_mode"] == "Off"
 
     def test_a_built_in_view_leaves_them_alone(self, at):
-        """Built-in views are global-only: they never owned Compare's keys."""
+        """Built-in views never own scanpath B's filters."""
         for key, value in B_FILTERS.items():
             at.session_state[key] = value
         _do(at, "apply:scanpath")

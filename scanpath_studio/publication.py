@@ -281,6 +281,11 @@ def editor_html(
     )
 
 
+#: How long one browser command may go unanswered before a render gives up.
+#: The slowest, a high-DPI raster or one frame of a clip, takes seconds.
+COMMAND_TIMEOUT_S = 120.0
+
+
 async def _draw(doc: dict, fmt: str):
     """Draw in an isolated local Chromium tab at the same dimensions as the proof."""
     from choreographer import Browser
@@ -291,11 +296,25 @@ async def _draw(doc: dict, fmt: str):
     path = chromium_browser_path()
     if path is None:
         raise RuntimeError(CHROME_INSTALL_HINT)
+    progress.report(detail="Starting the browser")
     async with Browser(path=path) as browser:
         tab = await browser.create_tab()
+        progress.report(detail="Drawing the figure")
 
-        async def command(method, params=None):
-            reply = await tab.send_command(method, params)
+        async def command(method, params=None, *, what=None):
+            # A command the browser never answers would hold the export open
+            # for good: past the deadline the render fails, naming what got
+            # no reply, and leaving the block closes the browser.
+            try:
+                reply = await asyncio.wait_for(
+                    tab.send_command(method, params), COMMAND_TIMEOUT_S
+                )
+            except TimeoutError:
+                raise RuntimeError(
+                    "Chromium stopped answering while drawing the figure "
+                    f"({what or method} got no reply in {COMMAND_TIMEOUT_S:g} s). "
+                    "Try again."
+                ) from None
             if "error" in reply:
                 message = reply["error"].get("message", method)
                 raise RuntimeError(f"Chromium could not render the figure: {message}")
@@ -317,6 +336,7 @@ async def _draw(doc: dict, fmt: str):
             result = await command(
                 "Runtime.evaluate",
                 {"expression": expr, "awaitPromise": True, "returnByValue": True},
+                what=expr,
             )
             if "exceptionDetails" in result:
                 raise ValueError(
@@ -328,6 +348,7 @@ async def _draw(doc: dict, fmt: str):
 
         await evaluate("window.publicationReady")
         if fmt == "pdf":
+            progress.report(detail="Printing the PDF")
             await evaluate("publicationPrint()")
             result = await command(
                 "Page.printToPDF",
@@ -368,10 +389,19 @@ async def _draw(doc: dict, fmt: str):
                         *mp4_metadata_args(),
                     ],
                 ) as writer:
+                    size = None
                     for i in range(count):
                         progress.report(i, count, unit="frames")
                         raw = await evaluate(f"publicationMovieFrame({i * 1000 / 24})")
                         with Image.open(io.BytesIO(base64.b64decode(raw))) as im:
+                            size = size or im.size
+                            if im.size != size:
+                                raise ValueError(
+                                    f"The figure changed size at frame {i + 1} of "
+                                    f"the clip ({im.size[0]}×{im.size[1]} px, not "
+                                    f"{size[0]}×{size[1]} px). Set Caption placement "
+                                    "to Keep separate and prepare the clip again."
+                                )
                             writer.append_data(np.asarray(im.convert("RGB")))
                 return target.read_bytes()
         return base64.b64decode(await evaluate(f"publicationBytes({json.dumps(fmt)})"))

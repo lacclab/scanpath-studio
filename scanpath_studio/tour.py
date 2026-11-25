@@ -41,6 +41,7 @@ from .constants import (
     preprocessing_enabled,
     spoken,
 )
+from .reruns import rerun
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -540,7 +541,7 @@ def _render_guide_pill(
             help=f"Close the {name}",
         ):
             on_close()
-            st.rerun(scope="app")
+            rerun(scope="app")
         embed_html_iframe(_guide_drag_script(kind), height=0)
 
 
@@ -1077,7 +1078,7 @@ def maybe_show_welcome_tour(active_view: str | None = None) -> None:
         state.pop("_sample_invitation", None)
         if state.get("tour_mode") == "spotlight":
             _request_sample_exit(return_to_view=False)
-            st.rerun(scope="app")
+            rerun(scope="app")
         return
     if state.get("tutorial_active"):
         state.pop("_sample_invitation", None)
@@ -1138,7 +1139,7 @@ def render_spotlight_tour() -> None:
             help="Close the sample guide and return to your work.",
         ):
             _request_sample_exit()
-            st.rerun(scope="app")
+            rerun(scope="app")
         _render_guide_fold_button("tour", "sample guide")
         st.markdown(f"## {step['title']}")
         st.markdown(step["body"])
@@ -1161,7 +1162,7 @@ def render_spotlight_tour() -> None:
             )
         elif forward.button("Done", key="tour_sp_done", type="primary"):
             _request_sample_exit()
-            st.rerun(scope="app")
+            rerun(scope="app")
         embed_html_iframe(_guide_drag_script("tour"), height=0)
         embed_html_iframe(_dismiss_listener_script(step["selector"]), height=0)
         embed_html_iframe(_scroll_into_view_script(step["selector"]), height=0)
@@ -1246,7 +1247,7 @@ def _rerun_after_guide_navigation() -> None:
     # A fragment can disappear as a result of its own callback (Exit or Done).
     # Its parent must still redraw the view, even if the button is gone.
     if st.session_state.pop("_guide_navigation_requested", False):
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _tutorial_progress() -> dict[str, int]:
@@ -1726,7 +1727,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['confirm']} Save it",
         "body": (
-            "Click **Add dataset**, then **Open in Scanpath view** or "
+            "Click **Add dataset**, then **Open in Scanpath View** or "
             "**Add another**. Use **Download setup file** to save the mapping "
             "and recording setup. When adding similar data, choose the saved "
             "file or this dataset under *Start from*."

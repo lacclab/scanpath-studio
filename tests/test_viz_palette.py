@@ -713,3 +713,36 @@ class TestALayerSwitchFlippedAfterAPreset:
             f"{sorted(drawn - controls._MOUNTED_VIEW_KEYS)}; listed but not "
             f"drawn: {sorted(controls._MOUNTED_VIEW_KEYS - drawn)}"
         )
+
+    @pytest.mark.timeout(240)
+    def test_no_widget_draws_a_key_listed_as_undrawn(self):
+        """`controls._UNDRAWN_VIEW_KEYS` are written plainly, never held, which
+        is right only while no widget in any view sends one of them back."""
+        from scanpath_studio import controls
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA
+        from tests.conftest import pin_view
+
+        streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+
+        def keys(node) -> set[str]:
+            key = getattr(node, "key", None)
+            found = {key} if isinstance(key, str) else set()
+            for child in getattr(node, "children", {}).values():
+                found |= keys(child)
+            return found
+
+        at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.run()
+        drawn = keys(at._tree)
+        for toggle in ("single_compare_toggle", "single_animate"):
+            at.toggle(key=toggle).set_value(True).run()
+            drawn |= keys(at._tree)
+            at.toggle(key=toggle).set_value(False).run()
+        for view in (_VIEW_CORPUS, _VIEW_DATA):
+            pin_view(at, view)
+            at.run()
+            drawn |= keys(at._tree)
+        assert not at.exception
+        assert not drawn & controls._UNDRAWN_VIEW_KEYS, (
+            f"a widget draws these: {sorted(drawn & controls._UNDRAWN_VIEW_KEYS)}"
+        )

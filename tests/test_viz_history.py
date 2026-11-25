@@ -51,6 +51,30 @@ def test_title_edit_on_the_same_rerun_as_opening_a_menu(menu, browser_title, exp
     assert at.session_state[SNIPPET_STATE_KEY].title == (title if expected else "")
 
 
+@pytest.mark.parametrize(
+    ("menu", "accepted"),
+    [
+        pytest.param("stim", True, id="open-text-menu-and-edit-together"),
+        pytest.param("grid", False, id="closed-text-menu-echo"),
+    ],
+)
+def test_font_size_edit_on_the_same_rerun_as_opening_its_menu(menu, accepted):
+    """The text rows are drawn into Stimulus → Text after that menu's own rows,
+    and opening it still releases the value Undo put back."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    before = at.number_input(key="global_base_font_size").value
+    at.number_input(key="global_base_font_size").set_value(before + 4).run()
+    _click(at, "viz_undo")
+    assert at.number_input(key="global_base_font_size").value == before
+
+    at.session_state[f"plot_menu_{menu}"] = True
+    at.number_input(key="global_base_font_size").set_value(before + 4).run()
+    assert not at.exception
+    expected = before + 4 if accepted else before
+    assert at.number_input(key="global_base_font_size").value == expected
+    assert at.session_state["global_base_font_size"] == expected
+
+
 def test_undo_names_the_restored_value_after_navigating_to_another_trial():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
     at.checkbox(key="global_show_order").check().run()
@@ -71,7 +95,7 @@ def test_presets_reset_and_edits_round_trip_on_the_current_trial():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
     assert at.button(key="viz_undo").disabled and at.button(key="viz_redo").disabled
     initial_trial = at.selectbox(key="single_trial_id").value
-    preset = next(s for s in at.selectbox if s.label == "Axis preset")
+    preset = next(s for s in at.selectbox if s.label == "Axis layout")
     preset.set_value("Elapsed time by fixation index").run()
     custom = ("order_in_trial", "@elapsed_seconds")
     assert _axis_pair(at) == custom
@@ -108,14 +132,19 @@ def test_presets_reset_and_edits_round_trip_on_the_current_trial():
 
 
 def test_navigating_trials_drops_only_the_local_fixation_window_edit():
-    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
+    # The Paragraph screen has room for an eight-fixation window. Its
+    # fixations are numbered after the earlier screens' in the reading.
+    at.query_params["screen"] = "Paragraph"
+    at.run()
     at.checkbox(key="global_show_order").check().run()
     window = next(s for s in at.slider if s.label == "Fixation index range")
-    window.set_range(5, 12).run()
+    picked = (window.min + 4, window.min + 11)
+    window.set_range(*picked).run()
     _click(at, "viz_undo")
     assert not at.session_state["single_fix_range_user_set"]
     _click(at, "viz_redo")
-    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    assert tuple(at.session_state["single_fix_range"]) == picked
     _click(at, "single_next_trial")
     _click(at, "viz_undo")
     assert not at.checkbox(key="global_show_order").value
@@ -139,8 +168,13 @@ def test_compare_and_animate_accept_an_edit_immediately_after_undo():
 
 def test_linked_axes_and_window_survive_undo_and_a_reset_round_trip():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    # The window lies within the eight fixations of the first reading's
+    # title screen.
     at.query_params.update(
-        x_field="order_in_trial", y_field="@elapsed_seconds", fix_range="2,12"
+        x_field="order_in_trial",
+        y_field="@elapsed_seconds",
+        fix_range="2,6",
+        screen="Title",
     )
     at.run()
     link = dict(at.query_params)
@@ -152,7 +186,7 @@ def test_linked_axes_and_window_survive_undo_and_a_reset_round_trip():
     assert "x_field" not in at.query_params
     _click(at, "viz_undo")
     assert dict(at.query_params) == link
-    assert tuple(at.session_state["single_fix_range"]) == (2, 12)
+    assert tuple(at.session_state["single_fix_range"]) == (2, 6)
     _click(at, "viz_redo")
     assert "x_field" not in at.query_params
     assert _axis_pair(at) == ("x", "y")

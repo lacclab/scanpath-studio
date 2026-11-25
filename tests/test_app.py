@@ -954,11 +954,40 @@ class TestForceLtrLocaleScript:
         script = app_module._FORCE_LTR_LOCALE_SCRIPT
         assert 'window.parent.dispatchEvent(new Event("languagechange"))' in script
 
-    def test_configure_page_embeds_the_script(self):
-        import inspect
 
-        source = inspect.getsource(app_module.configure_page)
-        assert "embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)" in source
+@pytest.mark.timeout(180)
+@pytest.mark.parametrize("view", ["Scanpath", "Corpus Analysis", "Data"])
+def test_every_view_installs_each_page_script_once(view):
+    """The scripts that reach into the parent page — the LTR locale, the
+    tooltip owner, the trial-change loading card and the rest — are drawn on
+    every view, each once, and take no room."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import constants, keyboard, loading
+    from tests.conftest import APP_SCRIPT, iframe_sources, pin_view
+
+    views = {
+        "Scanpath": constants._VIEW_SCANPATH,
+        "Corpus Analysis": constants._VIEW_CORPUS,
+        "Data": constants._VIEW_DATA,
+    }
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    pin_view(at, views[view])
+    at.run()
+    assert not at.exception, at.exception
+    frames = iframe_sources(at._tree)
+    for script in (
+        app_module._FORCE_LTR_LOCALE_SCRIPT,
+        app_module._TOOLTIP_OWNER_SCRIPT,
+        app_module._IFRAME_CLICK_CLOSES_POPOVER_SCRIPT,
+        app_module._A11Y_NAMES_SCRIPT,
+        app_module._FIELD_TIP_PLACEMENT_SCRIPT,
+        loading.trial_loading_script(),
+        keyboard.SCANPATH_SHORTCUTS,
+    ):
+        carriers = [frame for frame in frames if script in frame]
+        assert len(carriers) == 1, script[:80]
+        assert 'body style="margin:0;overflow:hidden"' in carriers[0]
 
 
 class TestNormalizePairUncachedReportsItsParts:
@@ -998,3 +1027,12 @@ class TestNormalizePairUncachedReportsItsParts:
                 app_module._normalize_pair_uncached(
                     words, word_schema, fixations, fix_schema, ("k", 2)
                 )
+
+
+def test_a_commercial_font_is_named_without_a_link():
+    """Google Fonts does not carry OneStop's Lucida Sans Typewriter."""
+    name, url = app_module._stimulus_font_install_hint(
+        "'Lucida Sans Typewriter', monospace"
+    )
+    assert name == "Lucida Sans Typewriter"
+    assert url is None

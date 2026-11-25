@@ -36,6 +36,7 @@ def test_comparison_contains_every_fixation_for_both_readers():
         expected = fixations[
             (fixations.participant_id == participant)
             & (fixations.trial_id == f"{participant}_2_2_4_Ele")
+            & (fixations.screen_id == "Paragraph")
         ]
         trace = next(t for t in figure.data if t.name == label and t.mode == "markers")
         assert len(trace.x) == len(expected)
@@ -111,7 +112,9 @@ def test_redacted_example_draws_blocks_and_no_words():
     figure = example["fig"]
     assert any(t.name == "words" and t.fill == "toself" for t in figure.data)
     words = example["words"]
-    trial = words[words["unique_trial_id"] == example["tid"]]
+    trial = words[
+        (words["unique_trial_id"] == example["tid"]) & (words["part"] == "Paragraph")
+    ]
     long_words = {w for w in trial["IA_LABEL"].astype(str) if len(w) >= 8}
     assert long_words
     payload = figure.to_json()

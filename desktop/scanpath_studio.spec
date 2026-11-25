@@ -53,9 +53,9 @@ hiddenimports += collect_submodules("streamlit")
 # used for MP4 animation export.
 for pkg in ("plotly", "streamlit_sortables", "kaleido", "imageio_ffmpeg"):
     datas += collect_data_files(pkg)
-# pandas imports its Excel engines by name at call time, which the analysis
-# cannot see: openpyxl reads .xlsx, xlrd legacy .xls.
-hiddenimports += ["streamlit_sortables", "imageio_ffmpeg", "openpyxl", "xlrd"]
+# pandas imports its Excel engine by name at call time, which the analysis
+# cannot see: calamine reads .xlsx and legacy .xls.
+hiddenimports += ["streamlit_sortables", "imageio_ffmpeg", "python_calamine"]
 
 # The bundle reports the exact build it was made from. The spec runs in
 # the repository (CI checks it out with fetch-depth 0, so the tag is visible)

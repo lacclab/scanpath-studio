@@ -28,7 +28,7 @@ print(gallery_figure("scanpath"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_273 -t l37_273_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
       --highlight-column '' \
       -o scanpath.html
     ```

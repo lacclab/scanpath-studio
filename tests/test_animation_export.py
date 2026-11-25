@@ -14,6 +14,7 @@ import os
 import tempfile
 
 import imageio.v3 as iio
+import numpy as np
 import plotly.graph_objects as go
 import pytest
 from PIL import Image
@@ -507,15 +508,48 @@ class TestRealTimeClip:
         assert captured["dur"] >= shortest_ms - 1e-9
         assert captured["n"] * captured["dur"] == pytest.approx(n * 5.0)
         assert captured["indices"][0] == 0
-        # At each actual display boundary the chosen state has already occurred.
+        # At each actual display boundary the chosen state has already occurred,
+        # except the last image, which ends with the replay and shows all of it.
         times = anim_fig.layout.meta["scanpath_frame_times_ms"]
         tick = 10 if fmt == "gif" else _MP4_DT_MS
-        for i, frame in enumerate(captured["indices"]):
+        *held, last = captured["indices"]
+        for i, frame in enumerate(held):
             boundary = round(i * captured["dur"] / tick) * tick
             reading_time = boundary * times[-1] / (n * 5)
             assert times[frame] <= reading_time
             if frame + 1 < n:
                 assert times[frame + 1] > reading_time
+        assert last == n - 1
+
+    @pytest.mark.parametrize("fmt", ["gif", "mp4"])
+    @pytest.mark.parametrize("max_frames", [None, 2, 7, 40])
+    def test_the_clip_ends_on_the_complete_scanpath(
+        self, monkeypatch, anim_fig, fmt, max_frames
+    ):
+        captured = self._capture(monkeypatch, fmt)
+        export_animation(anim_fig, fmt=fmt, max_frames=max_frames)
+        assert captured["indices"][0] == 0
+        assert captured["indices"][-1] == len(anim_fig.frames) - 1
+
+    def test_every_demo_reading_ends_with_its_last_fixation(self, monkeypatch):
+        from scanpath_studio import api
+
+        words, fixations = api.load_sample_data(names="canonical")
+        captured = self._capture(monkeypatch, "mp4")
+        # Each screen of a multi-screen reading is its own replay, timed from
+        # that screen's first fixation.
+        for (pid, tid, screen), part in fixations.groupby(
+            ["participant_id", "trial_id", "screen_id"]
+        ):
+            fig = api.animate_scanpath(words, fixations, pid, tid, screen=screen)
+            export_animation(fig, fmt="mp4")
+            times = fig.layout.meta["scanpath_frame_times_ms"]
+            onsets = part["timestamp_ms"].sort_values().to_numpy()
+            onsets = onsets - onsets[0]
+            shown_at_end = np.searchsorted(
+                onsets, times[captured["indices"][-1]], side="right"
+            )
+            assert shown_at_end == len(onsets), (pid, tid, screen)
 
 
 class TestEndToEnd:

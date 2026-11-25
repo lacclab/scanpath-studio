@@ -301,16 +301,22 @@ def bootstrap_ci(
     return (lo, hi)
 
 
+#: Spreads that describe individual values, which cannot bracket a total.
+_VALUE_SPREADS = ("SD", "SEM", "IQR")
+
+
 def effective_spread(spread: str, agg: str | None) -> str:
     """The interval drawn around the selected aggregate."""
-    return "Bootstrap CI" if agg == "sum" and spread in ("SEM", "SD") else spread
+    return "Bootstrap CI" if agg == "sum" and spread in _VALUE_SPREADS else spread
 
 
 def spread_bounds(values: np.ndarray, center: float, spread: str, *, agg: str = "mean"):
     """``(lo, hi)`` band for ``values`` around ``center`` under ``spread``.
 
     ``SD`` → ±1 std · ``SEM`` → ±std/√n · ``IQR`` → 25th/75th percentiles ·
-    ``Bootstrap CI`` → 95 % percentile bootstrap of the aggregate.
+    ``Bootstrap CI`` → 95 % percentile bootstrap of the aggregate. With
+    ``agg="sum"`` every spread is the bootstrap interval of the sum, since the
+    spread of the individual values says nothing about where a total lies.
     """
     arr = np.asarray(values, dtype="float64")
     arr = arr[np.isfinite(arr)]
@@ -863,17 +869,48 @@ def word_rate_profile(
 # --- Per reader: one reader, many trials ------------------------------------
 
 
+def _pool_values(
+    frame: pd.DataFrame, measure: Measure, *, normalize: bool
+) -> pd.Series:
+    """The measure on every row of ``frame``, aligned to its index.
+
+    With ``normalize`` each participant is z-scored once over all of their rows
+    in ``frame``. A caller that splits the frame into groups takes the groups
+    from this series, so a participant who is in both groups keeps the
+    difference between them instead of being centred at 0 in each.
+    """
+    values = _measure_series(frame, measure)
+    if normalize and not measure.is_rate:
+        work = pd.DataFrame({"_m": values})
+        if "participant_id" in frame.columns:
+            work["participant_id"] = frame["participant_id"]
+        values = add_normalized_column(work, "_m")["_m"]
+    return values
+
+
 def measure_values(
     frame: pd.DataFrame, measure: Measure, *, normalize: bool = False
 ) -> np.ndarray:
     """Flat array of a measure's values (for distribution plots)."""
     if frame is None or frame.empty or measure.column not in frame.columns:
         return np.array([], dtype="float64")
-    work = frame.copy()
-    work["_m"] = _measure_series(work, measure).to_numpy()
-    if normalize and not measure.is_rate:
-        work = add_normalized_column(work, "_m")
-    return work["_m"].dropna().to_numpy()
+    return _pool_values(frame, measure, normalize=normalize).dropna().to_numpy()
+
+
+def _group_values(
+    frame: pd.DataFrame | None,
+    measure: Measure,
+    specs: Sequence[Mapping],
+    *,
+    normalize: bool,
+) -> list[np.ndarray]:
+    """A measure's values for each group ``spec``, z-scored over ``frame`` first."""
+    if frame is None or frame.empty or measure.column not in frame.columns:
+        return [np.array([], dtype="float64") for _ in specs]
+    values = _pool_values(frame, measure, normalize=normalize)
+    return [
+        values[group_mask(frame, spec).to_numpy()].dropna().to_numpy() for spec in specs
+    ]
 
 
 def reader_means(frame: pd.DataFrame, measure: Measure) -> np.ndarray | None:
@@ -1139,7 +1176,9 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                     row["mean_forward_saccade_px"] = float(forward.mean())
             if "is_regression" in fx.columns:
                 row["regression_rate"] = float(
-                    pd.to_numeric(fx["is_regression"], errors="coerce").mean()
+                    pd.to_numeric(fx["is_regression"], errors="coerce")
+                    .astype("float64")
+                    .mean()
                 )
             reading = _trial_reading_time_ms(fx)
             if not reading.empty:
@@ -1158,13 +1197,19 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                     .sum()
                 )
         if not wd.empty:
+            # As float64: a flag column of a nullable dtype whose values are all
+            # missing (a one-word screen) has a mean of NA, which float() refuses.
             if "skip_flag" in wd.columns:
                 row["skip_rate"] = float(
-                    pd.to_numeric(wd["skip_flag"], errors="coerce").mean()
+                    pd.to_numeric(wd["skip_flag"], errors="coerce")
+                    .astype("float64")
+                    .mean()
                 )
             if "regression_in_flag" in wd.columns:
                 row["regression_in_rate"] = float(
-                    pd.to_numeric(wd["regression_in_flag"], errors="coerce").mean()
+                    pd.to_numeric(wd["regression_in_flag"], errors="coerce")
+                    .astype("float64")
+                    .mean()
                 )
         if "regression_in_rate" not in row and "regression_rate" in row:
             row["regression_in_rate"] = row["regression_rate"]
@@ -1428,9 +1473,9 @@ def landing_positions(
 
     Prefers the pre-computed ``first_fix_x`` on ``words``. When that's absent —
     the pre-aggregated OneStop path — it derives the landing from ``fixations``:
-    the earliest fixation on each ``(participant, trial, word)``, joined to the
-    word box. Returns the landing as a *fraction of the word's interest area* by
-    default, else the px distance from where the word starts.
+    the earliest fixation on each ``(participant, trial[, screen], word)``,
+    joined to the word box. Returns the landing as a *fraction of the word's
+    interest area* by default, else the px distance from where the word starts.
 
     The fraction is ``(x_fix − x) / width`` — 0 at the box's leading edge, 1 at
     its trailing edge — over the experiment's own box. It is the same
@@ -1733,11 +1778,14 @@ def two_group_values(
     label_b: str = "Group B",
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
-    """``{label_a: values, label_b: values}`` for overlaid distributions."""
+    """``{label_a: values, label_b: values}`` for overlaid distributions.
+
+    With ``normalize`` the z-scores are taken over each participant's rows in
+    the whole ``frame`` before the groups are split (:func:`_pool_values`).
+    """
     label_a, label_b = distinct_group_labels(label_a, label_b)
     out: dict[str, np.ndarray] = {}
-    a = measure_values(apply_group(frame, spec_a), measure, normalize=normalize)
-    b = measure_values(apply_group(frame, spec_b), measure, normalize=normalize)
+    a, b = _group_values(frame, measure, (spec_a, spec_b), normalize=normalize)
     if a.size:
         out[label_a] = a
     if b.size:
@@ -1882,8 +1930,8 @@ def paired_group_summary(
         )
         if src is None:
             continue
-        for spec, label in ((spec_a, label_a), (spec_b, label_b)):
-            vals = measure_values(apply_group(src, spec), m, normalize=normalize)
+        groups = _group_values(src, m, (spec_a, spec_b), normalize=normalize)
+        for vals, label in zip(groups, (label_a, label_b), strict=True):
             rows.append(
                 {
                     "measure": m.label,

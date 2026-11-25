@@ -15,6 +15,10 @@ check data and manage saved work without opening the app:
 | [`corpus`](#corpus) | Render a corpus figure from a tidy CSV you already have |
 | [`recipe`](#recipe) | Recreate a cohort profile CSV from its saved recipe |
 | [`check`](#check) | Run the Data checks on your tables |
+| [`add`](#add) | Add your tables to the app's dataset list |
+| [`remove`](#remove) | Remove a dataset you added from that list |
+| [`annotations`](#annotations) | Read or write a dataset's favorites, tags and notes |
+| [`open`](#open) | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache) | Show or clear the recovery cache |
 | [`version`](#version) | Show the build, and whether a newer release is out |
 | [`cite`](#cite) | Print how to cite Scanpath Studio |
@@ -27,7 +31,7 @@ If you mistype a command, the CLI suggests the closest match.
 Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```bash
-scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio render --sample --screen Paragraph --width-mm 85 -o reading.publication.json
 scanpath-studio publication reading.publication.json -o reading.html
 scanpath-studio publication figure-2.json -o figure-2.pdf
 ```
@@ -75,8 +79,8 @@ has a flag.
 # List the trials to pick from
 scanpath-studio render --sample --list-trials
 
-# The bundled demo
-scanpath-studio render --sample -o scanpath.html
+# The bundled demo: each reading has several screens, so name the one to draw
+scanpath-studio render --sample --screen Paragraph -o scanpath.html
 
 # Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
@@ -131,22 +135,22 @@ at the last colon.
 
 ```bash
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -170,6 +174,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | leave out the A/B legend | `--no-compare-legend` |
 | give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | take B from another dataset | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME` |
+| map B's columns yourself | `--compare-word-schema JSON`, `--compare-fix-schema JSON`, `--compare-raw-gaze-schema JSON`, as `--word-schema` and its siblings map A's |
 | set the two screen sizes | `--canvas WxH`, `--compare-canvas WxH` |
 | replay both on one clock | add `--animate` (HTML output) |
 
@@ -231,7 +236,7 @@ dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples
 for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```bash
-scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
@@ -289,7 +294,9 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 
 A mapping replaces auto-detection for that table, so it has to name every
 required field, not only the one that failed. It is the same dict
-`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+`load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python. A second
+dataset's tables in a comparison take theirs as `--compare-word-schema`,
+`--compare-fix-schema` and `--compare-raw-gaze-schema`.
 
 ## render flags
 
@@ -378,6 +385,116 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 from docs_support import cli_reference
 
 print(cli_reference("check"))
+```
+
+## add
+
+`add` adds your tables to the app's dataset list, as **Add dataset** does,
+without opening the app. Run `scanpath-studio` afterwards and the app opens on
+the new dataset. If the app is already open, reload its browser tab right away:
+changes you make in it before the reload are not saved. It works for an app on
+your own computer, not a hosted one.
+
+```bash
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+scanpath-studio add "Pilot 3" --fixations fixations_v2.csv --replace
+```
+
+A name that is already saved is an error unless you pass `--replace`, which
+swaps the dataset's tables and keeps its annotations, metadata tables, share
+links, description and recording setup (unless you give a new description or
+`--canvas`). Without `--canvas`, the app uses a screen the data records, or
+estimates one from the extent of the data. In Python, use
+[`add_dataset`][scanpath_studio.api.add_dataset].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("add"))
+```
+
+## remove
+
+`remove` takes a dataset you added, in the app or with `add`, off the app's
+dataset list. Its annotations, metadata tables and description go with it, as
+its **Remove** on the **:material/database: Data Management** page does. Built-in
+and public datasets can't be removed. If the app last had it open, it next
+opens on its default dataset.
+
+```bash
+scanpath-studio remove "Pilot 3"
+scanpath-studio remove "Pilot 3" --missing-ok   # no error if it isn't there
+```
+
+In Python, use [`remove_dataset`][scanpath_studio.api.remove_dataset].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("remove"))
+```
+
+## open
+
+`open` opens the app on a dataset you added, or one the app has itself (the
+bundled demo, a public corpus), at one reading, with the figure set
+by the same flags [`render`](#render-flags) takes. If the app is running on this
+computer, the link opens in your browser. Otherwise `open` starts the app and
+opens the link once it is up. `--print` prints the link instead.
+
+```bash
+scanpath-studio open "Pilot 3" -p p07 -t t12
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
+```
+
+The link is the one :material/share: **Share** → **Link** writes for the same view.
+Settings it leaves out keep the values the app has. It names the dataset, so a
+dataset you added opens only where it was added. A link carries no file: `render`'s
+input, output and `--stimulus-image` flags are refused, and
+`--show-stimulus-image` draws the dataset's own pages. In Python, use
+[`app_link`][scanpath_studio.api.app_link].
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("open"))
+```
+
+## annotations
+
+`annotations` reads and writes the favorites, tags and notes on a dataset you
+added. `export` writes the same `annotations.json` as **Data Management →
+Annotations → Export**, or a CSV table with one row per annotated reading. `import` reads either: a CSV needs `participant_id` and
+`trial_id`, optionally `screen_id`, and any of `favorite`, `tags` (separated by
+`;`, so a tag can't contain one in a CSV) and `note`. Importing adds a reading's tags to the ones it has, and a
+favorite or note in the file replaces its own; a blank stays as it was. This
+differs from the app's **Import**, which keeps or swaps a reading's whole entry.
+`--replace` makes the dataset's annotations exactly the file's, and is refused
+when none of the file's readings is in the dataset. Readings the dataset does not have are listed
+and left out. If the app is open, reload its browser tab to see the new ones.
+
+```bash
+scanpath-studio annotations import "Pilot 3" qc_flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.json
+```
+
+In Python, use [`write_annotations`][scanpath_studio.api.write_annotations] and
+[`read_annotations`][scanpath_studio.api.read_annotations].
+
+### annotations export
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("annotations export"))
+```
+
+### annotations import
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("annotations import"))
 ```
 
 ## cache

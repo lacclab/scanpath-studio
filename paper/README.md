@@ -73,7 +73,7 @@ The filenames `fig_interface` and `fig_ui_*` are reserved for screenshots.
 - Run `SCANPATH_EXPERIMENTAL=1 uv run python paper/paper_stats.py` for the
   experimental reading measures. The validation reassigns fixations from the
   recorded word rectangles and compares the resulting measures with the
-  EyeLink IA report. The current bundled files contain 2,614 word rows, 1,894
+  EyeLink IA report on the demo's paragraph screens: 2,614 word rows, 1,894
   fixations and 24 readings. The script prints how many words enter each
   comparison.
 - The architecture PDF uses Matplotlib. Run

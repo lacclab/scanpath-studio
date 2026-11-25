@@ -399,13 +399,14 @@ def _seed(**session):
 
 
 def test_the_source_snap_overwrites_an_unlinked_canvas_and_font():
-    """The control: without the link's word, the demo's monitor and a declared
-    typeface win — which is the snap doing its job for a source switch."""
+    """The control: without the link's word, the demo's monitor wins — which is
+    the snap doing its job for a source switch. The base size is the axis and
+    legend text, the user's own, which a declared typeface leaves alone."""
     at = _seed(
         global_canvas_width=1920, global_canvas_height=1080, global_base_font_size=20
     )
     width, height, font = at.session_state["_resolved"][:3]
-    assert (width, height, font) == (2560, 1440, 30)
+    assert (width, height, font) == (2560, 1440, 20)
 
 
 def test_a_linked_canvas_and_font_survive_the_source_snap():
@@ -431,9 +432,6 @@ def test_a_linked_canvas_and_font_survive_the_source_snap():
     assert (width, height, font) == (1920, 1080, 20)
     # One-shot: consumed by the first seeding, so a later source switch snaps.
     assert at.session_state["_marker_left"] is False
-    # And the snap's restore stash records the linked font as *absent*, so
-    # leaving the corpus restores the factory size rather than keeping this one.
-    assert at.session_state["_font_snap_restore"]["global_base_font_size"] is None
 
 
 def test_the_reader_names_what_it_seeded_for_the_snap():
@@ -567,16 +565,15 @@ def _font_corpus_link_app():
     st.session_state["global_base_font_size"] = 16
     if st.session_state["_snapped"]:
         # What `seed_canvas_state` leaves behind on a font-declaring corpus.
-        st.session_state["_font_snap_restore"] = {"global_base_font_size": None}
+        st.session_state["_font_snap_restore"] = {"global_font_family": None}
     st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
     st.session_state["_query"] = _build_share_query(DEMO_CHOICE)[0]
 
 
-@pytest.mark.parametrize(("snapped", "carried"), [(False, False), (True, True)])
+@pytest.mark.parametrize(("snapped", "carried"), [(False, False), (True, False)])
 def test_the_factory_font_travels_from_a_font_declaring_corpus(snapped, carried):
-    """On a font-declaring corpus the first seeding snaps the base font to the
-    corpus'; a sender who then picked 16 has to say so, or the recipient gets
-    the corpus size back."""
+    """A font-declaring corpus snaps the font family, never the base size, so a
+    base size of 16 is the recipient's own too and is left off the link."""
     at = AppTest.from_function(_font_corpus_link_app)
     at.session_state["_snapped"] = snapped
     at.run(timeout=30)

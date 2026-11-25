@@ -11,6 +11,7 @@ import pytest
 
 from scanpath_studio import api
 from scanpath_studio.annotations import deserialize, serialize
+from scanpath_studio.data import frame_fingerprint
 from scanpath_studio.export import (
     ExportOptions,
     bulk_export,
@@ -20,15 +21,21 @@ from scanpath_studio.export import (
 from scanpath_studio.measures import compute_per_word_measures, enrich_fixations
 from scanpath_studio.multipart import (
     SCREEN_ID,
+    SCREEN_INDEX,
     apply_trial_parts_manifest,
     extract_part,
     part_catalog,
 )
+from scanpath_studio.preprocessing import sentence_measures
 from scanpath_studio.synthetic import (
     MULTIPART_EXPECTED,
     make_multipart_synthetic_data,
 )
-from scanpath_studio.tabs import _build_compare_meta, _part_catalog_for_display
+from scanpath_studio.tabs import (
+    _build_compare_meta,
+    _c_derived_tables,
+    _part_catalog_for_display,
+)
 
 
 def _multipart_navigator_app():
@@ -87,6 +94,78 @@ def test_scientific_enrichment_and_measures_never_cross_screen_boundary():
     word_zero = measured[measured["word_id"] == 0].set_index(SCREEN_ID)
     assert word_zero.loc["intro", "total_fixation_duration_ms"] == 100
     assert word_zero.loc["question", "total_fixation_duration_ms"] == 120
+
+
+@pytest.mark.parametrize(
+    ("renames", "names"),
+    [
+        ({}, "canonical"),
+        # The dataset's own names: the screen columns come back under them.
+        ({SCREEN_ID: "page", SCREEN_INDEX: "page_index"}, "source"),
+    ],
+)
+def test_word_metrics_merge_back_onto_each_screens_words(renames, names):
+    raw_words, raw_fixations = make_multipart_synthetic_data()
+    words, fixations = api.load_scanpath_data(
+        raw_words.rename(columns=renames),
+        raw_fixations.rename(columns=renames),
+        names=names,
+    )
+    screen = renames.get(SCREEN_ID, SCREEN_ID)
+    number = renames.get(SCREEN_INDEX, SCREEN_INDEX)
+    # Each screen numbers its words from 0, so without the screen a word id
+    # names two rows of the trial.
+    assert words.duplicated(["participant_id", "trial_id", "word_id"]).any()
+
+    metrics = api.compute_word_metrics(words, fixations)
+
+    assert {screen, number} <= set(metrics.columns)
+    merged = words.merge(
+        metrics,
+        on=["participant_id", "trial_id", screen, "word_id"],
+        how="outer",
+        validate="one_to_one",
+        suffixes=("", "_metrics"),
+        indicator=True,
+    )
+    assert len(merged) == len(words)
+    assert merged["_merge"].eq("both").all()
+    assert merged[number].equals(merged[f"{number}_metrics"])
+    totals = merged.set_index([screen, "word_id"])["total_fixation_duration_ms"]
+    assert totals[("intro", 0)] == 100
+    assert totals[("question", 0)] == 120
+
+
+def test_data_page_tables_count_each_screens_words():
+    """The derived tables are built from the word metrics, so they see
+    every screen's words exactly as they see the words table's."""
+    words, fixations = api.load_scanpath_data(
+        *make_multipart_synthetic_data(), names="canonical"
+    )
+    built = _c_derived_tables(
+        words,
+        fixations,
+        pd.DataFrame(),
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        None,
+        None,
+    )
+
+    trials = built["Trial summary"].set_index(SCREEN_ID)
+    assert trials["n_words"].to_dict() == {"intro": 3, "question": 2}
+    assert trials["skip_rate"].notna().all()
+    # Five words read in 600 ms, not the three ids the two screens share.
+    assert built["Participant summary"]["wpm"].tolist() == [500.0]
+    assert len(built["Sentences"]) == len(sentence_measures(words, fixations)) == 2
+
+
+def test_single_screen_word_metrics_carry_no_screen_columns(
+    synthetic_words_df, synthetic_fixations_df
+):
+    metrics = api.compute_word_metrics(synthetic_words_df, synthetic_fixations_df)
+    assert not {SCREEN_ID, SCREEN_INDEX} & set(metrics.columns)
+    assert len(metrics) == len(synthetic_words_df)
 
 
 def test_explicit_columns_auto_normalize_and_headless_api_selects_one_screen():
@@ -485,23 +564,24 @@ def test_screen_steps_live_in_a_railbtn_cluster():
     That key is the whole mechanism behind the alignment: styles.py lays every
     ``[class*="st-key-railbtn_"]`` out as a right-packed flex row with a shared
     pill shape, so the screen row lands on the same edge as the trial picker's
-    ◀ ▶ ⇅ and the Filter-by **More**. No DOM exists under AppTest, so this is
-    pinned structurally — the same approach test_tour.py takes for its CSS hooks.
+    ◀ ▶ ⇅ and the Filter-by **More**. A's navigator and B's each keep their
+    pair together in their own cluster.
     """
-    import inspect
+    from streamlit.testing.v1 import AppTest
 
     from scanpath_studio.styles import get_app_css
-    from scanpath_studio.tabs import _render_screen_navigator
+    from tests.conftest import find_keyed
 
-    source = inspect.getsource(_render_screen_navigator)
-    # The key is prefix-parameterized (A's own "single" default, B's
-    # own "single_compare") rather than the literal "single_screen_trail" —
-    # still a `railbtn_*` name, which is the part the shared CSS rule below
-    # actually matches on.
-    assert 'key=f"railbtn_{key_prefix}_screen_trail"' in source
-    # The steps must be children of that container, not of the columns.
-    assert 'trail.button(\n        f"◀ {spoken(' in source
-    assert 'trail.button(\n        f"▶ {spoken(' in source
+    at = AppTest.from_function(_two_screen_navigators_app).run()
+    assert not at.exception, at.exception
+    for prefix in ("single", "single_compare"):
+        clusters = []
+        for step in ("previous", "next"):
+            _button, around = find_keyed(at, f"{prefix}_screen_{step}")
+            # The steps are the cluster's own children, not a column's.
+            clusters.append(around[-1])
+        assert clusters[0] is clusters[1]
+        assert clusters[0].key.startswith("railbtn_"), clusters[0].key
     # ...and the shared rule must actually match that key.
     assert '[class*="st-key-railbtn_"] {' in get_app_css()
 

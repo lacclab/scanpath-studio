@@ -12,7 +12,7 @@ import copy
 import json
 import math
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from urllib.parse import urlencode
@@ -48,6 +48,7 @@ from .code_snippet import (
     SnippetSource,
     cite_comment,
     reproduction_code,
+    upload_caveats,
     upload_source,
 )
 from .column_names import (
@@ -75,6 +76,7 @@ from .constants import (
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
+    FIXATION_FLAG_THRESHOLD_BOUNDS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
@@ -106,6 +108,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     SETUP_OVERRIDE_SESSION_KEYS,
     SNAP_POSITION_BOUNDS,
+    STIMULUS_IMAGE_OFFSET_BOUNDS,
     SYNTHETIC_CHOICE,
     TITLE_FONT_SIZE_BOUNDS,
     UNIFORM_COLOR_FIELD,
@@ -119,6 +122,8 @@ from .constants import (
 )
 from .controls import (
     _ALIGN_OPTIONS,
+    _AUTO_REPLAY_FIXATIONS,
+    BG_CHOICES,
     claim_mapping,
     clear_replay_layer_restore,
     color_field_options,
@@ -135,6 +140,7 @@ from .dataset_identity import (
 )
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
+from .reruns import rerun
 from .session_keys import (
     COMPARE_CORPUS_PARAM,
     COMPARE_DATASET_DIGEST_PARAM,
@@ -149,8 +155,11 @@ from .session_keys import (
     COMPARE_SOURCE_STATE_KEY,
     COMPARE_STIMULUS_PARAM,
     COMPARE_STYLE_PARAMS,
+    DATA_SOURCE_CHOICE,
     EXPORT_PARAMS,
+    FIX_RANGE_ALL_TRIALS_PARAM,
     FIX_RANGE_PARAM,
+    GLOBAL_SHOW_FIX,
     LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
@@ -162,6 +171,7 @@ from .session_keys import (
     PENDING_COMPARE_STATE_KEY,
     PLOT_CONFIG_SCHEMA_VERSION,
     PUBLIC_DATASET_CHOICE,
+    REPLAY_FIXATIONS_PARAM,
     SAME_DATASET,
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
@@ -171,6 +181,7 @@ from .session_keys import (
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_FIX_RANGE,
+    SINGLE_FIX_RANGE_ALL_TRIALS,
 )
 from .utils import (
     combo_reading_keys,
@@ -578,7 +589,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "saccade_type_legend": "global_saccade_type_legend",
     "show_color_legend": "global_show_color_legend",
     "show_highlight_legend": "global_show_highlight_legend",
-    # The fixed duration scale's size key (default on, so always emitted).
+    # The fixed duration scale's size key (off by default; seeded, so always
+    # emitted).
     "duration_size_legend": "global_duration_size_legend",
     # Snap to line (its *Position* is a float below). The param has the name
     # the older "snap above the word" had, so an older link that snapped still
@@ -619,6 +631,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     # The chips above the plot, shown or hidden. Not part of the figure, so
     # the settings file leaves it out — only the link carries it.
     "show_chips": "single_show_chips",
+    # *Keep this range across trials*, written only while it is on; see the
+    # `FIX_RANGE_PARAM` block in `_build_share_query`.
+    FIX_RANGE_ALL_TRIALS_PARAM: SINGLE_FIX_RANGE_ALL_TRIALS,
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     **_design_params("color"),
@@ -980,8 +995,8 @@ _URL_BOUNDED = {
     "global_fixation_snap_position": SNAP_POSITION_BOUNDS,
     "global_stimulus_image_opacity": (0.1, 1.0),
     # Image-alignment nudge — clamp a hand-crafted link to sane ranges.
-    "global_stimulus_image_offset_x": (-5000.0, 5000.0),
-    "global_stimulus_image_offset_y": (-5000.0, 5000.0),
+    "global_stimulus_image_offset_x": STIMULUS_IMAGE_OFFSET_BOUNDS,
+    "global_stimulus_image_offset_y": STIMULUS_IMAGE_OFFSET_BOUNDS,
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
     "global_crop_margin_px": CROP_MARGIN_BOUNDS,
@@ -992,9 +1007,7 @@ _URL_BOUNDED = {
     # 0 is a real choice for both — outlines only / fill only.
     "global_word_box_line_opacity": (0.0, 1.0),
     "global_word_box_fill_opacity": (0.0, 1.0),
-    # The colour-bar tick sliders, and the fixation-flag thresholds —
-    # a `number_input` with only a minimum, capped at a minute here so a link
-    # cannot carry a number no fixation reaches.
+    # The colour-bar tick sliders, and the fixation-flag thresholds.
     **{
         key: bounds
         for bar in ("fixation", "heatmap")
@@ -1003,10 +1016,10 @@ _URL_BOUNDED = {
             (f"global_{bar}_colorbar_tickfont_size", (6, 20)),
         )
     },
-    "global_fixclass_short_threshold_ms": (1, 60_000),
-    "global_fixclass_long_threshold_ms": (1, 60_000),
-    "cmp1_fixclass_short_threshold_ms": (1, 60_000),
-    "cmp1_fixclass_long_threshold_ms": (1, 60_000),
+    "global_fixclass_short_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
+    "global_fixclass_long_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
+    "cmp1_fixclass_short_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
+    "cmp1_fixclass_long_threshold_ms": FIXATION_FLAG_THRESHOLD_BOUNDS,
     # The recording setup and the per-scanpath styles (the saved-config
     # reader clamps by this table too). Mirrors the widgets
     # (`app.render_canvas_controls`, `controls._render_compare_*`).
@@ -1060,6 +1073,21 @@ def _shown_link_value(raw) -> str:
 def _warn_invalid_link_param(param: str, raw) -> None:
     """The reader's notice for a link param that was ignored."""
     st.warning(f"Ignored the link's invalid {param}={_shown_link_value(raw)}.")
+
+
+def _link_replay_draws_fixations(qp) -> bool:
+    """Whether a link that opens a replay with ``show_fixations=0`` draws them.
+
+    Only a ``replay_fixations`` the link carries hides them: one shared while a
+    replay always drew fixations has none, and opens as it was drawn."""
+    raw = qp.get(REPLAY_FIXATIONS_PARAM)
+    if raw is None:
+        return True
+    try:
+        return _coerce_bool(raw)
+    except (ValueError, TypeError):
+        _warn_invalid_link_param(REPLAY_FIXATIONS_PARAM, raw)
+        return True
 
 
 def _clamp_url_value(state_key: str, value):
@@ -1233,17 +1261,15 @@ def _apply_url_legends(qp) -> None:
             st.session_state.setdefault(key, value)
 
 
-def _legend_query(params: dict) -> None:
+def _legend_query(params: dict, state: Mapping) -> None:
     """Write ``legend_<kind>`` for each legend moved off Auto (the inverse)."""
     from .plots import _legend_is_moved, legend_spec_text, normalize_legend_layout
 
     layout = {
         kind: {
-            "position": st.session_state.get(f"global_legend_{kind}_position")
-            or "auto",
-            "arrangement": st.session_state.get(f"global_legend_{kind}_arrangement")
-            or "auto",
-            "size": st.session_state.get(f"global_legend_{kind}_size"),
+            "position": state.get(f"global_legend_{kind}_position") or "auto",
+            "arrangement": state.get(f"global_legend_{kind}_arrangement") or "auto",
+            "size": state.get(f"global_legend_{kind}_size"),
         }
         for kind in LEGEND_PARAMS.values()
     }
@@ -1343,6 +1369,9 @@ def _apply_url_preset() -> str | None:
     _apply_url_legends(qp)
 
     snapped_from_link: set[str] = set()
+    # Whether this run seeds the fixation layer from the link (it re-applies
+    # on every rerun, as `setdefault`), for the replay check below.
+    fixations_unseeded = GLOBAL_SHOW_FIX not in st.session_state
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
             continue
@@ -1357,6 +1386,11 @@ def _apply_url_preset() -> str | None:
             if len(str(raw)) > _MAX_LINK_VALUE_CHARS:
                 raise ValueError(f"longer than {_MAX_LINK_VALUE_CHARS} characters")
             value = coerce(raw)
+            # A control with a closed set of options takes only one of them,
+            # by the same rule the recovery cache applies, so a value it does
+            # not offer is reported here rather than reset by the widget unseen.
+            if value is not None and state_key in _CHOICE_STATE_PARSERS:
+                value = _CHOICE_STATE_PARSERS[state_key](value)
         except (ValueError, TypeError, OverflowError):
             _warn_invalid_link_param(url_key, raw)
             continue
@@ -1383,12 +1417,13 @@ def _apply_url_preset() -> str | None:
     # relative scale. Share writes the scale beside the toggles, so such a link
     # predates the fixed duration scale and was drawn relative.
     # `duration_size_legend` is left out of the check: it only travels with the
-    # scale. A hand-written `?trial_id=` link carries no toggle and gets the
+    # scale. So are the chips and the window's scope, which are no part of the
+    # figure. A hand-written `?trial_id=` link carries no toggle and gets the
     # current default.
     if "marker_size_scale" not in qp and any(
         k in qp
         for k in _SHARE_TOGGLE_PARAMS
-        if k not in ("duration_size_legend", "show_chips")
+        if k not in ("duration_size_legend", "show_chips", FIX_RANGE_ALL_TRIALS_PARAM)
     ):
         st.session_state.setdefault(
             "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
@@ -1455,6 +1490,16 @@ def _apply_url_preset() -> str | None:
     # Older links use the tab name to select Animation.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
+        if (
+            fixations_unseeded
+            and st.session_state.get(SINGLE_ANIMATE)
+            and st.session_state.get(GLOBAL_SHOW_FIX) is False
+            and _link_replay_draws_fixations(qp)
+        ):
+            # The replay draws the fixations, and leaving it returns to the
+            # static figure without them, as the switch's own replay does.
+            st.session_state[GLOBAL_SHOW_FIX] = True
+            st.session_state[_AUTO_REPLAY_FIXATIONS] = True
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
 
@@ -1911,12 +1956,36 @@ _FREE_RANGE_STATE_KEYS = frozenset(
 
 
 def _closed_choice(options) -> Callable[[object], object]:
+    """A parser for one of ``options``, matched ignoring case and returned as
+    the option is spelt (``log`` → ``Log``), as the CLI and API accept it."""
+    spelt = {str(option).casefold(): option for option in options}
+
     def parse(value):
-        if value not in options:
-            raise ValueError(f"not one of the widget's options: {value!r}")
-        return value
+        if value in options:
+            return value
+        if isinstance(value, str) and value.casefold() in spelt:
+            return spelt[value.casefold()]
+        raise ValueError(f"not one of the widget's options: {value!r}")
 
     return parse
+
+
+def _colorscale_value(value) -> str:
+    """A colour scale the figure can draw: one of the menu's, matched ignoring
+    case, or any other Plotly named scale (``Jet``, ``Viridis_r``), which a
+    link has always drawn and the CLI and API accept."""
+    text = str(value).strip()
+    for name in COLORSCALES:
+        if name.casefold() == text.casefold():
+            return name
+    from plotly.colors import get_colorscale
+    from plotly.exceptions import PlotlyError
+
+    try:
+        get_colorscale(text)
+    except PlotlyError as exc:
+        raise ValueError(f"not a colour scale: {value!r}") from exc
+    return text
 
 
 def _legend_size(value) -> int:
@@ -1955,6 +2024,7 @@ _LEGEND_STATE_PARSERS = {
 _CHOICE_STATE_PARSERS = {
     **_LEGEND_STATE_PARSERS,
     "global_align_algorithm": _parse_align_algorithm,
+    "export_figure_width_unit": _parse_print_unit,
     **{
         key: lambda v: _parse_saccade_classes(
             ",".join(str(item) for item in v) if isinstance(v, (list, tuple)) else v
@@ -1981,8 +2051,9 @@ _CHOICE_STATE_PARSERS = {
     "global_heatmap_style": _parse_heatmap_style,
     "global_heatmap_norm": _closed_choice(("Linear", "Log")),
     "global_heatmap_metric": _closed_choice(("duration_ms", "counts")),
-    "global_fixation_colorscale": _closed_choice(tuple(COLORSCALES)),
-    "global_heatmap_colorscale": _closed_choice(tuple(COLORSCALES)),
+    "global_fixation_colorscale": _colorscale_value,
+    "global_heatmap_colorscale": _colorscale_value,
+    "global_bg_choice": _closed_choice(BG_CHOICES),
     # "" follows the figure's colour scale.
     **{
         f"cmp{i}_heatmap_colorscale": _closed_choice(("", *COLORSCALES)) for i in (0, 1)
@@ -2024,6 +2095,11 @@ def _bounded_number(value, lo, hi):
     return int(number) if integral else number
 
 
+#: Number boxes that may be left blank: the print Width (blank keeps the
+#: figure's own size). `None` is a value their control accepts.
+_BLANK_NUMBER_STATE_KEYS = frozenset({"export_figure_width"})
+
+
 def sanitize_session_value(key: str, value):
     """A stored session value as it may be seeded, or ``ValueError``/``TypeError``.
 
@@ -2046,6 +2122,8 @@ def sanitize_session_value(key: str, value):
         ):
             return value  # follows the scanpath's colour / the figure's fill
         return _parse_hex_color(value)
+    if value is None and key in _BLANK_NUMBER_STATE_KEYS:
+        return None
     bounds = _URL_BOUNDED.get(key)
     if bounds is not None:
         lo, hi = bounds
@@ -2290,6 +2368,32 @@ def _migrate_config_7_to_8(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_9_to_10(config: dict) -> dict:
+    """Draw a saved replay's fixations. A replay drew them whatever the
+    Fixation switch said, so a file that saved a replay with the switch off
+    showed them; read as saved, it would open an empty replay, or saccades
+    alone. Fixation windows and their scope are left alone.
+
+    As with an old link, the fixations are on for the replay only: the
+    in-memory ``mode`` marks it, and leaving the replay hides them again."""
+    migrated = dict(config)
+    mode, layers = migrated.get("mode"), migrated.get("layers")
+    if (
+        isinstance(mode, dict)
+        and mode.get("animate") is True
+        and isinstance(layers, dict)
+        and "fixations" in layers
+        and not layers["fixations"]
+    ):
+        migrated["layers"] = {**layers, "fixations": True}
+        migrated["mode"] = {**mode, _REPLAY_ONLY_FIXATIONS: True}
+    return migrated
+
+
+#: Set by `_migrate_config_9_to_10` on the migrated (never saved) config.
+_REPLAY_ONLY_FIXATIONS = "_replay_only_fixations"
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -2302,8 +2406,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     7: _migrate_config_7_to_8,
     # Without an upload ID, a saved name still resolves by its original store key.
     8: dict,
-    # Earlier files leave existing fixation windows and their scope alone.
-    9: dict,
+    9: _migrate_config_9_to_10,
 }
 
 
@@ -2393,6 +2496,111 @@ def _match_selection(
     return match.iloc[0], ""
 
 
+#: The screen a bundled-demo link or settings file opens when it names none.
+#: Share names the screen of every multi-screen trial, so one without a screen
+#: was saved on a single-screen demo trial, whose screen this is; a link made
+#: without `screen=` (`api.app_link`) opens it too.
+DEMO_UNNAMED_SCREEN = "Paragraph"
+
+
+def _demo_fixations_before_paragraph(selection: dict) -> int:
+    """How many fixations the demo reading ``selection`` names has on the
+    screens before its paragraph — the shift from a window counted on the
+    paragraph alone to one counted over the whole trial."""
+    from .data import load_sample_data
+
+    _words, fixations = load_sample_data()
+    needed = {"participant_id", "unique_trial_id", "part", "screen_index"}
+    if fixations.empty or not needed <= set(fixations.columns):
+        return 0
+    reading = fixations["unique_trial_id"].astype(str).eq(str(selection["trial_id"]))
+    if selection.get("participant_id") not in (None, ""):
+        reading &= (
+            fixations["participant_id"].astype(str).eq(str(selection["participant_id"]))
+        )
+    screens = fixations.loc[reading, ["part", "screen_index"]]
+    paragraph = screens.loc[screens["part"].eq(DEMO_UNNAMED_SCREEN), "screen_index"]
+    if paragraph.empty:
+        return 0
+    return int(screens["screen_index"].lt(paragraph.iloc[0]).sum())
+
+
+def _with_demo_screen(selection: dict, *, demo: bool | None = None) -> tuple[dict, int]:
+    """``selection``, opening the paragraph when it is a bundled-demo selection
+    that names no screen, and the shift its fixation window takes there.
+
+    Such a selection counts its window on the paragraph alone, and a
+    multi-screen trial counts every screen's fixations in one sequence, so the
+    window moves by the fixations on the screens before the paragraph. ``demo``
+    says whether the selection is in the bundled demo; left out, it is when the
+    open dataset is. Any other selection is returned unchanged with no shift."""
+    if demo is None:
+        demo = st.session_state.get(DATA_SOURCE_CHOICE) == DEMO_CHOICE
+    if (
+        not demo
+        or selection.get("screen_id") not in (None, "")
+        or selection.get("trial_id") in (None, "")
+    ):
+        return selection, 0
+    shift = _demo_fixations_before_paragraph(selection)
+    moved = {**selection, "screen_id": DEMO_UNNAMED_SCREEN}
+    window = selection.get("fixation_window")
+    if (
+        isinstance(window, list)
+        and len(window) == 2
+        and all(type(bound) is int for bound in window)
+    ):
+        moved["fixation_window"] = [window[0] + shift, window[1] + shift]
+    return moved, shift
+
+
+def _seed_demo_compare_screen() -> None:
+    """Open a linked scanpath B in the bundled demo on its paragraph when the
+    link names no screen for it, shifting B's window as `_with_demo_screen`
+    shifts A's.
+
+    Runs once per link, with A's trial, after the open dataset is known: B is
+    in the demo when the link names the demo as B's source, or names none and
+    the open dataset is the demo. A B the link places in a public corpus or a
+    local dataset is never the demo."""
+    qp = st.query_params
+    compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
+    if (
+        compare_ids is None
+        or qp.get(COMPARE_SCREEN_PARAM) not in (None, "")
+        or _linked_compare_source_kind(qp) is not None
+    ):
+        return
+    source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
+    open_is_demo = st.session_state.get(DATA_SOURCE_CHOICE) == DEMO_CHOICE
+    demo = source_b == DEMO_CHOICE or (not source_b and open_is_demo)
+    participant_b, trial_b = compare_ids
+    selection, shift = _with_demo_screen(
+        {"participant_id": participant_b, "trial_id": trial_b}, demo=demo
+    )
+    if selection.get("screen_id") in (None, ""):
+        return
+    st.session_state.setdefault(SINGLE_COMPARE_SCREEN_ID, selection["screen_id"])
+    window = st.session_state.get(SINGLE_COMPARE_FIX_RANGE)
+    if shift and COMPARE_FIX_RANGE_PARAM in qp and window is not None:
+        st.session_state[SINGLE_COMPARE_FIX_RANGE] = (
+            window[0] + shift,
+            window[1] + shift,
+        )
+
+
+def _demo_compare_selection(compare: dict) -> dict:
+    """A saved scanpath B, opening its paragraph when it is a bundled-demo B
+    that names no screen (see `_with_demo_screen`). ``compare["source"]`` names
+    B's dataset; none means A's."""
+    from .compare_source import THIS_DATASET
+
+    source = compare.get("source")
+    open_is_demo = st.session_state.get(DATA_SOURCE_CHOICE) == DEMO_CHOICE
+    demo = source == DEMO_CHOICE or (source in (None, THIS_DATASET) and open_is_demo)
+    return _with_demo_screen(compare, demo=demo)[0]
+
+
 def _restore_selection(
     selection: dict, combos: pd.DataFrame, key_prefix: str = "single"
 ) -> bool:
@@ -2458,14 +2666,20 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> str | None:
     if combos is None or combos.empty:
         return None
     st.session_state["_url_trial_applied"] = True
-    selection = {
-        "participant_id": st.query_params.get("participant"),
-        "trial_id": trial_id,
-        "screen_id": st.query_params.get("screen"),
-    }
+    selection, shift = _with_demo_screen(
+        {
+            "participant_id": st.query_params.get("participant"),
+            "trial_id": trial_id,
+            "screen_id": st.query_params.get("screen"),
+        }
+    )
     _row, reason = _match_selection(selection, combos)
     if reason:
         return f"The link's trial couldn't be opened: {reason}."
+    window = st.session_state.get(SINGLE_FIX_RANGE)
+    if shift and FIX_RANGE_PARAM in st.query_params and window is not None:
+        st.session_state[SINGLE_FIX_RANGE] = (window[0] + shift, window[1] + shift)
+    _seed_demo_compare_screen()
     for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
     return None
@@ -2650,6 +2864,15 @@ class _RestoreContext:
             return None
 
     def put(self, key: str, value) -> None:
+        # A number on a clamped key is held to its control's range whichever
+        # section wrote it: past it, Streamlit resets the control to its
+        # minimum without a word.
+        if key in _URL_BOUNDED:
+            try:
+                value = sanitize_session_value(key, value)
+            except (TypeError, ValueError):
+                self.skipped.append(key)
+                return
         if key.startswith(PREPROC_KEY_PREFIX) and preprocessing_enabled():
             # The 🧹 Preprocessing widgets render before the restore runs, so
             # their keys can't be written now; they're held for the next run, where `app._preprocessing_settings` applies them
@@ -2722,6 +2945,10 @@ def _restore_plot_config(
     config, migration_note = _migrate_plot_config(config)
     if migration_note:
         st.toast(migration_note, icon=ICONS["warning"])
+    # The file decides the rail, not a choice held from another dataset.
+    from scanpath_studio.controls import forget_set_aside_values
+
+    forget_set_aside_values()
 
     restore = _RestoreContext(config)
     section = restore.section
@@ -2747,6 +2974,8 @@ def _restore_plot_config(
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
+    if section("mode").get(_REPLAY_ONLY_FIXATIONS) is True:
+        st.session_state[_AUTO_REPLAY_FIXATIONS] = True
 
     illustration = section("illustration")
     if "label_mode" in illustration:
@@ -3001,16 +3230,14 @@ def _restore_plot_config(
         put_float(
             coloring["stimulus_image_offset_x"],
             "global_stimulus_image_offset_x",
-            -5000.0,
-            5000.0,
+            *STIMULUS_IMAGE_OFFSET_BOUNDS,
             "stimulus image X offset",
         )
     if "stimulus_image_offset_y" in coloring:
         put_float(
             coloring["stimulus_image_offset_y"],
             "global_stimulus_image_offset_y",
-            -5000.0,
-            5000.0,
+            *STIMULUS_IMAGE_OFFSET_BOUNDS,
             "stimulus image Y offset",
         )
     if "stimulus_image_scale" in coloring:
@@ -3584,6 +3811,7 @@ def _restore_plot_config(
 
     selection = section("selection")
     if selection:
+        selection, _shift = _with_demo_screen(selection)
         if _restore_selection(selection, combos):
             restore.applied += 1
             _restore_window(selection, SINGLE_FIX_RANGE, "_fix_range_trial", restore)
@@ -3593,6 +3821,11 @@ def _restore_plot_config(
             _row, reason = _match_selection(selection, combos)
             skipped.append(f"trial selection ({reason})")
 
+    if isinstance(selection, dict) and isinstance(selection.get("compare"), dict):
+        selection = {
+            **selection,
+            "compare": _demo_compare_selection(selection["compare"]),
+        }
     _restore_figure_mode(config, selection, combos, put, skipped)
     compare = selection.get("compare")
     if (
@@ -3732,6 +3965,7 @@ def _apply_uploaded_plot_config(
         st.toast("That file isn't a settings file.", icon=ICONS["warning"])
         return
     from . import publication, publication_ui
+    from .controls import design_state, hold_script_writes
 
     if config.get("schema") == publication.SCHEMA:
         try:
@@ -3739,20 +3973,27 @@ def _apply_uploaded_plot_config(
         except ValueError as exc:
             st.toast(str(exc), icon=ICONS["warning"])
             return
-        st.rerun()
+        rerun()
+
+    # The file writes the rail's values before its widgets draw, and a menu the
+    # user had open sends back what it last showed on the next run.
+    before = design_state()
     try:
         applied, skipped = _restore_plot_config(config, combos, fixations, raw_gaze)
     except Exception as exc:  # backstop for an unexpectedly shaped config
+        hold_script_writes(before)
         st.toast(f"Couldn't apply that settings file: {exc}", icon=ICONS["warning"])
         return
     st.session_state["_plot_config_skipped"] = skipped
     staged = st.session_state.get(PENDING_PREPROC_RESTORE_KEY) or {}
-    if any(st.session_state.get(k) != v for k, v in staged.items()):
+    restaged = any(st.session_state.get(k) != v for k, v in staged.items())
+    hold_script_writes(before)
+    if restaged:
         # Preprocessing reshapes the frames this run already filtered and drew,
         # so run again with the restored values in place (the toast is replayed
         # by the next run's `_apply_uploaded_plot_config`).
         st.session_state[_PLOT_CONFIG_TOAST_KEY] = (applied, bool(skipped))
-        st.rerun()
+        rerun()
     st.session_state.pop(PENDING_PREPROC_RESTORE_KEY, None)
     _toast_restored(applied, bool(skipped))
 
@@ -3768,6 +4009,56 @@ def _toast_restored(applied: int, any_skipped: bool) -> None:
         )
     elif not any_skipped:
         st.toast("The settings file had no recognized settings.", icon=ICONS["warning"])
+
+
+def settings_params(state: Mapping) -> dict[str, str]:
+    """The link params for the figure settings in ``state`` (session keys →
+    values), as Share → Link writes them.
+
+    The settings half of `_build_share_query`, with nothing in it that needs a
+    running app, so `script_link.link_query` writes a link from a script with
+    the same code. Settings a link carries only beside a comparison, a trial
+    or a source are pruned by the caller, which knows whether it has one.
+    """
+    params: dict[str, str] = {}
+    # Visualization toggles — emit an explicit 0/1 so a layer the user turned
+    # *off* is shared as off (the URL coercion reads "0" as False).
+    for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
+            continue  # gated off
+        if state_key in state:
+            params[url_key] = "1" if state[state_key] else "0"
+    # Strings / choices / colours / numbers — emit only when set.
+    for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
+            continue  # don't put a gated setting on a link
+        value = state.get(state_key)
+        if value not in (None, ""):
+            if url_key in {"word_hover_fields", "fixation_hover_fields"} and isinstance(
+                value, (list, tuple)
+            ):
+                fields, as_json = encode_field_list(value)
+                params[f"{url_key}_json" if as_json else url_key] = fields
+                continue
+            params[url_key] = (
+                ",".join(str(item) for item in value)
+                if isinstance(value, (list, tuple))
+                else str(value)
+            )
+    for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
+        value = state.get(state_key)
+        if value is not None:
+            params[url_key] = str(value)
+    # Two-element ranges → "lo,hi".
+    for url_key, state_key in {
+        **_SHARE_INT_RANGE_PARAMS,
+        **_SHARE_FLOAT_RANGE_PARAMS,
+    }.items():
+        value = state.get(state_key)
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            params[url_key] = f"{value[0]},{value[1]}"
+    _legend_query(params, state)
+    return params
 
 
 def _build_share_query(
@@ -3951,42 +4242,7 @@ def _build_share_query(
         if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
             params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 
-    # Visualization toggles — emit an explicit 0/1 so a layer the user turned
-    # *off* is shared as off (the URL coercion reads "0" as False).
-    for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
-        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
-            continue  # gated off
-        if state_key in st.session_state:
-            params[url_key] = "1" if st.session_state[state_key] else "0"
-    # Strings / choices / colours / numbers — emit only when set.
-    for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
-        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
-            continue  # don't put a gated setting on a link
-        value = st.session_state.get(state_key)
-        if value not in (None, ""):
-            if url_key in {"word_hover_fields", "fixation_hover_fields"} and isinstance(
-                value, (list, tuple)
-            ):
-                fields, as_json = encode_field_list(value)
-                params[f"{url_key}_json" if as_json else url_key] = fields
-                continue
-            params[url_key] = (
-                ",".join(str(item) for item in value)
-                if isinstance(value, (list, tuple))
-                else str(value)
-            )
-    for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
-        value = st.session_state.get(state_key)
-        if value is not None:
-            params[url_key] = str(value)
-    # Two-element ranges → "lo,hi".
-    for url_key, state_key in {
-        **_SHARE_INT_RANGE_PARAMS,
-        **_SHARE_FLOAT_RANGE_PARAMS,
-    }.items():
-        value = st.session_state.get(state_key)
-        if isinstance(value, (list, tuple)) and len(value) == 2:
-            params[url_key] = f"{value[0]},{value[1]}"
+    params.update(settings_params(st.session_state))
     # The two compare-view params describe a comparison, so they only travel
     # when one does. Both widgets carry `persist_state="session"`, so the
     # generic value sweep above would otherwise stamp `cmp_layout`/`cmp_stimulus`
@@ -4020,13 +4276,22 @@ def _build_share_query(
     # length — so a 509–540 window arriving at a 30-fixation trial silently
     # collapses to a single fixation. Only headless callers can reach this (the
     # UI has no identity-mode picker), which is what makes it worth stating.
+    #
+    # A window kept across trials travels even when it spans this trial, as
+    # the settings file keeps it: on a longer trial it still cuts. Its scope
+    # travels as `fix_range_all_trials=1`, only while on.
     window = st.session_state.get("single_fix_range")
+    all_trials = bool(st.session_state.get(SINGLE_FIX_RANGE_ALL_TRIALS))
+    if not all_trials:
+        params.pop(FIX_RANGE_ALL_TRIALS_PARAM, None)
     if not include_trial or not st.session_state.get("single_fix_range_user_set"):
         params.pop(FIX_RANGE_PARAM, None)
     elif isinstance(window, (list, tuple)) and len(window) == 2:
         full = (st.session_state.get("_share_selection") or {}).get("full_fix_range")
-        if full is not None and tuple(int(v) for v in window) == tuple(
-            int(v) for v in full
+        if (
+            not all_trials
+            and full is not None
+            and tuple(int(v) for v in window) == tuple(int(v) for v in full)
         ):
             params.pop(FIX_RANGE_PARAM, None)
     # B's window on exactly the terms of A's, against B's own flag and
@@ -4071,7 +4336,6 @@ def _build_share_query(
         )
         if orphaned or restated:
             params.pop(url_key)
-    _legend_query(params)
     # The print size travels only while a width is set; without
     # one the PNG is drawn at the screen size, which needs nothing said.
     if not st.session_state.get(EXPORT_PARAMS["export_width"]):
@@ -4079,6 +4343,14 @@ def _build_share_query(
             params.pop(url_key, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
+        # A linked replay draws fixations unless `replay_fixations` hides
+        # them (see `REPLAY_FIXATIONS_PARAM`). Fixations the replay turned on
+        # for itself travel as the static figure's off, which the reader
+        # turns on for the replay alone, as here.
+        if st.session_state.get(_AUTO_REPLAY_FIXATIONS):
+            params["show_fixations"] = "0"
+        elif params.get("show_fixations") == "0":
+            params[REPLAY_FIXATIONS_PARAM] = "0"
 
     # A compact provenance badge for the recording setup. The link carries
     # the setup's *values* wherever they differ from the corpus' own — but it
@@ -4160,9 +4432,8 @@ def _link_defaults(data_choice: str) -> dict:
       physical width the recipient will have. Those are the sender's own (each
       either on the link or re-resolved to the same value), so a DPI that still
       follows from them is re-derived identically and need not be sent.
-    * **Base font** — the factory 16, except on a source that declares its own
-      typeface: that one snaps the font on first seeding, so it has no default
-      the sender can leave off and always travels.
+    * **Base font** — the factory 16. A source that declares its typeface
+      snaps the font family, which every link carries, and not this size.
     * **Everything else** — the factory values a fresh session pins
       (`app.SETUP_DEFAULTS`, `controls.compare_style_defaults`).
 
@@ -4171,18 +4442,12 @@ def _link_defaults(data_choice: str) -> dict:
     left off takes the recipient's cached value rather than the default.
     """
     from scanpath_studio.app import (
-        _FONT_SNAP_RESTORE_KEY,
         SETUP_DEFAULTS,
         resolve_source_monitor,
     )
     from scanpath_studio.controls import compare_style_defaults
 
     defaults = dict(SETUP_DEFAULTS)
-    if _FONT_SNAP_RESTORE_KEY in st.session_state:
-        # The source declares its typeface, so its first seeding
-        # snaps the base font to *that* — a sender who chose the factory 16
-        # there has to say so, or the recipient gets the corpus' size.
-        defaults.pop("global_base_font_size")
     # What the source itself declares: the recipient has none of this
     # session's own saved setup for it, so a canvas the sender saved travels.
     width, height, authoritative = resolve_source_monitor(
@@ -4493,6 +4758,36 @@ def _snippet_source(data_choice: str) -> SnippetSource:
     )
 
 
+def second_dataset_load(data_choice: str) -> tuple[dict[str, dict], tuple[str, ...]]:
+    """How Share → Code loads scanpath B when B comes from ``data_choice``.
+
+    Returns ``(schemas, caveats)``. For an uploaded dataset, ``schemas`` holds
+    its column mappings exactly as A's would be written (``word_schema`` /
+    ``fix_schema`` / ``raw_gaze_schema``), and ``caveats`` holds what adding it
+    did that loading its files does not repeat (`upload_caveats`). Both are
+    empty for a built-in dataset. A session set gets one caveat: B's recipe
+    loads two tables, and a session set is not two tables."""
+    stored = (st.session_state.get("_datasets") or {}).get(data_choice)
+    if not isinstance(stored, dict):
+        return {}, ()
+    from scanpath_studio.column_names import stored_source_recipe
+
+    if is_multipleye_entry(stored):
+        return {}, (
+            "This dataset was added as a MultiplEYE session set, which "
+            "`load_scanpath_data` does not read. Load its Words and fixation "
+            "tables yourself and pass them as `words_b` / `fixations_b`.",
+        )
+    recipe = stored_source_recipe(stored)
+    source = upload_source(data_choice, recipe, words=True, fixations=True)
+    schemas = {
+        option: source.options[option]
+        for option in ("word_schema", "fix_schema", "raw_gaze_schema")
+        if source.options.get(option)
+    }
+    return schemas, tuple(upload_caveats(recipe))
+
+
 def _has_rows(frame) -> bool:
     return frame is not None and not getattr(frame, "empty", True)
 
@@ -4533,7 +4828,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     state = st.session_state.get(SNIPPET_STATE_KEY)
     if not isinstance(state, FigureState):
         st.caption(
-            f"Open a trial on the {ICONS['view_scanpath']} Scanpath view to see "
+            f"Open a trial on the {ICONS['view_scanpath']} Scanpath View to see "
             "the code that rebuilds its figure."
         )
         return

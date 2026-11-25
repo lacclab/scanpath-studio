@@ -64,6 +64,12 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
   can observe: `scripts/verify_change.py` boots the app headless and renders
   through the CLI and the API, and a visible change gets looked at in a browser.
   Tests passing is not the same as the feature working.
+- **Run the tests for what you changed; CI runs the rest.** Locally, run the
+  test files for the modules you touched and the files that name the functions
+  you changed (`/preflight` check 3). CI runs the whole suite on every PR in
+  about five minutes, and every supported Python weekly and before a release.
+  Running the whole suite locally too doubles the wait for nothing, except when
+  a change reaches machinery most tests go through.
 - **Three rounds, then ask.** If a check still fails after three attempts at
   fixing it, stop and tell the user what fails, what you tried, and what you
   suspect.
@@ -122,8 +128,9 @@ the four-section body and the *⚖ Waiting on you* checklist.
   so a change can't weaken its own checks. `surface-parity-reviewer`
   (four-surface rule, wire-format keys, true-scale chart path) and
   `perf-reviewer` (`@st.cache_data` + `frame_fingerprint` conventions) go
-  deeper on their areas. Run `diff-reviewer` before setting an issue to
-  *Review*, plus the specialist whose area the diff touches; give a later round
-  the earlier round's findings, so it checks those and what changed since.
+  deeper on their areas. Run `diff-reviewer` on every PR before it is opened
+  or updated (`/preflight` check 7) and before setting an issue to *Review*,
+  plus the specialist whose area the diff touches; give a later round the
+  earlier round's findings, so it checks those and what changed since.
 - **Guardrails** — edits to `uv.lock`, `site/`, and `*.egg-info` are denied
   in `.claude/settings.json`; they are generated artifacts.

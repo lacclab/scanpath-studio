@@ -378,6 +378,8 @@ def _compare(viz: dict, monkeypatch, *, fixations=None, layout="overlay", **extr
         return real(words, fix, trial_a, trial_b, **kwargs)
 
     monkeypatch.setattr(tabs, "make_comparison_figure", spy)
+    # A cache hit would never reach the spied builder.
+    tabs._cached_comparison_figure.clear()
     combos = pd.DataFrame(
         {"participant_id": ["A", "B"], "trial_id": ["t1", "t1"], "text_id": ["p", "p"]}
     )
@@ -623,7 +625,7 @@ class TestDriftCorrectionReachesEveryPath:
         seen: dict[str, list] = {"static": [], "anim": [], "compare": []}
         real_static = tabs._cached_scanpath_figure
         real_anim = plots.build_scanpath_replay
-        real_compare = plots.make_comparison_figure
+        real_compare = tabs._cached_comparison_figure
 
         def static(words, fixations, settings, raw_gaze, fig_key):
             seen["static"].append((words, fixations))
@@ -639,15 +641,15 @@ class TestDriftCorrectionReachesEveryPath:
             seen["anim"].append((words, fixations, flattened))
             return real_anim(words, fixations, **kwargs)
 
-        def compare(words, fixations, trial_a, trial_b, **kwargs):
-            seen["compare"].append((words, fixations, trial_a, trial_b))
-            return real_compare(words, fixations, trial_a, trial_b, **kwargs)
+        def compare(words, fixations, trials, settings, raw_gaze, fig_key):
+            seen["compare"].append((words, fixations, *trials))
+            return real_compare(words, fixations, trials, settings, raw_gaze, fig_key)
 
         monkeypatch.setattr(tabs, "_cached_scanpath_figure", static)
         monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
         # A view-cache hit would never reach the spied replay cache.
         tabs._cached_replay_view.clear()
-        monkeypatch.setattr(tabs, "make_comparison_figure", compare)
+        monkeypatch.setattr(tabs, "_cached_comparison_figure", compare)
         return seen
 
     @staticmethod
@@ -659,6 +661,10 @@ class TestDriftCorrectionReachesEveryPath:
     def test_static_animation_and_comparison_all_move(self, monkeypatch):
         seen = self._spy(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
+        # The demo's paragraph screens: a correction needs two text lines to
+        # snap between, and a title has one.
+        at.session_state["single_screen_id"] = "Paragraph"
+        at.session_state["single_compare_screen_id"] = "Paragraph"
         at.run(timeout=90)
         assert not at.exception, at.exception
 

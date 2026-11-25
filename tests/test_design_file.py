@@ -1,4 +1,4 @@
-"""The saved-design library's own file — My views → Export / Import.
+"""The saved-design library's own file — My presets → Export / Import.
 
 It is the portable copy of the library.
 """
@@ -132,7 +132,7 @@ def test_import_merges_and_replaces_by_name():
         "Replaced": {"global_show_fix": False},
         "New": {"global_show_heatmap": True},
     }
-    assert at.session_state[controls._DESIGN_IMPORT_NOTE_KEY] == "Imported 2 views."
+    assert at.session_state[controls._DESIGN_IMPORT_NOTE_KEY] == "Imported 2 presets."
 
 
 def test_a_bad_file_says_so_and_changes_nothing():

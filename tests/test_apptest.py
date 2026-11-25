@@ -1316,9 +1316,7 @@ class TestDatasetTable:
         assert any(
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
-        assert any(
-            "EyeLink recordings for all 24 paragraph readings" in c for c in captions
-        )
+        assert any("EyeLink recordings for every screen" in c for c in captions)
         assert all("Fixation positions are reconstructed" not in c for c in captions)
         assert any("belong to the bundled demo" in msg.value for msg in at.info)
         # What an *About this dataset* popover would write (its own label is
@@ -1326,38 +1324,6 @@ class TestDatasetTable:
         tree = str(at._tree)
         assert "Published figures" not in tree
         assert "Where the coordinates come from" not in tree
-
-    def test_delete_is_wired_to_the_remover(self):
-        """`wizard._remove_dataset` must keep a caller: this table's ✕ is the
-        only way to delete an upload, and nothing else would notice it going.
-
-        The Remove click that arms the confirmation is driven for real in
-        `test_remove_arms_the_confirmation_for_its_own_row`; the confirmation's
-        own button is inside an ``st.dialog``, which AppTest does not run, and
-        the remover itself is covered by `tests/test_wizard_helpers.py`. What
-        is left untested is that the dialog still calls it — a source-level
-        fact, so it is checked as one."""
-        import inspect
-
-        # A confirmation sits between the two: the table's ✕ arms the pending
-        # token, and the confirm button in a modal is what calls the remover.
-        # The invariant is that something still calls the remover.
-        from scanpath_studio.app import (
-            _delete_confirmation_dialog,
-            _render_dataset_table_row,
-            _render_delete_confirmation,
-            render_dataset_table,
-        )
-
-        table_source = inspect.getsource(render_dataset_table)
-        assert "_render_delete_confirmation(" in table_source
-        row_source = inspect.getsource(_render_dataset_table_row)
-        assert "args=(PENDING_DELETE_KEY, row.token)" in row_source
-        gate_source = inspect.getsource(_render_delete_confirmation)
-        assert "_delete_confirmation_dialog(" in gate_source
-        dialog_source = inspect.getsource(_delete_confirmation_dialog)
-        assert "from scanpath_studio.wizard import _remove_dataset" in dialog_source
-        assert "_remove_dataset(" in dialog_source
 
 
 @pytest.mark.timeout(90)
@@ -2575,10 +2541,29 @@ class TestSampleReading:
         assert at.session_state["_tutorial_context"]["n_trials"] > 0
         assert not at.session_state["single_animate"]
 
-    def test_a_words_only_demo_reading_cannot_start_or_continue_the_replay(self):
+    def test_a_words_only_demo_reading_cannot_start_or_continue_the_replay(
+        self, monkeypatch
+    ):
+        """Mapping the fixations' Participant ID to another column leaves every
+        demo reading with words and no fixations. A multi-screen dataset refuses
+        a screen that one table lacks, so the demo here is its Paragraph screens
+        read as single-screen data, without raw gaze."""
+        import pandas as pd
+
+        from scanpath_studio import app, data
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
         from scanpath_studio.utils import reading_key
         from tests.conftest import edit_builtin_mapping
+
+        screen_columns = ["part", "screen_index"]
+        paragraphs = tuple(
+            frame[frame["part"].eq("Paragraph")].drop(columns=screen_columns)
+            for frame in data.load_sample_data()
+        )
+        monkeypatch.setattr(app, "load_sample_data", lambda: paragraphs)
+        monkeypatch.setattr(
+            app, "normalized_sample_raw_gaze", lambda: (pd.DataFrame(), None, ())
+        )
 
         at = _make_apptest().run(timeout=45)
         selection = at.session_state["_share_selection"]
@@ -3388,10 +3373,9 @@ class TestCorpusAnalysisTab:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         keys = {s.key for s in at.selectbox}
         assert view_key in keys, f"{view_key} view selector not found"
-        # The Screen picker is offered only by a multipart corpus. The demo
-        # has no `screen_id`, so it must not appear — every single-screen
-        # dataset is left as it is.
-        assert "ptext_screen" not in keys
+        # The Screen picker is offered only by a multipart corpus, and only
+        # in Per text. The demo keeps every screen of each reading.
+        assert ("ptext_screen" in keys) == (subtab == "Per text")
 
     def test_per_text_opens_on_the_scanpath_trials_text(self):
         """Per text opens on the text of the trial the user has open in

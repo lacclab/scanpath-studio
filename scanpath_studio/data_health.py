@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from .constants import DRAWABLE_PX_LIMIT
+from .data import DURATION_MISSING, synthesized_onset_mask
 from .multipart import SCREEN_ID
 
 #: How many offending rows a finding quotes.
@@ -99,7 +100,36 @@ def _number(frame: pd.DataFrame, column: str) -> pd.Series:
 
 def _duration_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
     duration = _number(frame, "duration_ms")
-    return {"negative": duration < 0, "zero": duration == 0}
+    zero = (duration == 0) & ~_cut_at_recording_end(frame, duration)
+    return {"negative": duration < 0, "zero": zero}
+
+
+def _cut_at_recording_end(frame: pd.DataFrame, duration: pd.Series) -> pd.Series:
+    """Fixations that begin as their screen's recording ends.
+
+    A fixation report clips each fixation to the recording period, so one that
+    starts on the period's last millisecond is kept at 0 ms. It is recognised
+    by its onset: no fixation of the same reading (and screen) ends after it,
+    and some fixation there lasts longer than 0 ms. On a screen whose every
+    duration is 0 ms the durations themselves are in doubt, so nothing there is
+    recognised; nor is a fixation whose duration was blank (loaded as 0 ms),
+    nor anything without measured onsets or reading keys.
+    """
+    keys = [c for c in ("participant_id", "trial_id", SCREEN_ID) if c in frame]
+    if "timestamp_ms" not in frame or not {"participant_id", "trial_id"} <= set(keys):
+        return pd.Series(False, index=frame.index)
+    onset = _number(frame, "timestamp_ms")
+    # A made-up onset (the reading order) is no clock, and a blank duration
+    # loaded as 0 ms was never measured.
+    measured = ~synthesized_onset_mask(frame)
+    if DURATION_MISSING in frame:
+        measured &= ~frame[DURATION_MISSING].fillna(False).astype(bool)
+    groups = [frame[k] for k in keys]
+    last_end = (
+        (onset + duration.clip(lower=0)).groupby(groups, dropna=False).transform("max")
+    )
+    timed = (duration > 0).groupby(groups, dropna=False).transform("any")
+    return measured & onset.notna() & np.isfinite(onset) & (onset >= last_end) & timed
 
 
 def _timing_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
@@ -169,7 +199,9 @@ CHECKS: tuple[_Check, ...] = (
             "These rows stay in your tables and exports. Their durations, including"
             " negative values, are included in totals such as reading time and dwell "
             "time. The plot uses the smallest marker size for them. Blank or "
-            "unreadable durations also load as 0 ms."
+            "unreadable durations also load as 0 ms. A 0 ms fixation that starts "
+            "as its screen's recording ends is not counted: the fixation report "
+            "cuts it short there."
         ),
     ),
     _Check(

@@ -378,13 +378,18 @@ class TestTheBundledDemoAgreesWithEyeLink:
 
     def test_geometry_assigns_fixations_as_eyelink_did(self, demo):
         """`CURRENT_FIX_INTEREST_AREA_ID` is EyeLink's own assignment against the
-        same rectangles, including fixations on shared edges."""
+        same rectangles, including fixations on shared edges, on every screen.
+        A fixation the report cuts to 0 ms, starting as its interest period
+        ends, has no interest area in EyeLink's report wherever it lands."""
         words, fix = demo
         eyelink = pd.to_numeric(fix["word_id"], errors="coerce")
         ours = pd.to_numeric(
             assign_fixations_to_words(fix.drop(columns="word_id"), words)["word_id"],
             errors="coerce",
         )
+        cut = fix["duration_ms"] <= 0
+        assert cut.sum() == 1 and eyelink[cut].isna().all()
+        eyelink, ours = eyelink[~cut], ours[~cut]
         assigned = eyelink.notna()
         assert assigned.any() and (~assigned).any()
         assert ours.notna().equals(assigned)

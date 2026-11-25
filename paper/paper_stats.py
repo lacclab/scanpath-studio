@@ -143,12 +143,27 @@ def validate(
     print(f"{'':15s} (durations compared over n={len(read)} words fixated per both)")
 
 
+def paragraph_demo():
+    """The bundled demo's paragraph screens, canonical, as the manuscript shows them.
+
+    The demo keeps every screen of a reading, and a multi-screen reading numbers
+    its fixations across all of them. The manuscript's figures and numbers are on
+    the paragraphs alone, each counted from its own first fixation, so the other
+    screens are left out before the tables are read."""
+    tables = (
+        frame.loc[frame["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+        for frame in _data.read_sample_tables()
+    )
+    return sps.load_scanpath_data(*tables, names="canonical")
+
+
 def main() -> None:
-    words, fixations = sps.load_sample_data(names="canonical")
+    words, fixations = paragraph_demo()
     eyelink = sps.compute_word_metrics(words, fixations)  # IA values win
     raw = pd.read_csv(
         Path(_data.__file__).parent / "sample_data" / "ia.csv", low_memory=False
     )
+    raw = raw[raw["part"].eq("Paragraph")]
 
     print("== Dataset counts ==")
     print(f"participants: {words['participant_id'].nunique()}")

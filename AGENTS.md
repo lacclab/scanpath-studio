@@ -52,19 +52,26 @@ scanpath_studio/
 │  ├─ wizard_shell.py    the wizard's part registry (`STEPS`) and ✏️ Edit dataset's (`EDITOR_STEPS`)
 │  ├─ dataset_table.py   the pure row model behind 📂 Available datasets
 │  ├─ url_state.py       deep links, 🔗 Share (Link · Code · File), settings-file save/restore + migrations
+│  ├─ script_link.py     the link a script writes (`api.app_link`, `open`): figure keywords → link params
 │  ├─ session_keys.py    the session keys / URL params that are a wire format, as constants
 │  ├─ plot_config.py     the settings-file serializer shared by Share and the export bundle
 │  ├─ tour.py            sample invitation, task guides and the optional import walkthrough
 │  ├─ feedback.py        offline troubleshooting, GitHub support links and bug-report details
 │  ├─ loading.py         loading cards (revealed by a timer thread) with Cancel
 │  ├─ progress.py        a Streamlit-free progress + cancel hook for loaders and builders
+│  ├─ reruns.py          `rerun` / `switch_page`, the app's `st.rerun` / `st.switch_page`: keep held writes
 │  ├─ constants.py       palette, defaults, `ICONS`, citation metadata, experimental-feature gates
 │  ├─ styles.py          injected CSS
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
 │  ├─ debug_log.py       in-app log + state inspector (❓ Help → About & citation → App details → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
+│  ├─ utils.py           trial selection, statistics and labelling helpers shared by the views
+│  ├─ plot_navigation.py the rail's *Find a setting…*: which plot editor owns a setting
+│  ├─ viz_history.py     session-local undo and redo of plot edits
+│  ├─ keyboard.py        keyboard shortcuts for the Scanpath page and its figure
 │  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
-│  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
+│  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py,
+│                        subtab_scroll.py
 │                        browser-only helpers installed into the parent document
 ├─ Data
 │  ├─ data.py            schema inference, normalization, filtering, the stimulus join, fingerprints
@@ -74,6 +81,13 @@ scanpath_studio/
 │  ├─ annotations.py     favorites / tags / notes, one store per dataset
 │  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop; the experimental MultiplEYE reader
 │  ├─ compare_source.py  Compare's second dataset (scanpath B): widget-free readiness + loading
+│  ├─ dataset_identity.py
+│  │                     local dataset ownership, portable references for uploads, `unique_name`
+│  ├─ dataset_credit.py  a lab's optional dataset credit, shared by the dataset editor and exports
+│  ├─ study_checks.py    a lab's planned readings and file mappings checked against the recordings
+│  ├─ cohort_audit.py    the evidence behind a cohort profile; two revisions of a study compared
+│  ├─ fixation_source.py one fixation traced back to the input cells it was drawn from
+│  ├─ file_lock.py       an advisory lock shared by processes publishing local files
 │  ├─ experimental_setup.py
 │  │                     display-geometry conversions + `SetupSnapshot` with per-group provenance
 │  ├─ persistence.py     the on-device recovery cache (loopback / desktop only)
@@ -98,13 +112,28 @@ scanpath_studio/
 │  ├─ bulk_renderer.py   Kaleido page reuse and browser recycling for bulk figures
 │  ├─ animation_export.py GIF / MP4 from the replay (warm Kaleido + Pillow / imageio-ffmpeg)
 │  ├─ export_status.py   shared export stages and byte signatures
+│  ├─ figure_views.py    which figure options each view honours (`options_for_view`): the render paths
+│  ├─ chart_axes.py      coordinates shared by fixation charts and their raw-gaze layer
+│  ├─ replay_frames.py   a replay as completed traces plus each reading's fixation onsets
+│  ├─ publication.py, publication_ui.py
+│  │                     portable publication figures (one renderer for app, offline editor, CLI)
+│  ├─ panel_proof.py, panel_proof_ui.py
+│  │                     a two-panel comparison at its physical print size, and its export
+│  ├─ export_archive.py  disk-backed bulk downloads, served one ZIP piece per request
+│  ├─ export_dictionary.py
+│  │                     the types and units of the CSV columns an export bundle writes
+│  ├─ export_png.py      lossless compression of the browser-drawn PNGs for bulk export
+│  ├─ export_retry.py    retries a bundle's failed figure files within the session
 │  └─ authoring.py, authoring_component.py
 │                        the manually authored scanpath ("Create manually") and its canvas
 └─ Headless & distribution
    ├─ api.py             the public Python API (`load_scanpath_data`, `plot_scanpath`, `animate_scanpath`,
    │                     `compare_scanpaths`, `save_figure`, `figure_code`, …)
-   ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `cache`, `version`, `analyze`
+   ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `add`, `remove`, `open`, `cache`,
+   │                     `version`, `analyze`
    ├─ __init__.py        `__release__`, the lazy `__version__`, and lazy re-exports of `api.py`
+   ├─ __main__.py, streamlit_entry.py
+   │                     `python -m scanpath_studio` → the CLI; the script `run` hands to `streamlit run`
    ├─ citation.py        the citation in every format (BibTeX, APA, RIS, CSL-JSON, a figure credit),
    │                     the public corpora's own, and `corpus_for` (the dataset → its corpus)
    ├─ file_citation.py   writes the citation into each exported file's metadata, editing bytes in place
@@ -280,8 +309,8 @@ uv run streamlit run streamlit_app.py --server.address 127.0.0.1
 uv run scanpath-studio                       # binds 127.0.0.1 itself
 
 # Tests
-uv run --extra test pytest -n auto                   # the full suite, as CI runs it
-uv run --extra test pytest tests/test_measures.py    # one file
+uv run --extra test pytest -n auto tests/test_measures.py  # the tests for what you changed
+uv run --extra test pytest -n auto                   # the full suite (CI runs it on every PR)
 uv run --extra test pytest --cov                     # coverage; floor in pyproject.toml
 uv run --extra test python scripts/verify_change.py  # see a change work (/verify)
 
@@ -289,8 +318,10 @@ uv run --extra test python scripts/verify_change.py  # see a change work (/verif
 uv run --extra lint ruff check .
 uv run --extra lint ruff format .
 
-# Regenerate the bundled L1 demo from the OneStop Full paragraph reports and raw ASC files
-uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc
+# Regenerate the bundled L1 demo from the OneStop Full per-part reports, the raw ASC
+# files and the Experiment Builder project the readers ran (its DataViewer draw lists
+# and runtime images give each screen's stimulus)
+uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc --experiment-dir /path/to/ose_2p_l1_l60_tower_st
 
 # Standalone desktop bundle (needs `pip install . pyinstaller` — non-editable)
 # Output: dist/ScanpathStudio.app on macOS, dist/ScanpathStudio/ elsewhere.
@@ -310,11 +341,15 @@ printed example output, CLI and figure-option references, and the Cite page are
 generated at build time by `exec="true"` fences calling
 `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
-CI (GitHub Actions) runs pytest on Python 3.11–3.15, ruff lint + format checks,
-`mkdocs build --strict`, and one `pytest --cov` leg that fails below
-`[tool.coverage.report] fail_under` in `pyproject.toml`. The HTML coverage
-report and the README badge are published with the docs site for each release
-tag.
+CI (GitHub Actions) runs, on every PR and every merge to `main`: the whole
+suite once, on Python 3.12, split over four jobs (`Tests k/4`, by
+`SCANPATH_TEST_SHARD` in `tests/conftest.py`), whose coverage the `Coverage`
+job adds up and fails below `[tool.coverage.report] fail_under` in
+`pyproject.toml`; ruff lint + format checks; `mkdocs build --strict`; a browser
+smoke test; and a Windows export check. Every supported Python (3.11–3.15) runs
+weekly, on each `v*` tag, and by hand (`gh workflow run ci.yml --ref <branch>`,
+which `/release` does before tagging). The HTML coverage report and the README
+badge are published with the docs site for each release tag.
 
 ## Code style
 
@@ -415,7 +450,18 @@ toggle, option, or parameter) is only "done" when it reaches **all** of them:
 
 Every figure option also needs a `render` flag and a `code_snippet` emitter:
 `tests/test_render_every_option.py` sets each option off its default and fails
-on one the Share → Code snippet cannot reproduce.
+on one the Share → Code snippet cannot reproduce, or whose command does not
+reach the builder.
+
+What else fails when a surface is missed:
+- `tests/test_saved_state_contract.py`: a key a link carries but the settings
+  file or the recovery cache drops;
+- `tests/test_widget_bounds.py`: a control's range differs from the link's
+  clamp;
+- `tests/test_url_garbage.py`: a menu value a link would drop;
+- `tests/test_wire_golden.py`: a released link, settings file or cache that no
+  longer restores;
+- `tests/test_shape_matrix.py`: a data shape that misses a surface.
 
 ## Gotchas
 
@@ -482,11 +528,14 @@ here fails when its rule is broken.
 - **Every fingerprint is exact** — a frame hashed in full or named by its source
   (`data.stamp_source` / `adopt_source`, `frame_cache`, `assign_derived`), never
   sampled. A new large per-rerun frame needs one, or it is hashed every run.
-- The bundled `raw_gaze.{csv,parquet}` carries the two L1 readers' recorded
-  EyeLink gaze positions for all 24 readings. Extract samples within the
-  fixation report's paragraph interest period and subtract its trial start
-  time to share the fixation clock. Keep every recorded tick, including missing
-  x/y values, pupil area in tracker units and the tracked eye.
+- The bundled `raw_gaze.parquet` (Parquet only: no CSV copy in the wheel)
+  carries the two L1 readers' recorded EyeLink gaze positions for every screen
+  of all 24 readings. Extract samples within each screen's interest period in
+  its fixation report and subtract the trial start time to share the fixation
+  clock; the samples carry the screen's `part` and `screen_index`. Keep
+  every recorded tick, including missing x/y values, pupil area in tracker
+  units and the tracked eye. A sample without a position has a missing pupil
+  value, not EyeLink's 0 (`update_sample_data.without_lost_pupil`).
 
 **Figures**
 

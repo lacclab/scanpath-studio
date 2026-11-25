@@ -19,6 +19,7 @@ import os
 import re
 import shlex
 import sys
+from collections.abc import Mapping
 from dataclasses import replace
 from importlib import resources
 from pathlib import Path
@@ -205,6 +206,12 @@ _SCHEMA_FLAGS = {
     "fix_schema": "--fix-schema",
     "raw_gaze_schema": "--raw-gaze-schema",
 }
+#: The same, for the second comparison dataset's tables (B's).
+_COMPARE_SCHEMA_FLAGS = {
+    "word_schema": "--compare-word-schema",
+    "fix_schema": "--compare-fix-schema",
+    "raw_gaze_schema": "--compare-raw-gaze-schema",
+}
 
 
 def _add_schema_flags(group) -> None:
@@ -295,40 +302,40 @@ def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
     return mapping
 
 
-def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
+def _load_error_message(
+    exc: Exception, *, schema_flags: Mapping[str, str] = _SCHEMA_FLAGS
+) -> str:
     """A load failure as the command line should say it.
 
     A :class:`api.SchemaError` ends with the API's "pass ``word_schema={…}``"
     hint, which a shell user has no way to act on; this swaps it for the
-    ``--word-schema`` / ``--fix-schema`` form. ``schema_flags=False`` is for the
-    second comparison dataset, which has no mapping flag of its own."""
+    ``--word-schema`` / ``--fix-schema`` form. ``schema_flags`` names the flags
+    of the tables that failed: :data:`_COMPARE_SCHEMA_FLAGS` for the second
+    comparison dataset's."""
     from .api import SchemaError
     from .data import StimulusJoinError, UnplacedFixationsError
 
     if isinstance(exc, UnplacedFixationsError):
         # The fix is the fixations' mapping — X and Y, on this command line.
         message = str(exc).replace("`", "'")
-        if not schema_flags:
-            return message
         return (
-            f"{message}\nOn the command line, map them with --fix-schema: the "
-            "fixations' full mapping as JSON (or a path to a .json file), with "
-            '"x" and "y" naming its columns.'
+            f"{message}\nOn the command line, map them with "
+            f"{schema_flags['fix_schema']}: the fixations' full mapping as JSON (or "
+            'a path to a .json file), with "x" and "y" naming its columns.'
         )
     if isinstance(exc, StimulusJoinError):
         # The fix is a mapping, and here a mapping is a flag.
         message = str(exc).replace("`", "'")
-        if not schema_flags:
-            return message
         return (
-            f"{message}\nOn the command line, map it with --word-schema and "
-            "--fix-schema: each takes that table's full mapping as JSON (or a "
-            'path to a .json file), with "text_id" naming its text column.'
+            f"{message}\nOn the command line, map it with "
+            f"{schema_flags['word_schema']} and {schema_flags['fix_schema']}: each "
+            "takes that table's full mapping as JSON (or a path to a .json file), "
+            'with "text_id" naming its text column.'
         )
     if not isinstance(exc, SchemaError):
         return str(exc)
-    flag = _SCHEMA_FLAGS.get(exc.param)
-    if flag is None or not schema_flags:
+    flag = schema_flags.get(exc.param)
+    if flag is None:
         return (
             f"{exc.detail}\nThis table's columns have to be auto-detected here — "
             "rename them, or build the figure in Python, where "
@@ -533,8 +540,9 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled demo, from OneStop: 2 participants, 12 trials each "
-        "(--list-trials shows them).",
+        help="Use the bundled demo, from OneStop: 2 participants, 12 trials each, "
+        "every screen of a trial from title to feedback (--list-trials shows "
+        "them; --screen picks one).",
     )
     src.add_argument(
         "--authoring",
@@ -1616,6 +1624,13 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Resolution of --width-mm / --width-in (default: 300).",
     )
+    # The app's Export bundle → Smaller PNG files.
+    viz.add_argument(
+        "--compact-png",
+        action="store_true",
+        help="Compress a .png output, and its --separable-layers, losslessly: the "
+        "same pixels and metadata in a smaller file, for a little more time.",
+    )
     viz.add_argument(
         "--font-size",
         type=int,
@@ -1627,7 +1642,10 @@ def _render_parser() -> argparse.ArgumentParser:
         "--font-family",
         default=None,
         metavar="NAME",
-        help=f"Font for all figure text (default: {FONT_FAMILY}).",
+        help=(
+            "Font for all figure text (default: the font the data declares for "
+            f"its stimulus, else {FONT_FAMILY})."
+        ),
     )
     viz.add_argument(
         "--title",
@@ -1888,6 +1906,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "scanpath. Same formats as --raw-gaze. With no second dataset, "
         "--raw-gaze already covers both scanpaths.",
     )
+    for flag, table, mirrors in (
+        ("--compare-word-schema", "--compare-words", "--word-schema"),
+        ("--compare-fix-schema", "--compare-fixations", "--fix-schema"),
+        ("--compare-raw-gaze-schema", "--compare-raw-gaze", "--raw-gaze-schema"),
+    ):
+        cmp_group.add_argument(
+            flag,
+            metavar="JSON",
+            help=f"Column mapping for the {table} table, replacing auto-detection. "
+            f"Same form as {mirrors}.",
+        )
     cmp_group.add_argument(
         "--compare-dataset-name",
         metavar="NAME",
@@ -2093,6 +2122,24 @@ def _comparison_ids(args: argparse.Namespace) -> tuple[str, str] | None:
     return args.compare_participant, args.compare_trial
 
 
+def _compare_schemas(args) -> dict[str, dict]:
+    """The second dataset's column mappings, keyed as the loaders take them
+    (``word_schema`` / ``fix_schema`` / ``raw_gaze_schema``); only those given.
+
+    Parsed once, when ``render`` checks its flags before loading anything, and
+    kept on ``args``: a mapping can be a file, read once."""
+    cached = getattr(args, "_compare_schema_maps", None)
+    if cached is not None:
+        return cached
+    schemas = {}
+    for option, flag in _COMPARE_SCHEMA_FLAGS.items():
+        mapping = _parse_schema_arg(getattr(args, f"compare_{option}", None), flag)
+        if mapping is not None:
+            schemas[option] = mapping
+    args._compare_schema_maps = schemas
+    return schemas
+
+
 def _compare_second_dataset(api, args, words, fixations):
     """``(words_b, fixations_b)`` for the comparison — A's frames unless given.
 
@@ -2100,11 +2147,14 @@ def _compare_second_dataset(api, args, words, fixations):
     """
     if not (args.compare_words or args.compare_fixations):
         return words, fixations, False
+    schemas = _compare_schemas(args)
     try:
         return (
             *api.load_scanpath_data(
                 args.compare_words,
                 args.compare_fixations,
+                word_schema=schemas.get("word_schema"),
+                fix_schema=schemas.get("fix_schema"),
                 keep_columns=args.keep_columns,
                 names="canonical",
             ),
@@ -2113,7 +2163,7 @@ def _compare_second_dataset(api, args, words, fixations):
     except (ValueError, FileNotFoundError, OSError) as exc:
         raise SystemExit(
             "--compare-words/--compare-fixations: "
-            + _load_error_message(exc, schema_flags=False)
+            + _load_error_message(exc, schema_flags=_COMPARE_SCHEMA_FLAGS)
         )
 
 
@@ -2666,6 +2716,8 @@ def _print_reproduction_code(
                 else None
             ),
             primary_raw_gaze=raw_gaze,
+            # The mappings this run read B's tables with.
+            schemas=_compare_schemas(args) if second else {},
         )
     state = cs.FigureState(
         kind=kind,
@@ -2675,7 +2727,10 @@ def _print_reproduction_code(
         screen=args.screen,
         canvas=canvas,
         base_font_size=args.font_size,
-        font_family=args.font_family or FONT_FAMILY,
+        font_family=args.font_family or "",
+        # A font named on the command line is a choice: written even when it
+        # is the default.
+        font_named=args.font_family is not None,
         title=args.title or "",
         caption=args.caption or "",
         illustration_label=str(args.illustration_label or "auto").lower(),
@@ -2685,6 +2740,10 @@ def _print_reproduction_code(
         # pair above — so it has to be named here or the printed recipe would
         # silently widen the window back to the whole trial.
         fix_index_range=_parse_fix_index_range(args.fix_index_range),
+        # B's own window, which both builders that draw a B take.
+        fix_index_range_b=_parse_fix_index_range(args.compare_fix_index_range)
+        if compare is not None
+        else None,
         playback_speed=args.playback_speed,
         autoplay=args.autoplay,
         compare=compare,
@@ -2819,6 +2878,8 @@ def _save_kwargs(args) -> dict:
         kwargs["width_in"] = args.width_in
     if args.dpi is not None:
         kwargs["dpi"] = args.dpi
+    if args.compact_png:
+        kwargs["compact_png"] = True
     return kwargs
 
 
@@ -2830,6 +2891,189 @@ def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
     if not screens:
         raise SystemExit("--screens names no screen; pass e.g. --screens Paragraph.")
     return screens
+
+
+def _figure_overrides(args: argparse.Namespace) -> dict:
+    """The figure options `render`'s flags ask for, in the API's vocabulary.
+
+    Only what a flag on the line sets, so a bare command keeps the builder's
+    own defaults. Shared with `open`, so a flag means the same in a link as in
+    a rendered file. The stimulus-image file and the comparison are `render`'s
+    own and are added there.
+    """
+    overrides = {
+        key: getattr(args, key)
+        for key in (
+            "show_words",
+            "show_word_labels",
+            "show_fixations",
+            "show_order",
+            "show_saccades",
+            "show_heatmap",
+            "show_saccade_arrows",
+        )
+        # Only a flag on the line overrides the API's default.
+        if getattr(args, key) is not None
+    }
+    # Only when given — `plot_scanpath` turns the layer on for the
+    # frame it is handed, and an override is the one thing that says off.
+    if args.show_raw_gaze is False:
+        overrides["show_raw_gaze"] = False
+    if args.coordinate_grid or args.coordinate_grid_spacing is not None:
+        overrides["show_coordinate_grid"] = True
+        overrides["coordinate_grid_spacing"] = args.coordinate_grid_spacing
+    for key in ("word_hover_fields", "fixation_hover_fields"):
+        if (fields := getattr(args, key)) is not None:
+            overrides[key] = fields
+    # The palette rides along as an override; api._expand_palette turns
+    # it into colour kwargs and lets any explicit --*-color below win.
+    if args.palette:
+        overrides["palette"] = args.palette
+    if args.color_by:
+        overrides["color_by"] = args.color_by
+    if args.fixation_color:  # flat fixation colour
+        overrides["fixation_color"] = args.fixation_color
+    if args.fixation_symbol:  # marker shape
+        overrides["fixation_symbol"] = args.fixation_symbol
+    if args.heatmap_metric:
+        overrides["heatmap_metric"] = args.heatmap_metric
+    if args.heatmap_style:
+        overrides["heatmap_style"] = {
+            "word-boxes": "Word boxes",
+            "smoothed": "Smoothed",
+        }[args.heatmap_style]
+    if args.heatmap_sigma is not None:
+        overrides["heatmap_sigma_px"] = args.heatmap_sigma
+    if args.heatmap_colorscale:
+        overrides["heatmap_colorscale"] = args.heatmap_colorscale
+    if args.heatmap_norm:
+        overrides["heatmap_norm"] = args.heatmap_norm.capitalize()  # linear→Linear
+    if args.fixation_colorscale:
+        overrides["fixation_colorscale"] = args.fixation_colorscale
+    if args.marker_size_range:
+        overrides["marker_size_range"] = tuple(args.marker_size_range)
+    if args.saccade_color:
+        overrides["saccade_color"] = args.saccade_color
+    if args.saccade_style:
+        overrides["saccade_style"] = args.saccade_style
+    if args.saccade_width is not None:
+        overrides["saccade_width"] = args.saccade_width
+    # Colour saccades by reading type. Either flag turns the mode on; each
+    # CLASS=COLOR pair overrides one class colour; --no-saccade-type-legend hides
+    # the colour key.
+    # --saccade-color-by-direction is the two-way fold; the full five-way
+    # split wins if both are given (it's the more specific request).
+    if args.saccade_color_by_direction:
+        overrides["saccade_color_mode"] = "Forward / regression"
+    # A class colour beside --saccade-color-by-direction recolours the
+    # two-way split rather than overriding the mode the user asked for, so the
+    # fold's own colours have a flag too.
+    if args.saccade_color_by_type or (
+        args.saccade_type_colors and not args.saccade_color_by_direction
+    ):
+        overrides["saccade_color_mode"] = "By type"
+    if not args.saccade_type_legend:
+        overrides["saccade_type_legend"] = False
+    if not args.show_color_legend:
+        overrides["show_color_legend"] = False
+    if not args.show_highlight_legend:
+        overrides["show_highlight_legend"] = False
+    if args.saccade_type_colors:
+        # Over the palette's class colours when one is named: the explicit dict
+        # wins over `--palette` wholesale in `api._expand_palette`, so starting
+        # from the stock set would put back every class the flags left alone —
+        # and a printed recipe restates only the classes the palette got wrong.
+        class_colors = dict(
+            palette_settings(args.palette)["saccade_class_colors"]
+            if args.palette
+            else SACCADE_CLASS_COLORS
+        )
+        for pair in args.saccade_type_colors:
+            cls_name, _, color = pair.partition("=")
+            cls_name = cls_name.strip()
+            if not color or cls_name not in SACCADE_CLASS_EDITABLE:
+                raise SystemExit(
+                    f"--saccade-type-color expects CLASS=COLOR with CLASS one of "
+                    f"{', '.join(SACCADE_CLASS_EDITABLE)}; got {pair!r}."
+                )
+            class_colors[cls_name] = color.strip()
+        overrides["saccade_class_colors"] = class_colors
+    # The critical-span pair. `--highlight-column ''` is a real request (mark
+    # nothing) and must survive the truthiness test the other options use, so it
+    # is compared against None.
+    if args.highlight_column is not None:
+        overrides["highlight_column"] = args.highlight_column or None
+    if args.critical_span_style:
+        overrides["critical_span_style"] = _CRITICAL_SPAN_STYLES[
+            args.critical_span_style
+        ]
+    if args.fixation_flags:
+        overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
+    if args.legend_layout:
+        overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
+    # The reading-class filter. Independent of the colour mode above —
+    # "only the regressions, in one colour" is as valid as "all of them, coloured
+    # by type" — so it is its own flag rather than a mode.
+    if args.saccade_classes:
+        overrides["saccade_classes"] = _parse_saccade_classes_arg(
+            args.saccade_classes, "--saccade-classes"
+        )
+    # Linear-reading mode.
+    if args.saccade_arcs:
+        overrides["saccade_render_mode"] = "Arc"
+    if args.snap_fixations:
+        overrides["fixation_snap_to_line"] = True
+    if args.snap_position is not None:
+        overrides["fixation_snap_position"] = args.snap_position
+    if args.illustration:
+        preset = dict(
+            show_words=False,
+            show_word_labels=True,
+            show_fixations=True,
+            show_order=False,
+            show_saccades=True,
+            show_saccade_arrows=False,
+            show_heatmap=False,
+            color_by=UNIFORM_COLOR_FIELD,
+            saccade_color_mode="One color",
+            saccade_render_mode="Arc",
+            fixation_snap_to_line=True,
+            fixation_opacity=1.0,
+        )
+        # An explicit flag wins over the preset, as it does over
+        # `plot_scanpath(illustration=True, …)`, so the preset must not
+        # overwrite `--color-by`, `--no-labels` and the rest set above. A layer
+        # switch is in `overrides` only when its flag was given.
+        stated = {key for key in preset if key in overrides}
+        overrides.update({k: v for k, v in preset.items() if k not in stated})
+    # The rest of the figure options. After `--illustration` on purpose,
+    # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
+    # `illustration=True` applies them in.
+    for key in _DIRECT_OPTION_FLAGS:
+        value = getattr(args, key)
+        if value is not None:
+            # `--word-hover-measure ''` is the real request "no measure on
+            # hover", the option's own `None` — the `--highlight-column ''` rule.
+            overrides[key] = None if value == "" and key in _NONE_WHEN_EMPTY else value
+    for key, flipped in _SWITCH_OPTION_FLAGS.items():
+        if getattr(args, key) == flipped:
+            overrides[key] = flipped
+    if args.crop_margin is not None:
+        # A margin is only drawn around a cropped view.
+        overrides["fit_to_monitor"] = False
+    if args.marker_duration_range:
+        overrides["marker_duration_range"] = tuple(args.marker_duration_range)
+    if args.fixation_color_range:
+        overrides["fixation_color_range"] = tuple(args.fixation_color_range)
+    if args.heatmap_range:
+        overrides["heatmap_range"] = tuple(args.heatmap_range)
+    for bar in ("fixation", "heatmap"):
+        orientation = getattr(args, f"{bar}_colorbar_orientation")
+        if orientation:
+            overrides[f"{bar}_colorbar_orientation"] = orientation.capitalize()
+    if args.stimulus_image_opacity is not None:
+        overrides["background_image_opacity"] = args.stimulus_image_opacity
+    return overrides
 
 
 def render(argv: list[str]) -> None:
@@ -2877,6 +3121,12 @@ def render(argv: list[str]) -> None:
             "Print width applies to PNG files and publication projects. Use .png, .publication.json or .publication.html "
             "with --width-mm or --width-in."
         )
+    if (
+        args.compact_png
+        and args.output
+        and not str(args.output).lower().endswith(".png")
+    ):
+        parser.error("--compact-png compresses a PNG. Choose a .png output.")
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [
@@ -2938,10 +3188,38 @@ def render(argv: list[str]) -> None:
             "--compare-raw-gaze is scanpath B's raw gaze; pass --compare-with "
             "PARTICIPANT:TRIAL too."
         )
+    second_dataset_flags = [
+        flag
+        for flag, given in (
+            ("--compare-words", args.compare_words),
+            ("--compare-fixations", args.compare_fixations),
+            *(
+                (flag, getattr(args, f"compare_{option}") is not None)
+                for option, flag in _COMPARE_SCHEMA_FLAGS.items()
+            ),
+        )
+        if given
+    ]
+    if second_dataset_flags and args.compare_with is None:
+        raise SystemExit(
+            f"{', '.join(second_dataset_flags)} load scanpath B's dataset; pass "
+            "--compare-with PARTICIPANT:TRIAL too."
+        )
     if args.raw_gaze_schema is not None and not args.raw_gaze:
         raise SystemExit(
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
         )
+    for option, table, table_flag in (
+        ("word_schema", args.compare_words, "--compare-words"),
+        ("fix_schema", args.compare_fixations, "--compare-fixations"),
+        ("raw_gaze_schema", args.compare_raw_gaze, "--compare-raw-gaze"),
+    ):
+        if getattr(args, f"compare_{option}") is not None and not table:
+            raise SystemExit(
+                f"{_COMPARE_SCHEMA_FLAGS[option]} maps the {table_flag} table; "
+                f"pass {table_flag} too."
+            )
+    _compare_schemas(args)  # a malformed mapping is said before anything loads
     raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
     # These describe the second scanpath of a comparison, so on their
     # own there is nothing for them to style — refused, like a lone --label-a.
@@ -3025,6 +3303,13 @@ def render(argv: list[str]) -> None:
             "--animate writes interactive .html files or a .publication.json recipe. For GIF or "
             "MP4, use the app's Export, or "
             "scanpath_studio.animation_export.export_animation in Python."
+        )
+    if args.animate and args.show_fixations is False and args.show_saccades is False:
+        raise SystemExit(
+            "--animate with --no-fixations and --no-saccades leaves nothing to "
+            "replay: the replay draws the fixations and the saccades between "
+            "them, and no heatmap or raw gaze. Drop one of the two, or drop "
+            "--animate for a static figure."
         )
     # The connectors draw *between* the original and corrected y, so on
     # their own there is nothing to connect. Warn rather than fail — the render
@@ -3246,151 +3531,7 @@ def render(argv: list[str]) -> None:
         file=sys.stderr,
     )
 
-    overrides = {
-        key: getattr(args, key)
-        for key in (
-            "show_words",
-            "show_word_labels",
-            "show_fixations",
-            "show_order",
-            "show_saccades",
-            "show_heatmap",
-            "show_saccade_arrows",
-        )
-        # Only a flag on the line overrides the API's default.
-        if getattr(args, key) is not None
-    }
-    # Only when given — `plot_scanpath` turns the layer on for the
-    # frame it is handed, and an override is the one thing that says off.
-    if args.show_raw_gaze is False:
-        overrides["show_raw_gaze"] = False
-    if args.coordinate_grid or args.coordinate_grid_spacing is not None:
-        overrides["show_coordinate_grid"] = True
-        overrides["coordinate_grid_spacing"] = args.coordinate_grid_spacing
-    for key in ("word_hover_fields", "fixation_hover_fields"):
-        if (fields := getattr(args, key)) is not None:
-            overrides[key] = fields
-    # The palette rides along as an override; api._expand_palette turns
-    # it into colour kwargs and lets any explicit --*-color below win.
-    if args.palette:
-        overrides["palette"] = args.palette
-    if args.color_by:
-        overrides["color_by"] = args.color_by
-    if args.fixation_color:  # flat fixation colour
-        overrides["fixation_color"] = args.fixation_color
-    if args.fixation_symbol:  # marker shape
-        overrides["fixation_symbol"] = args.fixation_symbol
-    if args.heatmap_metric:
-        overrides["heatmap_metric"] = args.heatmap_metric
-    if args.heatmap_style:
-        overrides["heatmap_style"] = {
-            "word-boxes": "Word boxes",
-            "smoothed": "Smoothed",
-        }[args.heatmap_style]
-    if args.heatmap_sigma is not None:
-        overrides["heatmap_sigma_px"] = args.heatmap_sigma
-    if args.heatmap_colorscale:
-        overrides["heatmap_colorscale"] = args.heatmap_colorscale
-    if args.heatmap_norm:
-        overrides["heatmap_norm"] = args.heatmap_norm.capitalize()  # linear→Linear
-    if args.fixation_colorscale:
-        overrides["fixation_colorscale"] = args.fixation_colorscale
-    if args.marker_size_range:
-        overrides["marker_size_range"] = tuple(args.marker_size_range)
-    if args.saccade_color:
-        overrides["saccade_color"] = args.saccade_color
-    if args.saccade_style:
-        overrides["saccade_style"] = args.saccade_style
-    if args.saccade_width is not None:
-        overrides["saccade_width"] = args.saccade_width
-    # Colour saccades by reading type. Either flag turns the mode on; each
-    # CLASS=COLOR pair overrides one class colour; --no-saccade-type-legend hides
-    # the colour key.
-    # --saccade-color-by-direction is the two-way fold; the full five-way
-    # split wins if both are given (it's the more specific request).
-    if args.saccade_color_by_direction:
-        overrides["saccade_color_mode"] = "Forward / regression"
-    # A class colour beside --saccade-color-by-direction recolours the
-    # two-way split rather than overriding the mode the user asked for, so the
-    # fold's own colours have a flag too.
-    if args.saccade_color_by_type or (
-        args.saccade_type_colors and not args.saccade_color_by_direction
-    ):
-        overrides["saccade_color_mode"] = "By type"
-    if not args.saccade_type_legend:
-        overrides["saccade_type_legend"] = False
-    if not args.show_color_legend:
-        overrides["show_color_legend"] = False
-    if not args.show_highlight_legend:
-        overrides["show_highlight_legend"] = False
-    if args.saccade_type_colors:
-        # Over the palette's class colours when one is named: the explicit dict
-        # wins over `--palette` wholesale in `api._expand_palette`, so starting
-        # from the stock set would put back every class the flags left alone —
-        # and a printed recipe restates only the classes the palette got wrong.
-        class_colors = dict(
-            palette_settings(args.palette)["saccade_class_colors"]
-            if args.palette
-            else SACCADE_CLASS_COLORS
-        )
-        for pair in args.saccade_type_colors:
-            cls_name, _, color = pair.partition("=")
-            cls_name = cls_name.strip()
-            if not color or cls_name not in SACCADE_CLASS_EDITABLE:
-                raise SystemExit(
-                    f"--saccade-type-color expects CLASS=COLOR with CLASS one of "
-                    f"{', '.join(SACCADE_CLASS_EDITABLE)}; got {pair!r}."
-                )
-            class_colors[cls_name] = color.strip()
-        overrides["saccade_class_colors"] = class_colors
-    # The critical-span pair. `--highlight-column ''` is a real request (mark
-    # nothing) and must survive the truthiness test the other options use, so it
-    # is compared against None.
-    if args.highlight_column is not None:
-        overrides["highlight_column"] = args.highlight_column or None
-    if args.critical_span_style:
-        overrides["critical_span_style"] = _CRITICAL_SPAN_STYLES[
-            args.critical_span_style
-        ]
-    if args.fixation_flags:
-        overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
-    if args.legend_layout:
-        overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
-    # The reading-class filter. Independent of the colour mode above —
-    # "only the regressions, in one colour" is as valid as "all of them, coloured
-    # by type" — so it is its own flag rather than a mode.
-    if args.saccade_classes:
-        overrides["saccade_classes"] = _parse_saccade_classes_arg(
-            args.saccade_classes, "--saccade-classes"
-        )
-    # Linear-reading mode.
-    if args.saccade_arcs:
-        overrides["saccade_render_mode"] = "Arc"
-    if args.snap_fixations:
-        overrides["fixation_snap_to_line"] = True
-    if args.snap_position is not None:
-        overrides["fixation_snap_position"] = args.snap_position
-    if args.illustration:
-        preset = dict(
-            show_words=False,
-            show_word_labels=True,
-            show_fixations=True,
-            show_order=False,
-            show_saccades=True,
-            show_saccade_arrows=False,
-            show_heatmap=False,
-            color_by=UNIFORM_COLOR_FIELD,
-            saccade_color_mode="One color",
-            saccade_render_mode="Arc",
-            fixation_snap_to_line=True,
-            fixation_opacity=1.0,
-        )
-        # An explicit flag wins over the preset, as it does over
-        # `plot_scanpath(illustration=True, …)`, so the preset must not
-        # overwrite `--color-by`, `--no-labels` and the rest set above. A layer
-        # switch is in `overrides` only when its flag was given.
-        stated = {key for key in preset if key in overrides}
-        overrides.update({k: v for k, v in preset.items() if k not in stated})
+    overrides = _figure_overrides(args)
     # Image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.
@@ -3407,8 +3548,6 @@ def render(argv: list[str]) -> None:
         overrides["background_image_origin"] = _parse_xy(
             args.stimulus_image_origin
         ) or (0.0, 0.0)
-    if args.stimulus_image_opacity is not None:
-        overrides["background_image_opacity"] = args.stimulus_image_opacity
     if args.image_root and not (args.show_stimulus_image or args.stimulus_image):
         # The folder only fills `image_path`; drawing it is its own flag,
         # as in the API, so a printed command names both.
@@ -3417,31 +3556,6 @@ def render(argv: list[str]) -> None:
             "--show-stimulus-image to draw it.",
             file=sys.stderr,
         )
-    # The rest of the figure options. After `--illustration` on purpose,
-    # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
-    # `illustration=True` applies them in.
-    for key in _DIRECT_OPTION_FLAGS:
-        value = getattr(args, key)
-        if value is not None:
-            # `--word-hover-measure ''` is the real request "no measure on
-            # hover", the option's own `None` — the `--highlight-column ''` rule.
-            overrides[key] = None if value == "" and key in _NONE_WHEN_EMPTY else value
-    for key, flipped in _SWITCH_OPTION_FLAGS.items():
-        if getattr(args, key) == flipped:
-            overrides[key] = flipped
-    if args.crop_margin is not None:
-        # A margin is only drawn around a cropped view.
-        overrides["fit_to_monitor"] = False
-    if args.marker_duration_range:
-        overrides["marker_duration_range"] = tuple(args.marker_duration_range)
-    if args.fixation_color_range:
-        overrides["fixation_color_range"] = tuple(args.fixation_color_range)
-    if args.heatmap_range:
-        overrides["heatmap_range"] = tuple(args.heatmap_range)
-    for bar in ("fixation", "heatmap"):
-        orientation = getattr(args, f"{bar}_colorbar_orientation")
-        if orientation:
-            overrides[f"{bar}_colorbar_orientation"] = orientation.capitalize()
     if args.compare_with is not None:
         if args.show_legend is not None:
             overrides["show_legend"] = args.show_legend
@@ -3496,7 +3610,7 @@ def render(argv: list[str]) -> None:
     common = dict(
         canvas_size=canvas,
         base_font_size=args.font_size,
-        font_family=args.font_family or FONT_FAMILY,
+        font_family=args.font_family,
         title=args.title or "",
         caption=args.caption or "",
         # The figure's text and the column flags in the dataset's own
@@ -3646,12 +3760,14 @@ def render(argv: list[str]) -> None:
                     )
                 try:
                     raw_gaze_b = api.load_raw_gaze(
-                        args.compare_raw_gaze, names="canonical"
+                        args.compare_raw_gaze,
+                        raw_gaze_schema=_compare_schemas(args).get("raw_gaze_schema"),
+                        names="canonical",
                     )
                 except (ValueError, FileNotFoundError, OSError) as exc:
                     raise SystemExit(
                         "--compare-raw-gaze: "
-                        + _load_error_message(exc, schema_flags=False)
+                        + _load_error_message(exc, schema_flags=_COMPARE_SCHEMA_FLAGS)
                     )
             # None keeps `compare_scanpaths` on its same-dataset path, which is
             # what skips the namespacing.
@@ -4138,6 +4254,513 @@ def corpus(argv: list[str]) -> None:
     print(f"Wrote {out}")
 
 
+def _add_parser() -> argparse.ArgumentParser:
+    """The `add` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio add",
+        description="Add a dataset to the app's dataset list from your tables, "
+        "as the app's Add dataset does, without opening the app. It is saved "
+        "where a local run keeps its added datasets (see `cache`); the next "
+        "`scanpath-studio` opens on it, and an app already open shows it once "
+        "its browser tab is reloaded. Same as api.add_dataset.",
+    )
+    parser.add_argument("name", help="The name the dataset list shows.")
+    parser.add_argument(
+        "--words", nargs="+", metavar="PATH", help="Words table(s), as for render."
+    )
+    parser.add_argument(
+        "--fixations",
+        nargs="+",
+        metavar="PATH",
+        help="Fixations table(s), as for render.",
+    )
+    parser.add_argument(
+        "--raw-gaze",
+        nargs="+",
+        metavar="PATH",
+        help="The Raw gaze table, as for render.",
+    )
+    parser.add_argument(
+        "--raw-gaze-schema",
+        metavar="JSON",
+        help="Column mapping for the --raw-gaze table, replacing "
+        "auto-detection, in the form --fix-schema takes.",
+    )
+    parser.add_argument(
+        "--trial-parts-manifest",
+        metavar="PATH",
+        help="JSON manifest assigning source rows to ordered screens.",
+    )
+    parser.add_argument(
+        "--canvas",
+        metavar="WxH",
+        help="The recording's screen in px, e.g. 1920x1080. Without it, a "
+        "screen the data records is used, else one estimated from the extent "
+        "of the data; with --replace, the saved dataset's setup is kept.",
+    )
+    parser.add_argument(
+        "--description",
+        metavar="TEXT",
+        help="The sentence the Data Management page shows under its name.",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Replace the tables of the saved dataset with this name, keeping "
+        "its annotations, metadata tables, share links, and its description and "
+        "recording setup unless --description or --canvas gives new ones. "
+        "Without it, a name already saved is an error.",
+    )
+    parser.add_argument(
+        "--no-select",
+        action="store_true",
+        help="Add it to the list without opening the app on it next time.",
+    )
+    _add_schema_flags(parser)
+    return parser
+
+
+def add(argv: list[str]) -> None:
+    """Add a dataset to the app's saved datasets (`api.add_dataset`)."""
+    args = _add_parser().parse_args(argv)
+    if not (args.words or args.fixations or args.raw_gaze):
+        raise SystemExit(
+            "Nothing to add: pass --words and/or --fixations (and/or --raw-gaze)."
+        )
+    if args.raw_gaze_schema and not args.raw_gaze:
+        raise SystemExit(
+            "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
+        )
+    word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
+    fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
+    raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
+    canvas = _parse_canvas(args.canvas)
+
+    from . import api
+
+    saved = {
+        str(row["name"]).casefold()
+        for key in ("datasets", "damaged")
+        for row in api.cache_status().get(key) or ()
+    }
+    replacing = args.replace and args.name.strip().casefold() in saved
+    try:
+        name = api.add_dataset(
+            args.name,
+            args.words,
+            args.fixations,
+            raw_gaze=args.raw_gaze,
+            word_schema=word_schema,
+            fix_schema=fix_schema,
+            raw_gaze_schema=raw_gaze_schema,
+            trial_parts_manifest=_trial_parts_manifest(args.trial_parts_manifest),
+            keep_columns=args.keep_columns,
+            canvas_size=canvas,
+            description=args.description,
+            select=not args.no_select,
+            replace=args.replace,
+        )
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
+    except (ValueError, OSError) as exc:
+        message = str(exc)
+        if not isinstance(exc, api.StoredDatasetExistsError):
+            message = _load_error_message(exc)
+        raise SystemExit(message.replace("replace=True (--replace)", "--replace"))
+    print(f"{'Replaced' if replacing else 'Added'} {name!r}.")
+    if args.no_select:
+        print("Run `scanpath-studio` to open the app; it is in the dataset list.")
+    else:
+        print("Run `scanpath-studio` to open the app on it.")
+    print(
+        "If the app is already open, reload its browser tab now: changes made "
+        "in it from here on are not saved until you do."
+    )
+
+
+def _remove_parser() -> argparse.ArgumentParser:
+    """The `remove` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio remove",
+        description="Remove a dataset you added (in the app or with `add`) from "
+        "the app's dataset list, with its annotations, metadata tables and "
+        "description, as its Remove on the Data Management page does. Built-in "
+        "and public datasets can't be removed. Same as api.remove_dataset.",
+    )
+    parser.add_argument(
+        "name", help="The name the dataset list shows (case does not matter)."
+    )
+    parser.add_argument(
+        "--missing-ok",
+        action="store_true",
+        help="Exit quietly when no dataset has the name, instead of with an error.",
+    )
+    return parser
+
+
+def remove(argv: list[str]) -> None:
+    """Remove a saved dataset (`api.remove_dataset`)."""
+    args = _remove_parser().parse_args(argv)
+
+    from . import api
+
+    wanted = args.name.strip()
+    shown = next(
+        (
+            str(row["name"])
+            for key in ("datasets", "damaged")
+            for row in api.cache_status().get(key) or ()
+            if str(row["name"]).casefold() == wanted.casefold()
+        ),
+        wanted,
+    )
+    try:
+        removed = api.remove_dataset(wanted, missing_ok=args.missing_ok)
+    except (RuntimeError, LookupError, ValueError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+    if not removed:
+        print(f"No dataset named {wanted!r} is saved; nothing removed.")
+        return
+    print(f"Removed {shown!r}.")
+    print(
+        "If the app is already open, reload its browser tab now: changes made "
+        "in it from here on are not saved until you do."
+    )
+
+
+#: `render`'s visualization flags that `open` leaves out: the output file's
+#: (size, format, code), the input's (raw gaze, an image file), and the settings
+#: that are no figure option a link takes from a script.
+_OPEN_SKIPPED_FLAGS = frozenset(
+    {
+        "canvas",
+        "caption",
+        "compact_png",
+        "dpi",
+        "font_family",
+        "font_size",
+        "height",
+        "print_code",
+        "print_code_explicit",
+        "proof_width_mm",
+        "raw_gaze",
+        "raw_gaze_schema",
+        "sample_raw_gaze",
+        "scale",
+        "separable_layers",
+        "stimulus_image",
+        "stimulus_image_origin",
+        "stimulus_image_size",
+        "title",
+        "width",
+        "width_in",
+        "width_mm",
+    }
+)
+
+
+def _open_parser() -> argparse.ArgumentParser:
+    """The `open` parser: the reading, and `render`'s figure flags as they are.
+
+    The figure flags are `render`'s own argparse actions, so each is spelled,
+    parsed and validated exactly as `render` does it."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio open",
+        # `--stimulus-image` must not pass for `--stimulus-image-opacity`.
+        allow_abbrev=False,
+        description="Open the app on a dataset you added, or one the app has "
+        "itself (the bundled demo, a public corpus), at one reading, with "
+        "the figure set by the same flags render takes. If the app is running "
+        "on this computer the link opens in its browser; otherwise the app is "
+        "started first. Same as api.app_link.",
+    )
+    parser.add_argument("name", help="The dataset's name in the app's list.")
+    parser.add_argument("-p", "--participant", help="Participant ID.")
+    parser.add_argument(
+        "-t",
+        "--trial",
+        help="Trial ID (without it, the participant's first trial).",
+    )
+    parser.add_argument(
+        "--screen", help="Screen ID within a trial recorded over several screens."
+    )
+    parser.add_argument(
+        "--animate", action="store_true", help="Open the replay of the reading."
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8501,
+        help="The port the app listens on, or is started on (default: 8501).",
+    )
+    parser.add_argument(
+        "--print",
+        dest="print_only",
+        action="store_true",
+        help="Print the link and exit, without opening or starting anything.",
+    )
+    render = _render_parser()
+    (viz,) = (g for g in render._action_groups if g.title.startswith("visualization"))
+    figure = parser.add_argument_group(
+        "figure (the flags render takes, spelled the same; see `scanpath-studio "
+        "render --help`)"
+    )
+    for action in viz._group_actions:
+        if action.dest not in _OPEN_SKIPPED_FLAGS:
+            figure._add_action(action)
+    taken = {flag for action in parser._actions for flag in action.option_strings}
+    parser.set_defaults(
+        _render_only=sorted(
+            flag
+            for action in render._actions
+            for flag in action.option_strings
+            if flag not in taken
+        )
+    )
+    return parser
+
+
+def _app_running(port: int, timeout: float = 1.0) -> bool:
+    """Whether a Streamlit server answers on this computer's ``port``."""
+    from urllib.error import URLError
+    from urllib.request import urlopen
+
+    try:
+        with urlopen(
+            f"http://{LOOPBACK_ADDRESS}:{port}/_stcore/health", timeout=timeout
+        ) as reply:
+            return reply.status == 200
+    except (URLError, OSError, ValueError):
+        return False
+
+
+def _open_when_ready(url: str, port: int, wait_s: float = 120.0) -> None:
+    """Open ``url`` in the browser once the app on ``port`` answers."""
+    import time
+    import webbrowser
+
+    deadline = time.monotonic() + wait_s
+    while time.monotonic() < deadline:
+        if _app_running(port):
+            webbrowser.open(url)
+            return
+        time.sleep(0.5)
+    print(
+        f"The app did not answer within {wait_s:.0f} s. Open {url} once it is up.",
+        file=sys.stderr,
+    )
+
+
+def open_link(argv: list[str]) -> None:
+    """Open the app on a dataset, a reading and a figure (`api.app_link`)."""
+    parser = _open_parser()
+    render_only = set(parser.get_default("_render_only"))
+    given = [word.split("=")[0] for word in argv if word.startswith("-")]
+    refused = [flag for flag in given if flag in render_only]
+    if refused:
+        parser.error(
+            f"{', '.join(refused)}: render's, not open's. A link names a dataset "
+            "the app already has and carries figure settings: no input or output "
+            "file, and no image."
+        )
+    args = parser.parse_args(argv)
+    _apply_shared_colorbar_flags(args)
+
+    from . import api
+
+    # An empty value is `render`'s "none", which a link has no spelling for:
+    # it would keep the app's own instead.
+    for flag, key in (
+        ("--highlight-column", "highlight_column"),
+        ("--word-hover-measure", "word_hover_measure"),
+    ):
+        if getattr(args, key) == "":
+            parser.error(
+                f"{flag} '': a link can't say none, so the app would keep its "
+                "own. Choose it in the app."
+            )
+    options = _figure_overrides(args)
+    for key in ("anim_grid_step_ms", "anim_max_frames"):
+        if getattr(args, key) is not None:
+            options[key] = getattr(args, key)
+    if args.fix_index_range:
+        options["fix_index_range"] = _parse_fix_index_range(args.fix_index_range)
+    if args.illustration_label != "auto":
+        options["illustration_label"] = args.illustration_label
+    if args.playback_speed != 1.0:
+        options["playback_speed"] = args.playback_speed
+    if not args.autoplay:
+        options["autoplay"] = False
+    try:
+        url = api.app_link(
+            args.name,
+            args.participant,
+            args.trial,
+            screen=args.screen,
+            port=args.port,
+            animate=args.animate,
+            **options,
+        )
+    except (TypeError, ValueError) as exc:
+        parser.error(str(exc))
+    if args.print_only:
+        print(url)
+        return
+    wanted = args.name.strip().casefold()
+    try:
+        saved = {str(row["name"]).casefold() for row in api.cache_status()["datasets"]}
+    except (OSError, ValueError, KeyError):
+        saved = None
+    if saved is not None and wanted not in saved:
+        print(
+            f"No dataset named {args.name.strip()!r} is saved on this computer, so "
+            "the app will say it is missing. Add it with `scanpath-studio add` "
+            "(`scanpath-studio cache` lists the saved ones).",
+            file=sys.stderr,
+        )
+    print(url)
+    if _app_running(args.port):
+        import webbrowser
+
+        webbrowser.open(url)
+        return
+    import threading
+
+    print(f"Starting the app on port {args.port}…", file=sys.stderr)
+    threading.Thread(
+        target=_open_when_ready, args=(url, args.port), daemon=True
+    ).start()
+    # Headless: the tab to open is the link's, which the thread opens, not
+    # the app's front page.
+    launch_app([f"--server.port={args.port}", "--server.headless=true"])
+
+
+def _annotations_parser() -> argparse.ArgumentParser:
+    """The `annotations` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio annotations",
+        description="Read or write the favorites, tags and notes saved on a "
+        "dataset you added, without opening the app. Same as "
+        "api.read_annotations and api.write_annotations.",
+    )
+    commands = parser.add_subparsers(dest="action", metavar="{export,import}")
+    commands.required = True
+    export = commands.add_parser(
+        "export",
+        prog="scanpath-studio annotations export",
+        help="write a dataset's annotations to a file",
+        description="Write a saved dataset's annotations to a file: .json is the "
+        "file the app's Data Management → Annotations → Export saves, .csv a "
+        "table with one row per annotated reading (tags separated by ';').",
+    )
+    export.add_argument(
+        "name", help="The name the dataset list shows (case does not matter)."
+    )
+    export.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        type=Path,
+        metavar="FILE",
+        help="The file to write, .json or .csv.",
+    )
+    import_ = commands.add_parser(
+        "import",
+        prog="scanpath-studio annotations import",
+        help="save annotations from a file on a dataset",
+        description="Save annotations from a file on a saved dataset: the app's "
+        "exported .json, or a .csv with participant_id, trial_id, optional "
+        "screen_id, and any of favorite, tags (separated by ';') and note. "
+        "Tags are added to a reading's own, and a favorite or note given "
+        "replaces its own. Readings the dataset does not have are listed and "
+        "left out. An app already open shows them once its tab is reloaded.",
+    )
+    import_.add_argument(
+        "name", help="The name the dataset list shows (case does not matter)."
+    )
+    import_.add_argument("file", type=Path, help="The .json or .csv file to read.")
+    import_.add_argument(
+        "--replace",
+        action="store_true",
+        help="Make the dataset's annotations exactly the file's, instead of "
+        "adding the file's to them. Refused when none of the file's readings "
+        "is in the dataset, so a file made for another dataset deletes nothing.",
+    )
+    return parser
+
+
+def _annotations_action_parser(action: str) -> argparse.ArgumentParser:
+    """The parser of one `annotations` action, ``export`` or ``import``."""
+    commands = next(
+        a
+        for a in _annotations_parser()._actions
+        if isinstance(a, argparse._SubParsersAction)
+    )
+    return commands.choices[action]
+
+
+def annotations(argv: list[str]) -> None:
+    """Export or import a saved dataset's annotations (`api.read_annotations`,
+    `api.write_annotations`)."""
+    args = _annotations_parser().parse_args(argv)
+
+    from . import api
+
+    if args.action == "export":
+        suffix = args.output.suffix.lower()
+        if suffix not in (".json", ".csv"):
+            raise SystemExit(
+                f"Can't write {args.output.name!r}: name a .json or .csv file."
+            )
+        import scanpath_studio.annotations as annotations_mod
+
+        from . import persistence
+
+        try:
+            shown, store, multipart = persistence.stored_annotations(args.name)
+            if suffix == ".json":
+                text = annotations_mod.serialize(store, dataset=shown)
+            else:
+                table = annotations_mod.store_to_frame(store, screens=multipart)
+                table["tags"] = table["tags"].map(
+                    lambda tags: f"{annotations_mod.TAG_SEPARATOR} ".join(tags)
+                )
+                text = table.to_csv(index=False, lineterminator="\n")
+            args.output.write_text(text, encoding="utf-8")
+        except (LookupError, ValueError, OSError) as exc:
+            raise SystemExit(str(exc)) from exc
+        noun = "annotated reading" if len(store) == 1 else "annotated readings"
+        print(f"Wrote {len(store)} {noun} of {shown!r} to {args.output}.")
+        return
+
+    try:
+        result = api.write_annotations(
+            args.name, args.file, mode="replace" if args.replace else "merge"
+        )
+    except (RuntimeError, LookupError, ValueError, OSError) as exc:
+        raise SystemExit(f"Nothing imported: {exc}") from exc
+    print(
+        f"Saved annotations on {result.written} "
+        f"reading{'' if result.written == 1 else 's'} of {result.dataset!r}; "
+        f"{result.annotated} {'is' if result.annotated == 1 else 'are'} annotated now."
+    )
+    if len(result.unknown):
+        shown_rows = result.unknown.head(10)
+        one = len(result.unknown) == 1
+        print(
+            f"{len(result.unknown)} reading{' is' if one else 's are'} not in the "
+            f"dataset and {'was' if one else 'were'} left out:"
+        )
+        for row in shown_rows.itertuples(index=False):
+            screen = (
+                f" / screen {row.screen_id}" if isinstance(row.screen_id, str) else ""
+            )
+            print(f"  {row.participant_id} / {row.trial_id}{screen}")
+        if len(result.unknown) > len(shown_rows):
+            print(f"  … and {len(result.unknown) - len(shown_rows)} more")
+    print("If the app is already open, reload its browser tab to see them.")
+
+
 def _cache_parser() -> argparse.ArgumentParser:
     """The `cache` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4538,6 +5161,13 @@ usage:
   scanpath-studio recipe …         reproduce a cohort or difference profile CSV from its recipe
   scanpath-studio publication …    render a publication figure recipe
   scanpath-studio check …          run the Data checks on your tables
+  scanpath-studio add NAME …       add your tables to the app's dataset list
+  scanpath-studio remove NAME      remove a dataset you added from that list
+  scanpath-studio annotations export|import NAME …
+                                   read or write a dataset's favorites, tags
+                                   and notes
+  scanpath-studio open NAME …      open the app on one of them, at a reading,
+                                   with render's figure flags (--print: the link)
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
                                    show this build and how it was installed;
@@ -4564,6 +5194,10 @@ _COMMANDS = (
     "recipe",
     "publication",
     "check",
+    "add",
+    "remove",
+    "annotations",
+    "open",
     "cache",
     "version",
     "cite",
@@ -4696,6 +5330,14 @@ def main(argv: list[str] | None = None) -> None:
         corpus(argv[1:])
     elif argv[0] == "check":
         check(argv[1:])
+    elif argv[0] == "add":
+        add(argv[1:])
+    elif argv[0] == "remove":
+        remove(argv[1:])
+    elif argv[0] == "annotations":
+        annotations(argv[1:])
+    elif argv[0] == "open":
+        open_link(argv[1:])
     elif argv[0] == "cache":
         cache(argv[1:])
     elif argv[0] == "version":

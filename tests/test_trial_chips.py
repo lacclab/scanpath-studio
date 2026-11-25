@@ -225,17 +225,35 @@ def test_the_summary_stats_popover_is_gone():
     assert not hasattr(tabs, "_render_trial_details_popover")
 
 
+@pytest.mark.timeout(180)
 def test_the_picker_says_where_the_colours_are():
     """The per-chip colour pickers sit *below* the two drag buckets, off-screen
     until you scroll — so the caption over the buckets points at them."""
-    import inspect
+    from streamlit.testing.v1 import AppTest
 
-    from scanpath_studio.controls import render_trial_chip_picker
+    from tests.conftest import APP_SCRIPT, find_keyed, page_nodes
 
-    # Source-level: the caption is drawn into a `host` the picker is handed, and
-    # the buckets themselves are a `sort_items` component AppTest cannot read.
-    source = " ".join(inspect.getsource(render_trial_chip_picker).split())
-    assert 'colors below the list."' in source
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    at.session_state["tour_seen"] = True
+    at.run()
+    assert not at.exception, at.exception
+    menu, _ = find_keyed(at, "iconpop_chip_fields")
+    drawn = [
+        ("caption", str(node.value))
+        if node.type == "caption"
+        else ("key", str(getattr(node, "key", None) or ""))
+        for node, _ in page_nodes(menu)
+    ]
+    said = [i for i, (kind, text) in enumerate(drawn) if kind == "caption"]
+    buckets = [
+        i for i, (_, key) in enumerate(drawn) if key.startswith("trial_chip_sort_")
+    ]
+    colours = [
+        i for i, (_, key) in enumerate(drawn) if key.startswith("trial_chip_color_")
+    ]
+    pointer = [i for i in said if drawn[i][1].endswith("colors below the list.")]
+    assert pointer and buckets and colours
+    assert pointer[0] < buckets[0] < colours[0]
 
 
 def test_a_cropped_figure_says_it_is_cropped():

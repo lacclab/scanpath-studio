@@ -764,16 +764,22 @@ def correction_sensitivity(
     report = []
     for method in methods:
         corrected, assigned = correct(fixations, words, method)
+        # Measured here, not read from `correct`: its passthrough (a screen
+        # with a single text line, no words) moves nothing and adds no
+        # correction column, and that is a shift of zero, not a missing one.
+        shift = pd.to_numeric(corrected["y"], errors="coerce") - pd.to_numeric(
+            fixations["y"], errors="coerce"
+        )
         combined[f"y_{method}"] = corrected["y"]
-        combined[f"y_{method}_correction"] = corrected["y_correction"]
+        combined[f"y_{method}_correction"] = shift
         combined[f"line_{method}"] = assigned
         if "alignment_agreement" in corrected:
             combined[f"agreement_{method}"] = corrected["alignment_agreement"]
         report.append(
             {
                 "algorithm": method,
-                "average_y_correction": float(corrected["y_correction"].abs().mean()),
-                "max_y_correction": float(corrected["y_correction"].abs().max()),
+                "average_y_correction": float(shift.abs().mean()),
+                "max_y_correction": float(shift.abs().max()),
             }
         )
     line_cols = [f"line_{method}" for method in methods]

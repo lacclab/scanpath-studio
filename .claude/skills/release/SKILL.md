@@ -56,20 +56,30 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    `scanpath_studio/constants.py` to it as well.
 5. **Verify parity** — run `pytest tests/test_citation.py` (it enforces
    version and release-year parity between the package and `CITATION.cff`).
-6. **Full test run** — `pytest -n auto`. Stop and report failures; do not
-   release a failing tree.
-7. **Commit + PR** — commit the changes (the three files plus the deleted fragments) with message `Release v<version>`
+6. **Golden captures** — `uv run --extra test python scripts/capture_golden.py`
+   writes `tests/fixtures/golden/v<version>/` (this release's share links,
+   settings files and recovery cache) and refreshes the figure digests.
+   `tests/test_wire_golden.py` then keeps every release's captures restoring,
+   which is how a later refactor learns it broke a link users hold.
+7. **Commit + PR** — commit the changes (the three files, the golden captures and the deleted fragments) with message `Release v<version>`
    (no AI co-author trailer — repo rule), push the branch, and open a PR to
    `main`, and turn on auto-merge so it lands once CI is green. Do not tag the
    branch.
-8. **Wait for the merge** — tagging is part of `/release`, so don't hand off
-   here. Wait in the background (Bash `run_in_background`, which re-invokes
-   you when it exits) rather than polling in the foreground:
+8. **Every supported Python** — on the pushed release branch, so it tests the
+   release commit: `gh workflow run ci.yml --ref <branch>`. It prints no run
+   id; find the run with
+   `gh run list --workflow ci.yml --branch <branch> --event workflow_dispatch -L1`.
+   PRs test one Python only, so this is where 3.11–3.15 are checked before
+   anything is published.
+9. **Wait for both** — the merge and that run. Tagging is part of `/release`,
+   so don't hand off here. Wait in the background (Bash `run_in_background`,
+   which re-invokes you when it exits) rather than polling in the foreground:
+   `gh run watch <run-id> --exit-status` for the run, and
    `until [ "$(gh pr view <n> --json state -q .state)" = MERGED ]; do
-   [ "$(gh pr view <n> --json state -q .state)" = CLOSED ] && exit 1; sleep 60; done`.
-   If CI fails, the PR closes, or the wait times out, stop and report — do
-   not tag.
-9. **Tag on main** — once merged: `git fetch origin`, check that
+   [ "$(gh pr view <n> --json state -q .state)" = CLOSED ] && exit 1; sleep 60; done`
+   for the merge. If either fails, the PR closes, or the wait times out, stop
+   and report — do not tag.
+10. **Tag on main** — once merged: `git fetch origin`, check that
    `origin/main`'s `scanpath_studio/__init__.py` holds the new version, then
    `git tag v<version> origin/main` and `git push origin v<version>`. Running
    `/release` is the go-ahead for this push — no separate confirmation.

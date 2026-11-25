@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from unittest import mock
 
+import pytest
+
 from scanpath_studio import app, html_embed, tabs
 from scanpath_studio.fields import accessible_name
 
@@ -24,13 +26,22 @@ def test_accessible_name_drops_icons_and_bold():
     assert accessible_name("Plain") == "Plain"
 
 
+@pytest.mark.timeout(180)
 def test_the_main_pickers_have_plain_labels():
-    import inspect
+    """The dataset and trial pickers, and B's trial picker, as drawn: no
+    markdown or icon for a screen reader to read out."""
+    from streamlit.testing.v1 import AppTest
 
-    from scanpath_studio import utils
+    from tests.conftest import APP_SCRIPT
 
-    assert '"**Select trial**"' not in inspect.getsource(utils)
-    assert '"**Select Dataset**"' not in inspect.getsource(app)
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    at.session_state["tour_seen"] = True
+    at.session_state["single_compare_toggle"] = True
+    at.run()
+    assert not at.exception, at.exception
+    for key in ("data_source_picker", "single_trial_id", "single_compare_trial"):
+        label = at.selectbox(key=key).label
+        assert label and accessible_name(label) == label, (key, label)
 
 
 def test_a_figure_summary_names_participant_text_and_count():

@@ -70,6 +70,15 @@ def get_app_css() -> str:
        gap under it that its overflow:auto container would turn into a
        scrollbar with nothing to scroll. */
     iframe[data-testid="stIFrame"] {display: block;}
+    /* A zero-height script carrier (`embed_html_iframe(..., height=0)`) is
+       drawn 1 px tall, and each one still takes a row plus the block margin:
+       stacked under the header they open a blank band above the page. Take
+       them out of the flow — still rendered, so their scripts run — and
+       leave their place in the element order unchanged. */
+    [data-testid="stElementContainer"][height="1px"]:has(> iframe[data-testid="stIFrame"]) {
+        position: absolute !important; width: 1px; height: 1px;
+        overflow: hidden; clip-path: inset(50%); margin: 0 !important;
+    }
     .stPlotlyChart {margin: 0 !important; padding: 0 !important;}
     /* Target parent containers */
     div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stPlotlyChart"]) {padding: 0 !important; margin: 0 !important; gap: 0 !important;}
@@ -675,6 +684,35 @@ def get_app_css() -> str:
        preference and prefers-color-scheme agree here. */
     @media (prefers-color-scheme: dark) {
         .stApp { --sps-code-fg: #8fc7f5; }
+    }
+
+    /* The "Stopped loading X · Try again" notice (`app._render_cancelled_load_notice`):
+       a light blue banner, since it reports what the user just did rather
+       than something going wrong. Try again is a small bordered button; the
+       ✕ sits at the far end. */
+    .st-key-sps_cancelled_notice {
+        background: var(--sps-accent-soft);
+        border: 1px solid var(--sps-accent-border);
+        border-radius: 0.6rem;
+        padding: 0.3rem 0.4rem 0.3rem 0.85rem;
+    }
+    .st-key-sps_cancelled_notice [data-testid="stMarkdownContainer"] p {
+        margin: 0;
+        font-size: 0.92rem;
+    }
+    .st-key-sps_cancelled_notice [data-testid="stMarkdownContainer"] [data-testid="stIconMaterial"] {
+        color: var(--sps-accent);
+        vertical-align: -0.2em;
+    }
+    .st-key-sps_try_again button {
+        min-height: 1.9rem;
+        padding: 0.1rem 0.65rem;
+        border-color: var(--sps-accent-border);
+        background: var(--sps-page-bg);
+    }
+    .st-key-sps_cancelled_notice_close button {
+        min-height: 1.9rem;
+        padding: 0.1rem 0.4rem;
     }
 
     /* Empty-state panels — "no trials match" and "this corpus isn't here
@@ -1299,6 +1337,68 @@ def get_app_css() -> str:
         flex: 1 1 0 !important;
         width: auto !important;
         min-width: 0 !important;
+    }
+    /* The screen named in a line of text: a phone's stand-in for the
+       dropdown, hidden (wrapper and all, so it leaves no gap) wherever the
+       dropdown fits. */
+    [class*="_screen_cell"] > [data-testid="stLayoutWrapper"]:has(
+        > [class*="_screen_brief"]) {
+        display: none !important;
+    }
+    /* On a phone the trial's ◀ ▶ and the screen cell (with the row's menus)
+       share one line, as ◀ ▶ and the menus do on a trial without screens, so
+       a multi-screen trial does not push the figure's view choices down a
+       row. The cell drops its dropdown and label for the line of text above;
+       its own ◀ ▶ step the screens, and the dropdown is back on a wider
+       window. The text ellipsises, so a long screen name cannot wrap the
+       line either. */
+    @media (max-width: 639px) {
+        [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="_row_tail"]) {
+            column-gap: 0.5rem !important;
+            justify-content: flex-end;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="_trail_steps"]),
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+            > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+            > [class*="_row_tail"]) {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: 100%;
+        }
+        [class*="_screen_cell"] > [class*="st-key-"][class*="_screen_id"] {
+            display: none !important;
+        }
+        /* Without its dropdown the cell is only as wide as what it holds,
+           and it and the menus sit close, so the line holds ◀ ▶ too. */
+        [class*="_row_tail"] > [data-testid="stLayoutWrapper"]:has(
+            [class*="screen_picker"]) {
+            flex: 0 1 auto !important;
+        }
+        [class*="_row_tail"], [class*="_screen_cell"] {
+            column-gap: 0.25rem !important;
+        }
+        [class*="_screen_cell"] > [data-testid="stLayoutWrapper"]:has(
+            > [class*="_screen_brief"]) {
+            display: flex !important;
+            flex: 0 1 auto !important;
+            width: auto !important;
+            max-width: 4.25rem;
+            min-width: 0 !important;
+            align-self: center;
+        }
+        [class*="_screen_brief"] :is([data-testid="stMarkdownContainer"], p) {
+            margin: 0 !important;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.85rem;
+            line-height: 1.2;
+        }
     }
     /* A slider's end labels stay on one line. The trial scrubber's
        labels are `1/24 · <trial id>`, and a long id would otherwise wrap onto a
@@ -2040,9 +2140,7 @@ def get_app_css() -> str:
        the page's own background — not a tinted, bordered card, whose fill would
        put a second surface behind rows that already carry their own outline. A
        hair more breathing room between the stacked toggles than the app-wide
-       gap:0 rule. The controls stay in page flow, beside both the plot and its
-       subtabs, so every control can use the space below the figure without a
-       nested scrollbar. */
+       gap:0 rule. */
     .st-key-scanpath_rail {
         border-left: 1px solid var(--sps-border);
         padding: 0.1rem 0.35rem 1.5rem 1rem;
@@ -2053,6 +2151,33 @@ def get_app_css() -> str:
            breakpoint. */
         container-type: inline-size;
         container-name: sps-rail;
+    }
+    /* Beside the figure, the rail's column sticks and scrolls on its own, as
+       tall as the room under the page's top band and never capped at the
+       plot's height: a long rail stays reachable while the figure stays in
+       view. Phones stack the two columns into one flow (the max-width: 639px
+       block below).
+
+       It sticks where it starts: 7.5rem down, which clears Streamlit's 3.75rem
+       header (opaque, drawn over the page), the 3rem top padding of
+       `.stMainBlockContainer` and the zero-height embeds and empty notice
+       strip above the view. So it never moves while the page scrolls, and the
+       box fits the window at every scroll position: sticking any higher would
+       slide its top under the header, and a box as tall as the window would
+       leave its last controls below the window's edge until the page itself
+       scrolled. A notice above the view (a recovery warning,
+       the hosted server's backup reminder) starts the rail that much lower,
+       until the page has scrolled past it. */
+    @media (min-width: 640px) {
+        [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > .st-key-scanpath_rail) {
+            position: sticky;
+            top: 7.5rem;
+            align-self: flex-start;
+            max-height: calc(100dvh - 8rem);
+            overflow-y: auto;
+            overscroll-behavior-y: contain;
+            scrollbar-width: thin;
+        }
     }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
@@ -2171,7 +2296,8 @@ def get_app_css() -> str:
     }
     .st-key-plot_history_actions {
         display: grid;
-        grid-template-columns: 2rem 2rem minmax(0, 1fr);
+        /* Undo and Redo share the room Reset's short label leaves. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
         align-items: center;
         gap: 0.25rem;
     }
@@ -2180,7 +2306,7 @@ def get_app_css() -> str:
         width: 100%;
         min-width: 0;
         min-height: 2.6rem;
-        padding-inline: 0.2rem;
+        padding-inline: 0.6rem;
     }
     /* Keep the spoken label out of the flex row so its gap doesn't shift the arrow. */
     :is(.st-key-viz_undo, .st-key-viz_redo) button [data-testid="stMarkdownContainer"] {
@@ -2196,7 +2322,7 @@ def get_app_css() -> str:
         width: 100%;
         justify-content: flex-start;
     }
-    /* The rail's expanders (e.g. 🎨 My views). Streamlit gives the
+    /* The rail's expanders (e.g. 🎨 My presets). Streamlit gives the
        expander label `word-break: break-word`, which in a rail this narrow
        snaps the header mid-word — the same defect the nowrap rule above
        prevents for toggle labels. Break at spaces only, and give the label the
@@ -2234,6 +2360,22 @@ def get_app_css() -> str:
     .st-key-scanpath_rail [data-testid="stMarkdownContainer"]:has(> .sps-control-label) {
         margin-bottom: 0;
     }
+    /* Presets, Palette, Modes and Customize fold away (`controls.rail_section`):
+       a small chevron beside the label, and the body hidden — never removed —
+       while folded. */
+    :is(.st-key-rail_view_section, .st-key-rail_palette_section, .st-key-rail_modes_section, .st-key-rail_customize_section):has(:is(.st-key-rail_view_head_folded, .st-key-rail_palette_head_folded, .st-key-rail_modes_head_folded, .st-key-rail_customize_head_folded)) [data-testid="stLayoutWrapper"]:has(> :is(.st-key-rail_view_body, .st-key-rail_palette_body, .st-key-rail_modes_body, .st-key-rail_customize_body)) {
+        display: none !important;
+    }
+    :is(.st-key-rail_view_fold, .st-key-rail_palette_fold, .st-key-rail_modes_fold, .st-key-rail_customize_fold) button {
+        min-height: 1.4rem;
+        padding: 0 0.15rem;
+        opacity: 0.72;
+    }
+    :is(.st-key-rail_view_fold, .st-key-rail_palette_fold, .st-key-rail_modes_fold, .st-key-rail_customize_fold) button:hover { opacity: 1; }
+    /* The titles below the tiles start a new part of the column. */
+    :is(.st-key-rail_modes_section, .st-key-rail_customize_section) { margin-top: 0.35rem; }
+    /* The script that keeps the folds in a cookie takes no room. */
+    .st-key-rail_fold_cookie { position: absolute; width: 0; height: 0; overflow: hidden; }
     .st-key-scanpath_rail :is(.st-key-tour_grp_views, .st-key-rail_palette_tiles) {
         margin-top: 0;
         margin-bottom: 0.05rem;
@@ -2254,7 +2396,7 @@ def get_app_css() -> str:
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
-    /* 🎨 My views. 💾 Save is drawn *into* the expander's own title
+    /* 🎨 My presets. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
        right-hand side is empty (the chevron sits left), so the list underneath
        keeps the full width of the rail instead of losing a fifth of it to one

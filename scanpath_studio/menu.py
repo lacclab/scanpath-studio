@@ -38,6 +38,7 @@ from scanpath_studio.constants import (
     DATA_WORKSPACE_REQUEST,
     ICONS,
 )
+from scanpath_studio.reruns import switch_page
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -50,6 +51,22 @@ _NAV_PAGES = {
     _VIEW_SCANPATH: ("Scanpath View", ICONS["view_scanpath"], "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", ICONS["view_corpus"], "corpus-analysis"),
     _VIEW_DATA: ("Data Management", ICONS["view_data"], "data"),
+}
+
+#: The tooltip each view's nav entry shows on hover.
+_NAV_HELP = {
+    _VIEW_SCANPATH: (
+        "Draw one reading's scanpath over its text, replay it, or compare it "
+        "with another reading."
+    ),
+    _VIEW_CORPUS: (
+        "Summarize the selected trials and their reading measures by text, "
+        "participant and group."
+    ),
+    _VIEW_DATA: (
+        "Add, open and edit datasets with their metadata and annotations, and "
+        "find saved figures and sessions."
+    ),
 }
 
 #: The ❓ Help *section* of the nav: entry id → (label, icon, url path).
@@ -71,6 +88,14 @@ HELP_SECTION = f"{ICONS['help']} Help · {build_info().channel.title()}"
 #: without it, a nav click is indistinguishable from a request to go back, and
 #: the nav bounces.
 _MIRROR_KEY = "_nav_mirrored"
+
+#: True on a run that lands on its view from elsewhere: a nav click, a
+#: programmatic switch, or a Help action's bounce back to the view you were on.
+#: Each of those drops the page's query parameters, so a view that keeps its
+#: place in the URL (Corpus Analysis) reads this to restore that place from
+#: session state instead of taking the empty address for browser history.
+ARRIVED_KEY = "_nav_arrived"
+_SWITCHED_KEY = "_nav_switched"
 
 #: Keyed wrapper around the main-area strip just under the bar, where load-time
 #: warnings land. A warning inside a *closed* popover would be invisible, so
@@ -108,6 +133,7 @@ def _view_page(view: str):
         icon=icon,
         url_path=path,
         default=view == _VIEW_SCANPATH,
+        help=_NAV_HELP[view],
     )
 
 
@@ -121,9 +147,10 @@ def switch_to_view(view: str) -> None:
     next run.
     """
     if view in _NAV_PAGES:
+        st.session_state[_SWITCHED_KEY] = True
         # Replace the previous page's parameters explicitly. The Corpus subtab
         # binds its selection to the URL, so the default clear can be refused.
-        st.switch_page(_view_page(view), query_params={})
+        switch_page(_view_page(view), query_params={})
 
 
 def _arm_help_action(entry: str) -> None:
@@ -243,6 +270,10 @@ def render_nav() -> str:
     ):
         st.session_state[_MIRROR_KEY] = requested
         switch_to_view(requested)  # reruns
+    st.session_state[ARRIVED_KEY] = bool(
+        st.session_state.pop(_SWITCHED_KEY, False)
+        or (mirrored is not None and mirrored != active)
+    )
     st.session_state["main_nav"] = active
     st.session_state[_MIRROR_KEY] = active
     return active

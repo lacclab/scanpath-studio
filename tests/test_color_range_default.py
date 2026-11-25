@@ -14,6 +14,8 @@ pure call of `_collect_viz_settings` never renders it.
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 import pytest
 
@@ -24,10 +26,18 @@ AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
 FIX_KEY = "global_fixation_color_range"
 HEAT_KEY = "global_heatmap_color_range"
-FIX_VIEW = "_fixation_color_range_view"
-HEAT_VIEW = "_heatmap_color_range_view"
-FIX_AUTO = "_fixation_color_range_auto"
-HEAT_AUTO = "_heatmap_color_range_auto"
+FIX_VIEW = "fixation_color_range_view"
+HEAT_VIEW = "heatmap_color_range_view"
+
+
+def _w(widgets, stem: str):
+    """The widget drawn under a shadow key with this stem
+    (`controls.shadow_widget_key`): the colour range and its *Auto* box."""
+    return next(w for w in widgets if re.fullmatch(rf"_{stem}__w\d+", w.key or ""))
+
+
+FIX_AUTO = "fixation_color_range_auto"
+HEAT_AUTO = "heatmap_color_range_auto"
 CANVAS = (2560, 1440)
 
 #: Every layer whose colour range is in play: a duration-weighted word-box
@@ -42,7 +52,10 @@ COLOURED = {
 
 @pytest.fixture(scope="module")
 def demo():
-    return sps.load_sample_data(names="canonical")
+    """The demo's paragraph screens, so a trial's frames are the one screen its
+    figure draws, as in the rail below."""
+    words, fixations = sps.load_sample_data(names="canonical")
+    return tuple(f[f["screen_id"] == "Paragraph"] for f in (words, fixations))
 
 
 def _trial_frames(words, fixations, trial):
@@ -74,7 +87,8 @@ def two_trials(demo):
 
 
 def _rail_app():
-    """Apply any deep link, render the real rail for one trial, and publish."""
+    """Apply any deep link, render the real rail for one trial's paragraph
+    screen, and publish."""
     from urllib.parse import parse_qs
 
     import streamlit as st
@@ -87,7 +101,10 @@ def _rail_app():
     if design:
         controls._apply_view_preset(design)  # a button on_click: runs first
     _apply_url_preset()  # app.main's order: the link, then the widgets
-    words, fixations = api.load_sample_data(names="canonical")
+    words, fixations = (
+        frame[frame["screen_id"] == "Paragraph"]
+        for frame in api.load_sample_data(names="canonical")
+    )
     pid, tid = st.session_state["_trial"]
     trial_fix = fixations[
         (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)
@@ -188,8 +205,8 @@ class TestTheDefaultIsTheApis:
         at = _rail(two_trials[0])
         assert FIX_KEY not in at.session_state
         assert HEAT_KEY not in at.session_state
-        assert at.session_state[FIX_AUTO] is True
-        assert at.session_state[HEAT_AUTO] is True
+        assert _w(at.checkbox, FIX_AUTO).value is True
+        assert _w(at.checkbox, HEAT_AUTO).value is True
 
     def test_a_comparison_shares_one_scale_across_a_and_b_like_the_api(
         self, demo, two_trials
@@ -220,26 +237,26 @@ class TestTheDefaultIsTheApis:
 class TestAnExplicitRange:
     def test_dragging_makes_it_explicit_and_sticky_across_trials(self, two_trials):
         at = _rail(two_trials[0])
-        lo, hi = at.slider(key=HEAT_VIEW).value
+        lo, hi = _w(at.slider, HEAT_VIEW).value
         chosen = (lo + 10.0, hi - 10.0)
-        at.slider(key=HEAT_VIEW).set_value(chosen)
+        _w(at.slider, HEAT_VIEW).set_value(chosen)
         _rerun(at)
         assert at.session_state[HEAT_KEY] == chosen
         assert at.session_state["_viz"]["heatmap_range"] == chosen
-        assert at.session_state[HEAT_AUTO] is False
+        assert _w(at.checkbox, HEAT_AUTO).value is False
 
         at.session_state["_trial"] = two_trials[1]
         _rerun(at)
         assert at.session_state[HEAT_KEY] == chosen
         assert at.session_state["_viz"]["heatmap_range"] == chosen
-        assert at.slider(key=HEAT_VIEW).value == chosen
+        assert _w(at.slider, HEAT_VIEW).value == chosen
         # The fixation range was never touched, so it is still auto.
         assert FIX_KEY not in at.session_state
 
     def test_ticking_auto_puts_it_back_to_per_trial(self, two_trials):
         at = _rail(two_trials[0], **{HEAT_KEY: (100.0, 400.0)})
-        assert at.session_state[HEAT_AUTO] is False
-        at.checkbox(key=HEAT_AUTO).check()
+        assert _w(at.checkbox, HEAT_AUTO).value is False
+        _w(at.checkbox, HEAT_AUTO).check()
         _rerun(at)
         assert HEAT_KEY not in at.session_state
         assert at.session_state["_viz"]["heatmap_range"] is None
@@ -247,8 +264,8 @@ class TestAnExplicitRange:
     def test_unticking_auto_pins_the_dataset_wide_scale(self, two_trials):
         """The dataset-wide scale is one click away: comparable trials on one scale."""
         at = _rail(two_trials[0])
-        bounds = at.slider(key=FIX_VIEW).value
-        at.checkbox(key=FIX_AUTO).uncheck()
+        bounds = _w(at.slider, FIX_VIEW).value
+        _w(at.checkbox, FIX_AUTO).uncheck()
         _rerun(at)
         assert at.session_state[FIX_KEY] == bounds
         assert at.session_state["_viz"]["fixation_color_range"] == bounds
@@ -279,9 +296,9 @@ class TestTheLink:
 
     def test_an_explicit_range_travels_and_reopens_as_explicit(self, two_trials):
         at = _rail(two_trials[0])
-        lo, hi = at.slider(key=HEAT_VIEW).value
+        lo, hi = _w(at.slider, HEAT_VIEW).value
         chosen = (lo + 10.0, hi - 10.0)
-        at.slider(key=HEAT_VIEW).set_value(chosen)
+        _w(at.slider, HEAT_VIEW).set_value(chosen)
         _rerun(at)
         param = at.session_state["_params"]["heatmap_color_range"]
         assert param == [f"{chosen[0]},{chosen[1]}"]
@@ -293,7 +310,7 @@ class TestTheLink:
             opened.session_state[key] = value
         opened.query_params["heatmap_color_range"] = param[0]
         _rerun(opened)
-        assert opened.session_state[HEAT_AUTO] is False
+        assert _w(opened.checkbox, HEAT_AUTO).value is False
         assert opened.session_state["_viz"]["heatmap_range"] == chosen
         assert opened.session_state["_params"]["heatmap_color_range"] == param
 
@@ -301,14 +318,14 @@ class TestTheLink:
         """Links from older versions carry the dataset-wide span as a range;
         it still means "this explicit range"."""
         probe = _rail(two_trials[0])
-        bounds = probe.slider(key=FIX_VIEW).value
+        bounds = _w(probe.slider, FIX_VIEW).value
         opened = AppTest.from_function(_rail_app)
         opened.session_state["_trial"] = two_trials[0]
         for key, value in COLOURED.items():
             opened.session_state[key] = value
         opened.query_params["fixation_color_range"] = f"{bounds[0]},{bounds[1]}"
         _rerun(opened)
-        assert opened.session_state[FIX_AUTO] is False
+        assert _w(opened.checkbox, FIX_AUTO).value is False
         assert opened.session_state["_viz"]["fixation_color_range"] == bounds
 
     def test_auto_on_a_linked_page_is_not_undone_by_the_link(self, two_trials):
@@ -320,8 +337,8 @@ class TestTheLink:
             opened.session_state[key] = value
         opened.query_params["heatmap_color_range"] = "100.0,400.0"
         _rerun(opened)
-        assert opened.session_state[HEAT_AUTO] is False
-        opened.checkbox(key=HEAT_AUTO).check()
+        assert _w(opened.checkbox, HEAT_AUTO).value is False
+        _w(opened.checkbox, HEAT_AUTO).check()
         _rerun(opened)
         _rerun(opened)
         assert HEAT_KEY not in opened.session_state

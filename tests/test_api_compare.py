@@ -507,8 +507,17 @@ class TestCoAnimationDrawsOneSecondReading:
         from scanpath_studio.utils import extract_trial
 
         words, fixations = api.load_sample_data(names="canonical")
-        expected = len(extract_trial(fixations, *self._B))
-        fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
+        reading_b = extract_trial(fixations, *self._B)
+        # Each demo reading spans several screens; both sides draw the paragraph.
+        expected = int((reading_b["screen_id"] == "Paragraph").sum())
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            *self._A,
+            screen="Paragraph",
+            trial_b=self._B,
+            screen_b="Paragraph",
+        )
         assert len(self._trace_b(fig).x) == expected
 
     def test_trial_b_is_looked_up_in_bs_own_frames(self):
@@ -537,14 +546,18 @@ class TestCoAnimationDrawsOneSecondReading:
     def test_an_in_place_edit_between_calls_still_finds_bs_reading(self):
         """B must be sliced fresh, as A is. Through `utils.extract_trial`'s
         position cache — keyed by the frame's identity, which an in-place edit
-        keeps — a second call after `sort_values(inplace=True)` would return
-        the same *positions*: as many rows, from somebody else's trials."""
+        keeps — a second call after the rows are reordered in place would
+        return the same *positions*: as many rows, from somebody else's
+        trials."""
         words, fixations = api.load_sample_data(names="canonical")
         fixations = fixations.copy()
         api._second_reading(words, fixations, None, None, self._B)
-        fixations.sort_values(
-            ["participant_id", "trial_id"], ascending=False, inplace=True
+        reordered = fixations.sort_values(
+            ["participant_id", "trial_id"], ascending=False
         )
+        # Column by column, so `fixations` stays the same object.
+        for column in fixations.columns:
+            fixations[column] = reordered[column].to_numpy()
         _, fix_b = api._second_reading(words, fixations, None, None, self._B)
         assert set(zip(fix_b["participant_id"], fix_b["trial_id"])) == {self._B}
 

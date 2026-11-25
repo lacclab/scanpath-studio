@@ -10,6 +10,7 @@
 - An empty Annotations tab on the Data page has a button that opens Scanpath → Annotations.
 - The Scanpath view shows when trial filters are on: a dot on the filter button and a line under the trial picker with how many trials the filters keep, what they are, and a Clear filters button.
 - Experimental: import EyeLink EDF recordings without Data Viewer — fixations, word boxes, stimulus screens, trial variables and, on request, raw gaze samples — into a resumable study folder with api.import_eyelink or scanpath-studio import-eyelink, then add it to the app with api.add_eyelink_dataset or --add; turn it on with SCANPATH_EXPERIMENTAL=1 and pip install "scanpath-studio[edf]", and it needs SR Research's edf2asc from the EyeLink Developers Kit.
+- The Comparisons grid draws its panels on the plot's axes, so a reading chart such as fixation index by word compares readings the way the main plot draws one, with one shared horizontal range per page (each panel keeps its own on an absolute clock). When every match is filed under the same trial, each panel is captioned by its participant.
 
 ### Changed
 
@@ -22,6 +23,7 @@
 - The Data page's experimental Stimuli table (with SCANPATH_EXPERIMENTAL=1), which shows each version of a screen with the readers who saw it since v0.49.0, now says so in its caption, as the Texts table does.
 - The Data page's Texts table keeps each word whose Word ID is blank as a word of its own, after its line's numbered words, instead of folding them into one word that depended on the row order.
 - Leaving the Add-dataset wizard after uploading a file no longer stops the bundled demo from loading ("Screen ID is set in only one table").
+- A dataset loaded from its fixations alone, with no word boxes or screen positions, now works on reading charts: the Comparisons grid draws its matches, plot_scanpath, compare_scanpaths and render draw it instead of refusing it for lacking coordinates, and the plot no longer warns about missing positions on a chart that draws none.
 
 ## Release v0.49.0
 

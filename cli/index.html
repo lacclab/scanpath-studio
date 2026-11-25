@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.48.0</strong>
+      <strong>Stable documentation &middot; v0.49.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2625,6 +2625,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        open
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="annotations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#annotations-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotations-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations import
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3113,6 +3185,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        remove
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        open
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="annotations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#annotations-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotations-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        annotations import
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3249,6 +3393,22 @@ check data and manage saved work without opening the app:</p>
 <td>Run the Data checks on your tables</td>
 </tr>
 <tr>
+<td><a href="#add"><code>add</code></a></td>
+<td>Add your tables to the app's dataset list</td>
+</tr>
+<tr>
+<td><a href="#remove"><code>remove</code></a></td>
+<td>Remove a dataset you added from that list</td>
+</tr>
+<tr>
+<td><a href="#annotations"><code>annotations</code></a></td>
+<td>Read or write a dataset's favorites, tags and notes</td>
+</tr>
+<tr>
+<td><a href="#open"><code>open</code></a></td>
+<td>Open the app on a dataset you added, at a reading and figure</td>
+</tr>
+<tr>
 <td><a href="#cache"><code>cache</code></a></td>
 <td>Show or clear the recovery cache</td>
 </tr>
@@ -3266,7 +3426,7 @@ check data and manage saved work without opening the app:</p>
 If you mistype a command, the CLI suggests the closest match.</p>
 <h2 id="publication">Publication<a class="headerlink" href="#publication" title="Permanent link">&para;</a></h2>
 <p>Download the editable file under <strong>Save or open</strong> to reproduce the figure with its crop, labels, caption and print settings.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--width-mm<span class="w"> </span><span class="m">85</span><span class="w"> </span>-o<span class="w"> </span>reading.publication.json
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span>--width-mm<span class="w"> </span><span class="m">85</span><span class="w"> </span>-o<span class="w"> </span>reading.publication.json
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>publication<span class="w"> </span>reading.publication.json<span class="w"> </span>-o<span class="w"> </span>reading.html
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>publication<span class="w"> </span>figure-2.json<span class="w"> </span>-o<span class="w"> </span>figure-2.pdf
 </code></pre></div>
@@ -3301,8 +3461,8 @@ has a flag.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># List the trials to pick from</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--list-trials
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># The bundled demo</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-o<span class="w"> </span>scanpath.html
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># The bundled demo: each reading has several screens, so name the one to draw</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span>-o<span class="w"> </span>scanpath.html
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Your own data (replace p1 / t3 with IDs from --list-trials)</span>
 <a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
@@ -3398,22 +3558,22 @@ For example, <code>--compare-participant B --compare-trial 'round:2'</code> pres
 colon in the trial ID. The shorthand <code>--compare-with PARTICIPANT:TRIAL</code> splits
 at the last colon.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>compare.html
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-screen<span class="w"> </span>Paragraph<span class="w"> </span>-o<span class="w"> </span>compare.html
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># The same overlay, drawing only B's word boxes and text</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-screen<span class="w"> </span>Paragraph<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>-o<span class="w"> </span>compare_b.html
 <a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Side by side: each panel draws its trial's stimulus</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>-o<span class="w"> </span>compare.svg
 <a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
 <a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1"># A style for each scanpath</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_1_1_Ele<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_183:l7_183_2_1_1_Ele<span class="w"> </span>--compare-screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span>--style-a<span class="w"> </span><span class="nv">fix_color</span><span class="o">=</span><span class="c1">#D55E00,opacity=0.5 --style-b saccade_style=dash \</span>
 <a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span>-o<span class="w"> </span>compare_styled.html
 <a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
@@ -3468,6 +3628,10 @@ at the last colon.</p>
 <tr>
 <td>take B from another dataset</td>
 <td><code>--compare-words PATH… --compare-fixations PATH…</code>, plus <code>--compare-raw-gaze PATH…</code> and <code>--compare-dataset-name NAME</code></td>
+</tr>
+<tr>
+<td>map B's columns yourself</td>
+<td><code>--compare-word-schema JSON</code>, <code>--compare-fix-schema JSON</code>, <code>--compare-raw-gaze-schema JSON</code>, as <code>--word-schema</code> and its siblings map A's</td>
 </tr>
 <tr>
 <td>set the two screen sizes</td>
@@ -3586,7 +3750,7 @@ ignores the <code>box_*</code> keys and <code>raw_gaze_color</code>.</p>
 <code>--compare-raw-gaze PATH…</code> gives B's samples when B comes from another
 dataset. With the bundled demo, <code>--sample-raw-gaze</code> draws the recorded samples
 for the selected reading. <code>--animate</code> ignores raw gaze with a warning.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_2_2_Adv<span class="w"> </span><span class="se">\</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_273<span class="w"> </span>-t<span class="w"> </span>l37_273_2_2_2_Adv<span class="w"> </span>--screen<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--raw-gaze-opacity<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>-o<span class="w"> </span>raw_gaze.html
 </code></pre></div>
 <p>To plot the same reading's pupil area over its recorded clock, use
@@ -3630,7 +3794,9 @@ a <code>.json</code> file, with <code>--word-schema</code> (the <code>--words</c
 </code></pre></div>
 <p>A mapping replaces auto-detection for that table, so it has to name every
 required field, not only the one that failed. It is the same dict
-<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python.</p>
+<code>load_scanpath_data(word_schema=…, fix_schema=…)</code> takes in Python. A second
+dataset's tables in a comparison take theirs as <code>--compare-word-schema</code>,
+<code>--compare-fix-schema</code> and <code>--compare-raw-gaze-schema</code>.</p>
 <h2 id="render-flags">render flags<a class="headerlink" href="#render-flags" title="Permanent link">&para;</a></h2>
 <p>Every <code>render</code> flag, generated from the command's parser, with the defaults
 and help that <code>--help</code> prints. The figure flags are grouped like the
@@ -3726,7 +3892,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--sample</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Use the bundled demo, from OneStop: 2 participants, 12 trials each (<code>--list-trials</code> shows them).</td>
+<td>Use the bundled demo, from OneStop: 2 participants, 12 trials each, every screen of a trial from title to feedback (<code>--list-trials</code> shows them; <code>--screen</code> picks one).</td>
 </tr>
 <tr>
 <td><code>--authoring</code></td>
@@ -4209,7 +4375,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--font-family</code></td>
 <td><code>NAME</code></td>
 <td>—</td>
-<td>Font for all figure text (default: monospace).</td>
+<td>Font for all figure text (default: the font the data declares for its stimulus, else monospace).</td>
 </tr>
 </tbody>
 </table>
@@ -4821,6 +4987,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Resolution of <code>--width-mm</code> / <code>--width-in</code> (default: 300).</td>
 </tr>
 <tr>
+<td><code>--compact-png</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Compress a .png output, and its <code>--separable-layers</code>, losslessly: the same pixels and metadata in a smaller file, for a little more time.</td>
+</tr>
+<tr>
 <td><code>--separable-layers</code></td>
 <td>switch</td>
 <td>—</td>
@@ -4972,6 +5144,24 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>PATH [PATH ...]</code></td>
 <td>—</td>
 <td>The Raw gaze table for the second dataset, drawn under B's scanpath. Same formats as <code>--raw-gaze</code>. With no second dataset, <code>--raw-gaze</code> already covers both scanpaths.</td>
+</tr>
+<tr>
+<td><code>--compare-word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--compare-words</code> table, replacing auto-detection. Same form as <code>--word-schema</code>.</td>
+</tr>
+<tr>
+<td><code>--compare-fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--compare-fixations</code> table, replacing auto-detection. Same form as <code>--fix-schema</code>.</td>
+</tr>
+<tr>
+<td><code>--compare-raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--compare-raw-gaze</code> table, replacing auto-detection. Same form as <code>--raw-gaze-schema</code>.</td>
 </tr>
 <tr>
 <td><code>--compare-dataset-name</code></td>
@@ -5295,15 +5485,385 @@ with missing participant or trial IDs. Its <code>findings</code> list matches <c
 </tbody>
 </table>
 </div>
+<h2 id="add">add<a class="headerlink" href="#add" title="Permanent link">&para;</a></h2>
+<p><code>add</code> adds your tables to the app's dataset list, as <strong>Add dataset</strong> does,
+without opening the app. Run <code>scanpath-studio</code> afterwards and the app opens on
+the new dataset. If the app is already open, reload its browser tab right away:
+changes you make in it before the reload are not saved. It works for an app on
+your own computer, not a hosted one.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>add<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--canvas<span class="w"> </span>1920x1080
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>add<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--fixations<span class="w"> </span>fixations_v2.csv<span class="w"> </span>--replace
+</code></pre></div>
+<p>A name that is already saved is an error unless you pass <code>--replace</code>, which
+swaps the dataset's tables and keeps its annotations, metadata tables, share
+links, description and recording setup (unless you give a new description or
+<code>--canvas</code>). Without <code>--canvas</code>, the app uses a screen the data records, or
+estimates one from the extent of the data. In Python, use
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;add_dataset&lt;/span&gt;" href="../api/#scanpath_studio.api.add_dataset"><code>add_dataset</code></a>.</p>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--words</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Words table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--fixations</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>Fixations table(s), as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze</code></td>
+<td><code>PATH [PATH ...]</code></td>
+<td>—</td>
+<td>The Raw gaze table, as for render.</td>
+</tr>
+<tr>
+<td><code>--raw-gaze-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--raw-gaze</code> table, replacing auto-detection, in the form <code>--fix-schema</code> takes.</td>
+</tr>
+<tr>
+<td><code>--trial-parts-manifest</code></td>
+<td><code>PATH</code></td>
+<td>—</td>
+<td>JSON manifest assigning source rows to ordered screens.</td>
+</tr>
+<tr>
+<td><code>--canvas</code></td>
+<td><code>WxH</code></td>
+<td>—</td>
+<td>The recording's screen in px, e.g. 1920x1080. Without it, a screen the data records is used, else one estimated from the extent of the data; with <code>--replace</code>, the saved dataset's setup is kept.</td>
+</tr>
+<tr>
+<td><code>--description</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td>The sentence the Data Management page shows under its name.</td>
+</tr>
+<tr>
+<td><code>--replace</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless <code>--description</code> or <code>--canvas</code> gives new ones. Without it, a name already saved is an error.</td>
+</tr>
+<tr>
+<td><code>--no-select</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Add it to the list without opening the app on it next time.</td>
+</tr>
+<tr>
+<td><code>--word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--words</code> table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--fixations</code> table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by <code>--color-by</code>, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="remove">remove<a class="headerlink" href="#remove" title="Permanent link">&para;</a></h2>
+<p><code>remove</code> takes a dataset you added, in the app or with <code>add</code>, off the app's
+dataset list. Its annotations, metadata tables and description go with it, as
+its <strong>Remove</strong> on the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management</strong> page does. Built-in
+and public datasets can't be removed. If the app last had it open, it next
+opens on its default dataset.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>scanpath-studio<span class="w"> </span>remove<span class="w"> </span><span class="s2">"Pilot 3"</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>scanpath-studio<span class="w"> </span>remove<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>--missing-ok<span class="w">   </span><span class="c1"># no error if it isn't there</span>
+</code></pre></div>
+<p>In Python, use <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;remove_dataset&lt;/span&gt;" href="../api/#scanpath_studio.api.remove_dataset"><code>remove_dataset</code></a>.</p>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows (case does not matter).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--missing-ok</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Exit quietly when no dataset has the name, instead of with an error.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="open">open<a class="headerlink" href="#open" title="Permanent link">&para;</a></h2>
+<p><code>open</code> opens the app on a dataset you added, or one the app has itself (the
+bundled demo, a public corpus), at one reading, with the figure set
+by the same flags <a href="#render-flags"><code>render</code></a> takes. If the app is running on this
+computer, the link opens in your browser. Otherwise <code>open</code> starts the app and
+opens the link once it is up. <code>--print</code> prints the link instead.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>open<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-p<span class="w"> </span>p07<span class="w"> </span>-t<span class="w"> </span>t12
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>open<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-p<span class="w"> </span>p07<span class="w"> </span>-t<span class="w"> </span>t12<span class="w"> </span>--heatmap<span class="w"> </span>--saccade-style<span class="w"> </span>dash<span class="w"> </span>--print
+</code></pre></div>
+<p>The link is the one <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Link</strong> writes for the same view.
+Settings it leaves out keep the values the app has. It names the dataset, so a
+dataset you added opens only where it was added. A link carries no file: <code>render</code>'s
+input, output and <code>--stimulus-image</code> flags are refused, and
+<code>--show-stimulus-image</code> draws the dataset's own pages. In Python, use
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;app_link&lt;/span&gt;" href="../api/#scanpath_studio.api.app_link"><code>app_link</code></a>.</p>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The dataset's name in the app's list.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-p</code><br><code>--participant</code></td>
+<td><code>PARTICIPANT</code></td>
+<td>—</td>
+<td>Participant ID.</td>
+</tr>
+<tr>
+<td><code>-t</code><br><code>--trial</code></td>
+<td><code>TRIAL</code></td>
+<td>—</td>
+<td>Trial ID (without it, the participant's first trial).</td>
+</tr>
+<tr>
+<td><code>--screen</code></td>
+<td><code>SCREEN</code></td>
+<td>—</td>
+<td>Screen ID within a trial recorded over several screens.</td>
+</tr>
+<tr>
+<td><code>--animate</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Open the replay of the reading.</td>
+</tr>
+<tr>
+<td><code>--port</code></td>
+<td><code>PORT</code></td>
+<td><code>8501</code></td>
+<td>The port the app listens on, or is started on (default: 8501).</td>
+</tr>
+<tr>
+<td><code>--print</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Print the link and exit, without opening or starting anything.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="annotations">annotations<a class="headerlink" href="#annotations" title="Permanent link">&para;</a></h2>
+<p><code>annotations</code> reads and writes the favorites, tags and notes on a dataset you
+added. <code>export</code> writes the same <code>annotations.json</code> as <strong>Data Management →
+Annotations → Export</strong>, or a CSV table with one row per annotated reading. <code>import</code> reads either: a CSV needs <code>participant_id</code> and
+<code>trial_id</code>, optionally <code>screen_id</code>, and any of <code>favorite</code>, <code>tags</code> (separated by
+<code>;</code>, so a tag can't contain one in a CSV) and <code>note</code>. Importing adds a reading's tags to the ones it has, and a
+favorite or note in the file replaces its own; a blank stays as it was. This
+differs from the app's <strong>Import</strong>, which keeps or swaps a reading's whole entry.
+<code>--replace</code> makes the dataset's annotations exactly the file's, and is refused
+when none of the file's readings is in the dataset. Readings the dataset does not have are listed
+and left out. If the app is open, reload its browser tab to see the new ones.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>scanpath-studio<span class="w"> </span>annotations<span class="w"> </span>import<span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>qc_flags.csv
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>scanpath-studio<span class="w"> </span>annotations<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="s2">"Pilot 3"</span><span class="w"> </span>-o<span class="w"> </span>annotations.json
+</code></pre></div>
+<p>In Python, use <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;write_annotations&lt;/span&gt;" href="../api/#scanpath_studio.api.write_annotations"><code>write_annotations</code></a> and
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;read_annotations&lt;/span&gt;" href="../api/#scanpath_studio.api.read_annotations"><code>read_annotations</code></a>.</p>
+<h3 id="annotations-export">annotations export<a class="headerlink" href="#annotations-export" title="Permanent link">&para;</a></h3>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows (case does not matter).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-o</code><br><code>--output</code></td>
+<td><code>FILE</code></td>
+<td>required</td>
+<td>The file to write, .json or .csv.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="annotations-import">annotations import<a class="headerlink" href="#annotations-import" title="Permanent link">&para;</a></h3>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>NAME</code></td>
+<td>required</td>
+<td>The name the dataset list shows (case does not matter).</td>
+</tr>
+<tr>
+<td></td>
+<td><code>FILE</code></td>
+<td>required</td>
+<td>The .json or .csv file to read.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--replace</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Make the dataset's annotations exactly the file's, instead of adding the file's to them. Refused when none of the file's readings is in the dataset, so a file made for another dataset deletes nothing.</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="cache">cache<a class="headerlink" href="#cache" title="Permanent link">&para;</a></h2>
 <p>A local or desktop run saves your session on your computer, so a refresh or a
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5367,8 +5927,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5404,9 +5964,9 @@ app, open <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></s
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>

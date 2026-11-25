@@ -59,6 +59,12 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.           |
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                            |
 | **Recovery cache**                            |                                                                                       |
+| add_dataset                                   | Add a dataset to the app's dataset list from a script.                                |
+| app_link                                      | A link that opens the local app on a dataset, a reading and a figure.                 |
+| remove_dataset                                | Remove a dataset from the app's dataset list from a script.                           |
+| read_annotations                              | Read the favorites, tags and notes saved on a dataset's readings.                     |
+| write_annotations                             | Save favorites, tags and notes on a dataset's readings from a script.                 |
+| AnnotationsWriteResult                        | What write_annotations did.                                                           |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
 | clear_cache                                   | Delete the recovery cache.                                                            |
 | **Version and updates**                       |                                                                                       |
@@ -88,10 +94,10 @@ print(words[columns].head(3))
 0        l37_273  l37_273_2_1_1_Ele
 1        l37_273  l37_273_2_1_2_Ele
 2        l37_273  l37_273_2_1_3_Adv
-   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-0      1    Robert                       243.0            243
-1      2  Myslajek                       192.0            192
-2      3     stops                       140.0            140
+   IA_ID IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
+0      1       On                         NaN              0
+1      2      the                       153.0            383
+2      3    Trail                       119.0            175
 ```
 
 ## Load your data
@@ -112,6 +118,7 @@ load_scanpath_data(
     names=NAMES_SOURCE,
     include_source_cells=False,
     _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -246,7 +253,12 @@ sps.plot_scanpath(words, fixations, show_stimulus_image=True)
 
 ```
 load_raw_gaze(
-    table, *, raw_gaze_schema=None, names=NAMES_SOURCE, _row_counts=None
+    table,
+    *,
+    raw_gaze_schema=None,
+    names=NAMES_SOURCE,
+    _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -370,7 +382,7 @@ load_sample_data(*, names=NAMES_SOURCE)
 
 Load the bundled demo, normalized and ready to plot.
 
-The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
+The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. Each trial has the screens its reader saw (`screen_id`: Title on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers, Feedback), each with the experiment's stimulus image. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
 
 Parameters:
 
@@ -388,7 +400,7 @@ load_sample_raw_gaze(*, names=NAMES_SOURCE)
 
 Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps and recorded pupil values.
+The table includes each sample while each screen of a reading was shown, with the screen it belongs to (`part` / `screen_index`), screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
 
 Parameters:
 
@@ -651,7 +663,7 @@ plot_scanpath(
     screen=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     raw_gaze=None,
     drift_correction=None,
     drift_connectors=False,
@@ -672,13 +684,13 @@ Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, 
 Parameters:
 
 - **`words`** (`DataFrame | None`, default: `None` ) – A normalized words frame from load_scanpath_data, or None for a dataset recorded as raw gaze alone.
-- **`fixations`** (`DataFrame | None`, default: `None` ) – The normalized fixations frame, or None likewise.
+- **`fixations`** (`DataFrame | None`, default: `None` ) – The normalized fixations frame, or None likewise. A categorical color_by gives each label of its column in this whole frame a color, so a category keeps its color in every trial drawn from the same frame.
 - **`participant`** (`str | None`, default: `None` ) – The participant ID. It may be left out when the frames hold one trial.
 - **`trial`** (`str | None`, default: `None` ) – The trial ID. It may be left out when the frames hold one trial.
 - **`screen`** (`str | None`, default: `None` ) – The screen of a multipart trial to draw. Left out, the first recorded screen; coordinate spaces are never concatenated.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size in px, (width, height). Estimated from the data's extent by default; pass the real resolution ((2560, 1440) for OneStop) to keep coordinates true to scale.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`raw_gaze`** (`DataFrame | None`, default: `None` ) – Samples from load_raw_gaze, filtered to the trial and drawn as recorded, under the fixations. It can be the only table: with words and fixations None, the trial is looked up in the samples, the canvas is estimated from their extent, and the figure is the samples alone. No fixations are detected from them, so the fixation, saccade and heatmap layers stay empty.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental. Without SCANPATH_EXPERIMENTAL=1, anything but None or "off" raises ValueError.
 - **`drift_connectors`** (`bool`, default: `False` ) – Experimental, with drift_correction.
@@ -716,7 +728,7 @@ animate_scanpath(
     screen_b=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     playback_speed=1.0,
     autoplay=True,
     fix_index_range=None,
@@ -751,7 +763,7 @@ Parameters:
 - **`screen_b`** (`str | None`, default: `None` ) – B's screen, looked up in B's own trial. Left out, its first recorded screen.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – A's monitor size, as in plot_scanpath.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`playback_speed`** (`float`, default: `1.0` ) – The replay lasts the reading time divided by this. Any other value than 1 makes the automatic Illustration label say the timing was changed.
 - **`autoplay`** (`bool`, default: `True` ) – Start the saved HTML's replay when it opens, at playback_speed. False saves it paused, to start with ▶ Play. A GIF or MP4 always plays from its first frame.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): replay only that window of the trial's fixations, 1-based and inclusive. In a co-animation it windows A only, as in the app, where A's slider never cuts B.
@@ -774,6 +786,7 @@ Raises:
 
 - `ValueError` – The trial has no fixations (one recorded as raw gaze alone, or a words-only one). Also for raw_gaze=; draw samples with plot_scanpath(raw_gaze=…).
 - `ValueError` – An option the replay does not take (the message names the valid ones), a style naming saccade_classes (the replay has no saccade-class filter), or B frames holding several trials without trial_b.
+- `ValueError` – show_fixations=False with show_saccades=False, which leaves the replay nothing to draw.
 - `IncomparableScreensError` – B's dataset has a different canvas from A's. A ValueError.
 
 ### compare_scanpaths
@@ -801,7 +814,7 @@ compare_scanpaths(
     style_a=None,
     style_b=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     fix_index_range=None,
     fix_index_range_b=None,
     drift_correction=None,
@@ -863,7 +876,7 @@ Parameters:
 - **`style_a`** (`dict | None`, default: `None` ) – A's style, with the keys above.
 - **`style_b`** (`dict | None`, default: `None` ) – B's style.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): draw only that window of both scanpaths' fixations.
 - **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's own window, as the app's B slider sets it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
@@ -879,6 +892,7 @@ Returns:
 
 Raises:
 
+- `ValueError` – fixations is None: a dataset recorded as raw gaze alone has no scanpath to compare.
 - `ValueError` – An overlay of two different screens (see the overlay gate), or a screen / screen_b the trial does not have or that names a screen of a single-screen trial.
 - `TypeError` – An unknown keyword. The message names the closest valid ones.
 
@@ -1237,12 +1251,14 @@ figure_code(
     compare_dataset="",
     compare_canvas=None,
     compare_labels=None,
+    compare_source_options=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     title="",
     caption="",
     fix_index_range=None,
+    fix_index_range_b=None,
     illustration_label="auto",
     drift_correction=None,
     drift_connectors=False,
@@ -1271,15 +1287,17 @@ Parameters:
 - **`compare_screen`** (`str | None`, default: `None` ) – B's screen (screen_b=, --compare-screen).
 - **`compare_layout`** (`str`, default: `'overlay'` ) – The comparison's layout, as compare_scanpaths takes it.
 - **`compare_stimulus`** (`str`, default: `'both'` ) – Whose stimulus an overlay draws, as compare_scanpaths takes it.
-- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables, from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations).
+- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations), from compare_source_options, else from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files.
 - **`compare_canvas`** (`tuple[int, int] | None`, default: `None` ) – B's screen, (width, height), with compare_dataset: written as setup_b= and --compare-canvas, which a co-animation across datasets needs.
 - **`compare_labels`** (`tuple[str, str] | None`, default: `None` ) – The two trace labels, when they are not the composed defaults: labels= and --label-a / --label-b.
+- **`compare_source_options`** (`dict | None`, default: `None` ) – How B's tables load when B is a second dataset, as source_options says it for A's files: "words" / "fixations" / "raw_gaze" paths in place of the placeholders, and "word_schema" / "fix_schema" / "raw_gaze_schema" mappings (--compare-word-schema and its siblings). Without compare_dataset, B is named "Dataset B", as render names it.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size. Defaults to the screen render assumes for the source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the same figure.
 - **`base_font_size`** (`int`, default: `16` ) – As the builders take it.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – As the builders take it.
+- **`font_family`** (`str | None`, default: `None` ) – As the builders take it.
 - **`title`** (`str`, default: `''` ) – As the builders take it.
 - **`caption`** (`str`, default: `''` ) – As the builders take it.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – As the builders take it.
+- **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's window, with compare, as compare_scanpaths and animate_scanpath take it (--compare-fix-index-range).
 - **`illustration_label`** (`str`, default: `'auto'` ) – As the builders take it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
 - **`drift_connectors`** (`bool`, default: `False` ) – Experimental, as in plot_scanpath.
@@ -1296,7 +1314,7 @@ Returns:
 
 Raises:
 
-- `ValueError` – An unknown flavor.
+- `ValueError` – An unknown flavor, or a key compare_source_options does not take.
 - `TypeError` – An option the builder does not take.
 
 Examples:
@@ -1328,6 +1346,7 @@ save_figure(
     width_in=None,
     dpi=None,
     proof_width_mm=None,
+    compact_png=False,
 )
 ```
 
@@ -1346,6 +1365,7 @@ Parameters:
 - **`width_in`** (`float | None`, default: `None` ) – The same in inches.
 - **`dpi`** (`int | None`, default: `None` ) – The resolution for width_mm / width_in. Default 300.
 - **`proof_width_mm`** (`float | None`, default: `None` ) – Total manuscript width of a split comparison SVG, as in save_panel_proof.
+- **`compact_png`** (`bool`, default: `False` ) – Compress the PNG losslessly, as the app's Export bundle does under Smaller PNG files: the same pixels and metadata in a smaller file, for a little more time. Only for .png.
 
 Returns:
 
@@ -1408,6 +1428,7 @@ save_figure_layers(
     width_mm=None,
     width_in=None,
     dpi=None,
+    compact_png=False,
 )
 ```
 
@@ -1426,12 +1447,278 @@ Parameters:
 - **`width_mm`** (`float | None`, default: `None` ) – PNG print width in millimetres.
 - **`width_in`** (`float | None`, default: `None` ) – PNG print width in inches.
 - **`dpi`** (`int | None`, default: `None` ) – Resolution for the print width, shared by every layer.
+- **`compact_png`** (`bool`, default: `False` ) – Compress each PNG layer losslessly, as save_figure does. Only for png.
 
 Returns:
 
 - `dict[str, Path]` – {layer: Path} for each file written.
 
 ## Recovery cache
+
+A local app keeps the datasets you add, so they are there the next time it starts. `add_dataset` adds one from a script: prepare the tables in Python, add them, then run `scanpath-studio` and the app opens on them. `app_link` writes a link that opens the app on one of them, at a reading, with the figure you describe in `plot_scanpath`'s options. `remove_dataset` takes one off the list again.
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+```
+
+### add_dataset
+
+```
+add_dataset(
+    name,
+    words=None,
+    fixations=None,
+    *,
+    raw_gaze=None,
+    word_schema=None,
+    fix_schema=None,
+    raw_gaze_schema=None,
+    trial_parts_manifest=None,
+    keep_columns=None,
+    canvas_size=None,
+    setup=None,
+    description=None,
+    select=True,
+    replace=False,
+)
+```
+
+Add a dataset to the app's dataset list from a script.
+
+The tables load as load_scanpath_data and load_raw_gaze load them, and the dataset is saved where a local app keeps the datasets added with ➕ **Add dataset** (the recovery cache, see cache_status). Start the app with `scanpath-studio` and it is in the list, opened unless `select=False`. An app already open shows it once its browser tab is reloaded. The same as `scanpath-studio add`.
+
+It works for a local app only: the app on this computer, the desktop app, or a `scanpath-studio run` on this machine. A hosted app keeps no saved datasets.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows. A built-in source's name is refused.
+- **`words`** (`TablesLike | None`, default: `None` ) – The Words table, in any form load_scanpath_data takes.
+- **`fixations`** (`TablesLike | None`, default: `None` ) – The Fixations table, in the same forms.
+- **`raw_gaze`** (`TablesLike | None`, default: `None` ) – The Raw gaze table, in the same forms. Any one of the three tables is enough.
+- **`word_schema`** (`dict | None`, default: `None` ) – The Words table's column mapping, replacing auto-detection, as load_scanpath_data takes it. The app shows it as the dataset's mapping, and ✏️ Edit dataset starts from it.
+- **`fix_schema`** (`dict | None`, default: `None` ) – The same for the Fixations table.
+- **`raw_gaze_schema`** (`dict | None`, default: `None` ) – The same for the Raw gaze table, as load_raw_gaze takes it.
+- **`trial_parts_manifest`** (`dict | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`keep_columns`** (`Iterable[str] | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The recording's screen, (width, height) px. Without it, the screen a table records is used, else one estimated from the extent of the data, as ➕ Add dataset suggests it. With replace, leaving out both this and setup keeps the saved dataset's setup.
+- **`setup`** (`SetupSnapshot | None`, default: `None` ) – The full recording setup, an experimental_setup.SetupSnapshot (screen, monitor width, text size), in place of canvas_size.
+- **`description`** (`str | None`, default: `None` ) – The sentence the 🗂️ Data page shows under its name.
+- **`select`** (`bool`, default: `True` ) – Open the app on this dataset next time it starts.
+- **`replace`** (`bool`, default: `False` ) – Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless new ones are given. Without it, a name already saved is an error.
+
+Returns:
+
+- `str` – The name the dataset was saved under.
+
+Raises:
+
+- `ValueError` – No table was given, a table can't be loaded (as load_scanpath_data raises), the name is empty, too long or a built-in source's, or the saved work can't be read or was written by another version. Nothing is saved then.
+- `StoredDatasetExistsError` – A dataset with this name is already saved and replace is off. A ValueError.
+- `TypeError` – setup is not a SetupSnapshot.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+Then run `scanpath-studio` and the app opens on *Pilot 3*. Reload a tab that is already open right away: changes made in it after the dataset was added are not saved, as when two tabs change the same saved work.
+
+### app_link
+
+```
+app_link(
+    dataset,
+    participant=None,
+    trial=None,
+    *,
+    screen=None,
+    port=8501,
+    animate=False,
+    illustration=False,
+    **figure_options,
+)
+```
+
+A link that opens the local app on a dataset, a reading and a figure.
+
+The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset, or one the app has itself: the bundled demo or a public corpus, named as its list shows it. The same as `scanpath-studio open --print`.
+
+For a dataset saved on this computer the link also carries its share ID and a digest of its tables, as Share's does, so the app checks it is the same data; its tables are read to compute it. Settings the link leaves out keep the values the app has. A link whose dataset the app doesn't have opens nothing from it, and says which dataset is missing.
+
+Parameters:
+
+- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case.
+- **`participant`** (`str | None`, default: `None` ) – The participant ID. Without it, a trial ID that only one participant has still opens that reading.
+- **`trial`** (`str | None`, default: `None` ) – The trial ID. Without it, the app opens the participant's first trial, or the reading it last showed.
+- **`screen`** (`str | None`, default: `None` ) – The screen ID of a trial recorded over several screens.
+- **`port`** (`int`, default: `8501` ) – The port the app listens on.
+- **`animate`** (`bool`, default: `False` ) – Open the replay instead of the static figure.
+- **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
+- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
+
+Returns:
+
+- `str` – The link, http://localhost:<port>/?….
+
+Raises:
+
+- `TypeError` – An option a link can't carry, or no figure option at all.
+- `ValueError` – An empty dataset name, a screen without a trial, a port outside 1–65535, or a value the app would ignore or clamp.
+
+Examples:
+
+```
+sps.add_dataset("Pilot 3", words="ia.csv", fixations="fixations.csv")
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+import webbrowser; webbrowser.open(url)
+```
+
+### remove_dataset
+
+```
+remove_dataset(name, *, missing_ok=False)
+```
+
+Remove a dataset from the app's dataset list from a script.
+
+The counterpart of add_dataset, and the same as the dataset's **Remove** on the 🗂️ **Data** page: its tables go, with its annotations, metadata tables, description and share ID. Any dataset you added counts, in the app or from a script; the built-in and public datasets can't be removed. When the app last had it open, it next opens on its default dataset. Reload a tab that is already open right away: changes made in it after the removal are not saved. The same as `scanpath-studio remove`.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows, ignoring case.
+- **`missing_ok`** (`bool`, default: `False` ) – Return False when no dataset has the name, instead of raising.
+
+Returns:
+
+- `bool` – Whether a dataset was removed.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name, and missing_ok is off. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version. Nothing is removed then.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.remove_dataset("Pilot 3")
+```
+
+A saved dataset's favorites, tags and notes can be read and written too: `write_annotations` tags the readings a script flags, so reviewers find them in the app, and `read_annotations` gives back what they marked.
+
+```
+flags = pd.DataFrame({"participant_id": ["p01"], "trial_id": ["3"], "tags": "Review"})
+sps.write_annotations("Pilot 3", flags)
+sps.read_annotations("Pilot 3")
+```
+
+### read_annotations
+
+```
+read_annotations(dataset)
+```
+
+Read the favorites, tags and notes saved on a dataset's readings.
+
+What the 🗂️ **Data** page's **Annotations** shows for a dataset you added (in the app or with add_dataset), read from the app's saved work on this computer: what reviewers marked in the app, for an analysis to use. An app that is open saves an edit within moments of it being made.
+
+Parameters:
+
+- **`dataset`** (`str`) – The name the dataset list shows, ignoring case.
+
+Returns:
+
+- `DataFrame` – One row per annotated reading: participant_id, trial_id,
+- `DataFrame` – screen_id on a dataset recorded over several screens (blank on an
+- `DataFrame` – annotation of the whole trial), favorite (bool), tags (a list of
+- `DataFrame` – text) and note (text, "" when none). Ids are text, spelled as the
+- `DataFrame` – app's trial picker lists them. The columns carry these names whatever the
+- `DataFrame` – dataset calls its own, as the app's annotations.json does. Empty, with
+- `DataFrame` – the same columns, when the dataset has no annotations.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name. The built-in and public datasets' annotations are exported in the app. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version.
+
+Examples:
+
+```
+marked = sps.read_annotations("Pilot 3")
+excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+```
+
+### write_annotations
+
+```
+write_annotations(dataset, annotations, *, mode='merge')
+```
+
+Save favorites, tags and notes on a dataset's readings from a script.
+
+A quality-control script can tag the readings it flags, and reviewers find them in the app — under the trial's **Annotations**, and with the ⭐ / tag trial filters. The dataset is one you added (in the app or with add_dataset); the annotations are saved with it on this computer, as the 🗂️ **Data** page's **Annotations → Import** saves an imported file.
+
+In `"merge"` mode a reading's tags are added to the ones it has, and a favorite or note you give replaces its own; what a row leaves blank, an empty note included, stays as it was. This differs from the app's **Import**, which adds new readings and keeps or swaps a reading's whole entry. `"replace"` makes the dataset's annotations exactly the ones given, and is refused when none of the given readings is in the dataset, so a file made for another dataset deletes nothing.
+
+Each reading is looked up in the dataset's tables, as the trial picker lists it. One the dataset does not have is left out and listed in the result's `unknown`. A browser tab that has the app open shows the new annotations once reloaded. Edits made in it in the meantime are kept beside them, except an edit of the same reading, which the tab reports as a conflict.
+
+Parameters:
+
+- **`dataset`** (`str`) – The name the dataset list shows, ignoring case.
+- **`annotations`** (`DataFrame | list[dict] | dict | str | Path`) – A table with participant_id, trial_id (or unique_trial_id, which wins when there are both, as the trial picker lists it), optionally screen_id, and any of favorite (true/false), tags (a list, or text with tags separated by ;) and note — what read_annotations returns. Rows on the same reading add their tags together. Or the app's exported annotations.json: its records, the parsed file, or the path to it, where two records on one reading must agree. A path ending in .csv is read as a table.
+- **`mode`** (`str`, default: `'merge'` ) – "merge" (the default) or "replace".
+
+Returns:
+
+- `AnnotationsWriteResult` – An AnnotationsWriteResult: how many readings were written, how many are annotated now, and the ones the dataset does not have.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name. A LookupError.
+- `ValueError` – mode is neither "merge" nor "replace"; the annotations are not in a form above (a missing id column, a favorite that is not true or false, two rows on one reading with different notes); "replace" names no reading the dataset has; or the saved work can't be read or was written by another version. Nothing is saved then.
+- `TypeError` – annotations is none of the forms above.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+words, fixations = sps.load_scanpath_data(
+    "pilot3/ia_report.csv", "pilot3/fixation_report.csv", names="canonical"
+)
+counts = fixations.groupby(["participant_id", "trial_id"]).size()
+flagged = counts[counts < 20].reset_index()[["participant_id", "trial_id"]]
+flagged["tags"] = "Few fixations"
+result = sps.write_annotations("Pilot 3", flagged)
+print(result.written, "readings tagged;", len(result.unknown), "not found")
+```
+
+### AnnotationsWriteResult
+
+```
+AnnotationsWriteResult(dataset, written, annotated, unknown)
+```
+
+What write_annotations did.
+
+Attributes:
+
+- **`dataset`** (`str`) – The dataset's name, as the dataset list shows it.
+- **`written`** (`int`) – How many readings the annotations were written on.
+- **`annotated`** (`int`) – How many readings of the dataset are annotated now.
+- **`unknown`** (`DataFrame`) – The readings the dataset does not have, which were left out: participant_id, trial_id and screen_id (blank on a whole trial). Empty when every reading was found.
 
 ### cache_status
 

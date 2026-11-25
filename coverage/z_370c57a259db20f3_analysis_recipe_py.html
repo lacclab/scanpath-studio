@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/analysis_recipe.py: 83%</title>
+    <title>Coverage for scanpath_studio/analysis_recipe.py: 84%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_54cfdca1.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>analysis_recipe.py</b>:
-            <span class="pc_cov">83%</span>
+            <span class="pc_cov">84%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">379 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">315<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">64<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">318<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">61<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -64,8 +64,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_animation_export_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.4">coverage.py v7.17.4</a>,
-            created at 2026-11-23 12:42 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.5">coverage.py v7.17.5</a>,
+            created at 2026-11-25 13:52 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -231,7 +231,7 @@
     <p class="pln"><span class="n"><a id="t149" href="#t149">149</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t150" href="#t150">150</a></span><span class="t">        <span class="nam">out</span><span class="op">[</span><span class="str">&quot;spread&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">effective_spread</span><span class="op">(</span><span class="nam">spread</span><span class="op">,</span> <span class="nam">aggregation</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">        <span class="key">if</span> <span class="nam">out</span><span class="op">[</span><span class="str">&quot;spread&quot;</span><span class="op">]</span> <span class="op">!=</span> <span class="nam">spread</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">            <span class="nam">out</span><span class="op">[</span><span class="str">&quot;requested_spread&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">spread</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">            <span class="nam">out</span><span class="op">[</span><span class="str">&quot;requested_spread&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">spread</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">    <span class="key">if</span> <span class="nam">min_readers</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">        <span class="nam">out</span><span class="op">[</span><span class="str">&quot;min_readers&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">int</span><span class="op">(</span><span class="nam">min_readers</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t155" href="#t155">155</a></span><span class="t">    <span class="key">if</span> <span class="nam">feature</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -334,14 +334,14 @@
     <p class="mis show_mis"><span class="n"><a id="t252" href="#t252">252</a></span><span class="t">            <span class="key">raise</span> <span class="nam">ValueError</span><span class="op">(</span><span class="fst">f&quot;</span><span class="fst">The </span><span class="op">{</span><span class="nam">name</span><span class="op">!</span><span class="nam">r</span><span class="op">}</span><span class="fst"> filter has no selected values.</span><span class="fst">&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t253" href="#t253">253</a></span><span class="t">    <span class="nam">ranges</span> <span class="op">=</span> <span class="op">{</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t254" href="#t254">254</a></span><span class="t">    <span class="key">for</span> <span class="nam">name</span><span class="op">,</span> <span class="nam">bounds</span> <span class="key">in</span> <span class="nam">_object</span><span class="op">(</span><span class="nam">spec</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;ranges&quot;</span><span class="op">,</span> <span class="op">{</span><span class="op">}</span><span class="op">)</span><span class="op">,</span> <span class="str">&quot;ranges&quot;</span><span class="op">)</span><span class="op">.</span><span class="nam">items</span><span class="op">(</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">            <span class="nam">isinstance</span><span class="op">(</span><span class="nam">bounds</span><span class="op">,</span> <span class="nam">list</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">            <span class="key">and</span> <span class="nam">len</span><span class="op">(</span><span class="nam">bounds</span><span class="op">)</span> <span class="op">==</span> <span class="num">2</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">            <span class="key">and</span> <span class="nam">all</span><span class="op">(</span><span class="nam">type</span><span class="op">(</span><span class="nam">x</span><span class="op">)</span> <span class="key">in</span> <span class="op">(</span><span class="nam">int</span><span class="op">,</span> <span class="nam">float</span><span class="op">)</span> <span class="key">and</span> <span class="nam">np</span><span class="op">.</span><span class="nam">isfinite</span><span class="op">(</span><span class="nam">x</span><span class="op">)</span> <span class="key">for</span> <span class="nam">x</span> <span class="key">in</span> <span class="nam">bounds</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">            <span class="key">and</span> <span class="nam">bounds</span><span class="op">[</span><span class="num">0</span><span class="op">]</span> <span class="op">&lt;=</span> <span class="nam">bounds</span><span class="op">[</span><span class="num">1</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">        <span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">        <span class="key">if</span> <span class="key">not</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">            <span class="nam">isinstance</span><span class="op">(</span><span class="nam">bounds</span><span class="op">,</span> <span class="nam">list</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">            <span class="key">and</span> <span class="nam">len</span><span class="op">(</span><span class="nam">bounds</span><span class="op">)</span> <span class="op">==</span> <span class="num">2</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">            <span class="key">and</span> <span class="nam">all</span><span class="op">(</span><span class="nam">type</span><span class="op">(</span><span class="nam">x</span><span class="op">)</span> <span class="key">in</span> <span class="op">(</span><span class="nam">int</span><span class="op">,</span> <span class="nam">float</span><span class="op">)</span> <span class="key">and</span> <span class="nam">np</span><span class="op">.</span><span class="nam">isfinite</span><span class="op">(</span><span class="nam">x</span><span class="op">)</span> <span class="key">for</span> <span class="nam">x</span> <span class="key">in</span> <span class="nam">bounds</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">            <span class="key">and</span> <span class="nam">bounds</span><span class="op">[</span><span class="num">0</span><span class="op">]</span> <span class="op">&lt;=</span> <span class="nam">bounds</span><span class="op">[</span><span class="num">1</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">        <span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t261" href="#t261">261</a></span><span class="t">            <span class="key">raise</span> <span class="nam">ValueError</span><span class="op">(</span><span class="fst">f&quot;</span><span class="fst">Invalid numeric range for </span><span class="op">{</span><span class="nam">name</span><span class="op">!</span><span class="nam">r</span><span class="op">}</span><span class="fst">.</span><span class="fst">&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t262" href="#t262">262</a></span><span class="t">        <span class="nam">ranges</span><span class="op">[</span><span class="nam">name</span><span class="op">]</span> <span class="op">=</span> <span class="nam">bounds</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t262" href="#t262">262</a></span><span class="t">        <span class="nam">ranges</span><span class="op">[</span><span class="nam">name</span><span class="op">]</span> <span class="op">=</span> <span class="nam">bounds</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t263" href="#t263">263</a></span><span class="t">    <span class="key">return</span> <span class="nam">values</span><span class="op">,</span> <span class="nam">ranges</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t264" href="#t264">264</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t265" href="#t265">265</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -874,8 +874,8 @@
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a class="nav" href="z_370c57a259db20f3_animation_export_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.4">coverage.py v7.17.4</a>,
-            created at 2026-11-23 12:42 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.17.5">coverage.py v7.17.5</a>,
+            created at 2026-11-25 13:52 +0000
         </p>
     </div>
 </footer>

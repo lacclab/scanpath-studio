@@ -72,7 +72,7 @@ Choose a reading in the demo to explore and save as an interactive figure.
 
 - **2 · Choose a view**
 
-  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **View** in Essentials and Full.
+  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **Presets** in Essentials and Full.
 
 - **3 · Save your figure**
 
@@ -306,7 +306,7 @@ Use [the session-review steps](https://lacclab.github.io/scanpath-studio/tutoria
 
 ## Before you start
 
-Open a dataset in the **Scanpath View**. The filter () beside **Select trial** selects whole trials. **Filters & highlights** in the Plot controls changes which fixations and saccades the figure draws. Switch to **Full** at the top of the Scanpath view to use trial filters, fixation highlights, and batch export ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+Open a dataset in the **Scanpath View**. The filter () beside **Select trial** selects whole trials. **Filters & highlights** in the Plot controls changes which fixations and saccades the figure draws. Switch to **Full** at the top of the Scanpath View to use trial filters, fixation highlights, and batch export ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
 
 \[!\[
 
@@ -416,7 +416,7 @@ Before you start, switch to **Full** at the top of the **Scanpath View** ([Essen
 1. Choose the **Figure formats** and, under **Also include**, the tables and their **Table format**. Check the **File path pattern**. To edit individual layers later, turn on **Layers as separate files**.
 1. Click **Build export**, download the bundle, and inspect one exported figure.
 
-For PNGs, turn on **Smaller PNG files** to reduce file size at the same resolution. This adds encoding time. Images over 16.8 megapixels use the standard encoding to limit memory use. **PNG scale** controls resolution separately. A scale of 1 writes one pixel per figure pixel, and the default scale of 2 doubles both dimensions.
+For PNGs, turn on **Smaller PNG files** to reduce file size at the same resolution. This adds encoding time. Images over 16.8 megapixels use the standard encoding to limit memory use. Outside the app, `scanpath-studio render --compact-png` and `save_figure(..., compact_png=True)` do the same for one figure and its layers. **PNG scale** controls resolution separately. A scale of 1 writes one pixel per figure pixel, and the default scale of 2 doubles both dimensions.
 
 Large bundles are kept on temporary disk and download as one ZIP in a new tab. Keep the Export panel open until the download finishes. If your browser cannot stream the ZIP, the download page offers numbered parts and instructions for joining them.
 
@@ -576,13 +576,13 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 
 ## In the app
 
-| Goal                                  | Where                                          |
-| ------------------------------------- | ---------------------------------------------- |
-| Save the figure or replay on screen   | **Export** → **Current figure**                |
-| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**     |
-| Export many trials and their tables   | **Export** → **Export bundle**                 |
-| Share a view or copy its code         | **Share** → **Link** or **Code**               |
-| Reuse the figure settings             | **My views**, or **Share** → **Settings file** |
+| Goal                                  | Where                                            |
+| ------------------------------------- | ------------------------------------------------ |
+| Save the figure or replay on screen   | **Export** → **Current figure**                  |
+| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**       |
+| Export many trials and their tables   | **Export** → **Export bundle**                   |
+| Share a view or copy its code         | **Share** → **Link** or **Code**                 |
+| Reuse the figure settings             | **My presets**, or **Share** → **Settings file** |
 
 To export multiple trials, switch to Full and open **Export bundle**. Essentials offers **Current figure** for the figure or replay on screen.
 
@@ -595,7 +595,7 @@ Open **Scanpath → Export → Prepare figure for export**. The preview shows th
 - **Crop** lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under **Label events**, pin a fixation or saccade and drag its label into position.
 - **Caption and description** suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.
 - For a replay, **Replay clip** lets you choose the interval, speed and poster frame. **Prepare MP4 and poster** produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.
-- When a journal specifies dimensions, open **Print settings** to set the width, resolution or minimum text size. In Full mode on the Scanpath view, **Use this size for batch export** applies the width and resolution to the export bundle.
+- When a journal specifies dimensions, open **Print settings** to set the width, resolution or minimum text size. In Full mode on the Scanpath View, **Use this size for batch export** prints each bundle figure at the prepared artwork’s width and resolution; the crop, labels and caption stay with the prepared figure.
 
 Under **Save or open**, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under **Data Management → Saved work → Saved figures**, or via **Share → Settings file**. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.
 
@@ -654,7 +654,8 @@ out = Path("figures")
 out.mkdir(exist_ok=True)
 
 for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    # Each demo reading has several screens; this saves its paragraph.
+    fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
     sps.save_figure(fig, out / f"{pid}_{tid}.html")
 ```
 
@@ -662,7 +663,7 @@ Use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-
 
 ## Replay export
 
-With **Animation** selected, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
+With **Animation** selected, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. Each frame of a GIF or MP4 shows the state reached at that frame’s start, and the last frame shows the complete scanpath. With a low frame cap, a fixation that begins between two frames first shows in the later one.
 
 The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 
@@ -675,7 +676,9 @@ import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
 words, fixations = sps.load_sample_data()
-replay = sps.animate_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+replay = sps.animate_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 ```
 
@@ -697,7 +700,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 
 Pick a dataset in **Select dataset** above the plot or open **Dataset library** on the **Data Management** page.
 
-- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. The 1,000 Hz EyeLink samples run from paragraph onset to the keypress that ended reading. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates are blank. The demo records a pupil area of zero on those samples.
+- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. Each reading keeps every screen the reader saw: the article's title (first paragraph only), the question preview, the paragraph, the question, the answers and the feedback. Each screen shows the experiment's own stimulus image, placed where the experiment drew it. The 1,000 Hz EyeLink samples cover each screen from its onset to the response that ended it. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates and the pupil area are blank.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text, which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each downloads the first time you open it.
 - **+** → **Import files**: your own tables.
@@ -759,7 +762,7 @@ For a walkthrough inside the import wizard, choose **Setup help → Show setup g
 1. Upload your tables and check the column mapping.
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
-1. Click **Add dataset**, then **Open in Scanpath view** to see its first trial. You can also open the figure from **Data Management → Current dataset**.
+1. Click **Add dataset**, then **Open in Scanpath View** to see its first trial. You can also open the figure from **Data Management → Current dataset**.
 
 To import similar files again, click **Download setup file** before **Add dataset**. Next time, choose **Start from** → **A setup file** and upload your tables: the column mapping, derived columns, character-box merge and recording setup are filled in.
 
@@ -787,13 +790,73 @@ scanpath-studio check --words ia.csv --fixations fixations.csv
 
 For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load-your-data) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#flags-input).
 
+### Add a dataset from a script
+
+On your own computer, a script can add a dataset to the app's list. Use it to prepare the tables in code and then look at them in the app. Start the app afterwards and it opens on the new dataset. If the app is already open, reload its browser tab right away: changes you make in it before the reload are not saved.
+
+```
+import scanpath_studio as sps
+
+sps.add_dataset(
+    "Pilot 3",
+    words="ia.csv",
+    fixations="fixations.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+```
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+```
+
+The tables load as `load_scanpath_data` loads them, and the dataset is saved with your other [saved work](https://lacclab.github.io/scanpath-studio/cli/#cache). Adding again under the same name is an error unless you pass `replace=True` (`--replace`). That swaps the tables and keeps the dataset's annotations, metadata tables, share links, description and recording setup, unless you give a new description or screen. Without a screen size, the app uses one the data records, or estimates one from the extent of the data. To set it later, use **Edit dataset**. See add_dataset for every option.
+
+To open the app on one reading of it, with the figure you want, write a link. It names the dataset, the participant and trial, and the figure in `plot_scanpath`'s options or `render`'s flags. From the CLI, `open` opens it in your browser, and starts the app first if it isn't running.
+
+```
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+```
+
+```
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap
+```
+
+The link is the one **Share** → **Link** writes for that view, so settings it leaves out keep the values the app has. See app_link and [`open`](https://lacclab.github.io/scanpath-studio/cli/#open).
+
+To take a dataset off the list again, use remove_dataset or `scanpath-studio remove "Pilot 3"`. Any dataset you added can be removed this way, with its annotations and metadata tables, as its **Remove** on the Data Management page does.
+
+### Annotations from a script
+
+A script can also read and write the favorites, tags and notes on a dataset you added. A quality-control script can tag the readings it flags, and reviewers find them in the app with the tag filter. An analysis can read back what the reviewers marked.
+
+```
+import pandas as pd
+import scanpath_studio as sps
+
+flags = pd.DataFrame(
+    {"participant_id": ["p01", "p02"], "trial_id": ["3", "7"], "tags": "Short"}
+)
+result = sps.write_annotations("Pilot 3", flags)
+print(result.unknown)  # readings the dataset does not have, left out
+
+marked = sps.read_annotations("Pilot 3")
+excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+```
+
+```
+scanpath-studio annotations import "Pilot 3" flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.csv
+```
+
+The table has one row per reading: `participant_id`, `trial_id`, `screen_id` for one screen of a trial recorded over several, and any of `favorite`, `tags` and `note`. In a CSV file, separate tags with `;`. The app's exported `annotations.json` works too. Writing adds a reading's tags to the ones it has, and a favorite or note you give replaces its own. Pass `mode="replace"` (`--replace`) to make the dataset's annotations exactly the ones given; it is refused when none of the given readings is in the dataset. A reading the dataset does not have is left out and listed. An app already open shows the new annotations once its browser tab is reloaded. See write_annotations for every option.
+
 ## Manage datasets
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
 
 Click a table name to jump to its rows. **Tables** shows fixations, words, raw gaze samples, participants, trials and texts on one page. When you attach a participant, trial or text metadata file, that table shows the complete file.
 
-**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes.
+**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes. A script can read and write them too; see [Annotations from a script](#annotations-from-a-script).
 
 To switch datasets, open **Dataset library**. Search by name or filter by source, then click a dataset to open its overview. **Saved work** shows what will reopen next time. On a local install, **Dataset downloads** lists the public datasets on disk and lets you choose where future downloads go.
 
@@ -825,7 +888,7 @@ Looking for a specific button?
 
 ## Essentials and Full
 
-The Scanpath view opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
+The Scanpath View opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
 
 Essentials shows:
 
@@ -861,17 +924,17 @@ With **A and B together** on, either pair of trial shortcuts steps both readings
 
 ## Control the layers
 
-Both modes start with the same **View** tiles and **Palette**. In Full, use **Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit its settings or its switch to show or hide it. Choose **Axes** to chart the reading by fixation order or time. **Figure** holds the settings for the whole plot, including framing, titles and legends.
+Both modes start with the same **Presets** tiles and **Palette**. In Full, use **Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit its settings or its switch to show or hide it. Choose **Axes** to chart the reading by fixation order or time. **Figure** holds the settings for the whole plot, including framing, titles and legends.
 
 **Gaze over time** plots elapsed seconds along the horizontal axis and horizontal screen position in pixels on the vertical axis. The length of each horizontal bar shows how long the fixation lasted. Turn **Animation** on to replay the reading on the text, then off to return to the same chart. **Custom** brings back your last hand-edited figure.
 
 | Section                  | What it controls                                                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **View**                 | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
-| **My views**             | save a named view, apply it to another reading, or share it                                                             |
+| **Presets**              | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
+| **My presets**           | save a named preset, apply it to another reading, or share it                                                           |
 | **Palette**              | choose **Colorblind-safe**, **Grayscale**, or **High contrast**                                                         |
 | **Compare readings**     | add a second reading over this one, beside it, or below it                                                              |
-| **Animation settings**   | set playback speed, autoplay, and frame quality                                                                         |
+| **Playback settings**    | set playback speed, autoplay, and frame quality                                                                         |
 | **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                     |
 | **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                             |
 | **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                       |
@@ -916,13 +979,15 @@ Python and CLI: render the demo
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-fig = sps.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+fig = sps.plot_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 sps.save_figure(fig, "scanpath.html")
 ```
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele -o scanpath.html
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph -o scanpath.html
 ```
 
 For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). The [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options) lists every figure setting with its Python keyword and CLI flag. For more CLI examples, see [Common tasks](https://lacclab.github.io/scanpath-studio/cli/#common-tasks).
@@ -938,7 +1003,7 @@ You can save each of these to a file and load it again:
 | figure settings                    | **Share** → **Settings file**                                            |
 | favorites, tags and notes          | **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | **Edit dataset** → **Download setup file**                               |
-| saved figure designs               | **My views** → **Export**                                                |
+| saved figure designs               | **My presets** → **Export**                                              |
 
 Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved work → Your session**.
 
@@ -984,7 +1049,7 @@ The bar above the plot: pick a dataset and a trial, step through the trials, and
 
 ## Plot controls
 
-The **View** and **Palette** tiles appear in both modes. In Full, **My views** sits below the view tiles. The switches below the palette open comparison and replay, and the arrow beside each switch opens its settings.
+The column has four parts: **Presets**, **Palette**, **Modes** and **Customize**. The **Presets** and **Palette** tiles appear in both modes, and in Full, **My presets** sits below the preset tiles. Click beside any of the four labels to fold that part away, and the browser remembers it for your next visit. A folded **Presets**, **Palette** or **Modes** line still names the current choice. Under **Modes**, the switches turn on comparison and, in Full, **Playback**, and the arrow beside each switch opens its settings. Beside a tall figure, the column scrolls on its own.
 
 - **Layers** lists what the plot can draw. Click a layer’s name to edit its settings. The switch on the right shows or hides it. **Filters & highlights** applies to the current reading.
 - **Axes** chooses the X and Y fields and configures the coordinate grid.
@@ -994,9 +1059,9 @@ Use **Find a setting** in Full when you know what you want to change. Type a wor
 
 If you switch to Essentials while comparing readings, the comparison switch stays available.
 
-### Animation settings
+### Playback settings
 
-Turn **Animation** on to replay the reading. Use the play and pause buttons and the time slider above the plot. Switch **Animation** off to return to your figure. For a saccades-only replay, open **Full**, leave **Saccades** on, and turn **Fixations** off. Each line appears when the reading reaches its next fixation. **Heatmap** and **Raw gaze** are available in static views. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#keyboard-shortcuts). Open **Animation settings** in Full for these controls:
+Turn on the **Animation** tile, or the **Playback** switch under **Modes**, to replay the reading. Use the play and pause buttons and the time slider above the plot. Switch **Animation** off to return to your figure. For a saccades-only replay, open **Full**, leave **Saccades** on, and turn **Fixations** off. Each line appears when the reading reaches its next fixation. **Heatmap** and **Raw gaze** are available in static views. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#keyboard-shortcuts). Open **Playback settings** in Full for these controls:
 
 | Control                               | What it does                                                                                                                                                            |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1020,42 +1085,42 @@ Turn **Animation** on to replay the reading. Use the play and pause buttons and 
 | **Reading labels** → **Available fields**      | The fields a label can use.                                                                                                                                       |
 | **Trial arrows**                               | ◀ ▶ move both scanpaths at once.                                                                                                                                  |
 
-### Views, palette and saved designs
+### Presets, palette and saved presets
 
-Restyle the whole figure in one click, with a ready-made design or one you saved:
+Restyle the whole figure in one click, with a ready-made preset or one you saved:
 
 | Control                                       | What it does                                                                                                                                                                                                                                                                                  |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                                                                                                                           |
+| **Scanpath** / **Heatmap** / **Illustration** | Ready-made presets: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                                                                                                                           |
 | **Gaze over time**                            | Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation. |
 | **Custom**                                    | Restore your last hand-edited figure, including its axes and palette. On first use, start with the figure on screen.                                                                                                                                                                          |
-| **My views**                                  | Your saved designs. Click one to apply it. renames it and deletes it.                                                                                                                                                                                                                         |
-| **My views** →                                | Save the settings on screen as a named design, to apply again later in one click.                                                                                                                                                                                                             |
-| **My views** → **Export** / **Import**        | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name.                                                                                                   |
+| **My presets**                                | Your saved presets. Click one to apply it. renames it and deletes it.                                                                                                                                                                                                                         |
+| **My presets** →                              | Save the settings on screen as a named preset, to apply again later in one click.                                                                                                                                                                                                             |
+| **My presets** → **Export** / **Import**      | Download your presets as a file, or load a file of presets, to share a look with co-authors or move your presets to another computer. A preset in the file replaces yours of the same name.                                                                                                   |
 | **Palette**                                   | Choose **Colorblind-safe**, **Grayscale** for print, or **High contrast**. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines.                                                           |
 
 ### Fixations
 
 Click **Fixations** to edit the markers. The switch shows or hides them.
 
-| Control                                                                                                       | What it does                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Color**                                                                                                     | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category such as condition or part of speech keeps the same color across trials, even when filtering removes other categories. The legend identifies missing values separately. |
-| color box                                                                                                     | With **One color**: the fixation marker color. With a number column: the color scale.                                                                                                                                                                                          |
-| **Color range and color bar** → **Range**                                                                     | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial.                                                                                                                                                                 |
-| **Marker appearance** → **Shape**                                                                             | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart.                                                                                                                                                                         |
-| **Size**                                                                                                      | Set the marker size range: the smallest and largest marker diameter, in px.                                                                                                                                                                                                    |
-| **Size by duration** → **Scale**                                                                              | Choose how duration sets marker size: square root (the default), linear, log, or relative to this figure (its shortest to its longest fixation).                                                                                                                               |
-| **Size by duration** → **Durations**                                                                          | Set the durations (ms) that get the smallest and the largest marker. Not used on the relative scale.                                                                                                                                                                           |
-| **Opacity**                                                                                                   | Set the fixation marker opacity. Lower it to see overlapping fixations.                                                                                                                                                                                                        |
-| **Marker appearance** → **Outline**                                                                           | Set the width (px) and color of the ring around each marker. A width of 0 draws none.                                                                                                                                                                                          |
-| **Color range and color bar** → **Show**                                                                      | Show the color scale's bar, when markers are colored by a number.                                                                                                                                                                                                              |
-| **Color range and color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length.                                                                                                                                                          |
-| **Fixation index** → **Show**                                                                                 | Number each fixation in reading order.                                                                                                                                                                                                                                         |
-| **Fixation index** → color, **Size**                                                                          | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay.                                                                                      |
-| **Marker appearance** → **Number position**                                                                   | Put each number above its fixation, inside it, or below it.                                                                                                                                                                                                                    |
-| **Position on the text** → **Snap to line**                                                                   | Move each fixation up or down onto its line of text. Choose **Show positions before snapping** above the figure to see the original trial coordinates beside the illustration, on the same axes. Downloads use the illustration.                                               |
-| **Position on the text** → **Position**                                                                       | Choose where on its line a snapped fixation sits.                                                                                                                                                                                                                              |
+| Control                                                                                                       | What it does                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Color**                                                                                                     | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category, such as a condition or a part of speech, keeps the same color in every trial of the dataset, even when filtering removes other categories. Up to 20 categories in the dataset get clearly different colors; with more, some colors are closer. The legend identifies missing values separately. |
+| color box                                                                                                     | With **One color**: the fixation marker color. With a number column: the color scale.                                                                                                                                                                                                                                                                                                                    |
+| **Color range and color bar** → **Range**                                                                     | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial.                                                                                                                                                                                                                                                                                           |
+| **Marker appearance** → **Shape**                                                                             | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart.                                                                                                                                                                                                                                                                                                   |
+| **Size**                                                                                                      | Set the marker size range: the smallest and largest marker diameter, in px.                                                                                                                                                                                                                                                                                                                              |
+| **Size by duration** → **Scale**                                                                              | Choose how duration sets marker size: square root (the default), linear, log, or relative to this figure (its shortest to its longest fixation).                                                                                                                                                                                                                                                         |
+| **Size by duration** → **Durations**                                                                          | Set the durations (ms) that get the smallest and the largest marker. Not used on the relative scale.                                                                                                                                                                                                                                                                                                     |
+| **Opacity**                                                                                                   | Set the fixation marker opacity. Lower it to see overlapping fixations.                                                                                                                                                                                                                                                                                                                                  |
+| **Marker appearance** → **Outline**                                                                           | Set the width (px) and color of the ring around each marker. A width of 0 draws none.                                                                                                                                                                                                                                                                                                                    |
+| **Color range and color bar** → **Show**                                                                      | Show the color scale's bar, when markers are colored by a number.                                                                                                                                                                                                                                                                                                                                        |
+| **Color range and color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length.                                                                                                                                                                                                                                                                                    |
+| **Fixation index** → **Show**                                                                                 | Number each fixation in reading order.                                                                                                                                                                                                                                                                                                                                                                   |
+| **Fixation index** → color, **Size**                                                                          | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay.                                                                                                                                                                                                                |
+| **Marker appearance** → **Number position**                                                                   | Put each number above its fixation, inside it, or below it.                                                                                                                                                                                                                                                                                                                                              |
+| **Position on the text** → **Snap to line**                                                                   | Move each fixation up or down onto its line of text. Choose **Show positions before snapping** above the figure to see the original trial coordinates beside the illustration, on the same axes. Downloads use the illustration.                                                                                                                                                                         |
+| **Position on the text** → **Position**                                                                       | Choose where on its line a snapped fixation sits.                                                                                                                                                                                                                                                                                                                                                        |
 
 ### Saccades
 
@@ -1131,9 +1196,9 @@ The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to s
 | **Dot size**     | Set the raw gaze sample marker size.                                                                                                                        |
 | **Opacity**      | Set the raw gaze sample opacity.                                                                                                                            |
 
-To inspect samples from one reading, open **Axes → Axis preset**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
+To inspect samples from one reading, open **Axes → Axis layout**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
 
-In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A pupil area of zero accompanies missing gaze coordinates. The raw table and its exports keep those samples.
+In the OneStop demo, the clock starts at trial onset and each screen's samples start when the reader sees that screen. A sample with missing gaze coordinates has no pupil area either, so the pupil chart shows a gap there. The raw table and its exports keep those samples.
 
 ### Filters & highlights
 
@@ -1155,7 +1220,7 @@ Choose a chart preset, or set the X and Y fields individually. Open **Coordinate
 
 | Control                                        | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Axis preset**                                | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the windowed index sequence, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **Axis layout**                                | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the windowed index sequence, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
 | **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates.                                               |
 | **Grid** → **Show**                            | Show a grid of screen coordinates, in px.                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Grid spacing and labels** → interval         | Set the grid spacing (interval), in px, or let **Auto** choose it.                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -1184,15 +1249,15 @@ Open **Screen & framing**, **Title & labels**, **Hover fields**, or **Legends**.
 | **Legend position and style** → **Arrangement**                    | Choose the legend arrangement: **Stacked** or **Side by side**.                                                                                                                                                                                                              |
 | **Legend position and style** → **Text size**                      | Set the legend text (font) size, in px. Empty uses the figure's text size.                                                                                                                                                                                                   |
 
-### Reset visualization
+### Reset
 
-At the foot of **Full** plot controls, use the arrows beside **Reset visualization** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
+At the foot of **Full** plot controls, use the arrows beside **Reset** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
 
-| Control                 | What it does                                                                                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Undo**                | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial.                                          |
-| **Redo**                | Reapply the change you undid. Making a new plot edit clears the redo list.                                                                                   |
-| **Reset visualization** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
+| Control   | What it does                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Undo**  | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial.                                          |
+| **Redo**  | Reapply the change you undid. Making a new plot edit clears the redo list.                                                                                   |
+| **Reset** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
 
 Changing datasets starts a fresh history. A trial-specific fixation window drops out of history when you leave that reading.
 
@@ -1397,6 +1462,12 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.           |
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                            |
 | **Recovery cache**                            |                                                                                       |
+| add_dataset                                   | Add a dataset to the app's dataset list from a script.                                |
+| app_link                                      | A link that opens the local app on a dataset, a reading and a figure.                 |
+| remove_dataset                                | Remove a dataset from the app's dataset list from a script.                           |
+| read_annotations                              | Read the favorites, tags and notes saved on a dataset's readings.                     |
+| write_annotations                             | Save favorites, tags and notes on a dataset's readings from a script.                 |
+| AnnotationsWriteResult                        | What write_annotations did.                                                           |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
 | clear_cache                                   | Delete the recovery cache.                                                            |
 | **Version and updates**                       |                                                                                       |
@@ -1426,10 +1497,10 @@ print(words[columns].head(3))
 0        l37_273  l37_273_2_1_1_Ele
 1        l37_273  l37_273_2_1_2_Ele
 2        l37_273  l37_273_2_1_3_Adv
-   IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
-0      1    Robert                       243.0            243
-1      2  Myslajek                       192.0            192
-2      3     stops                       140.0            140
+   IA_ID IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
+0      1       On                         NaN              0
+1      2      the                       153.0            383
+2      3    Trail                       119.0            175
 ```
 
 ## Load your data
@@ -1450,6 +1521,7 @@ load_scanpath_data(
     names=NAMES_SOURCE,
     include_source_cells=False,
     _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -1584,7 +1656,12 @@ sps.plot_scanpath(words, fixations, show_stimulus_image=True)
 
 ```
 load_raw_gaze(
-    table, *, raw_gaze_schema=None, names=NAMES_SOURCE, _row_counts=None
+    table,
+    *,
+    raw_gaze_schema=None,
+    names=NAMES_SOURCE,
+    _row_counts=None,
+    _schemas=None,
 )
 ```
 
@@ -1708,7 +1785,7 @@ load_sample_data(*, names=NAMES_SOURCE)
 
 Load the bundled demo, normalized and ready to plot.
 
-The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
+The bundled demo is a subset of OneStop: two participants, twelve trials each, every one with fixations. Each trial has the screens its reader saw (`screen_id`: Title on an article's first paragraph, Question_Preview, Paragraph, Questions, Answers, Feedback), each with the experiment's stimulus image. The frames carry the demo's recorded screen (OneStop's 2560×1440), so `plot_scanpath` draws them on it without a `canvas_size`, as `scanpath-studio render --sample` does.
 
 Parameters:
 
@@ -1726,7 +1803,7 @@ load_sample_raw_gaze(*, names=NAMES_SOURCE)
 
 Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps and recorded pupil values.
+The table includes each sample while each screen of a reading was shown, with the screen it belongs to (`part` / `screen_index`), screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
 
 Parameters:
 
@@ -1989,7 +2066,7 @@ plot_scanpath(
     screen=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     raw_gaze=None,
     drift_correction=None,
     drift_connectors=False,
@@ -2010,13 +2087,13 @@ Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, 
 Parameters:
 
 - **`words`** (`DataFrame | None`, default: `None` ) – A normalized words frame from load_scanpath_data, or None for a dataset recorded as raw gaze alone.
-- **`fixations`** (`DataFrame | None`, default: `None` ) – The normalized fixations frame, or None likewise.
+- **`fixations`** (`DataFrame | None`, default: `None` ) – The normalized fixations frame, or None likewise. A categorical color_by gives each label of its column in this whole frame a color, so a category keeps its color in every trial drawn from the same frame.
 - **`participant`** (`str | None`, default: `None` ) – The participant ID. It may be left out when the frames hold one trial.
 - **`trial`** (`str | None`, default: `None` ) – The trial ID. It may be left out when the frames hold one trial.
 - **`screen`** (`str | None`, default: `None` ) – The screen of a multipart trial to draw. Left out, the first recorded screen; coordinate spaces are never concatenated.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size in px, (width, height). Estimated from the data's extent by default; pass the real resolution ((2560, 1440) for OneStop) to keep coordinates true to scale.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`raw_gaze`** (`DataFrame | None`, default: `None` ) – Samples from load_raw_gaze, filtered to the trial and drawn as recorded, under the fixations. It can be the only table: with words and fixations None, the trial is looked up in the samples, the canvas is estimated from their extent, and the figure is the samples alone. No fixations are detected from them, so the fixation, saccade and heatmap layers stay empty.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental. Without SCANPATH_EXPERIMENTAL=1, anything but None or "off" raises ValueError.
 - **`drift_connectors`** (`bool`, default: `False` ) – Experimental, with drift_correction.
@@ -2054,7 +2131,7 @@ animate_scanpath(
     screen_b=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     playback_speed=1.0,
     autoplay=True,
     fix_index_range=None,
@@ -2089,7 +2166,7 @@ Parameters:
 - **`screen_b`** (`str | None`, default: `None` ) – B's screen, looked up in B's own trial. Left out, its first recorded screen.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – A's monitor size, as in plot_scanpath.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`playback_speed`** (`float`, default: `1.0` ) – The replay lasts the reading time divided by this. Any other value than 1 makes the automatic Illustration label say the timing was changed.
 - **`autoplay`** (`bool`, default: `True` ) – Start the saved HTML's replay when it opens, at playback_speed. False saves it paused, to start with ▶ Play. A GIF or MP4 always plays from its first frame.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): replay only that window of the trial's fixations, 1-based and inclusive. In a co-animation it windows A only, as in the app, where A's slider never cuts B.
@@ -2112,6 +2189,7 @@ Raises:
 
 - `ValueError` – The trial has no fixations (one recorded as raw gaze alone, or a words-only one). Also for raw_gaze=; draw samples with plot_scanpath(raw_gaze=…).
 - `ValueError` – An option the replay does not take (the message names the valid ones), a style naming saccade_classes (the replay has no saccade-class filter), or B frames holding several trials without trial_b.
+- `ValueError` – show_fixations=False with show_saccades=False, which leaves the replay nothing to draw.
 - `IncomparableScreensError` – B's dataset has a different canvas from A's. A ValueError.
 
 ### compare_scanpaths
@@ -2139,7 +2217,7 @@ compare_scanpaths(
     style_a=None,
     style_b=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     fix_index_range=None,
     fix_index_range_b=None,
     drift_correction=None,
@@ -2201,7 +2279,7 @@ Parameters:
 - **`style_a`** (`dict | None`, default: `None` ) – A's style, with the keys above.
 - **`style_b`** (`dict | None`, default: `None` ) – B's style.
 - **`base_font_size`** (`int`, default: `16` ) – The base font size in px.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – The font family.
+- **`font_family`** (`str | None`, default: `None` ) – The font family. Left out, the font the data declares for its stimulus (OneStop's Lucida Sans Typewriter), else monospace.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): draw only that window of both scanpaths' fixations.
 - **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's own window, as the app's B slider sets it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
@@ -2217,6 +2295,7 @@ Returns:
 
 Raises:
 
+- `ValueError` – fixations is None: a dataset recorded as raw gaze alone has no scanpath to compare.
 - `ValueError` – An overlay of two different screens (see the overlay gate), or a screen / screen_b the trial does not have or that names a screen of a single-screen trial.
 - `TypeError` – An unknown keyword. The message names the closest valid ones.
 
@@ -2575,12 +2654,14 @@ figure_code(
     compare_dataset="",
     compare_canvas=None,
     compare_labels=None,
+    compare_source_options=None,
     canvas_size=None,
     base_font_size=16,
-    font_family=FONT_FAMILY,
+    font_family=None,
     title="",
     caption="",
     fix_index_range=None,
+    fix_index_range_b=None,
     illustration_label="auto",
     drift_correction=None,
     drift_connectors=False,
@@ -2609,15 +2690,17 @@ Parameters:
 - **`compare_screen`** (`str | None`, default: `None` ) – B's screen (screen_b=, --compare-screen).
 - **`compare_layout`** (`str`, default: `'overlay'` ) – The comparison's layout, as compare_scanpaths takes it.
 - **`compare_stimulus`** (`str`, default: `'both'` ) – Whose stimulus an overlay draws, as compare_scanpaths takes it.
-- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables, from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations).
+- **`compare_dataset`** (`str`, default: `''` ) – The dataset B was loaded from, when it is a second one. Both forms then load B's own tables (words_b= / fixations_b= / dataset_b=, and --compare-words / --compare-fixations), from compare_source_options, else from the placeholder paths B_WORDS / B_FIXATIONS that you point at its files.
 - **`compare_canvas`** (`tuple[int, int] | None`, default: `None` ) – B's screen, (width, height), with compare_dataset: written as setup_b= and --compare-canvas, which a co-animation across datasets needs.
 - **`compare_labels`** (`tuple[str, str] | None`, default: `None` ) – The two trace labels, when they are not the composed defaults: labels= and --label-a / --label-b.
+- **`compare_source_options`** (`dict | None`, default: `None` ) – How B's tables load when B is a second dataset, as source_options says it for A's files: "words" / "fixations" / "raw_gaze" paths in place of the placeholders, and "word_schema" / "fix_schema" / "raw_gaze_schema" mappings (--compare-word-schema and its siblings). Without compare_dataset, B is named "Dataset B", as render names it.
 - **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The monitor size. Defaults to the screen render assumes for the source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the same figure.
 - **`base_font_size`** (`int`, default: `16` ) – As the builders take it.
-- **`font_family`** (`str`, default: `FONT_FAMILY` ) – As the builders take it.
+- **`font_family`** (`str | None`, default: `None` ) – As the builders take it.
 - **`title`** (`str`, default: `''` ) – As the builders take it.
 - **`caption`** (`str`, default: `''` ) – As the builders take it.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – As the builders take it.
+- **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's window, with compare, as compare_scanpaths and animate_scanpath take it (--compare-fix-index-range).
 - **`illustration_label`** (`str`, default: `'auto'` ) – As the builders take it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
 - **`drift_connectors`** (`bool`, default: `False` ) – Experimental, as in plot_scanpath.
@@ -2634,7 +2717,7 @@ Returns:
 
 Raises:
 
-- `ValueError` – An unknown flavor.
+- `ValueError` – An unknown flavor, or a key compare_source_options does not take.
 - `TypeError` – An option the builder does not take.
 
 Examples:
@@ -2666,6 +2749,7 @@ save_figure(
     width_in=None,
     dpi=None,
     proof_width_mm=None,
+    compact_png=False,
 )
 ```
 
@@ -2684,6 +2768,7 @@ Parameters:
 - **`width_in`** (`float | None`, default: `None` ) – The same in inches.
 - **`dpi`** (`int | None`, default: `None` ) – The resolution for width_mm / width_in. Default 300.
 - **`proof_width_mm`** (`float | None`, default: `None` ) – Total manuscript width of a split comparison SVG, as in save_panel_proof.
+- **`compact_png`** (`bool`, default: `False` ) – Compress the PNG losslessly, as the app's Export bundle does under Smaller PNG files: the same pixels and metadata in a smaller file, for a little more time. Only for .png.
 
 Returns:
 
@@ -2746,6 +2831,7 @@ save_figure_layers(
     width_mm=None,
     width_in=None,
     dpi=None,
+    compact_png=False,
 )
 ```
 
@@ -2764,12 +2850,278 @@ Parameters:
 - **`width_mm`** (`float | None`, default: `None` ) – PNG print width in millimetres.
 - **`width_in`** (`float | None`, default: `None` ) – PNG print width in inches.
 - **`dpi`** (`int | None`, default: `None` ) – Resolution for the print width, shared by every layer.
+- **`compact_png`** (`bool`, default: `False` ) – Compress each PNG layer losslessly, as save_figure does. Only for png.
 
 Returns:
 
 - `dict[str, Path]` – {layer: Path} for each file written.
 
 ## Recovery cache
+
+A local app keeps the datasets you add, so they are there the next time it starts. `add_dataset` adds one from a script: prepare the tables in Python, add them, then run `scanpath-studio` and the app opens on them. `app_link` writes a link that opens the app on one of them, at a reading, with the figure you describe in `plot_scanpath`'s options. `remove_dataset` takes one off the list again.
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+```
+
+### add_dataset
+
+```
+add_dataset(
+    name,
+    words=None,
+    fixations=None,
+    *,
+    raw_gaze=None,
+    word_schema=None,
+    fix_schema=None,
+    raw_gaze_schema=None,
+    trial_parts_manifest=None,
+    keep_columns=None,
+    canvas_size=None,
+    setup=None,
+    description=None,
+    select=True,
+    replace=False,
+)
+```
+
+Add a dataset to the app's dataset list from a script.
+
+The tables load as load_scanpath_data and load_raw_gaze load them, and the dataset is saved where a local app keeps the datasets added with ➕ **Add dataset** (the recovery cache, see cache_status). Start the app with `scanpath-studio` and it is in the list, opened unless `select=False`. An app already open shows it once its browser tab is reloaded. The same as `scanpath-studio add`.
+
+It works for a local app only: the app on this computer, the desktop app, or a `scanpath-studio run` on this machine. A hosted app keeps no saved datasets.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows. A built-in source's name is refused.
+- **`words`** (`TablesLike | None`, default: `None` ) – The Words table, in any form load_scanpath_data takes.
+- **`fixations`** (`TablesLike | None`, default: `None` ) – The Fixations table, in the same forms.
+- **`raw_gaze`** (`TablesLike | None`, default: `None` ) – The Raw gaze table, in the same forms. Any one of the three tables is enough.
+- **`word_schema`** (`dict | None`, default: `None` ) – The Words table's column mapping, replacing auto-detection, as load_scanpath_data takes it. The app shows it as the dataset's mapping, and ✏️ Edit dataset starts from it.
+- **`fix_schema`** (`dict | None`, default: `None` ) – The same for the Fixations table.
+- **`raw_gaze_schema`** (`dict | None`, default: `None` ) – The same for the Raw gaze table, as load_raw_gaze takes it.
+- **`trial_parts_manifest`** (`dict | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`keep_columns`** (`Iterable[str] | None`, default: `None` ) – As load_scanpath_data takes it.
+- **`canvas_size`** (`tuple[int, int] | None`, default: `None` ) – The recording's screen, (width, height) px. Without it, the screen a table records is used, else one estimated from the extent of the data, as ➕ Add dataset suggests it. With replace, leaving out both this and setup keeps the saved dataset's setup.
+- **`setup`** (`SetupSnapshot | None`, default: `None` ) – The full recording setup, an experimental_setup.SetupSnapshot (screen, monitor width, text size), in place of canvas_size.
+- **`description`** (`str | None`, default: `None` ) – The sentence the 🗂️ Data page shows under its name.
+- **`select`** (`bool`, default: `True` ) – Open the app on this dataset next time it starts.
+- **`replace`** (`bool`, default: `False` ) – Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless new ones are given. Without it, a name already saved is an error.
+
+Returns:
+
+- `str` – The name the dataset was saved under.
+
+Raises:
+
+- `ValueError` – No table was given, a table can't be loaded (as load_scanpath_data raises), the name is empty, too long or a built-in source's, or the saved work can't be read or was written by another version. Nothing is saved then.
+- `StoredDatasetExistsError` – A dataset with this name is already saved and replace is off. A ValueError.
+- `TypeError` – setup is not a SetupSnapshot.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.add_dataset(
+    "Pilot 3",
+    words="pilot3/ia_report.csv",
+    fixations="pilot3/fixation_report.csv",
+    canvas_size=(1920, 1080),
+)
+```
+
+Then run `scanpath-studio` and the app opens on *Pilot 3*. Reload a tab that is already open right away: changes made in it after the dataset was added are not saved, as when two tabs change the same saved work.
+
+### app_link
+
+```
+app_link(
+    dataset,
+    participant=None,
+    trial=None,
+    *,
+    screen=None,
+    port=8501,
+    animate=False,
+    illustration=False,
+    **figure_options,
+)
+```
+
+A link that opens the local app on a dataset, a reading and a figure.
+
+The link names the dataset as the app's dataset list shows it, the reading by its participant and trial IDs, and the figure by the options plot_scanpath takes, written as 🔗 **Share → Link** writes the same view. Open it in a browser while the app runs on this computer (`scanpath-studio` serves it at `localhost:8501`), or let `scanpath-studio open` start the app and open it. The dataset is one added in the app or with add_dataset, or one the app has itself: the bundled demo or a public corpus, named as its list shows it. The same as `scanpath-studio open --print`.
+
+For a dataset saved on this computer the link also carries its share ID and a digest of its tables, as Share's does, so the app checks it is the same data; its tables are read to compute it. Settings the link leaves out keep the values the app has. A link whose dataset the app doesn't have opens nothing from it, and says which dataset is missing.
+
+Parameters:
+
+- **`dataset`** (`str`) – The dataset's name in the app's dataset list, ignoring case.
+- **`participant`** (`str | None`, default: `None` ) – The participant ID. Without it, a trial ID that only one participant has still opens that reading.
+- **`trial`** (`str | None`, default: `None` ) – The trial ID. Without it, the app opens the participant's first trial, or the reading it last showed.
+- **`screen`** (`str | None`, default: `None` ) – The screen ID of a trial recorded over several screens.
+- **`port`** (`int`, default: `8501` ) – The port the app listens on.
+- **`animate`** (`bool`, default: `False` ) – Open the replay instead of the static figure.
+- **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
+- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
+
+Returns:
+
+- `str` – The link, http://localhost:<port>/?….
+
+Raises:
+
+- `TypeError` – An option a link can't carry, or no figure option at all.
+- `ValueError` – An empty dataset name, a screen without a trial, a port outside 1–65535, or a value the app would ignore or clamp.
+
+Examples:
+
+```
+sps.add_dataset("Pilot 3", words="ia.csv", fixations="fixations.csv")
+url = sps.app_link("Pilot 3", "p07", "t12", show_heatmap=True)
+import webbrowser; webbrowser.open(url)
+```
+
+### remove_dataset
+
+```
+remove_dataset(name, *, missing_ok=False)
+```
+
+Remove a dataset from the app's dataset list from a script.
+
+The counterpart of add_dataset, and the same as the dataset's **Remove** on the 🗂️ **Data** page: its tables go, with its annotations, metadata tables, description and share ID. Any dataset you added counts, in the app or from a script; the built-in and public datasets can't be removed. When the app last had it open, it next opens on its default dataset. Reload a tab that is already open right away: changes made in it after the removal are not saved. The same as `scanpath-studio remove`.
+
+Parameters:
+
+- **`name`** (`str`) – The name the dataset list shows, ignoring case.
+- **`missing_ok`** (`bool`, default: `False` ) – Return False when no dataset has the name, instead of raising.
+
+Returns:
+
+- `bool` – Whether a dataset was removed.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name, and missing_ok is off. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version. Nothing is removed then.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+sps.remove_dataset("Pilot 3")
+```
+
+A saved dataset's favorites, tags and notes can be read and written too: `write_annotations` tags the readings a script flags, so reviewers find them in the app, and `read_annotations` gives back what they marked.
+
+```
+flags = pd.DataFrame({"participant_id": ["p01"], "trial_id": ["3"], "tags": "Review"})
+sps.write_annotations("Pilot 3", flags)
+sps.read_annotations("Pilot 3")
+```
+
+### read_annotations
+
+```
+read_annotations(dataset)
+```
+
+Read the favorites, tags and notes saved on a dataset's readings.
+
+What the 🗂️ **Data** page's **Annotations** shows for a dataset you added (in the app or with add_dataset), read from the app's saved work on this computer: what reviewers marked in the app, for an analysis to use. An app that is open saves an edit within moments of it being made.
+
+Parameters:
+
+- **`dataset`** (`str`) – The name the dataset list shows, ignoring case.
+
+Returns:
+
+- `DataFrame` – One row per annotated reading: participant_id, trial_id,
+- `DataFrame` – screen_id on a dataset recorded over several screens (blank on an
+- `DataFrame` – annotation of the whole trial), favorite (bool), tags (a list of
+- `DataFrame` – text) and note (text, "" when none). Ids are text, spelled as the
+- `DataFrame` – app's trial picker lists them. The columns carry these names whatever the
+- `DataFrame` – dataset calls its own, as the app's annotations.json does. Empty, with
+- `DataFrame` – the same columns, when the dataset has no annotations.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name. The built-in and public datasets' annotations are exported in the app. A LookupError.
+- `ValueError` – The saved work can't be read or was written by another version.
+
+Examples:
+
+```
+marked = sps.read_annotations("Pilot 3")
+excluded = marked[marked["tags"].map(lambda tags: "To exclude" in tags)]
+```
+
+### write_annotations
+
+```
+write_annotations(dataset, annotations, *, mode='merge')
+```
+
+Save favorites, tags and notes on a dataset's readings from a script.
+
+A quality-control script can tag the readings it flags, and reviewers find them in the app — under the trial's **Annotations**, and with the ⭐ / tag trial filters. The dataset is one you added (in the app or with add_dataset); the annotations are saved with it on this computer, as the 🗂️ **Data** page's **Annotations → Import** saves an imported file.
+
+In `"merge"` mode a reading's tags are added to the ones it has, and a favorite or note you give replaces its own; what a row leaves blank, an empty note included, stays as it was. This differs from the app's **Import**, which adds new readings and keeps or swaps a reading's whole entry. `"replace"` makes the dataset's annotations exactly the ones given, and is refused when none of the given readings is in the dataset, so a file made for another dataset deletes nothing.
+
+Each reading is looked up in the dataset's tables, as the trial picker lists it. One the dataset does not have is left out and listed in the result's `unknown`. A browser tab that has the app open shows the new annotations once reloaded. Edits made in it in the meantime are kept beside them, except an edit of the same reading, which the tab reports as a conflict.
+
+Parameters:
+
+- **`dataset`** (`str`) – The name the dataset list shows, ignoring case.
+- **`annotations`** (`DataFrame | list[dict] | dict | str | Path`) – A table with participant_id, trial_id (or unique_trial_id, which wins when there are both, as the trial picker lists it), optionally screen_id, and any of favorite (true/false), tags (a list, or text with tags separated by ;) and note — what read_annotations returns. Rows on the same reading add their tags together. Or the app's exported annotations.json: its records, the parsed file, or the path to it, where two records on one reading must agree. A path ending in .csv is read as a table.
+- **`mode`** (`str`, default: `'merge'` ) – "merge" (the default) or "replace".
+
+Returns:
+
+- `AnnotationsWriteResult` – An AnnotationsWriteResult: how many readings were written, how many are annotated now, and the ones the dataset does not have.
+
+Raises:
+
+- `StoredDatasetNotFoundError` – No saved dataset has this name. A LookupError.
+- `ValueError` – mode is neither "merge" nor "replace"; the annotations are not in a form above (a missing id column, a favorite that is not true or false, two rows on one reading with different notes); "replace" names no reading the dataset has; or the saved work can't be read or was written by another version. Nothing is saved then.
+- `TypeError` – annotations is none of the forms above.
+- `RuntimeError` – Saving is turned off (SCANPATH_STUDIO_PERSIST=0).
+
+Examples:
+
+```
+words, fixations = sps.load_scanpath_data(
+    "pilot3/ia_report.csv", "pilot3/fixation_report.csv", names="canonical"
+)
+counts = fixations.groupby(["participant_id", "trial_id"]).size()
+flagged = counts[counts < 20].reset_index()[["participant_id", "trial_id"]]
+flagged["tags"] = "Few fixations"
+result = sps.write_annotations("Pilot 3", flagged)
+print(result.written, "readings tagged;", len(result.unknown), "not found")
+```
+
+### AnnotationsWriteResult
+
+```
+AnnotationsWriteResult(dataset, written, annotated, unknown)
+```
+
+What write_annotations did.
+
+Attributes:
+
+- **`dataset`** (`str`) – The dataset's name, as the dataset list shows it.
+- **`written`** (`int`) – How many readings the annotations were written on.
+- **`annotated`** (`int`) – How many readings of the dataset are annotated now.
+- **`unknown`** (`DataFrame`) – The readings the dataset does not have, which were left out: participant_id, trial_id and screen_id (blank on a whole trial). Empty when every reading was found.
 
 ### cache_status
 
@@ -2907,6 +3259,10 @@ Raises:
 | [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
 | [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
 | [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`add`](#add)                               | Add your tables to the app's dataset list                    |
+| [`remove`](#remove)                         | Remove a dataset you added from that list                    |
+| [`annotations`](#annotations)               | Read or write a dataset's favorites, tags and notes          |
+| [`open`](#open)                             | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache)                           | Show or clear the recovery cache                             |
 | [`version`](#version)                       | Show the build, and whether a newer release is out           |
 | [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
@@ -2918,7 +3274,7 @@ Each command takes `--help`, and `scanpath-studio --version` prints the version.
 Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```
-scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio render --sample --screen Paragraph --width-mm 85 -o reading.publication.json
 scanpath-studio publication reading.publication.json -o reading.html
 scanpath-studio publication figure-2.json -o figure-2.pdf
 ```
@@ -2952,8 +3308,8 @@ Served on a network, the app turns off the controls that read or write the serve
 # List the trials to pick from
 scanpath-studio render --sample --list-trials
 
-# The bundled demo
-scanpath-studio render --sample -o scanpath.html
+# The bundled demo: each reading has several screens, so name the one to draw
+scanpath-studio render --sample --screen Paragraph -o scanpath.html
 
 # Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
@@ -2998,22 +3354,22 @@ Hover fields appear in the order you list them. For a column named `pupil, left`
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -3026,19 +3382,20 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
   -o cross.html
 ```
 
-| Goal                                                       | Flags                                                                                                                |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                        |
-| pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                              |
-| arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                |
-| choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                     |
-| name the two scanpaths                                     | `--label-a TEXT --label-b TEXT` (both or neither)                                                                    |
-| style each scanpath                                        | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys))                                                       |
-| leave out the A/B legend                                   | `--no-compare-legend`                                                                                                |
-| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y`                      |
-| take B from another dataset                                | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME` |
-| set the two screen sizes                                   | `--canvas WxH`, `--compare-canvas WxH`                                                                               |
-| replay both on one clock                                   | add `--animate` (HTML output)                                                                                        |
+| Goal                                                       | Flags                                                                                                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                                            |
+| pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                                                  |
+| arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                                    |
+| choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                                         |
+| name the two scanpaths                                     | `--label-a TEXT --label-b TEXT` (both or neither)                                                                                        |
+| style each scanpath                                        | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys))                                                                           |
+| leave out the A/B legend                                   | `--no-compare-legend`                                                                                                                    |
+| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y`                                          |
+| take B from another dataset                                | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME`                     |
+| map B's columns yourself                                   | `--compare-word-schema JSON`, `--compare-fix-schema JSON`, `--compare-raw-gaze-schema JSON`, as `--word-schema` and its siblings map A's |
+| set the two screen sizes                                   | `--canvas WxH`, `--compare-canvas WxH`                                                                                                   |
+| replay both on one clock                                   | add `--animate` (HTML output)                                                                                                            |
 
 `--label-a` / `--label-b` and `--style-a` / `--style-b` apply to the `--animate` replay too.
 
@@ -3075,7 +3432,7 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 `--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
@@ -3114,7 +3471,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   --fix-schema fix_schema.json -o scanpath.html
 ```
 
-A mapping replaces auto-detection for that table, so it has to name every required field, not only the one that failed. It is the same dict `load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+A mapping replaces auto-detection for that table, so it has to name every required field, not only the one that failed. It is the same dict `load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python. A second dataset's tables in a comparison take theirs as `--compare-word-schema`, `--compare-fix-schema` and `--compare-raw-gaze-schema`.
 
 ## render flags
 
@@ -3139,7 +3496,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 | Option                                                                 | Value                                                                              | Default         | Description                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each (`--list-trials` shows them).                                                                                                                                                                                                                                                                    |
+| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each, every screen of a trial from title to feedback (`--list-trials` shows them; `--screen` picks one).                                                                                                                                                                                              |
 | `--authoring`                                                          | `PATH`                                                                             | —               | A draft file from the app's Draw a scanpath screen.                                                                                                                                                                                                                                                                                                                 |
 | `--words`                                                              | `PATH [PATH ...]`                                                                  | —               | The Words table: CSV, TSV, TXT, TAB, Parquet, Feather, XLSX or XLS, or a .zip of them. Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Several paths, or a quoted glob, are stacked into one table.                                                                                                                 |
 | `--fixations`                                                          | `PATH [PATH ...]`                                                                  | —               | The Fixations table, in the formats `--words` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table (e.g. one file per participant).                                                                                                                                                                                    |
@@ -3227,7 +3584,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--line-spacing`           | `N`                                             | —       | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N (default: 3, a blank line above and below).                                                                                                     |
 | `--no-scale-text-to-boxes` | switch                                          | —       | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
 | `--font-size`              | `PX`                                            | `16`    | Base figure font size (default: 16).                                                                                                                                                                                                |
-| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: monospace).                                                                                                                                                                                      |
+| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: the font the data declares for its stimulus, else monospace).                                                                                                                                    |
 
 ### Word boxes
 
@@ -3357,6 +3714,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--width-in`            | `IN`                    | —       | Width in inches for a PNG or a publication project.                                                                                                                                                                                                               |
 | `--proof-width-mm`      | `MM`                    | —       | Total manuscript width of a side-by-side or stacked comparison SVG in mm.                                                                                                                                                                                         |
 | `--dpi`                 | `N`                     | —       | Resolution of `--width-mm` / `--width-in` (default: 300).                                                                                                                                                                                                         |
+| `--compact-png`         | switch                  | —       | Compress a .png output, and its `--separable-layers`, losslessly: the same pixels and metadata in a smaller file, for a little more time.                                                                                                                         |
 | `--separable-layers`    | switch                  | —       | Also write one file per layer (word boxes, fixations, saccades, heatmap, labels, stimulus image) to a `&lt;output&gt;_layers/` folder, to restyle each in Illustrator or Inkscape. The layers line up when stacked. Static image output only: .svg, .pdf or .png. |
 | `--print-code`          | `python`, `cli`, `both` | —       | Print the Python or CLI code that reproduces this figure (python, cli or both), then render as usual. The code sets only the options that differ from the defaults.                                                                                               |
 | `--print-code-explicit` | switch                  | —       | With `--print-code`: write every figure option, including the ones at their defaults.                                                                                                                                                                             |
@@ -3385,6 +3743,9 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--compare-words`                        | `PATH [PATH ...]`                    | —           | The Words table for a second dataset, B's. Same formats and globbing as `--words`.                                                                                                                                                                                                                                                        |
 | `--compare-fixations`                    | `PATH [PATH ...]`                    | —           | The Fixations table for a second dataset, B's. Same formats and globbing as `--fixations`.                                                                                                                                                                                                                                                |
 | `--compare-raw-gaze`                     | `PATH [PATH ...]`                    | —           | The Raw gaze table for the second dataset, drawn under B's scanpath. Same formats as `--raw-gaze`. With no second dataset, `--raw-gaze` already covers both scanpaths.                                                                                                                                                                    |
+| `--compare-word-schema`                  | `JSON`                               | —           | Column mapping for the `--compare-words` table, replacing auto-detection. Same form as `--word-schema`.                                                                                                                                                                                                                                   |
+| `--compare-fix-schema`                   | `JSON`                               | —           | Column mapping for the `--compare-fixations` table, replacing auto-detection. Same form as `--fix-schema`.                                                                                                                                                                                                                                |
+| `--compare-raw-gaze-schema`              | `JSON`                               | —           | Column mapping for the `--compare-raw-gaze` table, replacing auto-detection. Same form as `--raw-gaze-schema`.                                                                                                                                                                                                                            |
 | `--compare-dataset-name`                 | `NAME`                               | `Dataset B` | Name of the second dataset, used in the trace names (default: 'Dataset B').                                                                                                                                                                                                                                                               |
 | `--compare-canvas`                       | `WxH`                                | —           | The second dataset's screen size in px, e.g. 1680x1050. Estimated from its data when left out. An overlay, or `--animate` with both scanpaths, checks it against `--canvas`.                                                                                                                                                              |
 
@@ -3477,6 +3838,131 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 | `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
 | `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
 
+## add
+
+`add` adds your tables to the app's dataset list, as **Add dataset** does, without opening the app. Run `scanpath-studio` afterwards and the app opens on the new dataset. If the app is already open, reload its browser tab right away: changes you make in it before the reload are not saved. It works for an app on your own computer, not a hosted one.
+
+```
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+scanpath-studio add "Pilot 3" --fixations fixations_v2.csv --replace
+```
+
+A name that is already saved is an error unless you pass `--replace`, which swaps the dataset's tables and keeps its annotations, metadata tables, share links, description and recording setup (unless you give a new description or `--canvas`). Without `--canvas`, the app uses a screen the data records, or estimates one from the extent of the data. In Python, use add_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                      |
+| ------ | ------ | -------- | -------------------------------- |
+|        | `NAME` | required | The name the dataset list shows. |
+
+**Options**
+
+| Option                   | Value                 | Default | Description                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--words`                | `PATH [PATH ...]`     | —       | Words table(s), as for render.                                                                                                                                                                                                                                                                                                                                      |
+| `--fixations`            | `PATH [PATH ...]`     | —       | Fixations table(s), as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze`             | `PATH [PATH ...]`     | —       | The Raw gaze table, as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze-schema`      | `JSON`                | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes.                                                                                                                                                                                                                                                              |
+| `--trial-parts-manifest` | `PATH`                | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                             |
+| `--canvas`               | `WxH`                 | —       | The recording's screen in px, e.g. 1920x1080. Without it, a screen the data records is used, else one estimated from the extent of the data; with `--replace`, the saved dataset's setup is kept.                                                                                                                                                                   |
+| `--description`          | `TEXT`                | —       | The sentence the Data Management page shows under its name.                                                                                                                                                                                                                                                                                                         |
+| `--replace`              | switch                | —       | Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless `--description` or `--canvas` gives new ones. Without it, a name already saved is an error.                                                                                                           |
+| `--no-select`            | switch                | —       | Add it to the list without opening the app on it next time.                                                                                                                                                                                                                                                                                                         |
+| `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
+| `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
+| `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## remove
+
+`remove` takes a dataset you added, in the app or with `add`, off the app's dataset list. Its annotations, metadata tables and description go with it, as its **Remove** on the **Data Management** page does. Built-in and public datasets can't be removed. If the app last had it open, it next opens on its default dataset.
+
+```
+scanpath-studio remove "Pilot 3"
+scanpath-studio remove "Pilot 3" --missing-ok   # no error if it isn't there
+```
+
+In Python, use remove_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option         | Value  | Default | Description                                                          |
+| -------------- | ------ | ------- | -------------------------------------------------------------------- |
+| `--missing-ok` | switch | —       | Exit quietly when no dataset has the name, instead of with an error. |
+
+## open
+
+`open` opens the app on a dataset you added, or one the app has itself (the bundled demo, a public corpus), at one reading, with the figure set by the same flags [`render`](#render-flags) takes. If the app is running on this computer, the link opens in your browser. Otherwise `open` starts the app and opens the link once it is up. `--print` prints the link instead.
+
+```
+scanpath-studio open "Pilot 3" -p p07 -t t12
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
+```
+
+The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. In Python, use app_link.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                           |
+| ------ | ------ | -------- | ------------------------------------- |
+|        | `NAME` | required | The dataset's name in the app's list. |
+
+**Options**
+
+| Option               | Value         | Default | Description                                                    |
+| -------------------- | ------------- | ------- | -------------------------------------------------------------- |
+| `-p` `--participant` | `PARTICIPANT` | —       | Participant ID.                                                |
+| `-t` `--trial`       | `TRIAL`       | —       | Trial ID (without it, the participant's first trial).          |
+| `--screen`           | `SCREEN`      | —       | Screen ID within a trial recorded over several screens.        |
+| `--animate`          | switch        | —       | Open the replay of the reading.                                |
+| `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501). |
+| `--print`            | switch        | —       | Print the link and exit, without opening or starting anything. |
+
+## annotations
+
+`annotations` reads and writes the favorites, tags and notes on a dataset you added. `export` writes the same `annotations.json` as **Data Management → Annotations → Export**, or a CSV table with one row per annotated reading. `import` reads either: a CSV needs `participant_id` and `trial_id`, optionally `screen_id`, and any of `favorite`, `tags` (separated by `;`, so a tag can't contain one in a CSV) and `note`. Importing adds a reading's tags to the ones it has, and a favorite or note in the file replaces its own; a blank stays as it was. This differs from the app's **Import**, which keeps or swaps a reading's whole entry. `--replace` makes the dataset's annotations exactly the file's, and is refused when none of the file's readings is in the dataset. Readings the dataset does not have are listed and left out. If the app is open, reload its browser tab to see the new ones.
+
+```
+scanpath-studio annotations import "Pilot 3" qc_flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.json
+```
+
+In Python, use write_annotations and read_annotations.
+
+### annotations export
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option          | Value  | Default  | Description                       |
+| --------------- | ------ | -------- | --------------------------------- |
+| `-o` `--output` | `FILE` | required | The file to write, .json or .csv. |
+
+### annotations import
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+|        | `FILE` | required | The .json or .csv file to read.                         |
+
+**Options**
+
+| Option      | Value  | Default | Description                                                                                                                                                                                              |
+| ----------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--replace` | switch | —       | Make the dataset's annotations exactly the file's, instead of adding the file's to them. Refused when none of the file's readings is in the dataset, so a file made for another dataset deletes nothing. |
+
 ## cache
 
 A local or desktop run saves your session on your computer, so a refresh or a restart resumes where you left off. It saves uploaded datasets, column mappings, view settings, saved designs, metadata tables and annotations. `cache` shows what is stored and can delete it.
@@ -3539,7 +4025,7 @@ You don't have to add the citation to your files by hand: every figure `render` 
 
 # Across the experiment
 
-Mean total fixation duration per word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
+Mean total fixation duration per paragraph word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
 
 1. Open your data in the **Corpus Analysis** view and select **Participants**.
 1. Choose a participant and select **Open participant profile**. In **Chart settings**, set **View** to **Per-trial trend**.
@@ -3563,7 +4049,9 @@ from scanpath_studio.data import derive_trial_index
 from scanpath_studio.plots import make_trend_figure
 
 words, fixations = sps.load_sample_data(names="canonical")
-reader = words[words["participant_id"] == "l37_273"].copy()
+reader = words[
+    (words["participant_id"] == "l37_273") & (words["screen_id"] == "Paragraph")
+].copy()
 reader["trial_index"] = derive_trial_index(reader)
 trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
 fig = make_trend_figure(
@@ -3598,8 +4086,9 @@ Two complete readings of a shorter text, labeled Participant A and Participant B
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_2_4_Ele \
-  --compare-with l7_183:l7_183_2_2_4_Ele --compare-legend --label-a "Participant A" --label-b "Participant B" \
+  -p l37_273 -t l37_273_2_2_4_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_2_4_Ele --compare-screen Paragraph \
+  --compare-legend --label-a "Participant A" --label-b "Participant B" \
   --legend compare=top-center-outside,side-by-side,24 \
   --crop-to-data --crop-margin 50 \
   --highlight-column '' \
@@ -3616,6 +4105,8 @@ fig = sps.compare_scanpaths(
     fixations,
     (pid, tid),
     ("l7_183", "l7_183_2_2_4_Ele"),
+    screen="Paragraph",
+    screen_b="Paragraph",
     labels=("Participant A", "Participant B"),
     fit_to_monitor=False,
     crop_margin=50,
@@ -3715,7 +4206,7 @@ Where fixation time concentrates.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --heatmap --heatmap-style smoothed --no-fixations --no-saccades \
   --highlight-column '' \
   -o heatmap.html
@@ -3731,6 +4222,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     show_heatmap=True,
     heatmap_style="Smoothed",
     show_fixations=False,
@@ -3754,7 +4246,7 @@ Highlight a selected text span alongside its fixations.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --highlight-column is_in_aspan --critical-span-style mark-text \
   --no-saccades -o highlighted-text.html
 ```
@@ -3769,6 +4261,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     highlight_column="is_in_aspan",
     critical_span_style="Mark text",
     show_saccades=False,
@@ -3838,7 +4331,7 @@ sps.save_figure(fig, "illustration.html")
 
 EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
-1. Open the bundled demo in the **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
+1. Open the bundled demo in the **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`, and set **Screen** to **Paragraph**.
 1. Turn on **Raw gaze** and turn off **Saccades**.
 1. In **Fixations** → **Opacity**, set 0.35 so the samples show through.
 
@@ -3846,7 +4339,7 @@ EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_2_2_Adv \
+  -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
   --highlight-column '' \
   -o raw-gaze.html
@@ -3863,6 +4356,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     raw_gaze=raw_gaze,
     fixation_opacity=0.35,
     show_saccades=False,
@@ -3884,7 +4378,7 @@ Show where the text was without showing what it said. Each word is drawn as a ro
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --redact-text --highlight-column '' \
   -o redacted-text.html
 ```
@@ -3894,7 +4388,9 @@ import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
+fig = sps.plot_scanpath(
+    words, fixations, pid, tid, screen="Paragraph", redact_text=True
+)
 
 sps.save_figure(fig, "redacted-text.html")
 ```
@@ -3914,7 +4410,7 @@ Replay a reading in fixation order. Press **▶ Play** above the text to start t
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --animate --fix-index-range 1:40 --playback-speed 2 \
   --highlight-column '' \
   -o replay.html
@@ -3930,6 +4426,7 @@ fig = sps.animate_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     fix_index_range=(1, 40),
     playback_speed=2.0,
 )
@@ -3953,7 +4450,7 @@ ForwardSkipRefixationReturn sweepRegressionOff the text
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --saccade-color-by-type --no-saccade-type-legend \
   --highlight-column '' \
   -o saccade-types.html
@@ -3969,6 +4466,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     saccade_color_mode="By type",
     saccade_type_legend=False,
 )
@@ -3990,7 +4488,7 @@ Fixations and saccades over the text.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --highlight-column '' \
   -o scanpath.html
 ```
@@ -4000,7 +4498,7 @@ import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-fig = sps.plot_scanpath(words, fixations, pid, tid)
+fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
 
 sps.save_figure(fig, "scanpath.html")
 ```
@@ -4019,7 +4517,7 @@ Fixations colored by their nearest text line.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --color-by-line \
   --highlight-column '' \
   -o text-lines.html
@@ -4030,7 +4528,9 @@ import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
 pid, tid = "l37_273", "l37_273_2_1_1_Ele"
-fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
+fig = sps.plot_scanpath(
+    words, fixations, pid, tid, screen="Paragraph", color_by_line=True
+)
 
 sps.save_figure(fig, "text-lines.html")
 ```
@@ -4051,7 +4551,7 @@ A figure ready for a slide or a paper. It has a title above the plot, a caption 
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --saccade-color-by-type \
   --title "One participant, one article" --title-size 34 \
   --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
@@ -4071,6 +4571,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     saccade_color_mode="By type",
     title="One participant, one article",
     title_font_size=34,
@@ -4102,7 +4603,7 @@ Fixation time within each word box.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --heatmap --heatmap-style word-boxes --no-fixations --no-saccades \
   --highlight-column '' \
   -o word-boxes.html
@@ -4118,6 +4619,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     show_heatmap=True,
     heatmap_style="Word boxes",
     show_fixations=False,
@@ -4155,14 +4657,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.48.0},
+  version = {0.49.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Grossman, M., Gruteke Klein, K., Jakobi, D. N., Lion, E., Büth, C., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.48.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Grossman, M., Gruteke Klein, K., Jakobi, D. N., Lion, E., Büth, C., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.49.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 
@@ -4193,99 +4695,124 @@ Developed with AI assistance. Cross-check results before publishing.
 
 # What's new
 
-## Release v0.48.0
+## Release v0.49.0
 
 ### Added
 
-- Use the arrow keys to browse trials and Space to play or pause a scanpath replay, including from the replay time slider.
-- The check command reports how many rows were read and checked, including why a table supplied no usable rows. Use --json-report to save these counts alongside the findings.
-- Inspect the readings behind a cohort value, compare profile revisions, download a methods draft, calculate within-participant contrasts, and rerun a two-group word difference from its recipe.
-- CSV bundles now include a type and unit dictionary and an editable R reader that preserves identifiers such as 01, literal NA identifiers, and missing measurements.
-- Preview bundle contents lists planned per-trial paths, table columns and selected annotations, and identifies stimulus words and images that may accompany a figure.
-- The interaction benchmark measures opening a first trial, switching readings and recoloring markers, with counts of data reads, normalization, selections and figure builds for each action.
-- A packaged synthetic study includes two source tables, recording setup, a tagged exclusion, figure settings and a cohort recipe written by Scanpath Studio v0.37.0. The example recreates its manuscript figure and checks the original results table.
-- Export can proof a side-by-side or stacked comparison at its manuscript width. Check the label sizes in points, save a vector SVG with physical dimensions, and restore the panel selection and shared color limits for a revision.
-- Use Previous fixation and Next fixation above a replay to inspect the fixation’s onset, duration and assigned word. The shared HTML replay keeps these controls when downloaded. Long replays now build the live view from a single trace template.
-- Retry failed figures and individual layer files in the last export bundle while the selected data and settings still match. Successful files keep their contents and paths.
-- Review incoming trial and screen annotations before applying them, inspect both versions of disputed notes, and keep independent edits from two local sessions.
-- Compare received readings with the experiment run sheet, inspect data-check findings by reading, preview changed reading IDs, and download inclusion counts and individual exclusion reasons.
-- Labs can attach a title, authors, version, DOI or preferred wording to an uploaded dataset. Cite and export bundles include the saved credits and identify the second dataset of a comparison. Programmatic comparison bundles include both dataset references in `CITATION.bib`. Open an included settings file to restore both readings, their selected screens and the comparison layout.
-- In Python, load data with `include_source_cells=True` and call `explain_fixation()` to see a fixation’s input row, file, original units and word assignment. Merged fixations list their contributing rows.
-- Plot gaze position and pupil measurements against recorded time or sample number. The OneStop demo includes every recorded sample, with its tracked eye, pupil area and missing positions.
-- Animation can replay saccades with the fixation markers hidden, for one reading or two.
-- Bulk export can now use lossless compression for smaller PNG figures and layers.
-- Compare readings on shared numeric axes, highlight word borders in comparisons and replays, and use the fixation window and sequence line with markers hidden. Plot controls grey out when the selected view or data cannot use them.
-- Prepare the current scanpath, replay or corpus chart for a paper or slide. Download it directly, or crop it, label events and edit its caption. Print settings include journal and slide sizes.
-- Word highlights can now underline individual words in the current text color.
+- Hovering over Scanpath View, Corpus Analysis or Data Management in the top navigation now says what each view is for.
+- Smaller PNG files works outside the app too: `render --compact-png` and `save_figure(..., compact_png=True)` / `save_figure_layers(..., compact_png=True)` compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.
+- Share links carry *Keep this range across trials* (`fix_range_all_trials=1`), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.
+- Add a dataset to the app's dataset list from a script with `add_dataset` or `scanpath-studio add`, and remove one with `remove_dataset` or `scanpath-studio remove`; the next local app session opens on a dataset just added.
+- Each part of Plot controls (Presets, Palette, Modes, Customize) can be folded away with the chevron beside its label; a folded line names the current choice, and the browser remembers what you folded.
+- Read and write a saved dataset's favorites, tags and notes from a script with `read_annotations` / `write_annotations` or `scanpath-studio annotations export` / `import`, so a quality-control script's tags show up in the app's trial filters.
+- A script can open the app on a dataset it added, at one reading and figure: `api.app_link` writes the link Share would, and `scanpath-studio open` opens it in the browser (starting the app if it isn't running) with the figure set by the same flags `render` takes.
 
 ### Changed
 
-- Corpus Analysis shows the participant profiles immediately after the measure and aggregation pickers. The cohort overlay, normalization and measure definition sit below the chart.
-- Fixation markers and saccades accept opacity from 0 to 1 in the app, shared settings, CLI and Python API, including fully transparent marks.
-- Open the import wizard directly from the welcome tour, find upload buttons by table name, and use the guide with reduced motion.
-- Choose a tool in the Essentials trial picker to open it in Full. Undo and Redo describe the value they will restore, Share explains what the recipient needs, and the import guide opens folded on narrow screens.
-- Large bundles use less memory when writing gaze CSVs and spend less time assigning duplicate filenames and preparing single-screen trials.
-- Switching trials reuses the current table’s position index, matching metadata is folded in groups, and out-of-text tests and cohort bootstrap intervals use bounded memory.
-- After Add dataset identifies an unresolved mapping, activate its message to focus the matching control. Selecting the duration column clears its warning and shows how two source values convert to milliseconds.
-- On phones, the Scanpath view choices sit directly below the figure, ahead of Export and the other trial panels.
-- Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
-- Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
-- Essentials and Full share their view controls and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
-- Full plot controls now have Layers, Axes and Figure tabs. Open a layer by name to style it, use its switch to change visibility, or choose a chart by fixation order or time in Axes.
-- In Full, search for a plot setting to open its controls directly. Each editor puts common adjustments first and groups detailed styling, timing and layout options under their own headings.
-- Switch Animation on or off from Plot controls, plot horizontal fixation position with Gaze over time, or return to your last hand-edited figure with Custom.
-- About & citation opens with a short project overview. Citation has the APA and BibTeX references, and App details groups privacy, updates and support.
-- Help now offers offline task guides and troubleshooting. Start the sample replay or import guide when you need it, and send suggestions to GitHub Ideas. Documentation ↗ opens in a new tab.
-- Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.
-- The fixation size legend starts hidden. Turn on Fixation sizes under Figure & canvas → Legends to include it in a figure.
-- The bundled demo now uses two readers from the published OneStop L1 cohort and includes recorded EyeLink gaze samples for all 24 readings. Demo participant and trial IDs have changed.
-- Bulk PNG, SVG and PDF exports reuse the browser page across trials and prepare the next figure during rendering. Large bundles download from temporary disk in small pieces as one ZIP.
-- Bulk exports run faster on large datasets whose rows are grouped by trial.
-- Corpus Analysis opens with a chart of texts or participants. Select a dot for its readings, open a word or participant profile, or choose Groups to compare two conditions. Chart settings, tables and downloads open on demand.
-- Corpus Analysis places profile shortcuts beside Texts and Participants, groups the dataset counts with their filters, and brings the reading measure and figure style together above the chart.
-- Plot controls now show Colorblind-safe, Grayscale and High contrast as palette tiles with swatches, place My views below the view tiles, and put the Animation switch beside its playback settings.
-- The main navigation tab for inspecting a reading is now called Scanpath View.
-- The software credits and citations now include Carlson Büth and list Maya Grossman before Keren Gruteke Klein and Deborah N. Jakobi before Ella Lion.
-- Data Management now lists the dataset’s supplied reading measures under Tables → Words.
-- The documentation screenshots and walkthroughs now show Scanpath View, the updated plot controls and the current export steps.
+- Buttons, help text and guides now name the Scanpath View tab as it appears in the navigation.
+- The hosted demo keeps its cached figures and tables within a memory budget, dropping the least recently used ones when many people use it at once.
+- The Texts and Participants summary captions now say how the means are weighted: each participant counts equally in a text mean, and each reading counts equally in a participant mean.
+- A table inside a zip with rows that have more fields than its header is read like the same table on its own: the Add-dataset wizard skips those rows and names their lines, instead of refusing the archive.
+- Gaze charts name their axes clearly: recorded timestamps read "Recorded time (ms)" and pupil charts "Pupil area (tracker units)" or "Pupil diameter (tracker units)", instead of "Time (ms)" and the raw column name.
+- `animate_scanpath` and `render --animate` now refuse a replay with both fixations and saccades hidden, which used to produce an empty replay, with a message naming the two settings.
+- Comparison links that use the Print / grayscale palette and were made before v0.48.0 draw the two readers in dark and light grey since v0.48.0, scanpath B with hollow markers and dashed saccades, instead of blue and red; set each scanpath's colors again under Scanpath A and Scanpath B in the Fixations and Saccades settings to bring blue and red back.
+- The fixation size legend is also off by default in `plot_scanpath` and `render` output since v0.48.0; turn it on with `duration_size_legend=True`, `render --duration-size-legend`, or Fixation sizes under Figure → Legends in the app.
+- `render` now stops with a message when `--compare-words`, `--compare-fixations` or their mapping flags are given without `--compare-with`, which they need; before, it ignored them.
+- animate_scanpath refuses the raw-gaze style and heatmap colour-bar options by name, which the replay never draws, instead of accepting and ignoring them.
+- Excel workbooks, .xlsx and legacy .xls alike, are read with calamine, which pandas is moving to, instead of openpyxl and the deprecated xlrd; neither is installed with the app any more.
+- A scanpath figure or replay built directly with the plotting module (FigureSettings, make_scanpath_figure, make_scanpath_animation) now draws fixations at the app's, the API's and the CLI's default opacity, 0.7, not 1.0.
+- Changing a dataset's mapping in Edit dataset no longer adds unique_trial_id / unique_text_id columns that adding the same files with that mapping would not, so an edited dataset exports the columns a freshly added one does.
+- The "Stopped loading" notice is now a light banner with a clearer Try again button and a ✕ to close it.
+- Plot controls stay in view and scroll on their own beside the figure; Reset visualization is now a compact Reset, with larger Undo and Redo buttons.
+- Plot controls are grouped under Presets, Palette, Modes and Customize: View is now Presets, My views is now My presets, the Animation switch is now Playback, and Axis preset is now Axis layout.
+- The bundled demo keeps every screen of each reading — title, question preview, paragraph, question, answers and feedback — each with the experiment's own stimulus image placed where the experiment drew it, and raw gaze for every screen. A demo trial opens on its paragraph and numbers its fixations across all its screens; a demo link or settings file saved by an earlier release still opens the paragraph on the same fixations, but a script must now name the paragraph (`--screen Paragraph`, `screen="Paragraph"`) to draw it, a fixation-index window counts from the trial's first screen, and the demo's export bundle files each screen under `screens/`.
+- OneStop's word tables, the demo's included, carry stimulus_font_px and stimulus_font_family columns, and a demo link or settings file that never named a font now opens in Lucida Sans Typewriter; plot_scanpath, animate_scanpath and compare_scanpaths draw the declared font unless font_family is passed.
 
 ### Removed
 
-- Removed the undocumented Python helpers `scanpath_studio.export.pair_export` and `ComparisonSide`. Comparison figures can be saved from the app or with `save_figure`.
-- Retired the individual workflow GIFs in `assets/workflows/`. The docs carry the videos and posters, and the README keeps its overview animation.
+- The package no longer ships a CSV copy of the demo raw gaze (`sample_data/raw_gaze.csv`); `load_sample_raw_gaze()` reads the bundled Parquet, and the download is about 3 MB smaller.
 
 ### Fixed
 
-- Static figure exports now require Kaleido 1.5.2 or later to prevent intermittent failures while the browser loads its plotting scripts.
-- Cohort figures use finite observations, weight repeated readings consistently, distinguish stimulus versions, and show gaps and units for the selected estimate.
-- Setting a reading’s fixation opacity to zero now makes its markers transparent in comparisons and two-reading replays.
-- Single and comparison heatmaps use the same word assignments and label log scales in their original units. Relative marker sizing uses both visible readings in Compare. Heart outlines respond to the selected width, and a category containing “heatmap” stays in the fixation export layer.
-- Two local app processes saving different review notes to the same recovery folder now preserve both edits. Clearing a folder waits for an active save or restore to finish.
-- Corpus Analysis distribution charts label within-participant z-scores in standard deviation units.
-- Comparison tables preserve lab columns that share a name with the dataset or A/B labels, and replacing attached metadata keeps the fields explicitly selected for publication.
-- Export previews follow the selected format, screen and file pattern. Incomplete scopes produce no trials, and screen selections include only those screens’ annotations and their parent trial notes.
-- Figure settings files restore narrowed fixation windows for both readings. Shared titles and captions preserve linguistic tags such as `<NP>`. Generated captions include raw gaze when the figure draws usable samples.
-- Importing large fixation tables uses less memory when recording source filenames.
-- Headless trial listings leave stderr quiet. Render and Share → Code preserve comparison IDs containing colons, uploaded column names containing commas, single-table inputs, and exact hover field selections.
-- Recipes, annotations, column mappings and multipart manifests accept UTF-8 BOMs and Unicode JSON encodings. An unmatched reading in a screen listing points to the available trials.
-- Table imports preserve literal reader IDs, report overlong records by line, identify the worksheet read, and show differences from a pilot’s saved mapping.
-- The OneStop manuscript figures include the full recorded scanpaths, and the replay montage preserves the bottom of its final frame.
-- Word labels in mixed-script passages follow each word's writing direction. Two sample CSVs show a Hebrew and Arabic reading with English, numbers, punctuation and a return fixation.
-- Opening a direct link to Corpus Analysis, Data Management, or Help on a first visit now opens the requested destination without the welcome tour taking over.
-- The manuscript scripts use canonical data columns and compare geometry-derived reading measures against EyeLink values. The corpus figure identifies the passage by its recorded ID and selects it consistently when reader counts tie. The benchmark uses the same readers in both input tables and labels post-stage memory measurements. The change verifier checks restored options and fresh output files.
-- Custom bundle paths extract on Windows even when participant or trial IDs use reserved device names or end in a period.
-- Publication-sized PNG layers use the composite’s dimensions and print density. Re-exporting layers removes obsolete files from the previous export. A failed render preserves the previous figure or layer set. Multipart figures retain their recorded screen numbers.
-- The desktop launcher waits for Streamlit's health response before opening the window. Update instructions preserve VCS branches, forks and package subdirectories and identify installs pinned to a commit.
-- Categorical fixation colors stay consistent across readings, and the index chart respects the selected connector style, width and opacity. Figure descriptions count the fixations and gaze samples drawn. With stimulus redaction on, the Hover and Export panels identify selected text fields that can still appear in HTML.
-- Replays preserve recorded gaps before long fixations. At a low GIF or MP4 frame cap, each image shows the fixations reached by its display time. A late fixation can fall after the last image.
-- If the local recovery cache cannot be locked, the app opens with saving paused and keeps the saved session available for a later launch.
-- HTML replays build frames as you play or seek, reducing memory use for long readings in the app and in saved files.
-- Commands copied from Share now accept participant, trial and screen IDs that start with a hyphen on either side of a comparison.
-- Comparison links and generated Python and CLI commands preserve each reader’s marker fill, colors and line styles when using the print palette.
-- A tab with an older recovery copy warns you before it can overwrite newer saved work. Your edits stay available in the tab to export.
-- Saving a static figure uses the shared renderer and reports when an installed browser has not finished starting Kaleido. HTML, PNG, SVG and PDF retain their citation.
-- After Undo or Redo, you can reopen a plot menu and immediately change the restored setting again.
-- The replay timer is easier to read in dark mode.
-- Screens with gaze samples alone appear in the trial picker and exports. Comparisons place each reading’s samples on its recorded screen. Saccade peak speeds use consecutive positions from the same eye and screen and skip gaps in tracking.
+- The Raw gaze switch can be turned off on a trial with no samples of its own, and its "no samples" warning no longer shows during Animation or for a dataset without raw gaze.
+- Clicking the Custom view no longer switches Compare readings on or off, or puts back an earlier replay speed, autoplay or smoothness.
+- When the chosen axes are ones fixations don't have, such as pupil area, the Fixations switch and its menu now say so instead of greying out with no reason.
+- Gaze over time now draws its small onset markers in Compare readings too, so large markers no longer hide short fixations; choosing a view sets both readings' marker size.
+- A replay always shows fixations or saccades: the last of the two cannot be switched off while it plays, and a replay opened with both off shows its fixations.
+- Changing the replay's speed, autoplay or smoothness no longer switches the view to Custom, and Essentials no longer reports it as a setting from Full.
+- After Undo, opening Stimulus → Text and changing the font size, line spacing or other text settings back keeps your change instead of putting the undone value back.
+- Groups → Overlaid distributions with Z-score per participant now z-scores each participant once over all their selected trials before splitting the groups, so a participant who read both conditions keeps the difference between them.
+- Corpus Analysis stays responsive on large datasets while Study inclusion and exclusions is open: the report is worked out once per filter change instead of on every rerun, and its CSVs are written only when you download them.
+- Corpus Analysis keeps its place when you visit another view or open a Help item: the destination, profile and measure you chose are still there when you come back.
+- Measure on the stimulus keeps the stimulus version you chose for a text after you visit another view, instead of hiding the figure until you choose again.
+- With Aggregate set to Sum, an IQR spread is now drawn as the 95% bootstrap interval of the sum, as SD and SEM already were, instead of the quartiles of the individual values around the total; the recipe and the methods draft say so.
+- The "Updated in this session" line under a trial's annotations now appears only in the editor of the trial you changed, and goes once you open another trial, instead of following you to every trial of the dataset.
+- While a conflict over a trial's note waits for you to resolve it, the app no longer writes and deletes this tab's unsaved datasets on disk on every click.
+- A damaged dataset-citation entry in the saved session no longer throws away every other restored setting: only that entry is left out.
+- Large CSV and TSV tables load faster again: a planned read no longer checks every line against the header before reading, only a table that turns out to have a row with a field too many, and that check keeps the loading card live and Cancel working.
+- Tables written by R's write.table() with its default row names (a header one column shorter than every row) load again, through the Add-dataset wizard, the API and the CLI, with the row names left out; a table with rows that really have too many fields now says how many and what each has.
+- Two tabs or windows that share saved work now merge each other's trial notes, stars and tags as promised, whatever page, trial or plot settings each has open: those are each tab's own, and the last one to save wins them.
+- On Windows, a window that opens while another one is still saving large datasets now waits for that save, instead of giving up after about ten seconds, calling the saved work unreadable and pausing saving.
+- CSV tables in an export bundle now carry the time they were written instead of 1 January 1980.
+- Changing an export setting while a large bundle is still downloading no longer stops the download; the replaced bundle stays available for 30 minutes.
+- Preview bundle contents in the Export tab is no longer re-planned on every interaction while it is open, which took seconds on a large corpus with a custom path pattern.
+- The read_csv.R reader in CSV bundles now says "Choose a CSV listed in dictionary$csv_files" for a path it does not know, instead of a cryptic R error.
+- A figure too large for the raster pixel limit is no longer offered for Retry failed figure files, since retrying with the same settings cannot make it.
+- Retrying failed figures in an export bundle larger than 2 GiB now makes a ZIP that macOS Archive Utility and other extractors can open.
+- Exported GIFs and MP4s end on the complete scanpath again; most readings had lost their last one or two fixations.
+- The bundled demo's raw gaze leaves the pupil area blank where the tracker lost the eye, so a pupil chart shows a gap at each blink instead of dropping to zero.
+- Each category now keeps one color in every trial of a dataset, and up to 20 categories get clearly different colors; several used to look almost identical, such as three purples for the demo's saccade types.
+- In a right-to-left or mixed-script passage, a word made only of digits or punctuation is drawn in the direction of the words around it, so a period ending an Arabic or Hebrew sentence sits on the left.
+- The experimental saccade table (with `SCANPATH_EXPERIMENTAL=1`) leaves the peak speed blank for a saccade that spans a blink or lost signal, instead of reporting thousands of degrees per second.
+- In a replay, the first Previous fixation press after pausing or scrubbing goes to the fixation before the one on screen instead of seeming to do nothing, and the fixation buttons work in Safari before 15.4.
+- The replay timer has a light background in the light theme again, even when the computer is in dark mode.
+- Share links and settings files from before v0.48.0 that open a replay with fixations hidden show the fixations again, as they were drawn when saved, instead of an empty or saccades-only replay; a saccades-only replay linked from v0.48.0 itself also reopens with fixations, while links made from now on keep it saccades-only.
+- `render --print-code` and `figure_code` keep scanpath B's fixation window (`--compare-fix-index-range`, `fix_index_range_b=`), so the printed recipe for a comparison or a two-reading replay draws the same B as the command it came from.
+- The sample-number axis (`x_field="sample_index"`, `render --x-field sample_index`) draws raw gaze recorded with timestamps too, numbering each reading's samples in recorded order per screen and eye, instead of an empty chart; and a shared link whose chart axis the opened reading lacks falls back to the screen axes, rather than plotting one field against itself.
+- The chart axis pickers offer the sample number for gaze samples recorded with timestamps.
+- Each visitor to the bundled demo uses about 70 MB less memory: every session now shares one copy of the demo's gaze samples.
+- Each interaction on a trial with raw-gaze samples is faster, most on long high-rate recordings: finding the cached figure no longer reads all of the trial's samples.
+- Opening a large dataset and changing its trial filters is faster: finding the columns the trial picker can sort by no longer runs Python code for each reading.
+- Use this size for batch export now gives the export bundle the width of the prepared artwork, without the page margins, so batch figures print with the same lettering as the proof instead of about 5% larger; the editor also says that the crop, labels and caption are not applied to batch figures.
+- Prepare figure no longer fails to make an MP4 when the suggested caption is printed below the replay: every frame of the clip, and its poster, keeps room for the caption's longest reading time.
+- A Corpus Analysis chart's Prepare figure for export section stays open, with its draft, when a note or control appears above the chart.
+- An emptied caption in Prepare figure no longer leaves a blank caption line below the figure when the caption is set to print with it.
+- Preparing a PDF or the offline editor in Prepare figure now shows a loading card with its progress, as the clip does, instead of a page that seems to hang.
+- Two Prepare figure sections open at once, such as a Corpus Analysis chart and its text's stimulus, no longer rebuild each other's editor on every rerun.
+- Scanpath B's fixation and saccade filters, the exported figure's width and DPI, whether the trial summary shows above the plot, and "keep this range across trials" are kept when the app restarts.
+- A renamed built-in dataset that needs a number to stay unique keeps its name within the 80-character limit, as an uploaded dataset's already did.
+- Removing a dataset also clears its saved filters, remembered trial and Compare selection, and closes Edit dataset if it was open on it, so a dataset added later under the same name opens unfiltered on its own first trial, and saving the editor cannot rename another dataset.
+- Saving a drawn scanpath keeps the participant, trial and text tables attached to the draft, as it already kept the draft's annotations.
+- A share link with a value a menu does not offer (a misspelt line style or background, say) now says it ignored that value, as it already did for colours and numbers, instead of quietly using the default. Menu values are matched ignoring capitalisation, and a colour scale may be any Plotly scale, as on the command line.
+- Colouring by, hovering, or picking a column that the next dataset you open lacks no longer forgets the choice: it comes back when you return to a dataset that has the column, unless you changed it in between.
+- Share → Code for a comparison whose scanpath B comes from a second, hand-mapped dataset now passes B's column mapping on, so the code reads B's files as the app did. `render` takes it as `--compare-word-schema`, `--compare-fix-schema` and `--compare-raw-gaze-schema`, and `figure_code` as `compare_source_options`.
+- `compare_scanpaths` and `animate_scanpath` on a dataset recorded as raw gaze alone now say that they need fixations. Before, the comparison failed with a `TypeError` and the replay said no trial existed.
+- Splitting a comparison into one file per layer (`render --separable-layers`, `save_figure_layers`) now files its saccades, raw gaze and heatmap colour bar under their own layers; before, all three landed in the fixations file.
+- The stimulus image's offset boxes and the fixation-flag threshold boxes now stop at the range a share link carries (±5000 px, 1–60,000 ms). Before, a value past it showed on screen but a share link cut it back to the limit. A settings file holding such a value is now restored at the limit too.
+- With Favorites only, a tag filter or a trial-metadata filter on, for the scanpath or for Compare's second one, a click no longer re-filters the whole dataset: the filtered trials are kept until the data, the filter or your stars and tags change (about 0.5 s a click on a full OneStop corpus).
+- Compare and the Comparisons grid redraw their figures only when something in them changes, not on every click elsewhere in the app; the static figure already worked this way.
+- A long session, or a server shared by many, no longer keeps every scanpath figure it has drawn in memory: the app keeps the 32 most recent.
+- Preparing a publication figure no longer waits forever when the browser drawing it stops answering: after two minutes without a reply it stops with an error, and you can try again.
+- A closed settings menu no longer brings back a value you changed elsewhere for four controls: undoing the replay's Smoothness or a word highlight now holds, a palette set by a settings file stays on Corpus Analysis, and a new dataset gets its own Stimulus & context fields.
+- Editing a dataset's column mapping now keeps the files' own paragraph ids, as adding the files does, and no longer leaves behind a copy of the participant column that a combined Trial ID had used.
+- A colour range set by a settings file, a link or *Use this heatmap range for other trials* now stays, instead of going back to Auto or the old range when the menu showing it had been opened before.
+- Settings restored from a settings file, and an added dataset's own text size and spacing, no longer revert when a menu you had opened before sends back its old values.
+- A stimulus page image replaced on disk at the same path now shows the next time the figure is drawn, instead of the old page until a setting changed.
+- A setting changed by a view tile, Undo, Reset or a settings file no longer goes back to its old value when the app reruns itself right after, for example when a dialog closes or a Help page opens.
+- Choosing participants no longer brings back readings a condition leaves out: a condition only the Words table carries now still applies when the chosen readers have no Words rows.
+- Legends placed at neighbouring spots (along one edge, or round one corner) no longer overlap each other when one is wide or tall for the figure: the later one moves aside, unless that would carry it out of the figure.
+- The Plot controls rail stays below the header and inside the window, so its last controls show without scrolling the page.
+- Corpus Analysis no longer stops with an error on a screen whose reading-measure flags are all missing.
+- On a phone, a trial with several screens names its screen in a line of text beside its ◀ ▶ in place of the dropdown, so the screen steps take a short line and the figure's view choices stay on the first screen in Essentials.
+- The screen you picked in a multi-screen trial stays picked after a visit to Corpus Analysis or Data Management, and turning Compare off no longer stops undo from recording your next plot edit.
+- Stimulus & context keeps its highlighted spans when you step through a screen with no highlighted words, such as a title, and picks them up even when a trial opens on such a screen.
+- On multi-screen trials the experimental per-word reading measures (`compute_word_metrics`, behind `SCANPATH_EXPERIMENTAL=1`) keep each word's screen ID and screen number, so they merge back onto the words one row per word, and the Data page's derived Trial summary, Participant summary and Sentences tables now count every screen's words instead of folding screens that share word IDs together.
+- The Data page's Texts table no longer passes off one reader's version of a screen as every reader's: a screen, or a text, that readers saw differently — the demo's answer orders and feedback — is shown once per version with the readers who saw it, and a Differs by reader column names those screens.
+- The Data page's checks no longer flag a fixation that a screen's recording end cuts to 0 ms, as in the bundled demo.
+- `api.app_link` and `scanpath-studio open` open the bundled demo and the public corpora by the name the dataset list shows, instead of saying the dataset isn't available here.
+- The blank band between the header and the dataset and trial pickers is gone.
+- The trial summary's chips no longer turn black after the ✏️ menu is opened for the first time in a session.
+- Switching subtabs while scrolled to the bottom of a tall one, such as Export, no longer makes the page jump.
+- The bundled demo and OneStop draw their word labels in Lucida Sans Typewriter, the font the experiment used, at its size on every screen, so a one-word Feedback screen is no longer drawn too large; where the font isn't installed, labels fall back to the browser's monospace.
 
 [Browse earlier releases on GitHub](https://github.com/lacclab/scanpath-studio/releases)

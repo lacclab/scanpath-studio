@@ -12,7 +12,7 @@ A figure ready for a slide or a paper. It has a title above the plot, a caption 
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --saccade-color-by-type \
   --title "One participant, one article" --title-size 34 \
   --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
@@ -32,6 +32,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     saccade_color_mode="By type",
     title="One participant, one article",
     title_font_size=34,

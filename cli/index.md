@@ -10,6 +10,10 @@
 | [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
 | [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
 | [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`add`](#add)                               | Add your tables to the app's dataset list                    |
+| [`remove`](#remove)                         | Remove a dataset you added from that list                    |
+| [`annotations`](#annotations)               | Read or write a dataset's favorites, tags and notes          |
+| [`open`](#open)                             | Open the app on a dataset you added, at a reading and figure |
 | [`cache`](#cache)                           | Show or clear the recovery cache                             |
 | [`version`](#version)                       | Show the build, and whether a newer release is out           |
 | [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
@@ -21,7 +25,7 @@ Each command takes `--help`, and `scanpath-studio --version` prints the version.
 Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```
-scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio render --sample --screen Paragraph --width-mm 85 -o reading.publication.json
 scanpath-studio publication reading.publication.json -o reading.html
 scanpath-studio publication figure-2.json -o figure-2.pdf
 ```
@@ -55,8 +59,8 @@ Served on a network, the app turns off the controls that read or write the serve
 # List the trials to pick from
 scanpath-studio render --sample --list-trials
 
-# The bundled demo
-scanpath-studio render --sample -o scanpath.html
+# The bundled demo: each reading has several screens, so name the one to draw
+scanpath-studio render --sample --screen Paragraph -o scanpath.html
 
 # Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
@@ -101,22 +105,22 @@ Hover fields appear in the order you list them. For a column named `pupil, left`
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
-  --compare-with l7_183:l7_183_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-screen Paragraph \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -129,19 +133,20 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
   -o cross.html
 ```
 
-| Goal                                                       | Flags                                                                                                                |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                        |
-| pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                              |
-| arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                |
-| choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                     |
-| name the two scanpaths                                     | `--label-a TEXT --label-b TEXT` (both or neither)                                                                    |
-| style each scanpath                                        | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys))                                                       |
-| leave out the A/B legend                                   | `--no-compare-legend`                                                                                                |
-| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y`                      |
-| take B from another dataset                                | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME` |
-| set the two screen sizes                                   | `--canvas WxH`, `--compare-canvas WxH`                                                                               |
-| replay both on one clock                                   | add `--animate` (HTML output)                                                                                        |
+| Goal                                                       | Flags                                                                                                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                                            |
+| pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                                                  |
+| arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                                    |
+| choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                                         |
+| name the two scanpaths                                     | `--label-a TEXT --label-b TEXT` (both or neither)                                                                                        |
+| style each scanpath                                        | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys))                                                                           |
+| leave out the A/B legend                                   | `--no-compare-legend`                                                                                                                    |
+| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y`                                          |
+| take B from another dataset                                | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME`                     |
+| map B's columns yourself                                   | `--compare-word-schema JSON`, `--compare-fix-schema JSON`, `--compare-raw-gaze-schema JSON`, as `--word-schema` and its siblings map A's |
+| set the two screen sizes                                   | `--canvas WxH`, `--compare-canvas WxH`                                                                                                   |
+| replay both on one clock                                   | add `--animate` (HTML output)                                                                                                            |
 
 `--label-a` / `--label-b` and `--style-a` / `--style-b` apply to the `--animate` replay too.
 
@@ -178,7 +183,7 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 `--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
@@ -217,7 +222,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   --fix-schema fix_schema.json -o scanpath.html
 ```
 
-A mapping replaces auto-detection for that table, so it has to name every required field, not only the one that failed. It is the same dict `load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python.
+A mapping replaces auto-detection for that table, so it has to name every required field, not only the one that failed. It is the same dict `load_scanpath_data(word_schema=…, fix_schema=…)` takes in Python. A second dataset's tables in a comparison take theirs as `--compare-word-schema`, `--compare-fix-schema` and `--compare-raw-gaze-schema`.
 
 ## render flags
 
@@ -242,7 +247,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 | Option                                                                 | Value                                                                              | Default         | Description                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each (`--list-trials` shows them).                                                                                                                                                                                                                                                                    |
+| `--sample`                                                             | switch                                                                             | —               | Use the bundled demo, from OneStop: 2 participants, 12 trials each, every screen of a trial from title to feedback (`--list-trials` shows them; `--screen` picks one).                                                                                                                                                                                              |
 | `--authoring`                                                          | `PATH`                                                                             | —               | A draft file from the app's Draw a scanpath screen.                                                                                                                                                                                                                                                                                                                 |
 | `--words`                                                              | `PATH [PATH ...]`                                                                  | —               | The Words table: CSV, TSV, TXT, TAB, Parquet, Feather, XLSX or XLS, or a .zip of them. Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Several paths, or a quoted glob, are stacked into one table.                                                                                                                 |
 | `--fixations`                                                          | `PATH [PATH ...]`                                                                  | —               | The Fixations table, in the formats `--words` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table (e.g. one file per participant).                                                                                                                                                                                    |
@@ -330,7 +335,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--line-spacing`           | `N`                                             | —       | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N (default: 3, a blank line above and below).                                                                                                     |
 | `--no-scale-text-to-boxes` | switch                                          | —       | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
 | `--font-size`              | `PX`                                            | `16`    | Base figure font size (default: 16).                                                                                                                                                                                                |
-| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: monospace).                                                                                                                                                                                      |
+| `--font-family`            | `NAME`                                          | —       | Font for all figure text (default: the font the data declares for its stimulus, else monospace).                                                                                                                                    |
 
 ### Word boxes
 
@@ -460,6 +465,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--width-in`            | `IN`                    | —       | Width in inches for a PNG or a publication project.                                                                                                                                                                                                               |
 | `--proof-width-mm`      | `MM`                    | —       | Total manuscript width of a side-by-side or stacked comparison SVG in mm.                                                                                                                                                                                         |
 | `--dpi`                 | `N`                     | —       | Resolution of `--width-mm` / `--width-in` (default: 300).                                                                                                                                                                                                         |
+| `--compact-png`         | switch                  | —       | Compress a .png output, and its `--separable-layers`, losslessly: the same pixels and metadata in a smaller file, for a little more time.                                                                                                                         |
 | `--separable-layers`    | switch                  | —       | Also write one file per layer (word boxes, fixations, saccades, heatmap, labels, stimulus image) to a `&lt;output&gt;_layers/` folder, to restyle each in Illustrator or Inkscape. The layers line up when stacked. Static image output only: .svg, .pdf or .png. |
 | `--print-code`          | `python`, `cli`, `both` | —       | Print the Python or CLI code that reproduces this figure (python, cli or both), then render as usual. The code sets only the options that differ from the defaults.                                                                                               |
 | `--print-code-explicit` | switch                  | —       | With `--print-code`: write every figure option, including the ones at their defaults.                                                                                                                                                                             |
@@ -488,6 +494,9 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--compare-words`                        | `PATH [PATH ...]`                    | —           | The Words table for a second dataset, B's. Same formats and globbing as `--words`.                                                                                                                                                                                                                                                        |
 | `--compare-fixations`                    | `PATH [PATH ...]`                    | —           | The Fixations table for a second dataset, B's. Same formats and globbing as `--fixations`.                                                                                                                                                                                                                                                |
 | `--compare-raw-gaze`                     | `PATH [PATH ...]`                    | —           | The Raw gaze table for the second dataset, drawn under B's scanpath. Same formats as `--raw-gaze`. With no second dataset, `--raw-gaze` already covers both scanpaths.                                                                                                                                                                    |
+| `--compare-word-schema`                  | `JSON`                               | —           | Column mapping for the `--compare-words` table, replacing auto-detection. Same form as `--word-schema`.                                                                                                                                                                                                                                   |
+| `--compare-fix-schema`                   | `JSON`                               | —           | Column mapping for the `--compare-fixations` table, replacing auto-detection. Same form as `--fix-schema`.                                                                                                                                                                                                                                |
+| `--compare-raw-gaze-schema`              | `JSON`                               | —           | Column mapping for the `--compare-raw-gaze` table, replacing auto-detection. Same form as `--raw-gaze-schema`.                                                                                                                                                                                                                            |
 | `--compare-dataset-name`                 | `NAME`                               | `Dataset B` | Name of the second dataset, used in the trace names (default: 'Dataset B').                                                                                                                                                                                                                                                               |
 | `--compare-canvas`                       | `WxH`                                | —           | The second dataset's screen size in px, e.g. 1680x1050. Estimated from its data when left out. An overlay, or `--animate` with both scanpaths, checks it against `--canvas`.                                                                                                                                                              |
 
@@ -579,6 +588,131 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 | `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
 | `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
 | `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## add
+
+`add` adds your tables to the app's dataset list, as **Add dataset** does, without opening the app. Run `scanpath-studio` afterwards and the app opens on the new dataset. If the app is already open, reload its browser tab right away: changes you make in it before the reload are not saved. It works for an app on your own computer, not a hosted one.
+
+```
+scanpath-studio add "Pilot 3" --words ia.csv --fixations fixations.csv --canvas 1920x1080
+scanpath-studio add "Pilot 3" --fixations fixations_v2.csv --replace
+```
+
+A name that is already saved is an error unless you pass `--replace`, which swaps the dataset's tables and keeps its annotations, metadata tables, share links, description and recording setup (unless you give a new description or `--canvas`). Without `--canvas`, the app uses a screen the data records, or estimates one from the extent of the data. In Python, use add_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                      |
+| ------ | ------ | -------- | -------------------------------- |
+|        | `NAME` | required | The name the dataset list shows. |
+
+**Options**
+
+| Option                   | Value                 | Default | Description                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--words`                | `PATH [PATH ...]`     | —       | Words table(s), as for render.                                                                                                                                                                                                                                                                                                                                      |
+| `--fixations`            | `PATH [PATH ...]`     | —       | Fixations table(s), as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze`             | `PATH [PATH ...]`     | —       | The Raw gaze table, as for render.                                                                                                                                                                                                                                                                                                                                  |
+| `--raw-gaze-schema`      | `JSON`                | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes.                                                                                                                                                                                                                                                              |
+| `--trial-parts-manifest` | `PATH`                | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                             |
+| `--canvas`               | `WxH`                 | —       | The recording's screen in px, e.g. 1920x1080. Without it, a screen the data records is used, else one estimated from the extent of the data; with `--replace`, the saved dataset's setup is kept.                                                                                                                                                                   |
+| `--description`          | `TEXT`                | —       | The sentence the Data Management page shows under its name.                                                                                                                                                                                                                                                                                                         |
+| `--replace`              | switch                | —       | Replace the tables of the saved dataset with this name, keeping its annotations, metadata tables, share links, and its description and recording setup unless `--description` or `--canvas` gives new ones. Without it, a name already saved is an error.                                                                                                           |
+| `--no-select`            | switch                | —       | Add it to the list without opening the app on it next time.                                                                                                                                                                                                                                                                                                         |
+| `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
+| `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
+| `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
+
+## remove
+
+`remove` takes a dataset you added, in the app or with `add`, off the app's dataset list. Its annotations, metadata tables and description go with it, as its **Remove** on the **Data Management** page does. Built-in and public datasets can't be removed. If the app last had it open, it next opens on its default dataset.
+
+```
+scanpath-studio remove "Pilot 3"
+scanpath-studio remove "Pilot 3" --missing-ok   # no error if it isn't there
+```
+
+In Python, use remove_dataset.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option         | Value  | Default | Description                                                          |
+| -------------- | ------ | ------- | -------------------------------------------------------------------- |
+| `--missing-ok` | switch | —       | Exit quietly when no dataset has the name, instead of with an error. |
+
+## open
+
+`open` opens the app on a dataset you added, or one the app has itself (the bundled demo, a public corpus), at one reading, with the figure set by the same flags [`render`](#render-flags) takes. If the app is running on this computer, the link opens in your browser. Otherwise `open` starts the app and opens the link once it is up. `--print` prints the link instead.
+
+```
+scanpath-studio open "Pilot 3" -p p07 -t t12
+scanpath-studio open "Pilot 3" -p p07 -t t12 --heatmap --saccade-style dash --print
+```
+
+The link is the one **Share** → **Link** writes for the same view. Settings it leaves out keep the values the app has. It names the dataset, so a dataset you added opens only where it was added. A link carries no file: `render`'s input, output and `--stimulus-image` flags are refused, and `--show-stimulus-image` draws the dataset's own pages. In Python, use app_link.
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                           |
+| ------ | ------ | -------- | ------------------------------------- |
+|        | `NAME` | required | The dataset's name in the app's list. |
+
+**Options**
+
+| Option               | Value         | Default | Description                                                    |
+| -------------------- | ------------- | ------- | -------------------------------------------------------------- |
+| `-p` `--participant` | `PARTICIPANT` | —       | Participant ID.                                                |
+| `-t` `--trial`       | `TRIAL`       | —       | Trial ID (without it, the participant's first trial).          |
+| `--screen`           | `SCREEN`      | —       | Screen ID within a trial recorded over several screens.        |
+| `--animate`          | switch        | —       | Open the replay of the reading.                                |
+| `--port`             | `PORT`        | `8501`  | The port the app listens on, or is started on (default: 8501). |
+| `--print`            | switch        | —       | Print the link and exit, without opening or starting anything. |
+
+## annotations
+
+`annotations` reads and writes the favorites, tags and notes on a dataset you added. `export` writes the same `annotations.json` as **Data Management → Annotations → Export**, or a CSV table with one row per annotated reading. `import` reads either: a CSV needs `participant_id` and `trial_id`, optionally `screen_id`, and any of `favorite`, `tags` (separated by `;`, so a tag can't contain one in a CSV) and `note`. Importing adds a reading's tags to the ones it has, and a favorite or note in the file replaces its own; a blank stays as it was. This differs from the app's **Import**, which keeps or swaps a reading's whole entry. `--replace` makes the dataset's annotations exactly the file's, and is refused when none of the file's readings is in the dataset. Readings the dataset does not have are listed and left out. If the app is open, reload its browser tab to see the new ones.
+
+```
+scanpath-studio annotations import "Pilot 3" qc_flags.csv
+scanpath-studio annotations export "Pilot 3" -o annotations.json
+```
+
+In Python, use write_annotations and read_annotations.
+
+### annotations export
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+
+**Options**
+
+| Option          | Value  | Default  | Description                       |
+| --------------- | ------ | -------- | --------------------------------- |
+| `-o` `--output` | `FILE` | required | The file to write, .json or .csv. |
+
+### annotations import
+
+**Positional arguments**
+
+| Option | Value  | Default  | Description                                             |
+| ------ | ------ | -------- | ------------------------------------------------------- |
+|        | `NAME` | required | The name the dataset list shows (case does not matter). |
+|        | `FILE` | required | The .json or .csv file to read.                         |
+
+**Options**
+
+| Option      | Value  | Default | Description                                                                                                                                                                                              |
+| ----------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--replace` | switch | —       | Make the dataset's annotations exactly the file's, instead of adding the file's to them. Refused when none of the file's readings is in the dataset, so a file made for another dataset deletes nothing. |
 
 ## cache
 

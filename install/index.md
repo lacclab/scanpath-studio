@@ -64,7 +64,7 @@ Choose a reading in the demo to explore and save as an interactive figure.
 
 - **2 · Choose a view**
 
-  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **View** in Essentials and Full.
+  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **Presets** in Essentials and Full.
 
 - **3 · Save your figure**
 

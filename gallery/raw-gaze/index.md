@@ -2,7 +2,7 @@
 
 EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
-1. Open the bundled demo in the **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`.
+1. Open the bundled demo in the **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`, and set **Screen** to **Paragraph**.
 1. Turn on **Raw gaze** and turn off **Saccades**.
 1. In **Fixations** → **Opacity**, set 0.35 so the samples show through.
 
@@ -10,7 +10,7 @@ EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_2_2_Adv \
+  -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
   --highlight-column '' \
   -o raw-gaze.html
@@ -27,6 +27,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     raw_gaze=raw_gaze,
     fixation_opacity=0.35,
     show_saccades=False,

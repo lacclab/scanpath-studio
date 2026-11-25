@@ -10,7 +10,7 @@ Highlight a selected text span alongside its fixations.
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --highlight-column is_in_aspan --critical-span-style mark-text \
   --no-saccades -o highlighted-text.html
 ```
@@ -25,6 +25,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     highlight_column="is_in_aspan",
     critical_span_style="Mark text",
     show_saccades=False,

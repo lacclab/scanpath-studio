@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.48.0</strong>
+      <strong>Stable documentation &middot; v0.49.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2634,7 +2634,7 @@
 </tr>
 <tr>
 <td>Reuse the figure settings</td>
-<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My views</strong>, or <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Settings file</strong></td>
+<td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My presets</strong>, or <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Settings file</strong></td>
 </tr>
 </tbody>
 </table>
@@ -2647,7 +2647,7 @@ Essentials offers <strong>Current figure</strong> for the figure or replay on sc
 <li><strong>Crop</strong> lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under <strong>Label events</strong>, pin a fixation or saccade and drag its label into position.</li>
 <li><strong>Caption and description</strong> suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.</li>
 <li>For a replay, <strong>Replay clip</strong> lets you choose the interval, speed and poster frame. <strong>Prepare MP4 and poster</strong> produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.</li>
-<li>When a journal specifies dimensions, open <strong>Print settings</strong> to set the width, resolution or minimum text size. In Full mode on the Scanpath view, <strong>Use this size for batch export</strong> applies the width and resolution to the export bundle.</li>
+<li>When a journal specifies dimensions, open <strong>Print settings</strong> to set the width, resolution or minimum text size. In Full mode on the Scanpath View, <strong>Use this size for batch export</strong> prints each bundle figure at the prepared artwork’s width and resolution; the crop, labels and caption stay with the prepared figure.</li>
 </ul>
 <p>Under <strong>Save or open</strong>, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under <strong>Data Management → Saved work → Saved figures</strong>, or via <strong>Share → Settings file</strong>. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.</p>
 <h2 id="reproduce-a-coauthors-results">Reproduce a coauthor's results<a class="headerlink" href="#reproduce-a-coauthors-results" title="Permanent link">&para;</a></h2>
@@ -2730,8 +2730,9 @@ with the jsonlite package installed. The example preserves reader IDs such as
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">out</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">for</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="ow">in</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">itertuples</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">)</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">out</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">tid</span><span class="si">}</span><span class="s2">.html"</span><span class="p">)</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="c1"># Each demo reading has several screens; this saves its paragraph.</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">screen</span><span class="o">=</span><span class="s2">"Paragraph"</span><span class="p">)</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">out</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">tid</span><span class="si">}</span><span class="s2">.html"</span><span class="p">)</span>
 </code></pre></div>
 <p>Use the <a href="../loading-data/#load-and-inspect-in-code">data loaders</a>
 for your own files. The CLI's <code>render</code> writes one trial per run.</p>
@@ -2741,8 +2742,9 @@ for your own files. The CLI's <code>render</code> writes one trial per run.</p>
 replay as HTML, GIF or MP4. In a saved HTML replay, <strong>Previous fixation</strong> and
 <strong>Next fixation</strong> move to individual onsets and show the fixation’s duration and
 assigned word when available. The time slider scrubs through the whole reading.
-A GIF or MP4 with a low frame cap shows the state reached at each frame’s start.
-A fixation after the last frame starts can be absent from the clip.</p>
+Each frame of a GIF or MP4 shows the state reached at that frame’s start, and the
+last frame shows the complete scanpath. With a low frame cap, a fixation that
+begins between two frames first shows in the later one.</p>
 <p>The CLI’s <code>render --animate</code> saves interactive HTML. For a GIF or MP4 in Python:</p>
 <details class="example">
 <summary>Python: save a GIF or MP4</summary>
@@ -2752,8 +2754,10 @@ A fixation after the last frame starts can be absent from the clip.</p>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">replay</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_273"</span><span class="p">,</span> <span class="s2">"l37_273_2_1_1_Ele"</span><span class="p">)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">export_animation</span><span class="p">(</span><span class="n">replay</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">))</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">replay</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">"l37_273"</span><span class="p">,</span> <span class="s2">"l37_273_2_1_1_Ele"</span><span class="p">,</span> <span class="n">screen</span><span class="o">=</span><span class="s2">"Paragraph"</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">Path</span><span class="p">(</span><span class="s2">"replay.mp4"</span><span class="p">)</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">export_animation</span><span class="p">(</span><span class="n">replay</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"mp4"</span><span class="p">))</span>
 </code></pre></div>
 <p>Use <code>fmt="gif"</code> and a <code>.gif</code> filename for GIF output.</p>
 </details>

@@ -12,7 +12,7 @@ ForwardSkipRefixationReturn sweepRegressionOff the text
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele \
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
   --saccade-color-by-type --no-saccade-type-legend \
   --highlight-column '' \
   -o saccade-types.html
@@ -28,6 +28,7 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
+    screen="Paragraph",
     saccade_color_mode="By type",
     saccade_type_legend=False,
 )

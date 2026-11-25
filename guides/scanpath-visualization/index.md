@@ -16,7 +16,7 @@ Looking for a specific button?
 
 ## Essentials and Full
 
-The Scanpath view opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
+The Scanpath View opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
 
 Essentials shows:
 
@@ -52,17 +52,17 @@ With **A and B together** on, either pair of trial shortcuts steps both readings
 
 ## Control the layers
 
-Both modes start with the same **View** tiles and **Palette**. In Full, use **Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit its settings or its switch to show or hide it. Choose **Axes** to chart the reading by fixation order or time. **Figure** holds the settings for the whole plot, including framing, titles and legends.
+Both modes start with the same **Presets** tiles and **Palette**. In Full, use **Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit its settings or its switch to show or hide it. Choose **Axes** to chart the reading by fixation order or time. **Figure** holds the settings for the whole plot, including framing, titles and legends.
 
 **Gaze over time** plots elapsed seconds along the horizontal axis and horizontal screen position in pixels on the vertical axis. The length of each horizontal bar shows how long the fixation lasted. Turn **Animation** on to replay the reading on the text, then off to return to the same chart. **Custom** brings back your last hand-edited figure.
 
 | Section                  | What it controls                                                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **View**                 | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
-| **My views**             | save a named view, apply it to another reading, or share it                                                             |
+| **Presets**              | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
+| **My presets**           | save a named preset, apply it to another reading, or share it                                                           |
 | **Palette**              | choose **Colorblind-safe**, **Grayscale**, or **High contrast**                                                         |
 | **Compare readings**     | add a second reading over this one, beside it, or below it                                                              |
-| **Animation settings**   | set playback speed, autoplay, and frame quality                                                                         |
+| **Playback settings**    | set playback speed, autoplay, and frame quality                                                                         |
 | **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                     |
 | **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                             |
 | **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                       |
@@ -107,13 +107,15 @@ Python and CLI: render the demo
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-fig = sps.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
+fig = sps.plot_scanpath(
+    words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+)
 sps.save_figure(fig, "scanpath.html")
 ```
 
 ```
 scanpath-studio render --sample \
-  -p l37_273 -t l37_273_2_1_1_Ele -o scanpath.html
+  -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph -o scanpath.html
 ```
 
 For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). The [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options) lists every figure setting with its Python keyword and CLI flag. For more CLI examples, see [Common tasks](https://lacclab.github.io/scanpath-studio/cli/#common-tasks).
@@ -129,6 +131,6 @@ You can save each of these to a file and load it again:
 | figure settings                    | **Share** → **Settings file**                                            |
 | favorites, tags and notes          | **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | **Edit dataset** → **Download setup file**                               |
-| saved figure designs               | **My views** → **Export**                                                |
+| saved figure designs               | **My presets** → **Export**                                              |
 
 Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved work → Your session**.

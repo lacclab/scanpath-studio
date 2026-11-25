@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.48.0</strong>
+      <strong>Stable documentation &middot; v0.49.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2422,7 +2422,9 @@
 </ol>
 <p>For PNGs, turn on <strong>Smaller PNG files</strong> to reduce file size at the same resolution.
 This adds encoding time. Images over 16.8 megapixels use the standard encoding
-to limit memory use. <strong>PNG scale</strong> controls resolution separately. A scale of 1
+to limit memory use. Outside the app, <code>scanpath-studio render --compact-png</code>
+and <code>save_figure(..., compact_png=True)</code> do the same for one figure and its
+layers. <strong>PNG scale</strong> controls resolution separately. A scale of 1
 writes one pixel per figure pixel, and the default scale of 2 doubles both dimensions.</p>
 <p>Large bundles are kept on temporary disk and download as one ZIP in a new tab.
 Keep the Export panel open until the download finishes. If your browser cannot

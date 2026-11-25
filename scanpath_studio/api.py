@@ -5049,21 +5049,24 @@ def add_eyelink_dataset(
     # Raw gaze is large: only the named participants' is read.
     data = load_eyelink(study_dir, raw_gaze=wanted)
     sessions, display = len(data.notes), data.display
-    raw_gaze = None
     if wanted:
-        gaze = data.raw_gaze
-        have = set() if gaze is None else set(gaze["participant_id"].astype(str))
+        have = (
+            set()
+            if data.raw_gaze is None
+            else set(data.raw_gaze["participant_id"].astype(str))
+        )
         if wanted - have:
             raise ValueError(
                 f"The study folder {study_dir} has no raw gaze for "
                 f"{', '.join(sorted(wanted - have))}; import it with raw_gaze=True."
             )
-        raw_gaze = gaze
-    kept = _eyelink.shared_screens(data.words, data.fixations, raw_gaze)
+    kept = _eyelink.shared_screens(
+        data.words, data.fixations, data.raw_gaze if wanted else None
+    )
     trials = data.trial_metadata
-    # The loaded tables go before the dataset is saved, so a large study is
-    # not held twice.
-    del data, raw_gaze
+    # The loaded tables go before the dataset is saved, so a large study (its
+    # unfiltered raw gaze above all) is not held twice.
+    del data
     words, fixations = kept.words, kept.fixations
     note = None
     if kept.screens_left_out:
@@ -5071,6 +5074,8 @@ def add_eyelink_dataset(
             f"{kept.screens_left_out} screens without both words and fixations, "
             f"with {kept.fixations_left_out} fixations, were left out."
         )
+    if not words.empty and not fixations.empty:
+        # A reading with no fixation on any screen shown is not offered.
         readings = pd.MultiIndex.from_arrays(
             [fixations["participant_id"], fixations["trial_id"]]
         ).unique()

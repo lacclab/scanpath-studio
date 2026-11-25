@@ -246,3 +246,27 @@ def test_an_unreadable_metadata_file_says_what_to_do(cache_dir, study):
     assert "nothing was removed. Open the app and remove the dataset" in str(
         removing.value
     )
+
+
+def test_trials_without_fixations_are_left_out_of_the_trial_table(cache_dir, tmp_path):
+    """Every screen has both words and fixations, so none is left out, yet a
+    reading with no fixations at all is still not offered as a trial."""
+    asc = write_experiment(tmp_path)
+    text = asc.read_text(encoding="utf-8")
+    # Trial 1's question screen loses its one fixation: no screen lacks words.
+    text = text.replace("EFIX\tR\t1720\t1919\t200\t500.0\t600.0\t980\n", "")
+    text += (
+        "MSG\t30000\tTRIALID 9\n"
+        "MSG\t30010\t!V TRIAL_VAR condition Hard\n"
+        "MSG\t30020\tTRIAL_RESULT 0\n"
+    )
+    asc.write_text(text, encoding="utf-8")
+    study_dir = tmp_path / "study"
+    eyelink.import_eyelink(tmp_path / "exp", study_dir, workers=1)
+    assert "9" in set(eyelink.load_eyelink(study_dir).trial_metadata["trial_id"])
+    sps.add_eyelink_dataset("Readings", study_dir, select=False)
+    session = _restored(cache_dir)
+    tables = session[metadata.DATASET_STORE_KEY]["Readings"]
+    stored = metadata.trial_from_payload(tables["trial"]).frame
+    assert set(stored["condition"]) == {"Adv", "Ele"}
+    assert "left out" not in session[DATASET_DESCRIPTIONS_KEY]["Readings"]

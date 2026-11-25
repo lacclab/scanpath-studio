@@ -2891,10 +2891,12 @@ def _load_multipleye_render(root: str, participant: str | None):
     return data, session
 
 
-def _load_eyelink_render(study_dir: str, participant: str | None):
+def _load_eyelink_render(
+    study_dir: str, participant: str | None, trial: str | None = None
+):
     """`render --eyelink-study`: one participant's tables from the study
-    folder -- the one named, else the study's first -- normalized like a
-    dataset added to the app.
+    folder -- the one named, else the study's first (with ``trial``, the first
+    that has it) -- normalized like a dataset added to the app.
 
     A screen only one table has (a question screen with fixations and no word
     boxes) is left out, as `api.add_eyelink_dataset` leaves it out. Returns
@@ -2903,8 +2905,9 @@ def _load_eyelink_render(study_dir: str, participant: str | None):
     from .eyelink import load_eyelink, shared_screens, study_participants
 
     if participant is None:
-        # One reading is drawn: the whole study is never loaded for it.
-        participant = next(iter(study_participants(study_dir)), None)
+        # One reading is drawn, so one participant is loaded: the first, or
+        # with -t the first whose fixations have that trial.
+        participant = next(iter(study_participants(study_dir, trial=trial)), None)
     data = load_eyelink(
         study_dir, participants=None if participant is None else [participant]
     )
@@ -3468,7 +3471,7 @@ def render(argv: list[str]) -> None:
     elif args.eyelink_study:
         try:
             words, fixations, display = _load_eyelink_render(
-                args.eyelink_study, args.participant
+                args.eyelink_study, args.participant, args.trial
             )
         except (ValueError, ImportError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))

@@ -130,3 +130,30 @@ def test_render_without_a_participant_loads_the_first_alone(
     cli.main(["render", "--eyelink-study", str(study), "-o", str(out)])
     assert out.is_file()
     assert loads == [{"participants": ["p00"]}]
+
+
+def test_render_a_trial_without_a_participant_loads_one_that_has_it(
+    experiment, tmp_path, monkeypatch
+):
+    from tests.test_eyelink_study import _add_session
+
+    # p00 comes first but never read trial 2: it logs it as trial 9.
+    asc = _add_session(experiment, "p00")
+    asc.write_text(
+        asc.read_text(encoding="utf-8").replace("TRIALID 2", "TRIALID 9"),
+        encoding="utf-8",
+    )
+    study = tmp_path / "study"
+    _import(experiment, study)
+    loads = []
+    real = eyelink.load_eyelink
+
+    def spy(study_dir, **options):
+        loads.append(options)
+        return real(study_dir, **options)
+
+    monkeypatch.setattr(eyelink, "load_eyelink", spy)
+    out = tmp_path / "fig.html"
+    cli.main(["render", "--eyelink-study", str(study), "-t", "2", "-o", str(out)])
+    assert out.is_file()
+    assert loads == [{"participants": ["p01"]}]

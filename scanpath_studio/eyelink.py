@@ -688,6 +688,7 @@ def trial_table(rec: AscRecording) -> pd.DataFrame:
     # ``<id>_r2``, its third ``<id>_r3``, as the app names repeated readings;
     # a number some TRIALID already is (``1, 1, 1_r2``) is passed over.
     logged = table["trial_id"].tolist()
+    logged_ids = set(logged)
     taken, seen = set(logged), Counter()
     repeated: dict[str, list[str]] = {}
     passed_over: dict[str, list[str]] = {}
@@ -699,7 +700,10 @@ def trial_table(rec: AscRecording) -> pd.DataFrame:
             continue
         n = max(seen[trial_id], 2)
         while f"{trial_id}_r{n}" in taken:
-            passed_over.setdefault(trial_id, []).append(f"{trial_id}_r{n}")
+            # Noted only when a TRIALID is logged under that name; one an
+            # earlier repeat was given needs no note.
+            if f"{trial_id}_r{n}" in logged_ids:
+                passed_over.setdefault(trial_id, []).append(f"{trial_id}_r{n}")
             n += 1
         taken.add(f"{trial_id}_r{n}")
         ids.append(f"{trial_id}_r{n}")
@@ -1184,17 +1188,22 @@ def _text_id(boxes: pd.DataFrame) -> str:
 
 
 def _text_ids(screens: pd.DataFrame) -> dict[str, str]:
-    """Each trial's ``text_id``: `_text_id` of the interest areas of its first
-    screen that has any, else ``trial_<id>``.
+    """Each trial's ``text_id``: `_text_id` of the interest areas of its
+    screen with the most of them (the first such screen on a tie), else
+    ``trial_<id>``.
 
-    Experiment Builder numbers a session's ``.ias`` files as it writes them, so
-    one file name holds different texts in different sessions: the id comes
-    from what the file holds, not its name.
+    The screen with the most words is the passage read: a question shown
+    before it (OneStop's preview) has fewer, so two readings of one paragraph
+    under different questions share an id.  Experiment Builder numbers a
+    session's ``.ias`` files as it writes them, so one file name holds
+    different texts in different sessions: the id comes from what the file
+    holds, not its name.
     """
-    ids: dict[str, str] = {}
+    most: dict[str, pd.DataFrame] = {}
     for trial_id, boxes in zip(screens["trial_id"], screens["boxes"]):
-        if trial_id not in ids and boxes is not None and len(boxes):
-            ids[trial_id] = _text_id(boxes)
+        if boxes is not None and len(boxes) > len(most.get(trial_id, ())):
+            most[trial_id] = boxes
+    ids = {trial_id: _text_id(boxes) for trial_id, boxes in most.items()}
     for trial_id in screens["trial_id"]:
         ids.setdefault(trial_id, f"trial_{trial_id}")
     return ids
@@ -1996,6 +2005,13 @@ def load_eyelink(
     (``False``, the default, since raw gaze is millions of rows per session),
     all of them (``True``), or the participants it names.
     ``EyeLinkData.raw_gaze`` is ``None`` when none of them has raw gaze.
+
+    The frames carry the study's own columns, not yet normalized: pass them
+    through `api.load_scanpath_data` before drawing them, or add the study to
+    the app with `api.add_eyelink_dataset`::
+
+        data = load_eyelink("study", participants=["p01"])
+        words, fixations = load_scanpath_data(data.words, data.fixations)
     """
     _require_enabled("load_eyelink")
     study_dir = Path(study_dir).resolve()
@@ -2009,8 +2025,11 @@ def load_eyelink(
         return _load_study(study_dir, participants, raw_gaze)
 
 
-def study_participants(study_dir: str | Path) -> list[str]:
-    """The participants of a study folder whose sessions were read, sorted."""
+def study_participants(study_dir: str | Path, *, trial: str | None = None) -> list[str]:
+    """The participants of a study folder whose sessions were read, sorted;
+    with ``trial``, only the first of them whose fixations have that trial
+    (an empty list when none has), found by reading each one's ``trial_id``
+    column in turn, never the whole study."""
     _require_enabled("study_participants")
     study_dir = Path(study_dir).resolve()
     if not (study_dir / _MANIFEST).is_file():
@@ -2018,7 +2037,17 @@ def study_participants(study_dir: str | Path) -> list[str]:
             f"{study_dir} is not an EyeLink study folder: it has no {_MANIFEST}."
         )
     with file_lock(study_dir / ".lock", reading=True):
-        return sorted(_ok_sessions(_read_manifest(study_dir)["sessions"]))
+        pids = sorted(_ok_sessions(_read_manifest(study_dir)["sessions"]))
+        if trial is None:
+            return pids
+        for pid in pids:
+            path = study_dir / "fixations" / f"{pid}.parquet"
+            if not path.is_file():
+                continue
+            trials = pd.read_parquet(path, columns=["trial_id"])["trial_id"]
+            if (trials.astype(str) == str(trial)).any():
+                return [pid]
+        return []
 
 
 class SharedScreens(NamedTuple):

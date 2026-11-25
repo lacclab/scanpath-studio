@@ -509,3 +509,67 @@ def test_repeated_trial_id_never_takes_a_logged_one(tmp_path):
         "TRIALID 1 is logged more than once; its later readings are 1_r3 "
         "(1_r2 is a TRIALID of its own)."
     )
+
+
+def _screens_with(trials: dict[str, list[list[tuple]]]) -> pd.DataFrame:
+    """A screen table holding, per trial, each screen's boxes as the
+    fixture's rows (an empty list: a screen without interest areas)."""
+    rows = []
+    for trial_id, screens in trials.items():
+        for boxes in screens:
+            frame = None
+            if boxes:
+                frame = pd.DataFrame(
+                    [
+                        (i, left, top, right - left, bottom - top, word)
+                        for i, left, top, right, bottom, word in boxes
+                    ],
+                    columns=["word_id", "x", "y", "width", "height", "text"],
+                )
+            rows.append((trial_id, frame))
+    return pd.DataFrame(rows, columns=["trial_id", "boxes"])
+
+
+def test_text_id_names_the_paragraph_not_its_question():
+    """OneStop shows a question before its paragraph: two readings of one
+    paragraph with different questions share a text id; another paragraph
+    under the same question does not."""
+    paragraph, other = _IAS["IA_1.ias"], _IAS["IA_2.ias"]
+    question_a = [(1, 100, 150, 200, 250, "Why?")]
+    question_b = [(1, 100, 150, 200, 250, "Who"), (2, 200, 150, 300, 250, "said?")]
+    ids = eyelink._text_ids(
+        _screens_with(
+            {
+                "1": [[], question_a, paragraph, []],
+                "2": [question_b, paragraph],
+                "3": [question_a, other],
+                "4": [[]],
+            }
+        )
+    )
+    assert ids["1"] == ids["2"] == TEXT_IDS["1"]
+    assert ids["3"] == TEXT_IDS["2"] != ids["1"]
+    assert ids["4"] == "trial_4"
+
+
+def test_text_id_takes_the_first_of_screens_with_as_many_boxes():
+    first = [(1, 100, 150, 200, 250, "One"), (2, 200, 150, 300, 250, "two")]
+    second = [(1, 100, 150, 200, 250, "Three"), (2, 200, 150, 300, 250, "four")]
+    ids = eyelink._text_ids(_screens_with({"1": [first, second]}))
+    assert ids["1"] == _content_id(first)
+
+
+def test_a_repeat_name_is_called_a_trialid_only_when_logged(tmp_path):
+    """TRIALIDs ``1, 1, 1_r2, 1``: the last passes over 1_r3, which an earlier
+    repeat was given, not a TRIALID of its own."""
+    asc = write_experiment(tmp_path, aborted_trial=True, multi_display=True)
+    text = asc.read_text(encoding="utf-8")
+    for old, new in (("TRIALID 2", "TRIALID 1"), ("TRIALID 3", "TRIALID 1_r2")):
+        text = text.replace(old, new)
+    asc.write_text(text.replace("TRIALID 4", "TRIALID 1"), encoding="utf-8")
+    t = _tables(asc, tmp_path)
+    assert t.trial_metadata["trial_id"].tolist() == ["1", "1_r3", "1_r2", "1_r4"]
+    assert (
+        "TRIALID 1 is logged more than once; its later readings are 1_r3, 1_r4 "
+        "(1_r2 is a TRIALID of its own)."
+    ) in t.notes

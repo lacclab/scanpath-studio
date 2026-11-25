@@ -18,8 +18,6 @@ EDF2ASC_ENV = "SCANPATH_EDF2ASC"
 # Where the EyeLink Developers Kit installs ``edf2asc``, checked after the
 # environment variable and ``PATH``.
 KNOWN_EDF2ASC_PATHS: tuple[Path, ...] = (
-    Path("/Applications/EyeLink/EDF_Access_API/Example/edf2asc"),
-    Path("/Applications/EyeLink/edf2asc"),
     Path("/usr/local/bin/edf2asc"),
     Path(r"C:\Program Files (x86)\SR Research\EyeLink\bin\edf2asc.exe"),
     Path(r"C:\Program Files\SR Research\EyeLink\bin\edf2asc.exe"),
@@ -80,7 +78,9 @@ def convert_edf(edf: Path, out_dir: Path, *, samples: bool = False) -> Path:
         args.append("-e")
     args += ["-p", str(out_dir)]
     try:
-        run = subprocess.run(args, capture_output=True, text=True, check=False)
+        run = subprocess.run(
+            args, capture_output=True, text=True, errors="replace", check=False
+        )
     except OSError as exc:
         hint = ""
         if exc.errno == 86 or "bad cpu type" in str(exc).lower():

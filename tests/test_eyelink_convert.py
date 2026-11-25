@@ -106,3 +106,11 @@ def test_gate_off_raises(tmp_path, monkeypatch):
     monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
     with pytest.raises(ValueError, match="SCANPATH_EXPERIMENTAL"):
         eyelink.convert_edf(tmp_path / "s1.edf", tmp_path)
+
+
+def test_exit_zero_without_asc_raises(tmp_path, monkeypatch, experimental):
+    monkeypatch.setenv("SCANPATH_EDF2ASC", str(_fake(tmp_path, "exit 0\n")))
+    edf = tmp_path / "s1.edf"
+    edf.write_bytes(b"x")
+    with pytest.raises(eyelink.Edf2AscError):
+        eyelink.convert_edf(edf, tmp_path)

@@ -4919,8 +4919,14 @@ def _chart_lines(
     fixation_color,
 ):
     x_field, y_field = fields
-    if chart_axes.position_chart(fields, "order_in_trial") and show_saccades:
-        path = ordered.sort_values("order_in_trial", kind="stable")
+    if show_saccades and len(ordered) > 1:
+        # Reading order: the fixation index where the table has one, else the
+        # onset order the caller already sorted the rows into.
+        path = (
+            ordered.sort_values("order_in_trial", kind="stable")
+            if "order_in_trial" in ordered
+            else ordered
+        )
         yield go.Scatter(
             x=path[x_field],
             y=path[y_field],
@@ -5425,7 +5431,7 @@ def _render_scanpath_figure(
                 )
             )
 
-    sequence = show_saccades and chart_axes.position_chart(fields, "order_in_trial")
+    sequence = show_saccades and not spatial_axes
     if (show_fixations or sequence) and not fixations.empty:
         # ``render_fix`` == fixations unless Snap to line is on, in which case
         # the markers, order labels and colour-by-line use the snapped y.
@@ -5441,7 +5447,8 @@ def _render_scanpath_figure(
         for line in _chart_lines(
             ordered,
             fields,
-            show_saccades=show_saccades,
+            # The screen scanpath draws its saccades as segments above.
+            show_saccades=sequence,
             show_fixations=show_fixations,
             saccade_color=saccade_color,
             saccade_style=saccade_style,
@@ -9329,6 +9336,9 @@ def _make_split_comparison_figure(
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
 
+    On reading-chart axes (anything but screen ``x`` / ``y``) ``orientation``
+    may also be ``"overlay"``: both readings in one panel on the same axes.
+
     Each panel computes its **own** axis ranges from its trial's words +
     fixations, which is what lets the two panels sit in different coordinate
     spaces at all.
@@ -9609,30 +9619,52 @@ def _make_split_comparison_figure(
         )
 
     if fields != ("x", "y"):
-        rows, cols = (2, 1) if is_stacked else (1, 2)
+        overlaid = orientation == "overlay"
+        rows, cols = (1, 1) if overlaid else (2, 1) if is_stacked else (1, 2)
         fig = make_subplots(
             rows=rows,
             cols=cols,
-            subplot_titles=subplot_titles,
+            # One panel names both readings, so it still says which is which
+            # with the legend off; a line each keeps two long names in its width.
+            subplot_titles=["<br>".join(subplot_titles)]
+            if overlaid
+            else subplot_titles,
             horizontal_spacing=0.13,
             vertical_spacing=0.18,
         )
         fig.update_annotations(name=_PANEL_NAME)
+        # Each panel's readings with nothing on these axes, keyed by panel.
+        empty: dict[tuple[int, int], list[str]] = {}
         for idx, spec in enumerate(trial_specs):
-            row, col = (idx + 1, 1) if is_stacked else (1, idx + 1)
+            row, col = (
+                (1, 1) if overlaid else (idx + 1, 1) if is_stacked else (1, idx + 1)
+            )
             first_trace = len(fig.data)
             draw_reading(fig, spec, idx, row, col)
-            if not any(_trace_has_points(t) for t in fig.data[first_trace:]):
-                fig.add_annotation(
-                    text="No data on these axes",
-                    x=0.5,
-                    y=0.5,
-                    xref="x domain",
-                    yref="y domain",
-                    row=row,
-                    col=col,
-                    showarrow=False,
-                )
+            drawn = any(_trace_has_points(t) for t in fig.data[first_trace:])
+            empty.setdefault((row, col), [])
+            if not drawn:
+                empty[(row, col)].append("AB"[idx])
+        for (row, col), sides in empty.items():
+            if not sides:
+                continue
+            # An overlay panel holding one empty reading names it; a panel
+            # with nothing drawn at all says so plainly.
+            partial = overlaid and len(sides) == 1
+            fig.add_annotation(
+                text=(
+                    f"No data for {sides[0]} on these axes"
+                    if partial
+                    else "No data on these axes"
+                ),
+                x=0.5,
+                y=0.5,
+                xref="x domain",
+                yref="y domain",
+                row=row,
+                col=col,
+                showarrow=False,
+            )
         for coord, field, update in zip(
             ("x", "y"), fields, (fig.update_xaxes, fig.update_yaxes), strict=True
         ):
@@ -9670,7 +9702,7 @@ def _make_split_comparison_figure(
             font=font_settings,
             plot_bgcolor=background_color,
             paper_bgcolor=background_color,
-            margin=dict(t=62, l=70, r=55, b=70),
+            margin=dict(t=90 if overlaid else 62, l=70, r=55, b=70),
         )
         return fig
 
@@ -10062,13 +10094,15 @@ def _render_comparison_figure(
         settings.x_field,
         settings.y_field,
     ) != ("x", "y"):
+        # Reading charts share the split builder's axis handling; an overlay
+        # there is the same chart with both readings in one panel.
         return _make_split_comparison_figure(
             words,
             fixations,
             trial_a,
             trial_b,
             settings=settings,
-            orientation="stacked" if layout == "stacked" else "side_by_side",
+            orientation=layout if layout in {"stacked", "overlay"} else "side_by_side",
             styles=(style_a, style_b),
             raw_gaze=raw_gaze,
         )

@@ -943,3 +943,51 @@ class TestHeatmapColorscale:
         assert len(bars) == 2
         assert bars[0].colorscale != bars[1].colorscale
         assert (bars[0].cmin, bars[0].cmax) == (bars[1].cmin, bars[1].cmax)
+
+
+class TestReadingChartOverlay:
+    """On reading-chart axes an overlay draws both readings in one panel, and
+    Saccades joins each reading's fixations in reading order."""
+
+    @staticmethod
+    def _compare(fields=("word_id", "order_in_trial"), **kwargs):
+        fix_b = _fixations("p9", "t9", y=300.0).assign(word_id=[0, 2, 1])
+        return api.compare_scanpaths(
+            _words("p1", "t1"),
+            _fixations("p1", "t1"),
+            ("p1", "t1"),
+            ("p9", "t9"),
+            words_b=_words("p9", "t9"),
+            fixations_b=fix_b,
+            dataset_b="PoTeC",
+            x_field=fields[0],
+            y_field=fields[1],
+            labels=("First", "Second"),
+            **kwargs,
+        )
+
+    def test_an_overlay_puts_both_readings_on_one_pair_of_axes(self):
+        fig = self._compare(layout="overlay")
+        assert {t.xaxis for t in fig.data} == {"x"}
+        assert "xaxis2" not in fig.layout
+        named = {t.name for t in fig.data if t.mode == "markers"}
+        assert {"First", "Second"} <= named
+        assert [a.text for a in fig.layout.annotations if "<br>B · " in str(a.text)]
+
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_saccades_join_each_reading_in_fixation_order(self, layout):
+        fig = self._compare(layout=layout)
+        lines = [t for t in fig.data if t.name == "Fixation sequence"]
+        assert [list(t.x) for t in lines] == [[0, 1, 2], [0, 2, 1]]
+        assert [list(t.y) for t in lines] == [[1, 2, 3], [1, 2, 3]]
+        quiet = self._compare(layout=layout, show_saccades=False)
+        assert not [t for t in quiet.data if t.name == "Fixation sequence"]
+
+    def test_only_a_screen_position_axis_needs_one_screen_size(self):
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        screens = dict(setup=_measured(1920, 1080), setup_b=_measured(1680, 1050))
+        fig = self._compare(layout="overlay", **screens)
+        assert {t.xaxis for t in fig.data} == {"x"}
+        with pytest.raises(IncomparableScreensError):
+            self._compare(("order_in_trial", "x"), layout="overlay", **screens)

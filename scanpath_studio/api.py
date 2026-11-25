@@ -3716,12 +3716,14 @@ def compare_scanpaths(
     pass in are not modified, and only the trace labels show the prefix.
 
     **Numeric axes.** Set ``x_field`` and ``y_field`` to compare index, position,
-    duration or other numeric fields in panels with matching ranges, and
-    ``reverse_x_axis`` / ``reverse_y_axis`` to run either axis the other way. An
-    overlay request uses side-by-side panels on these axes. Elapsed seconds start at
+    duration or other numeric fields on matching ranges: both readings in one
+    panel for an overlay, or one panel each. ``reverse_x_axis`` /
+    ``reverse_y_axis`` run either axis the other way. With ``show_saccades`` each
+    reading's fixations are joined in reading order. Elapsed seconds start at
     each full reading's first recorded fixation onset.
 
-    **The overlay gate.** A spatial overlay needs both readings on screens of the same size, or
+    **The overlay gate.** An overlay with a screen-position axis (``x`` or ``y``)
+    needs both readings on screens of the same size, or
     it raises ``ValueError`` (the app falls back to side by side). That holds across
     datasets, and within one when the two screens carry different ``canvas_width`` /
     ``canvas_height`` or ``setup_b`` states another screen. Pass
@@ -3863,8 +3865,6 @@ def compare_scanpaths(
         figure_overrides, names, words=word_side, raw_gaze=sample_side
     )
     fields = figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y")
-    if fields != ("x", "y") and resolved_layout == "overlay":
-        resolved_layout = "side_by_side"
     words, fixations, words_b, fixations_b = (
         _cn.to_canonical_frame(frame)
         for frame in (words, fixations, words_b, fixations_b)
@@ -3971,7 +3971,7 @@ def compare_scanpaths(
                 resolved_setup_b = replace(
                     setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
                 )
-    if resolved_layout == "overlay" and gate:
+    if resolved_layout == "overlay" and gate and chart_axes.in_screen_pixels(fields):
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
             # The reason says why; this says what happened here and how

@@ -1797,7 +1797,8 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
         help="How A and B are arranged (default: overlay). Across two datasets, "
-        "overlay needs canvases of the same size. Different canvases are "
+        "an overlay with a screen-position axis (x or y) needs canvases of the "
+        "same size; other --x-field/--y-field charts overlay on any. Different canvases are "
         "refused, so use side-by-side or stacked for them. Matching canvases "
         "that a dataset did not record still overlay, with a warning.",
     )
@@ -3285,19 +3286,26 @@ def render(argv: list[str]) -> None:
         raise SystemExit(
             "--label-a and --label-b go together: name both scanpaths, or neither."
         )
-    # Each panel of a split layout draws its own reading's stimulus, so there is
-    # no shared set of word boxes to pick from — the builder ignores the choice
-    # there. Say so, rather than quietly drawing both.
+    # Each panel of a split layout draws its own reading's stimulus, and a
+    # reading chart draws none, so there is no shared set of word boxes to pick
+    # from — the builder ignores the choice there. Say so, rather than quietly
+    # drawing both.
+    reading_chart = (args.x_field or "x", args.y_field or "y") != ("x", "y")
     if (
         args.compare_with is not None
         and not args.animate
-        and args.compare_layout != "overlay"
+        and (args.compare_layout != "overlay" or reading_chart)
         and args.compare_stimulus != "both"
     ):
         print(
             f"Warning: --compare-stimulus {args.compare_stimulus} only applies to "
-            f"--compare-layout overlay; each {args.compare_layout} panel draws its "
-            "own trial's stimulus. Ignoring it.",
+            + (
+                "a screen overlay; a --x-field/--y-field chart draws no word boxes. "
+                if reading_chart
+                else f"--compare-layout overlay; each {args.compare_layout} panel "
+                "draws its own trial's stimulus. "
+            )
+            + "Ignoring it.",
             file=sys.stderr,
         )
     if args.label_a is not None and args.compare_with is None:

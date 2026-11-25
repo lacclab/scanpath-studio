@@ -2641,7 +2641,7 @@ def _snippet_data_source(args) -> SnippetSource:
                 "parts": list(args.onestop_part or ["Paragraph"]),
             },
         )
-    if args.eyelink_study:
+    if getattr(args, "eyelink_study", None):
         raise SystemExit(
             "--print-code does not cover --eyelink-study: its tables are read "
             "with `load_eyelink(study_dir)`, which no printed figure code reads."

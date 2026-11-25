@@ -235,6 +235,21 @@ def test_different_displays_leave_the_study_without_one(study):
     assert eyelink.load_eyelink(study_dir, participants=["p03"]).display == (1920, 1080)
 
 
+def test_workers_do_not_run_the_parents_main_script(study, tmp_path, monkeypatch):
+    """A Streamlit app, a notebook or an unguarded script as ``__main__`` must
+    not run again in each worker."""
+    experiment, study_dir = study
+    script = tmp_path / "unguarded_main.py"
+    script.write_text("raise SystemExit('the main script ran in a worker')\n")
+    main = type(sys)("__main__")
+    main.__file__ = str(script)
+    monkeypatch.setitem(sys.modules, "__main__", main)
+    report = eyelink.import_eyelink(experiment, study_dir, workers=2)
+    assert report.failed == {}
+    assert sorted(report.imported) == PIDS
+    assert sys.modules["__main__"] is main
+
+
 def test_parallel_matches_serial(study, tmp_path):
     experiment, study_dir = study
     serial_dir = tmp_path / "serial"

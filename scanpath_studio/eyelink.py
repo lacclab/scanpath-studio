@@ -15,10 +15,13 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import types
 import warnings
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -1661,6 +1664,26 @@ def _read_session(job: dict) -> SessionTables | str:
         return _failure(exc)
 
 
+@contextmanager
+def _main_hidden() -> Iterator[None]:
+    """Start spawned workers without re-running the parent's ``__main__``.
+
+    A spawned process imports the parent's main script before it runs a task.
+    The workers need only this module, and that script may be a Streamlit app,
+    a notebook kernel or a script with no ``if __name__ == "__main__"`` guard,
+    so a bare ``__main__`` (no file, no spec) stands in while workers start.
+    """
+    main = sys.modules.get("__main__")
+    sys.modules["__main__"] = types.ModuleType("__main__")
+    try:
+        yield
+    finally:
+        if main is None:
+            del sys.modules["__main__"]
+        else:
+            sys.modules["__main__"] = main
+
+
 def _read_sessions(jobs: list[dict], workers: int) -> Iterator[tuple[int, object]]:
     """``(index, result)`` for each job as it finishes: in this process with
     one worker, else in a pool of ``workers`` spawned processes."""
@@ -1682,8 +1705,10 @@ def _read_sessions(jobs: list[dict], workers: int) -> Iterator[tuple[int, object
     running: dict = {}
     try:
         while True:
-            for i, job in itertools.islice(queued, 2 * workers - len(running)):
-                running[pool.submit(_read_session, job)] = i
+            # The pool starts its worker processes inside ``submit``.
+            with _main_hidden():
+                for i, job in itertools.islice(queued, 2 * workers - len(running)):
+                    running[pool.submit(_read_session, job)] = i
             if not running:
                 return
             finished, _ = wait(running, return_when=FIRST_COMPLETED)

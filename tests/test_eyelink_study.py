@@ -349,9 +349,9 @@ def test_image_paths_outside_the_study_dropped(study):
     path = study_dir / "fixations" / "p01.parquet"
     frame = pd.read_parquet(path)
     frame["image_path"] = frame["image_path"].astype(object)
-    secret = study_dir.parent / "secret.png"
-    frame.loc[0, "image_path"] = str(secret)
-    frame.loc[1, "image_path"] = "../secret.png"
+    outside_png = study_dir.parent / "outside.png"
+    frame.loc[0, "image_path"] = str(outside_png)
+    frame.loc[1, "image_path"] = "../outside.png"
     frame.to_parquet(path, index=False)
     data = eyelink.load_eyelink(study_dir, participants=["p01"])
     paths = data.fixations["image_path"]

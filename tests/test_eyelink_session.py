@@ -357,30 +357,30 @@ def test_requires_experimental_flag(tmp_path, monkeypatch):
         _tables(asc, tmp_path)
 
 
-def _secret(tmp_path: Path) -> Path:
+def _outside_picture(tmp_path: Path) -> Path:
     """A picture outside the experiment folder (``tmp_path / "exp"``)."""
-    secret = tmp_path / "secret.png"
-    Image.new("RGB", (300, 100), (0, 255, 0)).save(secret)
-    return secret
+    outside_png = tmp_path / "outside.png"
+    Image.new("RGB", (300, 100), (0, 255, 0)).save(outside_png)
+    return outside_png
 
 
 def test_vcl_paths_outside_the_experiment_are_refused(tmp_path):
     asc = write_experiment(tmp_path)
-    secret = _secret(tmp_path)
+    outside_png = _outside_picture(tmp_path)
     vcl = asc.parent / "graphics" / "VC_1.vcl"
     vcl.write_text(
         "0 CLEAR 255 255 255\n"
-        "0 IMGLOAD TOP_LEFT ../../../secret.png 0 0\n"
-        f"0 IMGLOAD TOP_LEFT {secret} 500 500\n"
+        "0 IMGLOAD TOP_LEFT ../../../outside.png 0 0\n"
+        f"0 IMGLOAD TOP_LEFT {outside_png} 500 500\n"
         "0 IMGLOAD TOP_LEFT ../../runtime/images/text1.png 100 150\n",
         encoding="utf-8",
     )
     t = _tables(asc, tmp_path)
     root = tmp_path / "exp"
     assert t.notes == [
-        f"graphics/VC_1.vcl: ../../../secret.png is outside the experiment folder "
+        f"graphics/VC_1.vcl: ../../../outside.png is outside the experiment folder "
         f"{root}; it was not read.",
-        f"graphics/VC_1.vcl: {secret} is outside the experiment folder {root}; it "
+        f"graphics/VC_1.vcl: {outside_png} is outside the experiment folder {root}; it "
         "was not read.",
     ]
     with Image.open(_image_of(t.fixations, "1", 1)) as image:
@@ -409,15 +409,16 @@ def test_draw_list_outside_the_experiment_is_refused(tmp_path):
 
 def test_inline_imgload_outside_the_experiment_is_refused(tmp_path):
     asc = write_experiment(tmp_path, inline=True)
-    secret = _secret(tmp_path)
+    outside_png = _outside_picture(tmp_path)
     text = asc.read_text(encoding="utf-8")
     asc.write_text(
-        text.replace("../../runtime/images/text2.png", str(secret)), encoding="utf-8"
+        text.replace("../../runtime/images/text2.png", str(outside_png)),
+        encoding="utf-8",
     )
     t = _tables(asc, tmp_path)
     root = tmp_path / "exp"
     assert t.notes == [
-        f"Trial 2: {secret} is outside the experiment folder {root}; it was not read."
+        f"Trial 2: {outside_png} is outside the experiment folder {root}; it was not read."
     ]
     with Image.open(_image_of(t.fixations, "2", 1)) as image:
         assert image.getpixel((100, 150)) == (255, 255, 255)

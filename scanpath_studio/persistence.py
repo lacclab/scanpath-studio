@@ -1758,6 +1758,7 @@ def store_dataset(
     select: bool = True,
     replace: bool = False,
     keep_setup: bool = False,
+    trial_metadata: dict | None = None,
     root: Path | None = None,
 ) -> str:
     """Add one dataset to the recovery cache from outside the app.
@@ -1775,6 +1776,11 @@ def store_dataset(
     annotations, metadata tables and share ID — and its description unless a
     new one is given, and with ``keep_setup`` its recording setup. ``select``
     makes it the dataset the next session opens on.
+
+    ``trial_metadata`` is the dataset's trial table as
+    ``metadata.session_payloads`` builds it, written into the metadata sidecar
+    under this dataset's store key, as the app saves a table attached on the
+    Data page; left out, a replaced dataset keeps the one it has.
 
     An app tab that saved before this finds the saved copy changed on its next
     save and says so, as it does when two tabs change the same saved work.
@@ -1839,6 +1845,8 @@ def store_dataset(
         if description is not None and description.strip():
             descriptions[token] = description.strip()
         (root / "datasets").mkdir(exist_ok=True)
+        if trial_metadata is not None:
+            _put_metadata_table(root, manifest, token, "trial", trial_metadata, written)
         datasets[token] = _write_dataset(payload, root / "datasets", written)
         counts = manifest.get("dataset_counts")
         if isinstance(counts, dict):
@@ -1874,22 +1882,27 @@ _OPEN_DATASET_SESSION_KEYS = (
 )
 
 
-def _drop_metadata_tables(root: Path, manifest: dict, token: str, written) -> None:
-    """Write the stored metadata tables again without ``token``'s, to a new file
-    (listed in ``written``); the old one goes once the manifest is swapped."""
+def _stored_metadata_tables(root: Path, manifest: dict, action: str) -> dict:
+    """The stored metadata tables, ``{dataset: {grain: payload}}``; a sidecar
+    that does not read is an error naming what was not done (``action``)."""
     pointer = manifest.get("metadata")
-    if not isinstance(pointer, dict) or token not in _metadata_owners(manifest):
-        return
+    if not isinstance(pointer, dict):
+        return {}
     try:
         stored = _as_mapping(_read_metadata_file(root, pointer))
     except (OSError, ValueError, TypeError, AttributeError) as exc:
         raise ValueError(
             f"The saved metadata tables at {root} can't be read "
-            f"({_metadata_failure_reason(exc)}), so nothing was removed. Open "
-            "the app and remove the dataset on the Data Management page instead."
+            f"({_metadata_failure_reason(exc)}), so nothing was {action}. Open "
+            "the app and see its Data Management page instead."
         ) from exc
-    tables = dict(_as_mapping(stored.get("datasets") or {}))
-    tables.pop(token, None)
+    return dict(_as_mapping(stored.get("datasets") or {}))
+
+
+def _write_metadata_tables(root: Path, manifest: dict, tables: dict, written) -> None:
+    """Write ``tables`` to a new sidecar (listed in ``written``) and point the
+    manifest at it, or drop the pointer when none is left; the old file goes
+    once the manifest is swapped."""
     if not tables:
         manifest.pop("metadata", None)
         return
@@ -1906,6 +1919,26 @@ def _drop_metadata_tables(root: Path, manifest: dict, token: str, written) -> No
             for grain in _as_mapping(grains)
         ],
     }
+
+
+def _put_metadata_table(
+    root: Path, manifest: dict, token: str, grain: str, table: dict, written
+) -> None:
+    """Store ``table`` as ``token``'s ``grain`` table, keeping its others and
+    every other dataset's."""
+    tables = _stored_metadata_tables(root, manifest, "saved")
+    tables[token] = {**_as_mapping(tables.get(token) or {}), grain: table}
+    _write_metadata_tables(root, manifest, tables, written)
+
+
+def _drop_metadata_tables(root: Path, manifest: dict, token: str, written) -> None:
+    """Write the stored metadata tables again without ``token``'s, to a new file
+    (listed in ``written``); the old one goes once the manifest is swapped."""
+    if token not in _metadata_owners(manifest):
+        return
+    tables = _stored_metadata_tables(root, manifest, "removed")
+    tables.pop(token, None)
+    _write_metadata_tables(root, manifest, tables, written)
 
 
 def remove_stored_dataset(name: str, *, root: Path | None = None) -> str:

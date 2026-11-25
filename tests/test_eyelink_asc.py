@@ -75,6 +75,22 @@ def test_latin1_asc_parses(tmp_path):
     assert _rows(rec.fixations) == EXPECTED["fixations"]
 
 
+@pytest.mark.parametrize("latin1", [False, True])
+def test_asc_parsed_once_in_its_encoding(tmp_path, monkeypatch, latin1):
+    import pymovements as pm
+
+    real = pm.gaze.from_asc
+    encodings = []
+
+    def counting(*args, **kwargs):
+        encodings.append(kwargs["encoding"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(pm.gaze, "from_asc", counting)
+    eyelink.read_asc(write_experiment(tmp_path, latin1=latin1))
+    assert encodings == ["latin-1" if latin1 else "utf-8"]
+
+
 def test_events_only_has_no_samples(tmp_path):
     rec = eyelink.read_asc(write_experiment(tmp_path), samples=False)
     assert rec.samples is None

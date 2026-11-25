@@ -6,14 +6,18 @@ found on the user's machine and never bundled or downloaded.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import io
+import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
 import warnings
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +25,8 @@ import numpy as np
 import pandas as pd
 
 from scanpath_studio import constants
+from scanpath_studio import progress as progress_mod
+from scanpath_studio.file_lock import file_lock
 
 EDF2ASC_ENV = "SCANPATH_EDF2ASC"
 
@@ -138,23 +144,27 @@ _DISPLAY_COORDS = re.compile(r"^DISPLAY_COORDS\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(
 _EYE_LETTER = {"left": "L", "right": "R"}
 
 
+def _asc_encoding(path: Path) -> str:
+    """UTF-8 when the whole file decodes as it, else latin-1 (which decodes any
+    bytes), so the file is parsed once.  OneStop's ASC files are latin-1."""
+    try:
+        path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        return "latin-1"
+    return "utf-8"
+
+
 def _parse_asc(path: Path):
     try:
         import pymovements as pm
     except ImportError as exc:
         raise ImportError(_MISSING_PYMOVEMENTS) from exc
-    for encoding in ("utf-8", "latin-1"):
-        try:
-            with warnings.catch_warnings():
-                for pattern in _QUIET_PYMOVEMENTS:
-                    warnings.filterwarnings("ignore", message=pattern)
-                gaze = pm.gaze.from_asc(
-                    path, events=True, messages=True, encoding=encoding
-                )
-            return gaze, encoding
-        except UnicodeDecodeError:
-            continue
-    raise ValueError(f"{path.name} is not readable as UTF-8 or latin-1 text.")
+    encoding = _asc_encoding(path)
+    with warnings.catch_warnings():
+        for pattern in _QUIET_PYMOVEMENTS:
+            warnings.filterwarnings("ignore", message=pattern)
+        gaze = pm.gaze.from_asc(path, events=True, messages=True, encoding=encoding)
+    return gaze, encoding
 
 
 def _scan_lines(path: Path, encoding: str):
@@ -1040,4 +1050,422 @@ def session_tables(
         raw_gaze=None,
         display=rec.display,
         notes=notes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# A study: every session in one folder of per-participant Parquet files
+# ---------------------------------------------------------------------------
+
+#: Bumped whenever the tables read from the same recording change, so that a
+#: study folder reads every session again.
+PARSER_VERSION = 1
+MANIFEST_VERSION = 1
+_MANIFEST = "manifest.json"
+# The per-participant tables of a study folder, one subfolder each.
+_STUDY_TABLES = ("fixations", "words", "trial_metadata", "raw_gaze")
+_RECORDING_SUFFIXES = (".edf", ".asc")
+
+
+@dataclass
+class StudyReport:
+    """What one `import_eyelink` run did: the participants it read, those it
+    skipped as unchanged, those it could not read (with the error), and the
+    notes on each participant it read or whose display sets it apart."""
+
+    study_dir: Path
+    imported: list[str]
+    skipped: list[str]
+    failed: dict[str, str]
+    notes: dict[str, list[str]]
+
+
+@dataclass
+class EyeLinkData:
+    """A study folder's tables, as `load_eyelink` reads them back.
+
+    ``image_path`` is absolute; ``display`` is ``None`` when the sessions'
+    displays differ in size (a note on each session that differs says so);
+    ``notes`` maps each participant to what could not be read.
+    """
+
+    words: pd.DataFrame
+    fixations: pd.DataFrame
+    trial_metadata: pd.DataFrame
+    raw_gaze: pd.DataFrame | None
+    display: tuple[int, int] | None
+    notes: dict[str, list[str]]
+
+
+def study_sources(paths: str | Path | Iterable[str | Path]) -> list[Path]:
+    """The recordings ``paths`` name, resolved.
+
+    A file is taken as given; a folder is searched through for ``.edf`` files
+    and for ``.asc`` files whose stem no ``.edf`` found there has (an ``.asc``
+    converted beside its ``.edf``).  A recording's stem is its participant, so
+    two recordings with one stem raise ``ValueError``.
+    """
+    _require_enabled("study_sources")
+    if isinstance(paths, (str, os.PathLike)):
+        paths = [paths]
+    sources: list[Path] = []
+    for path in map(Path, paths):
+        if path.is_dir():
+            found = sorted(
+                p
+                for p in path.rglob("*")
+                if p.suffix.lower() in _RECORDING_SUFFIXES and p.is_file()
+            )
+            edfs = {p.stem for p in found if p.suffix.lower() == ".edf"}
+            sources += [
+                p for p in found if p.suffix.lower() == ".edf" or p.stem not in edfs
+            ]
+        elif path.is_file() and path.suffix.lower() in _RECORDING_SUFFIXES:
+            sources.append(path)
+        elif path.exists():
+            raise ValueError(f"{path} is not an .edf or .asc recording.")
+        else:
+            raise FileNotFoundError(f"{path} does not exist.")
+    sources = list(dict.fromkeys(p.resolve() for p in sources))
+    if not sources:
+        raise ValueError("No .edf or .asc recordings were found.")
+    by_stem: dict[str, list[Path]] = {}
+    for source in sources:
+        by_stem.setdefault(source.stem, []).append(source)
+    clashes = [
+        f"{stem} ({', '.join(map(str, files))})"
+        for stem, files in by_stem.items()
+        if len(files) > 1
+    ]
+    if clashes:
+        raise ValueError(
+            "A recording's file name is its participant id, so two recordings "
+            f"cannot share one: {'; '.join(clashes)}."
+        )
+    return sources
+
+
+def _read_manifest(study_dir: Path) -> dict:
+    path = study_dir / _MANIFEST
+    if not path.is_file():
+        return {"version": MANIFEST_VERSION, "display": None, "sessions": {}}
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if manifest.get("version") != MANIFEST_VERSION:
+        raise ValueError(
+            f"{path} has manifest version {manifest.get('version')}; this version "
+            f"of Scanpath Studio reads version {MANIFEST_VERSION}."
+        )
+    return manifest
+
+
+def _replace_atomically(path: Path, write: Callable[[str], None]) -> None:
+    """Write ``path`` aside with ``write`` and move it into place, so a reader
+    sees the old file or the new one, never part of one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, partial = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".partial"
+    )
+    os.close(handle)
+    try:
+        write(partial)
+        os.replace(partial, path)
+    except BaseException:
+        Path(partial).unlink(missing_ok=True)
+        raise
+
+
+def _write_manifest(study_dir: Path, manifest: dict) -> None:
+    def write(partial: str) -> None:
+        Path(partial).write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+    _replace_atomically(study_dir / _MANIFEST, write)
+
+
+def _unchanged(entry: dict | None, stat: os.stat_result, raw_gaze: bool) -> bool:
+    """Whether a session's manifest entry still holds for its recording."""
+    return (
+        entry is not None
+        and entry.get("status") == "ok"
+        and entry.get("size") == stat.st_size
+        and entry.get("mtime_ns") == stat.st_mtime_ns
+        and entry.get("parser_version") == PARSER_VERSION
+        and (bool(entry.get("raw_gaze")) or not raw_gaze)
+    )
+
+
+def _ok_sessions(sessions: dict) -> list[str]:
+    return [pid for pid, entry in sessions.items() if entry.get("status") == "ok"]
+
+
+def _read_session(job: dict) -> SessionTables | str:
+    """One session's tables, or the message of the error that stopped them.
+
+    Run in a worker process, so the error comes back as text: a failed session
+    is reported and the others go on.
+    """
+    try:
+        return session_tables(**job)
+    except Exception as exc:
+        return str(exc) or type(exc).__name__
+
+
+def _read_sessions(jobs: list[dict], workers: int) -> Iterator[tuple[int, object]]:
+    """``(index, result)`` for each job as it finishes: in this process with
+    one worker, else in a pool of ``workers`` spawned processes."""
+    if workers == 1 or len(jobs) <= 1:
+        for i, job in enumerate(jobs):
+            yield i, _read_session(job)
+        return
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    pool = ProcessPoolExecutor(
+        max_workers=min(workers, len(jobs)),
+        mp_context=multiprocessing.get_context("spawn"),
+    )
+    try:
+        futures = {pool.submit(_read_session, job): i for i, job in enumerate(jobs)}
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception as exc:  # the worker process itself died
+                result = str(exc) or type(exc).__name__
+            yield futures[future], result
+    finally:
+        # A cancelled import stops queued sessions instead of reading them all.
+        pool.shutdown(wait=True, cancel_futures=True)
+
+
+def _relative_image(path, study_dir: Path) -> str | None:
+    if path is None or (isinstance(path, float) and np.isnan(path)):
+        return None
+    return Path(path).resolve().relative_to(study_dir).as_posix()
+
+
+def _write_session(study_dir: Path, pid: str, tables: SessionTables) -> None:
+    for name in _STUDY_TABLES:
+        frame = getattr(tables, name)
+        path = study_dir / name / f"{pid}.parquet"
+        if frame is None:
+            path.unlink(missing_ok=True)
+            continue
+        if "image_path" in frame.columns:
+            frame = frame.assign(
+                image_path=[_relative_image(p, study_dir) for p in frame["image_path"]]
+            )
+        _replace_atomically(path, functools.partial(frame.to_parquet, index=False))
+
+
+def _study_display(
+    sessions: dict, pids: Iterable[str]
+) -> tuple[tuple[int, int] | None, dict[str, list[str]]]:
+    """The display size the sessions ``pids`` share, and a note on each one
+    whose display differs from the most common when they do not share one."""
+    displays = {
+        pid: (int(d[0]), int(d[1]))
+        for pid in pids
+        if (d := sessions[pid].get("display"))
+    }
+    counts = Counter(displays.values())
+    if len(counts) <= 1:
+        return next(iter(counts), None), {}
+    common = counts.most_common(1)[0][0]
+    sizes = ", ".join(f"{w}×{h}" for w, h in counts)
+    return None, {
+        pid: [
+            f"This session's display is {w}×{h}, most sessions' {common[0]}×"
+            f"{common[1]}; with displays of several sizes ({sizes}) the study "
+            "has no single display size."
+        ]
+        for pid, (w, h) in displays.items()
+        if (w, h) != common
+    }
+
+
+def import_eyelink(
+    paths: str | Path | Iterable[str | Path],
+    study_dir: str | Path,
+    *,
+    session_dir: str | Path | None = None,
+    experiment_dir: str | Path | None = None,
+    raw_gaze: bool = False,
+    workers: int | None = None,
+    rebuild: bool = False,
+    keep_asc: bool = False,
+    progress: Callable[[int, int, str], None] | None = None,
+) -> StudyReport:
+    """Read EyeLink recordings into the study folder ``study_dir``.
+
+    ``paths`` is an ``.edf`` / ``.asc`` file, a folder (`study_sources`), or a
+    list of them.  Each session is read by `session_tables` and written as
+    ``fixations/``, ``words/`` and ``trial_metadata/<participant>.parquet``,
+    its stimulus screens into ``images/``, with ``image_path`` relative to the
+    study folder; ``manifest.json`` records each session as it finishes.  A
+    session whose recording, parser version and raw-gaze choice are unchanged
+    since it was read is skipped, unless ``rebuild``; one that fails is
+    reported and the others go on.
+
+    ``session_dir`` is the session folder of a single recording; for several,
+    ``experiment_dir`` finds each in ``results/<participant>/``.  Sessions are
+    read by ``workers`` processes (default: one fewer than the CPUs; ``1``
+    reads them in this process).  ``keep_asc`` keeps the ASC converted from an
+    ``.edf`` in ``asc/``.  ``progress(done, total, participant)`` is called
+    as each session to read finishes.
+    """
+    _require_enabled("import_eyelink")
+    if raw_gaze:
+        raise NotImplementedError("Raw gaze from EyeLink recordings is not read yet.")
+    sources = study_sources(paths)
+    if session_dir is not None and len(sources) != 1:
+        raise ValueError(
+            "session_dir is one session's folder, so it takes one recording; for "
+            f"{len(sources)} recordings pass experiment_dir, the folder whose "
+            "results/<participant>/ holds each session."
+        )
+    if workers is None:
+        workers = max(1, (os.cpu_count() or 1) - 1)
+    if workers < 1:
+        raise ValueError(f"workers must be at least 1, not {workers}.")
+    study_dir = Path(study_dir).resolve()
+    study_dir.mkdir(parents=True, exist_ok=True)
+    with file_lock(study_dir / ".lock"):
+        manifest = _read_manifest(study_dir)
+        sessions = manifest["sessions"]
+        report = StudyReport(study_dir, [], [], {}, {})
+        pending: list[tuple[str, Path, os.stat_result]] = []
+        for source in sources:
+            pid, stat = source.stem, source.stat()
+            written = (study_dir / "fixations" / f"{pid}.parquet").is_file()
+            if (
+                written
+                and not rebuild
+                and _unchanged(sessions.get(pid), stat, raw_gaze)
+            ):
+                report.skipped.append(pid)
+            else:
+                pending.append((pid, source, stat))
+        asc_dir = study_dir / "asc" if keep_asc else None
+        if asc_dir is not None and any(
+            s.suffix.lower() == ".edf" for _, s, _ in pending
+        ):
+            asc_dir.mkdir(exist_ok=True)
+        jobs = [
+            {
+                "source": source,
+                "image_dir": study_dir / "images",
+                "session_dir": None if session_dir is None else Path(session_dir),
+                "experiment_dir": None
+                if experiment_dir is None
+                else Path(experiment_dir),
+                "raw_gaze": raw_gaze,
+                "asc_dir": asc_dir if source.suffix.lower() == ".edf" else None,
+            }
+            for _, source, _ in pending
+        ]
+        for done, (i, result) in enumerate(_read_sessions(jobs, workers), start=1):
+            pid, source, stat = pending[i]
+            entry = {
+                "source": str(source),
+                "size": stat.st_size,
+                "mtime_ns": stat.st_mtime_ns,
+                "parser_version": PARSER_VERSION,
+                "raw_gaze": False,
+                "status": "failed",
+                "error": None,
+                "notes": [],
+                "display": None,
+            }
+            if isinstance(result, SessionTables):
+                _write_session(study_dir, pid, result)
+                entry.update(
+                    raw_gaze=result.raw_gaze is not None,
+                    status="ok",
+                    notes=list(result.notes),
+                    display=None if result.display is None else list(result.display),
+                )
+                report.imported.append(pid)
+            else:
+                for name in _STUDY_TABLES:
+                    (study_dir / name / f"{pid}.parquet").unlink(missing_ok=True)
+                entry["error"] = result
+                report.failed[pid] = result
+            report.notes[pid] = list(entry["notes"])
+            sessions[pid] = entry
+            display, _ = _study_display(sessions, _ok_sessions(sessions))
+            manifest["display"] = None if display is None else list(display)
+            _write_manifest(study_dir, manifest)
+            if progress is not None:
+                progress(done, len(jobs), pid)
+            progress_mod.report(done, len(jobs), unit="sessions", detail=pid)
+        for pid, notes in _study_display(sessions, _ok_sessions(sessions))[1].items():
+            report.notes.setdefault(pid, []).extend(notes)
+    return report
+
+
+def _concat(frames: list[pd.DataFrame], columns: list[str]) -> pd.DataFrame:
+    # Empty sessions are left out so that they do not turn the columns' types
+    # into ``object``.
+    filled = [frame for frame in frames if len(frame)]
+    if not filled:
+        return frames[0] if frames else pd.DataFrame(columns=columns)
+    return pd.concat(filled, ignore_index=True)
+
+
+def _absolute_images(frame: pd.DataFrame, study_dir: Path) -> pd.DataFrame:
+    if "image_path" not in frame.columns:
+        return frame
+    return frame.assign(
+        image_path=[
+            None
+            if p is None or (isinstance(p, float) and np.isnan(p))
+            else str(study_dir / p)
+            for p in frame["image_path"]
+        ]
+    )
+
+
+def load_eyelink(
+    study_dir: str | Path, *, participants: Iterable[str] | None = None
+) -> EyeLinkData:
+    """Read back a study folder `import_eyelink` wrote: every session it read,
+    or only ``participants``'.  Sessions that failed are not part of it."""
+    _require_enabled("load_eyelink")
+    study_dir = Path(study_dir).resolve()
+    if not (study_dir / _MANIFEST).is_file():
+        raise FileNotFoundError(
+            f"{study_dir} is not an EyeLink study folder: it has no {_MANIFEST}."
+        )
+    sessions = _read_manifest(study_dir)["sessions"]
+    ok = sorted(_ok_sessions(sessions))
+    if participants is None:
+        pids = ok
+    else:
+        pids = list(dict.fromkeys(str(p) for p in participants))
+        unknown = [pid for pid in pids if pid not in ok]
+        if unknown:
+            raise ValueError(
+                f"These participants were not imported into {study_dir}: "
+                f"{', '.join(unknown)}."
+            )
+    display, display_notes = _study_display(sessions, pids)
+    frames: dict[str, list[pd.DataFrame]] = {name: [] for name in _STUDY_TABLES}
+    for pid in pids:
+        for name in _STUDY_TABLES:
+            path = study_dir / name / f"{pid}.parquet"
+            if path.is_file():
+                frames[name].append(_absolute_images(pd.read_parquet(path), study_dir))
+    return EyeLinkData(
+        words=_concat(frames["words"], WORD_COLUMNS),
+        fixations=_concat(frames["fixations"], FIXATION_COLUMNS),
+        trial_metadata=_concat(
+            frames["trial_metadata"], ["participant_id", "trial_id"]
+        ),
+        raw_gaze=_concat(frames["raw_gaze"], []) if frames["raw_gaze"] else None,
+        display=display,
+        notes={
+            pid: [*sessions[pid].get("notes", []), *display_notes.get(pid, [])]
+            for pid in pids
+        },
     )

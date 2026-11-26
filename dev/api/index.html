@@ -8426,6 +8426,26 @@ listing them for anything else.</p>
 <td><code>None</code></td>
 <td>With <code>--animate</code>: at most N frames. A trial too long for that many at <code>--anim-grid-step-ms</code> gets a wider step.<br><em>Single replay, Compare + Animate.</em></td>
 </tr>
+<tr>
+<td><code>grow_fixations</code><br><code>--grow-fixations</code></td>
+<td><code>False</code></td>
+<td>With <code>--animate</code>: the current fixation starts small and reaches its full size when its duration has passed.<br><em>Single replay, Compare + Animate.</em></td>
+</tr>
+<tr>
+<td><code>fade_fixations</code><br><code>--fade-fixations</code></td>
+<td><code>False</code></td>
+<td>With <code>--animate</code>: draw the fixations before the current one, their numbers and the saccades faded.<br><em>Single replay, Compare + Animate.</em></td>
+</tr>
+<tr>
+<td><code>grow_start</code><br><code>--grow-start</code></td>
+<td><code>0.15</code></td>
+<td>With <code>--grow-fixations</code>: the share of its full size a fixation starts at, 0.05–1.<br><em>Single replay, Compare + Animate.</em></td>
+</tr>
+<tr>
+<td><code>fade_opacity</code><br><code>--fade-opacity</code></td>
+<td><code>0.3</code></td>
+<td>With <code>--fade-fixations</code>: the share of its opacity what has faded keeps, 0–1.<br><em>Single replay, Compare + Animate.</em></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -9800,7 +9820,8 @@ an option given beside it wins.</p>
             <p>Figure options, as <code>plot_scanpath</code> takes them, with
 its <code>fix_index_range</code> and <code>illustration_label</code>, plus <code>palette</code>
 and the replay's <code>anim_grid_step_ms</code>, <code>anim_max_frames</code>,
-<code>playback_speed</code> and <code>autoplay</code>. <code>None</code> leaves the app's own
+<code>grow_fixations</code>, <code>fade_fixations</code>, <code>grow_start</code>,
+<code>fade_opacity</code>, <code>playback_speed</code> and <code>autoplay</code>. <code>None</code> leaves the app's own
 value, except where it is a choice of its own (<code>heatmap_metric</code>
 counts fixations, <code>fixation_flags</code> turns them off). A link carries
 no file, so <code>background_image</code> and its size and origin are

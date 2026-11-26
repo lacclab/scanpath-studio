@@ -1184,6 +1184,10 @@ Examples:
 | ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `anim_grid_step_ms` `--anim-grid-step-ms` | `None`  | With `--animate`: one frame per MS of reading time. A smaller step is smoother and makes a larger file. *Single replay, Compare + Animate.*        |
 | `anim_max_frames` `--anim-max-frames`     | `None`  | With `--animate`: at most N frames. A trial too long for that many at `--anim-grid-step-ms` gets a wider step. *Single replay, Compare + Animate.* |
+| `grow_fixations` `--grow-fixations`       | `False` | With `--animate`: the current fixation starts small and reaches its full size when its duration has passed. *Single replay, Compare + Animate.*    |
+| `fade_fixations` `--fade-fixations`       | `False` | With `--animate`: draw the fixations before the current one, their numbers and the saccades faded. *Single replay, Compare + Animate.*             |
+| `grow_start` `--grow-start`               | `0.15`  | With `--grow-fixations`: the share of its full size a fixation starts at, 0.05–1. *Single replay, Compare + Animate.*                              |
+| `fade_opacity` `--fade-opacity`           | `0.3`   | With `--fade-fixations`: the share of its opacity what has faded keeps, 0–1. *Single replay, Compare + Animate.*                                   |
 
 ### Compare
 
@@ -1574,7 +1578,7 @@ Parameters:
 - **`match`** (`str | None`, default: `None` ) – Open the Comparisons subtab with this Match field: a column as the dataset names it (one kept with add_dataset's keep_columns, say), or "same_text" / "same_participant" for the two choices before the columns. The link opens in Full, the only mode with that subtab. A field the dataset doesn't offer is ignored with a notice.
 - **`match_view`** (`str | None`, default: `None` ) – The Comparisons subtab's View for match: "grid" (the default) or "overlay", every match on one figure.
 - **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
-- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
+- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, grow_fixations, fade_fixations, grow_start, fade_opacity, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
 
 Returns:
 

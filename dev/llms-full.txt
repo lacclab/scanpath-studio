@@ -1064,15 +1064,19 @@ If you switch to Essentials while comparing readings, the comparison switch stay
 
 Turn on the **Animation** tile, or the **Playback** switch under **Modes**, to replay the reading. Use the play and pause buttons and the time slider above the plot. Switch **Animation** off to return to your figure. For a saccades-only replay, open **Full**, leave **Saccades** on, and turn **Fixations** off. Each line appears when the reading reaches its next fixation. **Heatmap** and **Raw gaze** are available in static views. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#keyboard-shortcuts). Open **Playback settings** in Full for these controls:
 
-| Control                               | What it does                                                                                                                                                            |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Speed**                             | How fast the video plays, from ×0.25 to ×8: ×1 is the participant's recorded pace, ×2 twice as fast, ×0.5 half as fast.                                                 |
-| **Autoplay**                          | Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play.                                                                      |
-| **Duration**                          | For information only: the trial's reading time, and how long the video runs at this speed.                                                                              |
-| **Smoothness**                        | How smooth the video is: **Coarse**, **Standard** or **Fine**. More frames play more smoothly but take longer to build. Moving either slider below makes it **Custom**. |
-| **Frame timing** → **Frame interval** | Reading time between frames, in ms.                                                                                                                                     |
-| **Frame timing** → **Frame limit**    | The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit.                                                 |
-| Frame count                           | Shows the number of frames in this replay and the reading time between them.                                                                                            |
+| Control                                           | What it does                                                                                                                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Speed**                                         | How fast the video plays, from ×0.25 to ×8: ×1 is the participant's recorded pace, ×2 twice as fast, ×0.5 half as fast.                                                                                                            |
+| **Autoplay**                                      | Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play.                                                                                                                                 |
+| **Current fixation** → **Grow over its duration** | The current fixation starts small and reaches its full size when its duration has passed, so a long fixation visibly takes longer. Link: `anim_grow_fixations=1`; command line: `--grow-fixations`; Python: `grow_fixations=True`. |
+| **Start size**                                    | How small a growing fixation starts, as a share of its full size: 0.15 (the default) starts at 15 %. Link: `anim_grow_start=0.3`; command line: `--grow-start 0.3`; Python: `grow_start=0.3`.                                      |
+| **Earlier fixations** → **Fade**                  | Draw the fixations before the current one, their numbers and the saccades faded, so the current fixation stands out. Link: `anim_fade_fixations=1`; command line: `--fade-fixations`; Python: `fade_fixations=True`.               |
+| **Faded opacity**                                 | How much of its opacity what has faded keeps: 0.3 by default, 0 hides it, 1 leaves it as it is. Link: `anim_fade_opacity=0.5`; command line: `--fade-opacity 0.5`; Python: `fade_opacity=0.5`.                                     |
+| **Duration**                                      | For information only: the trial's reading time, and how long the video runs at this speed.                                                                                                                                         |
+| **Smoothness**                                    | How smooth the video is: **Coarse**, **Standard** or **Fine**. More frames play more smoothly but take longer to build. Moving either slider below makes it **Custom**.                                                            |
+| **Frame timing** → **Frame interval**             | Reading time between frames, in ms.                                                                                                                                                                                                |
+| **Frame timing** → **Frame limit**                | The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit.                                                                                                            |
+| Frame count                                       | Shows the number of frames in this replay and the reading time between them.                                                                                                                                                       |
 
 ### Compare
 
@@ -2589,6 +2593,10 @@ Examples:
 | ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `anim_grid_step_ms` `--anim-grid-step-ms` | `None`  | With `--animate`: one frame per MS of reading time. A smaller step is smoother and makes a larger file. *Single replay, Compare + Animate.*        |
 | `anim_max_frames` `--anim-max-frames`     | `None`  | With `--animate`: at most N frames. A trial too long for that many at `--anim-grid-step-ms` gets a wider step. *Single replay, Compare + Animate.* |
+| `grow_fixations` `--grow-fixations`       | `False` | With `--animate`: the current fixation starts small and reaches its full size when its duration has passed. *Single replay, Compare + Animate.*    |
+| `fade_fixations` `--fade-fixations`       | `False` | With `--animate`: draw the fixations before the current one, their numbers and the saccades faded. *Single replay, Compare + Animate.*             |
+| `grow_start` `--grow-start`               | `0.15`  | With `--grow-fixations`: the share of its full size a fixation starts at, 0.05–1. *Single replay, Compare + Animate.*                              |
+| `fade_opacity` `--fade-opacity`           | `0.3`   | With `--fade-fixations`: the share of its opacity what has faded keeps, 0–1. *Single replay, Compare + Animate.*                                   |
 
 ### Compare
 
@@ -2979,7 +2987,7 @@ Parameters:
 - **`match`** (`str | None`, default: `None` ) – Open the Comparisons subtab with this Match field: a column as the dataset names it (one kept with add_dataset's keep_columns, say), or "same_text" / "same_participant" for the two choices before the columns. The link opens in Full, the only mode with that subtab. A field the dataset doesn't offer is ignored with a notice.
 - **`match_view`** (`str | None`, default: `None` ) – The Comparisons subtab's View for match: "grid" (the default) or "overlay", every match on one figure.
 - **`illustration`** (`bool`, default: `False` ) – The Illustration design, as plot_scanpath takes it; an option given beside it wins.
-- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
+- **`**figure_options`** (`Any`, default: `{}` ) – Figure options, as plot_scanpath takes them, with its fix_index_range and illustration_label, plus palette and the replay's anim_grid_step_ms, anim_max_frames, grow_fixations, fade_fixations, grow_start, fade_opacity, playback_speed and autoplay. None leaves the app's own value, except where it is a choice of its own (heatmap_metric counts fixations, fixation_flags turns them off). A link carries no file, so background_image and its size and origin are refused (show_stimulus_image=True draws the dataset's own pages), and no title or caption, which the app writes from its own patterns.
 
 Returns:
 
@@ -3707,12 +3715,16 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 ### Animate
 
-| Option                | Value  | Default | Description                                                                                                                   |
-| --------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `--playback-speed`    | `X`    | `1.0`   | Animation speed multiplier for `--animate` (default: 1.0 = real time).                                                        |
-| `--no-autoplay`       | switch | —       | With `--animate`: start the replay paused. By default the HTML file starts playing when it opens.                             |
-| `--anim-grid-step-ms` | `MS`   | —       | With `--animate`: one frame per MS of reading time (default: 100). A smaller step is smoother and makes a larger file.        |
-| `--anim-max-frames`   | `N`    | —       | With `--animate`: at most N frames (default: 360). A trial too long for that many at `--anim-grid-step-ms` gets a wider step. |
+| Option                | Value   | Default | Description                                                                                                                   |
+| --------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--playback-speed`    | `X`     | `1.0`   | Animation speed multiplier for `--animate` (default: 1.0 = real time).                                                        |
+| `--no-autoplay`       | switch  | —       | With `--animate`: start the replay paused. By default the HTML file starts playing when it opens.                             |
+| `--grow-fixations`    | switch  | —       | With `--animate`: the current fixation starts small and reaches its full size when its duration has passed.                   |
+| `--fade-fixations`    | switch  | —       | With `--animate`: draw the fixations before the current one, their numbers and the saccades faded.                            |
+| `--grow-start`        | `SHARE` | —       | With `--grow-fixations`: the share of its full size a fixation starts at, 0.05–1 (default: 0.15).                             |
+| `--fade-opacity`      | `SHARE` | —       | With `--fade-fixations`: the share of its opacity what has faded keeps, 0–1 (default: 0.3).                                   |
+| `--anim-grid-step-ms` | `MS`    | —       | With `--animate`: one frame per MS of reading time (default: 100). A smaller step is smoother and makes a larger file.        |
+| `--anim-max-frames`   | `N`     | —       | With `--animate`: at most N frames (default: 360). A trial too long for that many at `--anim-grid-step-ms` gets a wider step. |
 
 ### Size and export
 
@@ -4722,6 +4734,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - The Comparisons tab can overlay its matches: View → Overlay draws the selected trial and the page's matches on one figure, each in its own colour, with the chip table's rows named in those colours. A link opens it with match_view=overlay beside match=, as do app_link(match_view="overlay") and scanpath-studio open --match-view overlay.
 - A link can open the Comparisons subtab with its Match field chosen: Share → Link writes `match=` when copied from Comparisons, as do `api.app_link(match=…)` and `scanpath-studio open --match`.
 - A repository script, scripts/eyegenbench_to_studio.py, adds the corpora of a local EyeGenBench checkout, with every model's generated readings, as datasets the app lists: word-level fixations, each model's version of a trial matched to the human one by source_trial, and each trial's held-out regime.
+- The replay can grow the current fixation over its duration and fade the fixations before it, with their numbers and the saccades, at a start size and faded opacity you choose (Playback settings, links, `render --grow-fixations` / `--fade-fixations`, and `animate_scanpath`).
 
 ### Changed
 

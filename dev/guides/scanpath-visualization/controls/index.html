@@ -2981,6 +2981,22 @@ keyboard, see <a href="../#keyboard-shortcuts">Keyboard shortcuts</a>. Open <str
 <td>Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play.</td>
 </tr>
 <tr>
+<td><strong>Current fixation</strong> → <strong>Grow over its duration</strong></td>
+<td>The current fixation starts small and reaches its full size when its duration has passed, so a long fixation visibly takes longer. Link: <code>anim_grow_fixations=1</code>; command line: <code>--grow-fixations</code>; Python: <code>grow_fixations=True</code>.</td>
+</tr>
+<tr>
+<td><strong>Start size</strong></td>
+<td>How small a growing fixation starts, as a share of its full size: 0.15 (the default) starts at 15 %. Link: <code>anim_grow_start=0.3</code>; command line: <code>--grow-start 0.3</code>; Python: <code>grow_start=0.3</code>.</td>
+</tr>
+<tr>
+<td><strong>Earlier fixations</strong> → <strong>Fade</strong></td>
+<td>Draw the fixations before the current one, their numbers and the saccades faded, so the current fixation stands out. Link: <code>anim_fade_fixations=1</code>; command line: <code>--fade-fixations</code>; Python: <code>fade_fixations=True</code>.</td>
+</tr>
+<tr>
+<td><strong>Faded opacity</strong></td>
+<td>How much of its opacity what has faded keeps: 0.3 by default, 0 hides it, 1 leaves it as it is. Link: <code>anim_fade_opacity=0.5</code>; command line: <code>--fade-opacity 0.5</code>; Python: <code>fade_opacity=0.5</code>.</td>
+</tr>
+<tr>
 <td><strong>Duration</strong></td>
 <td>For information only: the trial's reading time, and how long the video runs at this speed.</td>
 </tr>

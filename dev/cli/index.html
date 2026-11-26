@@ -4923,6 +4923,30 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>With <code>--animate</code>: start the replay paused. By default the HTML file starts playing when it opens.</td>
 </tr>
 <tr>
+<td><code>--grow-fixations</code></td>
+<td>switch</td>
+<td>—</td>
+<td>With <code>--animate</code>: the current fixation starts small and reaches its full size when its duration has passed.</td>
+</tr>
+<tr>
+<td><code>--fade-fixations</code></td>
+<td>switch</td>
+<td>—</td>
+<td>With <code>--animate</code>: draw the fixations before the current one, their numbers and the saccades faded.</td>
+</tr>
+<tr>
+<td><code>--grow-start</code></td>
+<td><code>SHARE</code></td>
+<td>—</td>
+<td>With <code>--grow-fixations</code>: the share of its full size a fixation starts at, 0.05–1 (default: 0.15).</td>
+</tr>
+<tr>
+<td><code>--fade-opacity</code></td>
+<td><code>SHARE</code></td>
+<td>—</td>
+<td>With <code>--fade-fixations</code>: the share of its opacity what has faded keeps, 0–1 (default: 0.3).</td>
+</tr>
+<tr>
 <td><code>--anim-grid-step-ms</code></td>
 <td><code>MS</code></td>
 <td>—</td>

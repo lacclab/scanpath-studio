@@ -449,12 +449,16 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 ### Animate
 
-| Option                | Value  | Default | Description                                                                                                                   |
-| --------------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `--playback-speed`    | `X`    | `1.0`   | Animation speed multiplier for `--animate` (default: 1.0 = real time).                                                        |
-| `--no-autoplay`       | switch | —       | With `--animate`: start the replay paused. By default the HTML file starts playing when it opens.                             |
-| `--anim-grid-step-ms` | `MS`   | —       | With `--animate`: one frame per MS of reading time (default: 100). A smaller step is smoother and makes a larger file.        |
-| `--anim-max-frames`   | `N`    | —       | With `--animate`: at most N frames (default: 360). A trial too long for that many at `--anim-grid-step-ms` gets a wider step. |
+| Option                | Value   | Default | Description                                                                                                                   |
+| --------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--playback-speed`    | `X`     | `1.0`   | Animation speed multiplier for `--animate` (default: 1.0 = real time).                                                        |
+| `--no-autoplay`       | switch  | —       | With `--animate`: start the replay paused. By default the HTML file starts playing when it opens.                             |
+| `--grow-fixations`    | switch  | —       | With `--animate`: the current fixation starts small and reaches its full size when its duration has passed.                   |
+| `--fade-fixations`    | switch  | —       | With `--animate`: draw the fixations before the current one, their numbers and the saccades faded.                            |
+| `--grow-start`        | `SHARE` | —       | With `--grow-fixations`: the share of its full size a fixation starts at, 0.05–1 (default: 0.15).                             |
+| `--fade-opacity`      | `SHARE` | —       | With `--fade-fixations`: the share of its opacity what has faded keeps, 0–1 (default: 0.3).                                   |
+| `--anim-grid-step-ms` | `MS`    | —       | With `--animate`: one frame per MS of reading time (default: 100). A smaller step is smoother and makes a larger file.        |
+| `--anim-max-frames`   | `N`     | —       | With `--animate`: at most N frames (default: 360). A trial too long for that many at `--anim-grid-step-ms` gets a wider step. |
 
 ### Size and export
 

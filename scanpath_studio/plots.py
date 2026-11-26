@@ -294,7 +294,8 @@ class FigureSettings:
     #: Replay only: the current fixation's marker grows from small to its full
     #: duration size over the fixation's own duration.
     grow_fixations: bool = False
-    #: Replay only: every fixation before the current one is drawn faded.
+    #: Replay only: every fixation before the current one, its number and the
+    #: saccades are drawn faded.
     fade_fixations: bool = False
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
@@ -3275,6 +3276,18 @@ def _saccade_arrow_markers(
 _RGB_FUNCTION = re.compile(
     r"rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,[^)]*)?\)"
 )
+
+
+def _faded_and_full(color: str) -> tuple[str, str] | None:
+    """A fixation number's colour faded and at full strength, for a replay
+    that fades earlier fixations; ``None`` for a colour that takes no alpha
+    (a CSS name), whose numbers then stay as they are."""
+    from .replay_frames import FADE_FACTOR
+
+    try:
+        return color_with_alpha(color, FADE_FACTOR), color_with_alpha(color, 1.0)
+    except ValueError:
+        return None
 
 
 def color_with_alpha(color: str, alpha: float) -> str:
@@ -7635,6 +7648,13 @@ def _render_scanpath_animation(
     show_saccades = settings.show_saccades
     show_saccade_arrows = settings.show_saccade_arrows
     show_order = show_fixations and settings.show_order
+    # Fading dims what came before the current fixation: the earlier markers
+    # and numbers per frame (`replay_frames`), and the saccades as a whole,
+    # since one line trace takes one opacity.
+    fade = settings.fade_fixations and show_fixations
+    saccade_opacity = settings.saccade_opacity * (
+        replay_frames.FADE_FACTOR if fade else 1.0
+    )
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
@@ -8117,7 +8137,7 @@ def _render_scanpath_animation(
                     ),
                     # On the base trace only — a frame restates the
                     # line's x/y and style, never its opacity, so it holds.
-                    opacity=settings.saccade_opacity,
+                    opacity=saccade_opacity,
                     meta="saccades",
                     showlegend=label_line,
                     legendgroup=s["label"],
@@ -8155,7 +8175,7 @@ def _render_scanpath_animation(
                         color=s["sac_color"],
                         line=dict(width=0),
                     ),
-                    opacity=settings.saccade_opacity,
+                    opacity=saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -8380,7 +8400,8 @@ def _render_scanpath_animation(
                 redact=settings.redact_text,
                 comparing=dual,
                 grow=settings.grow_fixations and show_fixations,
-                fade=settings.fade_fixations and show_fixations,
+                fade=fade,
+                order_colors=_faded_and_full(s["text_color"]) if fade else None,
             )
             for s in specs
         ]

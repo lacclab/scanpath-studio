@@ -19,6 +19,7 @@ def reading(
     comparing: bool,
     grow: bool = False,
     fade: bool = False,
+    order_colors: tuple[str, str] | None = None,
 ) -> dict:
     """Trace positions and recorded details for stepping through one reading."""
     from .measures import assign_fixations_to_words
@@ -66,6 +67,10 @@ def reading(
         run["trails"] = [slots[idx] for idx in spec["idx_trails"]]
         run["grow"] = bool(grow)
         run["fade"] = bool(fade)
+    # The fixation numbers fade with their markers: ``(faded, full)`` colours.
+    if fade and order_colors and slots.get(spec["idx_order"]) is not None:
+        run["order"] = slots[spec["idx_order"]]
+        run["order_colors"] = list(order_colors)
     return run
 
 
@@ -134,6 +139,14 @@ def at_time(terminal: dict, readings: list[dict], time_ms: float, name: str) -> 
         frac = growth(run, count - 1, time_ms) if run.get("grow") else 1.0
         for slot in run.get("trails", ()):
             data[slot] = _restyle_trail(data[slot], count - 1, frac, fade=run["fade"])
+        if run.get("order") is not None:
+            trace = data[run["order"]]
+            faded, full = run["order_colors"]
+            colors = [faded] * (count - 1) + [full] * (len(trace["x"]) - count + 1)
+            data[run["order"]] = {
+                **trace,
+                "textfont": {**(trace.get("textfont") or {}), "color": colors},
+            }
         if run["current"] is None:
             continue
         source = terminal["data"][run["points"][0]]
@@ -214,6 +227,11 @@ FRAME_AT_JS = """function frameAtTime(terminal, readings, ms, name) {
         data[slot] = Object.assign({}, g, {marker: Object.assign({}, m, changes)});
       }
     });
+    if (run.order != null) {
+      var o = data[run.order], c = run.order_colors;
+      var colors = o.x.map(function (_, k) { return k < i ? c[0] : c[1]; });
+      data[run.order] = Object.assign({}, o, {textfont: Object.assign({}, o.textfont || {}, {color: colors})});
+    }
     if (run.current == null) { return; }
     var source = terminal.data[run.points[0]];
     var t = data[run.current];

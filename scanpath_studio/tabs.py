@@ -7158,9 +7158,9 @@ def render_single_trial_tab(
                     key="global_anim_fade_fixations",
                     persist_state="session",
                     disabled=anim_disabled or bool(marks_reason),
-                    help="Draw the fixations before the current one faded, so "
-                    "the current one stands out."
-                    + (f" {marks_reason}" if marks_reason else ""),
+                    help="Draw the fixations before the current one, their "
+                    "numbers and the saccades faded, so the current fixation "
+                    "stands out." + (f" {marks_reason}" if marks_reason else ""),
                 )
                 # The duration depends on both readings when comparing.
                 anim_timing_slot = st.container() if animate else None

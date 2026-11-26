@@ -110,3 +110,27 @@ def test_the_playback_checkboxes_grey_when_they_would_do_nothing(state, greyed):
     assert not at.exception
     for key in ("global_anim_grow_fixations", "global_anim_fade_fixations"):
         assert at.checkbox(key=key).disabled is greyed
+
+
+def test_fading_dims_the_earlier_numbers_and_every_saccade():
+    plain, _ = _replay(show_saccade_arrows=True)
+    fig, run = _replay(fade_fixations=True, show_saccade_arrows=True)
+    saccade_traces = [t for t in fig.data if t.meta == "saccades"]
+    assert saccade_traces
+    for faded, full in zip(
+        saccade_traces, [t for t in plain.data if t.meta == "saccades"], strict=True
+    ):
+        assert faded.opacity == pytest.approx(full.opacity * replay_frames.FADE_FACTOR)
+    faded_color, full_color = run["order_colors"]
+    assert faded_color.endswith(f",{replay_frames.FADE_FACTOR})")
+    for k in range(len(fig.frames)):
+        i, _ = _current(fig, run, k)
+        colors = list(fig.frames[k].data[run["order"]].textfont.color)
+        assert colors[:i] == [faded_color] * i
+        assert set(colors[i:]) == {full_color}
+
+
+def test_a_named_number_colour_keeps_its_numbers_unfaded():
+    fig, run = _replay(fade_fixations=True, order_font_color="black")
+    assert "order" not in run
+    assert fig.frames

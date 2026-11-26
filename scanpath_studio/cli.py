@@ -1749,7 +1749,8 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--fade-fixations",
         action="store_true",
-        help="With --animate: draw the fixations before the current one faded.",
+        help="With --animate: draw the fixations before the current one, their "
+        "numbers and the saccades faded.",
     )
     viz.add_argument(
         "--anim-grid-step-ms",

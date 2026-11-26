@@ -110,7 +110,7 @@ def convert_edf(edf: Path, out_dir: Path, *, samples: bool = False) -> Path:
                 "Rosetta with: softwareupdate --install-rosetta --agree-to-license"
             )
         raise Edf2AscError(f"Could not run {exe}: {exc}.{hint}") from exc
-    asc = out_dir / f"{edf.stem}.asc"
+    asc = out_dir / f"{_participant(edf)}.asc"
     if run.returncode != 0 or not asc.is_file():
         output = ((run.stdout or "") + (run.stderr or "")).strip()
         raise Edf2AscError(
@@ -781,7 +781,7 @@ def resolve_session_dir(
     source = Path(source)
     candidates = [session_dir, source.parent]
     if experiment_dir is not None:
-        candidates.append(Path(experiment_dir) / "results" / source.stem)
+        candidates.append(Path(experiment_dir) / "results" / _participant(source))
     names = _named_files(rec)
     for candidate in candidates:
         if candidate is None:
@@ -1372,7 +1372,7 @@ def session_tables(
     """
     _require_enabled("session_tables")
     source = Path(source)
-    if source.suffix.lower() == ".edf":
+    if _recording_suffix(source) == ".edf":
         if asc_dir is None:
             with tempfile.TemporaryDirectory() as tmp:
                 asc = convert_edf(source, Path(tmp), samples=raw_gaze)
@@ -1406,7 +1406,7 @@ def session_tables(
         notes.append(note + ".")
     image_paths = _screen_images(screens, rec.display, Path(image_dir), notes)
     screens = screens.assign(image_path=image_paths)
-    participant = source.stem
+    participant = _participant(source)
     text_ids = _text_ids(screens)
 
     def _finish(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -1458,6 +1458,23 @@ RAW_GAZE_WORKERS = 2
 _RECORDING_SUFFIXES = (".edf", ".asc")
 
 
+def _recording_suffix(path: Path) -> str:
+    """``path``'s recording extension (``.edf`` / ``.asc``), lower-cased, or ``""``.
+
+    Read from the name itself, not ``Path.suffix``: from Python 3.14 a name
+    of leading dots such as ``..asc`` has no suffix there, so the same folder
+    would hold different recordings depending on the interpreter.
+    """
+    name = path.name.lower()
+    return next((s for s in _RECORDING_SUFFIXES if name.endswith(s)), "")
+
+
+def _participant(path: Path) -> str:
+    """The participant a recording names: its file name without the extension."""
+    suffix = _recording_suffix(path)
+    return path.name[: -len(suffix)] if suffix else path.stem
+
+
 @dataclass
 class StudyReport:
     """What one `import_eyelink` run did: the participants it read, those it
@@ -1503,15 +1520,15 @@ def study_sources(paths: str | Path | Iterable[str | Path]) -> list[Path]:
     for path in map(Path, paths):
         if path.is_dir():
             found = sorted(
-                p
-                for p in path.rglob("*")
-                if p.suffix.lower() in _RECORDING_SUFFIXES and p.is_file()
+                p for p in path.rglob("*") if _recording_suffix(p) and p.is_file()
             )
-            edfs = {p.stem for p in found if p.suffix.lower() == ".edf"}
+            edfs = {_participant(p) for p in found if _recording_suffix(p) == ".edf"}
             sources += [
-                p for p in found if p.suffix.lower() == ".edf" or p.stem not in edfs
+                p
+                for p in found
+                if _recording_suffix(p) == ".edf" or _participant(p) not in edfs
             ]
-        elif path.is_file() and path.suffix.lower() in _RECORDING_SUFFIXES:
+        elif path.is_file() and _recording_suffix(path):
             sources.append(path)
         elif path.exists():
             raise ValueError(f"{path} is not an .edf or .asc recording.")
@@ -1522,8 +1539,8 @@ def study_sources(paths: str | Path | Iterable[str | Path]) -> list[Path]:
         raise ValueError("No .edf or .asc recordings were found.")
     by_stem: dict[str, list[Path]] = {}
     for source in sources:
-        _check_participant(source.stem, f"the name of {source}")
-        by_stem.setdefault(source.stem, []).append(source)
+        _check_participant(_participant(source), f"the name of {source}")
+        by_stem.setdefault(_participant(source), []).append(source)
     clashes = [
         f"{stem} ({', '.join(map(str, files))})"
         for stem, files in by_stem.items()
@@ -1648,7 +1665,7 @@ def _check_dependencies(sources: Iterable[Path]) -> None:
         import pymovements  # noqa: F401
     except ImportError as exc:
         raise ImportError(_MISSING_PYMOVEMENTS) from exc
-    if any(source.suffix.lower() == ".edf" for source in sources):
+    if any(_recording_suffix(source) == ".edf" for source in sources):
         find_edf2asc()
 
 
@@ -1884,7 +1901,7 @@ def import_eyelink(
         report = StudyReport(study_dir, [], [], {}, {})
         pending: list[tuple[str, Path, dict]] = []
         for source in sources:
-            pid = source.stem
+            pid = _participant(source)
             key = _session_key(source, source.stat(), session_dir, experiment_dir)
             stored = sessions.get(pid, {}).get("source")
             if stored is not None and stored != key["source"] and not rebuild:
@@ -1903,7 +1920,7 @@ def import_eyelink(
             _check_dependencies(source for _, source, _ in pending)
         asc_dir = study_dir / "asc" if keep_asc else None
         if asc_dir is not None and any(
-            s.suffix.lower() == ".edf" for _, s, _ in pending
+            _recording_suffix(s) == ".edf" for _, s, _ in pending
         ):
             asc_dir.mkdir(exist_ok=True)
         jobs = [
@@ -1913,7 +1930,7 @@ def import_eyelink(
                 "session_dir": session_dir,
                 "experiment_dir": experiment_dir,
                 "raw_gaze": raw_gaze,
-                "asc_dir": asc_dir if source.suffix.lower() == ".edf" else None,
+                "asc_dir": asc_dir if _recording_suffix(source) == ".edf" else None,
             }
             for _, source, _ in pending
         ]

@@ -71,7 +71,7 @@ reproduce it; `tests/test_render_every_option.py` fails on one it cannot.
       and a screenshot when it is visible
 - [ ] A row in `.claude/skills/verify/feature-map.md`
 - [ ] `diff-reviewer` run (`REVIEW.md` from `origin/main`); Important findings fixed
-- [ ] `ruff check .` + `ruff format .`
+- [ ] `uv run --extra lint ruff check .` + `uv run --extra lint ruff format .`
 - [ ] A changelog fragment, `changelog.d/<issue>.<group>.md` (or
       `<slug>.<group>.md` with no issue), one line of plain text — never an edit to `CHANGELOG.md` (`changelog.d/README.md`)
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)

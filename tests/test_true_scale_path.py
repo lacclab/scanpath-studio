@@ -4,7 +4,7 @@
 height, which mis-scales the pixel-sized word labels; spatial figures go
 through `tabs._render_true_scale_chart` (and the replay through the same
 embed, `_render_true_scale_plot`), which draws the figure's HTML at its
-exact size and scales it with CSS (AGENTS.md, Figures). Here the Scanpath view
+exact size and scales it with CSS (`.claude/rules/figures.md`). Here the Scanpath view
 is drawn in each figure mode, and Corpus Analysis's *Measure on the stimulus*
 view once, and each is checked.
 """

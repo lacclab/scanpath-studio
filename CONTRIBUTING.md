@@ -16,8 +16,9 @@ uv run streamlit run streamlit_app.py --server.address 127.0.0.1
 Python 3.11–3.15. Bind to `127.0.0.1`: the on-device recovery cache is off on a
 server other machines can reach.
 
-The architecture map, conventions and gotchas are in [AGENTS.md](AGENTS.md);
-the workflow rules in [CLAUDE.md](CLAUDE.md). AI coding assistants pick both up
+The architecture map and conventions are in [AGENTS.md](AGENTS.md), the
+gotchas one file per area in [`.claude/rules/`](.claude/rules/), and the
+workflow rules in [CLAUDE.md](CLAUDE.md). AI coding assistants pick these up
 automatically.
 
 ### If a code change doesn't show up

@@ -474,132 +474,19 @@ What else fails when a surface is missed:
 
 ## Gotchas
 
-One line per rule. [`REVIEW.md`](REVIEW.md) holds the checklist form — the
-diff that triggers each, the check, and the bug it came from — and a test named
-here fails when its rule is broken.
+The rules that are not obvious from reading one file live one file per area
+in `.claude/rules/`, so Claude Code loads each only when it works on the files the
+area covers (their `paths:` header). Read the one for the area you change:
 
-**State and the wire format**
+- [State and the wire format](.claude/rules/state-and-wire-format.md) — widgets, session keys, deep links and settings files.
+- [Data](.claude/rules/data.md) — loading, normalizing and joining the dataset's tables.
+- [Figures](.claude/rules/figures.md) — building, embedding and exporting figures.
+- [Loading and performance](.claude/rules/loading-and-performance.md) — slow steps, loading cards and the plot stage.
+- [Compare](.claude/rules/compare.md) — Compare's second dataset (scanpath B).
 
-- **Widget keys, URL params and settings keys are a wire format.** Deep-link
-  presets are applied before widgets render (`app.py`); renaming one breaks
-  links and files already in users' hands (`tests/test_session_key_contract.py`).
-  A settings-file shape change bumps `session_keys.PLOT_CONFIG_SCHEMA_VERSION`
-  and registers a migration in `url_state._PLOT_CONFIG_MIGRATIONS`.
-- **`persist_state="session"` on every persisted widget**, or a control that
-  renders only sometimes remounts at its default
-  (`tests/test_widget_value_sync.py`).
-- **Write a widget key inside a popover with `controls.write_through`** — the
-  browser keeps echoing the value it last showed.
-- **Never pass `value=` / `index=` to a gated (disabled) widget**; disabling
-  must not rewrite what a link or saved file carries.
-- **Anything drawn only sometimes above a view goes in a container drawn every
-  run.** Streamlit matches elements by position, so one more or fewer above
-  `sps_view` redraws the whole view. `st.dialog`, a bare `st.toast` and
-  `@st.fragment` are safe; a bare `st.warning`, `st.markdown` or iframe is not.
-- **Essentials and Full draw the same widgets.** Essentials is `SIMPLE` /
-  `simple_only` in code, Full is `ADVANCED` / `advanced_only`. Mode-only UI
-  goes in a `ui_mode.advanced_only(host, name)` (or `simple_only`) container,
-  one per item, hidden by `ui_mode.mode_css`; never skip rendering a widget by
-  mode. The subtab list is the one structural difference. `?ui=` is read on a
-  session's first run; Share never writes it.
-- **Never give `st.select_slider` a single option** — the browser throws and
-  blanks the tab, invisibly to AppTest.
-- **Code changes not showing? Restart the server** (CONTRIBUTING → *If a code
-  change doesn't show up*).
-
-**Data**
-
-- **Carry `column_names` through every rewrite of `_datasets[name]`**, and show
-  column names through the map. The API's frames use the dataset's own names;
-  package code reading them passes `names="canonical"`.
-- **A trial filter decides readings, never rows of one table** — see *Trial
-  annotations & filtering*.
-- **One trial pool, the union, on every surface**: a trial is listed when any
-  table has it, and a table that lacks it draws as an empty layer
-  (`data.trial_pool`; `utils.combo_source` in the app).
-- **Raw gaze can be a dataset's only table**; nothing derives fixations from
-  samples, and the Raw gaze layer then turns on by default.
-- **Column auto-detection** (`data.pick_column`) ignores case and separators
-  and one trailing unit block (`Fixation Duration [ms]` == `fixation_duration`),
-  so `*_CANDIDATES` lists hold only distinct conventions. A whole-token match
-  (`AOI_LEFT`) is taken only when exactly one column survives it.
-- **`*` on a mapping field means exactly "validation blocks without it."**
-  Without X/Y, fixations whose Word IDs name no word of their trial are refused
-  (`harmonize_frames` → `UnplacedFixationsError`).
-- **pandas joins NaN to NaN** in `merge` and `Series.map(dict)`: drop missing
-  keys before any lookup keyed on a word id.
-- **Repeated readings** get `_r2` on `trial_id` (ranked on `TRIAL_INDEX`) unless
-  the Trial ID maps to several columns, which builds a composite id
-  (`data.compose_id`). Any mapping beats a literal `unique_trial_id` column.
-- **A built-in dataset's recording setup is an override, never an edit of the
-  corpus** (`constants.DATASET_SETUP_OVERRIDES_KEY`); a share link elides it
-  against the source's screen.
-- **Every fingerprint is exact** — a frame hashed in full or named by its source
-  (`data.stamp_source` / `adopt_source`, `frame_cache`, `assign_derived`), never
-  sampled. A new large per-rerun frame needs one, or it is hashed every run.
-- The bundled `raw_gaze.parquet` (Parquet only: no CSV copy in the wheel)
-  carries the two L1 readers' recorded EyeLink gaze positions for every screen
-  of all 24 readings. Extract samples within each screen's interest period in
-  its fixation report and subtract the trial start time to share the fixation
-  clock; the samples carry the screen's `part` and `screen_index`. Keep
-  every recorded tick, including missing x/y values, pupil area in tracker
-  units and the tracked eye. A sample without a position has a missing pupil
-  value, not EyeLink's 0 (`update_sample_data.without_lost_pupil`).
-
-**Figures**
-
-- **Spatial plots go through `tabs._render_true_scale_chart`, never
-  `st.plotly_chart`**, which pins the width to the column but keeps the layout
-  height and so mis-scales the px-sized word labels. The embed draws the
-  figure's HTML at its exact pixel size and CSS-scales it. plotly.js comes from
-  the app's own server (`html_embed.plotlyjs_script`); HTML downloads take
-  `export.html_plotlyjs(...)`.
-- **The replay player owns the clock.** Plotly's frame queue rounds frames up
-  to display ticks, so `make_scanpath_animation` stamps each frame's reading
-  time on `fig.layout.meta` and every HTML surface passes
-  `plots.animation_player_post_script(fig)`. Pages carry the frames packed
-  (`plots.replay_page`: frame 0 whole, then deltas); the figure keeps its own.
-- **Transport controls never shrink the plot.** The figure keeps Plotly's
-  controls in a top band it grows by (`plots._CONTROLS_MARGIN_PX`; GIF/MP4
-  strip it). HTML pages hide them, take the band back (`plots.replay_page_box`)
-  and draw a `REPLAY_TOOLBAR_PX` row above the figure instead. A legend above
-  the plot grows the figure past the band, never into it.
-- **Set layout shapes in one assignment** (`fig.layout.shapes = …`); each
-  `add_shape` re-validates every shape (`tests/test_smoke.py` counts them).
-- **A new top-level trace** in `make_scanpath_figure` goes in
-  `plots._trace_layer`, or separable-layer export files it under fixations.
-- **Every exported file carries the citation** — `export._figure_renderer`,
-  `file_citation.stamp_html` / `stamp_file`, `animation_export`, and the bytes
-  `tabs._render_save_plot_button` hands its component. A new writer stamps its
-  output too; only the toolbar camera's PNG can't.
-- **Kaleido** (PNG/SVG/PDF, GIF/MP4) needs Chrome (`plotly_get_chrome -y`;
-  `packages.txt` on Streamlit Cloud). Hold `animation_export.KALEIDO_LOCK`
-  for native rendering. Single figures and animations use Kaleido's process-wide
-  warm server. Multi-reading bundles reuse one browser page and periodically
-  replace the browser to release native memory. The on-screen PNG/SVG is saved
-  in the browser. HTML export works without Chrome.
-- Bulk export iterates *all* filtered trials — narrow the filter first.
-
-**Loading and performance**
-
-- **A new slow step gets a `loading.card`, not `st.spinner`**, with
-  `progress.report()` from inside its loop. Under a *gated* card it reports at
-  the start of its work on a miss, or the card shows late or never. Never create
-  a Streamlit element inside a cached function.
-- **Keep the plot stage's order**: notes before the figure go to
-  `plot_notes_slot`, never into `tour_grp_plot` ahead of the figure.
-
-**Compare**
-
-- **Scanpath B's id is namespaced only in the throwaway compare frames**
-  (`utils.qualify_for_compare`), since two corpora can share a
-  `(participant_id, trial_id)`; everything user-facing goes through
-  `utils.unqualify_for_export`.
-- **Overlay and co-animation across datasets need equal canvases**
-  (`experimental_setup.setups_comparable`): the app falls back to side by side,
-  the API raises `IncomparableScreensError`, the CLI exits.
-- **Filter helpers are prefix-scoped**: B's use `cmp`, and
-  `controls.FILTER_PREFIXES` keeps clearing A's from wiping B's.
+[`REVIEW.md`](REVIEW.md) holds the checklist form — the diff that triggers each
+rule, the check, and the bug it came from — and a test named in a rule fails
+when it is broken.
 
 ## Which viz settings apply in which render path
 

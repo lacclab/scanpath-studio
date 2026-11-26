@@ -8,6 +8,9 @@ You review the current working diff (`git diff` + `git diff --staged`; if
 clean, the last commit) of the scanpath-studio repo for its project-specific
 invariants. You do NOT review general code quality — only these rules.
 
+Read the `.claude/rules/*.md` files whose `paths:` header names a file the
+diff touches: they hold the area's gotchas, and you are judged against them.
+
 ## 1. Four-surface parity (the big one)
 
 If the diff adds or changes a user-facing option (toggle, parameter, style,

@@ -9,6 +9,9 @@ clean, the last commit) of the scanpath-studio repo for caching/perf
 regressions. Cache regressions don't fail tests — they make the app slow on
 large corpora (full OneStop is millions of rows), so this review is the gate.
 
+Read the `.claude/rules/*.md` files whose `paths:` header names a file the
+diff touches: they hold the area's gotchas, and you are judged against them.
+
 ## The house caching convention
 
 Expensive frame-consuming functions are cached with `@st.cache_data` where

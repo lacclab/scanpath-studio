@@ -1,11 +1,30 @@
-@AGENTS.md
-
 # Working agreements
 
-`@AGENTS.md` (imported above) is the architecture + conventions map — modules,
-pipeline, canonical columns, code style, gotchas, the "adding a new …" recipes,
-and releasing. This file adds the workflow rules every contributor follows.
-Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Scanpath Studio is a Streamlit workbench for eye-tracking-while-reading
+scanpaths, shipped as a PyPI package, desktop bundles and a hosted demo. This
+file holds the workflow rules every contributor follows; it is loaded into every
+session, so it stays short.
+
+- **[`AGENTS.md`](AGENTS.md)** is the map — modules, pipeline, canonical
+  columns, code style, the "adding a new …" recipes, the four surfaces. Read the
+  section for the area you work on; it is not loaded up front.
+- **`.claude/rules/`** holds the gotchas, one file per area; each loads on its
+  own when you touch the files its `paths:` header names.
+- Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Commands
+
+Run everything through `uv`: a bare `python` / `pytest` / `ruff` on PATH can be
+another interpreter with another pandas and an older ruff, and pass code CI
+rejects.
+
+```bash
+uv run --extra test pytest -n auto tests/test_measures.py  # the tests for what you changed
+uv run --extra test python scripts/verify_change.py         # see a change work (/verify)
+uv run --extra lint ruff check . && uv run --extra lint ruff format .
+uv run --extra docs mkdocs build --strict                   # docs gate
+uv run scanpath-studio                                      # the app, on 127.0.0.1
+```
 
 ## Before every commit / push
 
@@ -33,7 +52,7 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 - A user-facing feature is only done when it is exposed on **every** surface —
   the UI **and** the deep link / Share, the CLI, and the headless API — not just
-  visually. See *Exposing a feature on every surface* in `@AGENTS.md`.
+  visually. See AGENTS.md → *Exposing a feature on every surface*.
 - **Don't break existing functionality** unless it was explicitly agreed.
 - Prefer the **latest dependency versions**; don't add shims to keep old
   dependency versions working. This is a research tool, not a version-pinned

@@ -662,6 +662,8 @@ def _restore_config_app():
             "show_credit": True,
             "plot_frame_color": "#999999",
             "saccade_arrow_size": 18.0,
+            "anim_grow_start": 0.4,
+            "anim_fade_opacity": 0.5,
             "fixation_outline_width": 1.5,
             "fixation_outline_color": "#336699",
             "coordinate_grid_font_size": 12,

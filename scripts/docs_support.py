@@ -398,6 +398,8 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "anim_max_frames",
         "grow_fixations",
         "fade_fixations",
+        "grow_start",
+        "fade_opacity",
     ),
     "Compare": (
         "label_a",

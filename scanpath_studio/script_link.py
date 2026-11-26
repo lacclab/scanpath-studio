@@ -121,6 +121,8 @@ _SAME_VALUE = {
     "autoplay": "global_anim_autoplay",
     "grow_fixations": "global_anim_grow_fixations",
     "fade_fixations": "global_anim_fade_fixations",
+    "grow_start": "global_anim_grow_start",
+    "fade_opacity": "global_anim_fade_opacity",
     **{name: option.state_key for name, option in FIXATION_LABEL_OPTIONS.items()},
     **{name: option.state_key for name, option in OPACITY_OPTIONS.items()},
     **{

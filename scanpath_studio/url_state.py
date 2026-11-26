@@ -72,6 +72,7 @@ from .constants import (
     DATA_WORKSPACE_REQUEST,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FADE_OPACITY_BOUNDS,
     FIXATION_DURATION_FLAGS,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
@@ -82,6 +83,7 @@ from .constants import (
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
+    GROW_START_BOUNDS,
     HEATMAP_OPACITY_BOUNDS,
     HEATMAP_SIGMA_BOUNDS,
     ICONS,
@@ -531,6 +533,9 @@ _DESIGN_PARAMS = {
     "show_credit": ("global_show_credit", None),
     "plot_frame_color": ("global_plot_frame_color", "color"),
     "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
+    # How small the replay's growing fixation starts, and how faint it fades.
+    "anim_grow_start": ("global_anim_grow_start", GROW_START_BOUNDS),
+    "anim_fade_opacity": ("global_anim_fade_opacity", FADE_OPACITY_BOUNDS),
     "fixation_outline_width": (
         "global_fixation_outline_width",
         FIXATION_OUTLINE_WIDTH_BOUNDS,

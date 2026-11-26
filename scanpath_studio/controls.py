@@ -39,12 +39,14 @@ from .constants import (
     DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_CROP_MARGIN_PX,
     DEFAULT_DURATION_SIZE_LEGEND,
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
     DEFAULT_FIXATION_OUTLINE_WIDTH,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_GRID_FONT_SIZE,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_HEATMAP_OPACITY,
     DEFAULT_HEATMAP_SIGMA_PX,
@@ -934,6 +936,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # The replay's current fixation grows over its duration; earlier ones fade.
     "global_anim_grow_fixations": False,
     "global_anim_fade_fixations": False,
+    "global_anim_grow_start": DEFAULT_GROW_START,
+    "global_anim_fade_opacity": DEFAULT_FADE_OPACITY,
     # The animation frame grid. Step = smoothness; max frames = the ceiling that
     # keeps a long reading's GIF/MP4 bounded (it coarsens the step, and the popover
     # says so).
@@ -7215,6 +7219,10 @@ def _collect_viz_settings(
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
         anim_grow_fixations=bool(ss.get("global_anim_grow_fixations")),
         anim_fade_fixations=bool(ss.get("global_anim_fade_fixations")),
+        anim_grow_start=float(ss.get("global_anim_grow_start", DEFAULT_GROW_START)),
+        anim_fade_opacity=float(
+            ss.get("global_anim_fade_opacity", DEFAULT_FADE_OPACITY)
+        ),
         # The animation frame grid (smoothness vs. frame count).
         anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
         anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),

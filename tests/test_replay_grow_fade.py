@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from scanpath_studio import plots, replay_frames
+from scanpath_studio.constants import DEFAULT_FADE_OPACITY, DEFAULT_GROW_START
 from scanpath_studio.synthetic import load_synthetic_data
 
 
@@ -50,7 +51,7 @@ def test_the_current_fixation_grows_to_its_full_size_over_its_duration():
     for k, ms in enumerate(times):
         i, trail = _current(fig, run, k)
         share = (ms - run["times"][i]) / run["durations"][i]
-        expected = full[i] * min(1.0, max(replay_frames.GROW_FLOOR, share))
+        expected = full[i] * min(1.0, max(DEFAULT_GROW_START, share))
         assert trail.marker.size[i] == pytest.approx(expected)
         # Earlier fixations are already full grown.
         assert list(trail.marker.size[:i]) == full[:i]
@@ -65,7 +66,7 @@ def test_earlier_fixations_fade_and_the_current_one_does_not():
     for k in range(len(fig.frames)):
         i, trail = _current(fig, run, k)
         shown = list(trail.marker.opacity)
-        assert shown[:i] == pytest.approx([opacity * replay_frames.FADE_FACTOR] * i)
+        assert shown[:i] == pytest.approx([opacity * DEFAULT_FADE_OPACITY] * i)
         assert shown[i] == pytest.approx(opacity)
 
 
@@ -120,9 +121,9 @@ def test_fading_dims_the_earlier_numbers_and_every_saccade():
     for faded, full in zip(
         saccade_traces, [t for t in plain.data if t.meta == "saccades"], strict=True
     ):
-        assert faded.opacity == pytest.approx(full.opacity * replay_frames.FADE_FACTOR)
+        assert faded.opacity == pytest.approx(full.opacity * DEFAULT_FADE_OPACITY)
     faded_color, full_color = run["order_colors"]
-    assert faded_color.endswith(f",{replay_frames.FADE_FACTOR})")
+    assert faded_color.endswith(f",{DEFAULT_FADE_OPACITY})")
     for k in range(len(fig.frames)):
         i, _ = _current(fig, run, k)
         colors = list(fig.frames[k].data[run["order"]].textfont.color)
@@ -134,3 +135,35 @@ def test_a_named_number_colour_keeps_its_numbers_unfaded():
     fig, run = _replay(fade_fixations=True, order_font_color="black")
     assert "order" not in run
     assert fig.frames
+
+
+@pytest.mark.parametrize(("grow_start", "fade_opacity"), [(0.5, 0.0), (1.0, 0.75)])
+def test_the_start_size_and_faded_opacity_are_the_ones_asked_for(
+    grow_start, fade_opacity
+):
+    fig, run = _replay(
+        grow_fixations=True,
+        fade_fixations=True,
+        grow_start=grow_start,
+        fade_opacity=fade_opacity,
+    )
+    full = list(_base_trail(fig, run).marker.size)
+    opacity = _base_trail(fig, run).marker.opacity
+    onsets = fig.layout.meta["scanpath_frame_times_ms"]
+    k = next(k for k, ms in enumerate(onsets) if ms == run["times"][1])
+    i, trail = _current(fig, run, k)
+    assert i == 1
+    assert trail.marker.size[1] == pytest.approx(full[1] * grow_start)
+    assert trail.marker.opacity[0] == pytest.approx(opacity * fade_opacity)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("grow_start", 0.0), ("grow_start", 1.5), ("fade_opacity", -0.1)],
+)
+def test_a_share_outside_its_range_is_refused(name, value):
+    from scanpath_studio import api
+
+    words, fixations = load_synthetic_data()
+    with pytest.raises(ValueError, match=name):
+        api.animate_scanpath(words, fixations, **{name: value})

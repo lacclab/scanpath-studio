@@ -67,6 +67,9 @@ GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
 # The replay's current fixation grows over its duration; earlier ones fade.
 GLOBAL_ANIM_GROW_FIXATIONS = "global_anim_grow_fixations"
 GLOBAL_ANIM_FADE_FIXATIONS = "global_anim_fade_fixations"
+# How small a growing fixation starts, and how faint a faded one is.
+GLOBAL_ANIM_GROW_START = "global_anim_grow_start"
+GLOBAL_ANIM_FADE_OPACITY = "global_anim_fade_opacity"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
 # Raw gaze's own style.
@@ -236,6 +239,8 @@ DESIGN_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "heatmap_opacity": GLOBAL_HEATMAP_OPACITY,
         "saccade_arrow_size": GLOBAL_SACCADE_ARROW_SIZE,
         "fixation_outline_width": GLOBAL_FIXATION_OUTLINE_WIDTH,
+        "anim_grow_start": GLOBAL_ANIM_GROW_START,
+        "anim_fade_opacity": GLOBAL_ANIM_FADE_OPACITY,
         "fixation_colorbar_length": GLOBAL_FIXATION_COLORBAR_LENGTH,
         "heatmap_colorbar_length": GLOBAL_HEATMAP_COLORBAR_LENGTH,
     }

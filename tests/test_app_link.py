@@ -102,6 +102,8 @@ def test_the_app_draws_the_figure_the_options_describe(color_by_line, monkeypatc
         "anim_max_frames": viz["anim_max_frames"],
         "grow_fixations": viz["anim_grow_fixations"],
         "fade_fixations": viz["anim_fade_fixations"],
+        "grow_start": viz["anim_grow_start"],
+        "fade_opacity": viz["anim_fade_opacity"],
         "palette": state.get("global_palette"),
     }
     for key, value in options.items():
@@ -312,6 +314,8 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
         "anim_max_frames",
         "grow_fixations",
         "fade_fixations",
+        "grow_start",
+        "fade_opacity",
         "heatmap_range",
         "highlight_text_color",
         "plot_frame_color",
@@ -326,6 +330,10 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
         "200",
         "--grow-fixations",
         "--fade-fixations",
+        "--grow-start",
+        "0.4",
+        "--fade-opacity",
+        "0.5",
     ]
     cli.main(
         ["open", "D", "-p", "p", "-t", "t", "--print", *_render_flags(options), *replay]
@@ -341,6 +349,8 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
             anim_max_frames=200,
             grow_fixations=True,
             fade_fixations=True,
+            grow_start=0.4,
+            fade_opacity=0.5,
         )
     )
 

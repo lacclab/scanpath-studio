@@ -6,6 +6,8 @@ from bisect import bisect_right
 
 import pandas as pd
 
+from .constants import DEFAULT_FADE_OPACITY, DEFAULT_GROW_START
+
 # Private keys on a replay layout. A compact figure is used only inside the UI.
 READINGS = "scanpath_fixation_steps"
 COMPACT = "_scanpath_terminal_frame"
@@ -20,6 +22,8 @@ def reading(
     grow: bool = False,
     fade: bool = False,
     order_colors: tuple[str, str] | None = None,
+    grow_start: float = DEFAULT_GROW_START,
+    fade_opacity: float = DEFAULT_FADE_OPACITY,
 ) -> dict:
     """Trace positions and recorded details for stepping through one reading."""
     from .measures import assign_fixations_to_words
@@ -67,6 +71,8 @@ def reading(
         run["trails"] = [slots[idx] for idx in spec["idx_trails"]]
         run["grow"] = bool(grow)
         run["fade"] = bool(fade)
+        run["grow_start"] = float(grow_start)
+        run["fade_opacity"] = float(fade_opacity)
     # The fixation numbers fade with their markers: ``(faded, full)`` colours.
     if fade and order_colors and slots.get(spec["idx_order"]) is not None:
         run["order"] = slots[spec["idx_order"]]
@@ -74,24 +80,19 @@ def reading(
     return run
 
 
-# The smallest a growing fixation starts at, as a fraction of its full size.
-GROW_FLOOR = 0.15
-# A faded fixation's opacity, as a fraction of the current fixation's.
-FADE_FACTOR = 0.3
-
-
 def growth(run: dict, i: int, time_ms: float) -> float:
     """How far fixation ``i`` has grown at ``time_ms``: its elapsed share of its
-    own duration, from :data:`GROW_FLOOR` to 1."""
+    own duration, from the run's ``grow_start`` to 1."""
     duration = run["durations"][i] if i < len(run["durations"]) else None
     if not duration or duration <= 0:
         return 1.0
-    return min(1.0, max(GROW_FLOOR, (time_ms - run["times"][i]) / duration))
+    start = run.get("grow_start", DEFAULT_GROW_START)
+    return min(1.0, max(start, (time_ms - run["times"][i]) / duration))
 
 
-def _restyle_trail(trace: dict, i: int, frac: float, *, fade: bool) -> dict:
-    """The trail with fixation ``i`` grown to ``frac`` of its size and, with
-    ``fade``, every earlier fixation at :data:`FADE_FACTOR` of its opacity. A
+def _restyle_trail(trace: dict, i: int, frac: float, *, fade: float | None) -> dict:
+    """The trail with fixation ``i`` grown to ``frac`` of its size and, with a
+    ``fade`` share, every earlier fixation at that share of its opacity. A
     glyph trail's text layers carry no marker size or opacity and are left as
     they are."""
     marker = trace.get("marker") or {}
@@ -103,10 +104,10 @@ def _restyle_trail(trace: dict, i: int, frac: float, *, fade: bool) -> dict:
         sizes = list(sizes)
         sizes[i] = sizes[i] * frac
         changes["size"] = sizes
-    if fade:
+    if fade is not None:
         opacity = marker.get("opacity")
         full = 1.0 if opacity is None else float(opacity)
-        changes["opacity"] = [full * FADE_FACTOR] * i + [full] * (len(sizes) - i)
+        changes["opacity"] = [full * fade] * i + [full] * (len(sizes) - i)
     if not changes:
         return trace
     return {**trace, "marker": {**marker, **changes}}
@@ -138,7 +139,12 @@ def at_time(terminal: dict, readings: list[dict], time_ms: float, name: str) -> 
             reveal(run["arrows"], bisect_right(run["segments"], count - 2))
         frac = growth(run, count - 1, time_ms) if run.get("grow") else 1.0
         for slot in run.get("trails", ()):
-            data[slot] = _restyle_trail(data[slot], count - 1, frac, fade=run["fade"])
+            data[slot] = _restyle_trail(
+                data[slot],
+                count - 1,
+                frac,
+                fade=run["fade_opacity"] if run["fade"] else None,
+            )
         if run.get("order") is not None:
             trace = data[run["order"]]
             faded, full = run["order_colors"]
@@ -210,7 +216,7 @@ FRAME_AT_JS = """function frameAtTime(terminal, readings, ms, name) {
     var frac = 1;
     if (run.grow) {
       var d = run.durations[i];
-      if (d && d > 0) { frac = Math.min(1, Math.max(GROW_FLOOR, (ms - run.times[i]) / d)); }
+      if (d && d > 0) { frac = Math.min(1, Math.max(run.grow_start, (ms - run.times[i]) / d)); }
     }
     (run.trails || []).forEach(function (slot) {
       var g = data[slot], m = g.marker || {}, changes = {};
@@ -221,7 +227,7 @@ FRAME_AT_JS = """function frameAtTime(terminal, readings, ms, name) {
       }
       if (run.fade) {
         var full = m.opacity == null ? 1 : +m.opacity;
-        changes.opacity = m.size.map(function (_, k) { return k < i ? full * FADE_FACTOR : full; });
+        changes.opacity = m.size.map(function (_, k) { return k < i ? full * run.fade_opacity : full; });
       }
       if (changes.size || changes.opacity) {
         data[slot] = Object.assign({}, g, {marker: Object.assign({}, m, changes)});
@@ -240,4 +246,4 @@ FRAME_AT_JS = """function frameAtTime(terminal, readings, ms, name) {
     });
   });
   return {name: name, traces: terminal.traces, data: data};
-}""".replace("GROW_FLOOR", repr(GROW_FLOOR)).replace("FADE_FACTOR", repr(FADE_FACTOR))
+}"""

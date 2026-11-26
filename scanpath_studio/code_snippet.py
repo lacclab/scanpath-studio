@@ -1609,6 +1609,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "anim_max_frames": _int_valued("--anim-max-frames"),
     "grow_fixations": _flag_when("--grow-fixations", True),
     "fade_fixations": _flag_when("--fade-fixations", True),
+    "grow_start": _valued("--grow-start"),
+    "fade_opacity": _valued("--fade-opacity"),
     # Each flag below is spelled after its option; `tests/test_code_snippet.py`
     # fails on an option with no row here, so a new one cannot quietly fall
     # back to being "named".

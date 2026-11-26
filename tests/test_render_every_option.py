@@ -161,6 +161,8 @@ NON_DEFAULT = {
     "anim_max_frames": 200,
     "grow_fixations": True,
     "fade_fixations": True,
+    "grow_start": 0.4,
+    "fade_opacity": 0.5,
     # The comparison's (and the co-animation's).
     "show_legend": False,  # on by default
     "compare_stimulus": "b",

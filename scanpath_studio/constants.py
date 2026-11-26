@@ -597,6 +597,12 @@ DEFAULT_CAPTION_COLOR = "#555555"
 DEFAULT_PLOT_FRAME_COLOR = "#000000"
 #: The saccades' direction arrowheads, in px.
 DEFAULT_SACCADE_ARROW_SIZE = 12.0
+# The replay's growing fixation starts at this share of its full size, and a
+# faded one keeps this share of its opacity.
+DEFAULT_GROW_START = 0.15
+GROW_START_BOUNDS = (0.05, 1.0)
+DEFAULT_FADE_OPACITY = 0.3
+FADE_OPACITY_BOUNDS = (0.0, 1.0)
 SACCADE_ARROW_SIZE_BOUNDS = (4.0, 40.0)
 #: The outline round a filled fixation marker; a width of 0 draws none. The
 #: colour is `FIX_MARKER_OUTLINE`, spelt out for a colour picker.

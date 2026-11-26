@@ -142,8 +142,10 @@ from scanpath_studio.constants import (
     DATA_RUN_SHEETS_KEY,
     DATASET_EDITOR_OPEN_KEY,
     DEFAULT_DURATION_SIZE_LEGEND,
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
@@ -151,10 +153,12 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FADE_OPACITY_BOUNDS,
     FIXATION_GLYPH_SYMBOLS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FOCUS_MAPPING_KEY,
+    GROW_START_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
     MANUAL_SAMPLE_CHOICE,
@@ -5670,6 +5674,8 @@ def _plan_replay(
         autoplay=viz_settings.get("anim_autoplay", True),
         grow_fixations=bool(viz_settings.get("anim_grow_fixations")),
         fade_fixations=bool(viz_settings.get("anim_fade_fixations")),
+        grow_start=float(viz_settings.get("anim_grow_start", DEFAULT_GROW_START)),
+        fade_opacity=float(viz_settings.get("anim_fade_opacity", DEFAULT_FADE_OPACITY)),
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
         # The co-animation wears the rail's per-scanpath styles, as the static
@@ -7151,6 +7157,26 @@ def render_single_trial_tab(
                     "full size when its duration has passed."
                     + (f" {marks_reason}" if marks_reason else ""),
                 )
+                grow_off = not st.session_state.get("global_anim_grow_fixations")
+                _numeric_slider(
+                    st,
+                    "Start size",
+                    key="global_anim_grow_start",
+                    persist_state="session",
+                    min_value=GROW_START_BOUNDS[0],
+                    max_value=GROW_START_BOUNDS[1],
+                    step=0.05,
+                    slider_format="%.2f",
+                    disabled=anim_disabled or bool(marks_reason) or grow_off,
+                    label_left=True,
+                    help="The share of its full size a fixation starts at: "
+                    "0.15 starts at 15 %."
+                    + (
+                        " Used only with **Grow over its duration** on."
+                        if grow_off
+                        else ""
+                    ),
+                )
                 _check_row(
                     "Earlier fixations",
                     check_label="Fade",
@@ -7161,6 +7187,22 @@ def render_single_trial_tab(
                     help="Draw the fixations before the current one, their "
                     "numbers and the saccades faded, so the current fixation "
                     "stands out." + (f" {marks_reason}" if marks_reason else ""),
+                )
+                fade_off = not st.session_state.get("global_anim_fade_fixations")
+                _numeric_slider(
+                    st,
+                    "Faded opacity",
+                    key="global_anim_fade_opacity",
+                    persist_state="session",
+                    min_value=FADE_OPACITY_BOUNDS[0],
+                    max_value=FADE_OPACITY_BOUNDS[1],
+                    step=0.05,
+                    slider_format="%.2f",
+                    disabled=anim_disabled or bool(marks_reason) or fade_off,
+                    label_left=True,
+                    help="The share of its opacity what has faded keeps: 0 "
+                    "hides it, 1 leaves it as it is."
+                    + (" Used only with **Fade** on." if fade_off else ""),
                 )
                 # The duration depends on both readings when comparing.
                 anim_timing_slot = st.container() if animate else None

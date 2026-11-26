@@ -1,0 +1,441 @@
+{
+ "annotations": [
+  {
+   "note": "regression?",
+   "participant_id": "p1",
+   "star": true,
+   "tags": [
+    "Review"
+   ],
+   "trial_id": "t1"
+  }
+ ],
+ "datasets": {
+  "Golden corpus/column_names": {
+   "fixations": {
+    "duration_ms": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Dur"
+     ]
+    },
+    "fixation_id": {
+     "kind": "generated",
+     "note": "1, 2, \u2026 per trial",
+     "sources": []
+    },
+    "participant_id": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Reader"
+     ]
+    },
+    "text_id": {
+     "kind": "generated",
+     "note": "the trial ID",
+     "sources": []
+    },
+    "timestamp_ms": {
+     "kind": "generated",
+     "note": "the fixation's order in its trial",
+     "sources": []
+    },
+    "trial_id": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Paragraph"
+     ]
+    },
+    "unique_trial_id": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Paragraph"
+     ]
+    },
+    "word_id": {
+     "kind": "computed",
+     "note": "assigned from the word boxes",
+     "sources": []
+    },
+    "x": {
+     "kind": "computed",
+     "note": "the fixated word's box center",
+     "sources": []
+    },
+    "y": {
+     "kind": "computed",
+     "note": "the fixated word's box center",
+     "sources": []
+    }
+   },
+   "words": {
+    "line_idx": {
+     "kind": "generated",
+     "note": "1, a single line",
+     "sources": []
+    },
+    "participant_id": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Reader"
+     ]
+    },
+    "text": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Word"
+     ]
+    },
+    "text_id": {
+     "kind": "generated",
+     "note": "the trial ID",
+     "sources": []
+    },
+    "trial_id": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Paragraph"
+     ]
+    },
+    "unique_trial_id": {
+     "kind": "mapped",
+     "note": "",
+     "sources": [
+      "Paragraph"
+     ]
+    },
+    "word_id": {
+     "kind": "generated",
+     "note": "the row order",
+     "sources": []
+    }
+   }
+  },
+  "Golden corpus/composite_trial_columns": [],
+  "Golden corpus/dropped_columns": {
+   "fixations": [],
+   "raw_gaze": [],
+   "words": [
+    "Notes"
+   ]
+  },
+  "Golden corpus/filter_fields": [
+   "condition"
+  ],
+  "Golden corpus/schemas": {
+   "fixations": {
+    "duration": "Dur",
+    "participant": "Reader",
+    "trial": "Paragraph"
+   },
+   "raw_gaze": null,
+   "words": {
+    "participant": "Reader",
+    "text": "Word",
+    "trial": "Paragraph"
+   }
+  },
+  "Golden corpus/setup": {
+   "base_font_size": 22,
+   "canvas_height": 720,
+   "canvas_width": 1280,
+   "font_family": "monospace",
+   "line_spacing": 3.0,
+   "monitor_width_mm": 531.0,
+   "provenance": {
+    "geometry": "measured",
+    "screen": "measured",
+    "text": "assumed"
+   },
+   "scale_text_to_boxes": true,
+   "viewing_distance_mm": 650.0,
+   "viewing_distance_provenance": "assumed"
+  }
+ },
+ "frames": {
+  "Golden corpus/fixations": {
+   "duration_ms": [
+    210,
+    180,
+    240,
+    200
+   ],
+   "participant_id": [
+    "p1",
+    "p1",
+    "p1",
+    "p1"
+   ],
+   "trial_id": [
+    "t1",
+    "t1",
+    "t1",
+    "t1"
+   ],
+   "x": [
+    25.0,
+    80.0,
+    30.0,
+    140.0
+   ],
+   "y": [
+    32.0,
+    33.0,
+    35.0,
+    31.0
+   ]
+  },
+  "Golden corpus/raw_gaze": {
+   "participant_id": [
+    "p1",
+    "p1",
+    "p1"
+   ],
+   "timestamp_ms": [
+    0,
+    2,
+    4
+   ],
+   "trial_id": [
+    "t1",
+    "t1",
+    "t1"
+   ],
+   "x": [
+    24.0,
+    25.0,
+    null
+   ],
+   "y": [
+    31.0,
+    32.0,
+    null
+   ]
+  },
+  "Golden corpus/words": {
+   "height": [
+    30.0,
+    30.0,
+    30.0
+   ],
+   "participant_id": [
+    "p1",
+    "p1",
+    "p1"
+   ],
+   "text": [
+    "The",
+    "quick",
+    "fox"
+   ],
+   "trial_id": [
+    "t1",
+    "t1",
+    "t1"
+   ],
+   "width": [
+    45.0,
+    65.0,
+    40.0
+   ],
+   "word_id": [
+    1,
+    2,
+    3
+   ],
+   "x": [
+    10.0,
+    60.0,
+    130.0
+   ],
+   "y": [
+    20.0,
+    20.0,
+    20.0
+   ]
+  }
+ },
+ "state": {
+  "_dataset_descriptions": {
+   "Golden corpus": "A three-word pilot."
+  },
+  "_dataset_display_aliases": {
+   "Golden corpus": "Pilot (three words)"
+  },
+  "_upload_dataset_ids": {
+   "Golden corpus": "0d6c1e7a-5b8f-4c3e-9a21-7f04b1c2d3e4"
+  },
+  "cmp0_hollow": true,
+  "cmp1_hollow": true,
+  "data_source_choice": "Golden corpus",
+  "global_align_algorithm": "Off",
+  "global_align_connectors": true,
+  "global_anim_autoplay": false,
+  "global_anim_fade_fixations": true,
+  "global_anim_fade_opacity": 0.37,
+  "global_anim_grid_step_ms": 225,
+  "global_anim_grow_fixations": true,
+  "global_anim_grow_start": 0.4,
+  "global_anim_max_frames": 874,
+  "global_caption_color": "#555555",
+  "global_caption_font_size": 18,
+  "global_caption_pattern": "",
+  "global_color_by": "(uniform)",
+  "global_coordinate_grid_auto": false,
+  "global_coordinate_grid_font_size": 7,
+  "global_coordinate_grid_spacing": 1856.3,
+  "global_critical_span_style": "None",
+  "global_crop_margin_auto": false,
+  "global_crop_margin_px": 740.0,
+  "global_duration_size_legend": true,
+  "global_fit_to_monitor": false,
+  "global_fixation_color": "#0072B2",
+  "global_fixation_colorbar_length": 0.43,
+  "global_fixation_colorbar_length_auto": false,
+  "global_fixation_colorbar_orientation": "Vertical",
+  "global_fixation_colorbar_thickness": 19,
+  "global_fixation_colorbar_tickangle": -13,
+  "global_fixation_colorbar_tickfont_size": 7,
+  "global_fixation_colorscale": "Blues",
+  "global_fixation_opacity": 0.37,
+  "global_fixation_outline_color": "#111111",
+  "global_fixation_outline_width": 1.85,
+  "global_fixation_snap_position": -0.52,
+  "global_fixation_snap_to_line": true,
+  "global_fixation_symbol": "circle",
+  "global_fixclass_blink_color": "#17becf",
+  "global_fixclass_blink_mode": "Off",
+  "global_fixclass_blink_symbol": "diamond-open",
+  "global_fixclass_long_color": "#9467bd",
+  "global_fixclass_long_mode": "Off",
+  "global_fixclass_long_symbol": "square-open",
+  "global_fixclass_long_threshold_ms": 25714,
+  "global_fixclass_oob_color": "#d62728",
+  "global_fixclass_oob_mode": "Off",
+  "global_fixclass_oob_symbol": "x",
+  "global_fixclass_short_color": "#ff7f0e",
+  "global_fixclass_short_mode": "Off",
+  "global_fixclass_short_symbol": "triangle-up-open",
+  "global_fixclass_short_threshold_ms": 25714,
+  "global_heatmap_colorbar_length": 0.43,
+  "global_heatmap_colorbar_length_auto": false,
+  "global_heatmap_colorbar_orientation": "Vertical",
+  "global_heatmap_colorbar_thickness": 19,
+  "global_heatmap_colorbar_tickangle": -13,
+  "global_heatmap_colorbar_tickfont_size": 7,
+  "global_heatmap_colorscale": "Blues",
+  "global_heatmap_metric": "duration_ms",
+  "global_heatmap_norm": "Linear",
+  "global_heatmap_opacity": 0.4,
+  "global_heatmap_opacity_auto": false,
+  "global_heatmap_sigma_auto": false,
+  "global_heatmap_sigma_px": 185.63,
+  "global_heatmap_style": "Word boxes",
+  "global_highlight_text_color": "#D55E00",
+  "global_hollow_fixations": true,
+  "global_illustration_label": "Auto",
+  "global_illustration_text": "",
+  "global_legend_colors_arrangement": "auto",
+  "global_legend_colors_position": "auto",
+  "global_legend_colors_size": null,
+  "global_legend_compare_arrangement": "auto",
+  "global_legend_compare_position": "auto",
+  "global_legend_compare_size": null,
+  "global_legend_highlight_arrangement": "auto",
+  "global_legend_highlight_position": "auto",
+  "global_legend_highlight_size": null,
+  "global_legend_saccades_arrangement": "auto",
+  "global_legend_saccades_position": "auto",
+  "global_legend_saccades_size": null,
+  "global_legend_size_key_arrangement": "auto",
+  "global_legend_size_key_position": "auto",
+  "global_legend_size_key_size": null,
+  "global_marker_duration_range": [
+   160,
+   490
+  ],
+  "global_marker_size_range": [
+   11,
+   20
+  ],
+  "global_marker_size_scale": "sqrt",
+  "global_order_font_color": "#111111",
+  "global_order_font_size": 34,
+  "global_order_label_position": "above",
+  "global_palette": "Default (colorblind-safe)",
+  "global_plot_frame_color": "#000000",
+  "global_preproc_blink_adjacent": true,
+  "global_preproc_enabled": true,
+  "global_raw_gaze_color": "#888888",
+  "global_raw_gaze_marker_size": 5.07,
+  "global_raw_gaze_opacity": 0.43,
+  "global_redact_text": true,
+  "global_reverse_x_axis": true,
+  "global_reverse_y_axis": true,
+  "global_saccade_arrow_size": 17.32,
+  "global_saccade_class_color_forward": "#009E73",
+  "global_saccade_class_color_refixation": "#CC79A7",
+  "global_saccade_class_color_regression": "#D55E00",
+  "global_saccade_class_color_return_sweep": "#E69F00",
+  "global_saccade_class_color_skip": "#56B4E9",
+  "global_saccade_classes": [
+   "forward",
+   "skip",
+   "refixation",
+   "return_sweep",
+   "regression",
+   "other"
+  ],
+  "global_saccade_color": "#CC79A7",
+  "global_saccade_color_mode": "One color",
+  "global_saccade_opacity": 0.37,
+  "global_saccade_render_mode": "Straight",
+  "global_saccade_style": "Solid",
+  "global_saccade_type_legend": false,
+  "global_saccade_width": 4.02,
+  "global_scale_text_to_boxes": true,
+  "global_show_caption": true,
+  "global_show_color_legend": false,
+  "global_show_compare_legend": false,
+  "global_show_coordinate_grid": true,
+  "global_show_credit": true,
+  "global_show_fix": false,
+  "global_show_fixation_colorbar": false,
+  "global_show_heatmap": true,
+  "global_show_heatmap_colorbar": false,
+  "global_show_highlight_legend": false,
+  "global_show_labels": false,
+  "global_show_order": true,
+  "global_show_plot_frame": false,
+  "global_show_raw_gaze": true,
+  "global_show_saccade_arrows": true,
+  "global_show_saccades": false,
+  "global_show_stimulus": false,
+  "global_show_stimulus_image": true,
+  "global_show_title": true,
+  "global_show_words": true,
+  "global_span_border_color": "#000000",
+  "global_stimulus_image_offset_x": -1300.0,
+  "global_stimulus_image_offset_y": -1300.0,
+  "global_stimulus_image_opacity": 0.43,
+  "global_stimulus_image_scale": 1.27,
+  "global_title_font_size": 25,
+  "global_title_pattern": "",
+  "global_use_stimulus_font_pt": true,
+  "global_word_box_color": "#6c757d",
+  "global_word_box_fill_color": "#646464",
+  "global_word_box_fill_opacity": 0.37,
+  "global_word_box_line_opacity": 0.37,
+  "global_x_field": "x",
+  "global_y_field": "y",
+  "single_fix_range_all_trials": true,
+  "single_show_chips": true
+ }
+}

@@ -1,1 +1,0 @@
-The replay can grow the current fixation over its duration and fade the fixations before it, with their numbers and the saccades, at a start size and faded opacity you choose (Playback settings, links, `render --grow-fixations` / `--fade-fixations`, and `animate_scanpath`).

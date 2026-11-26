@@ -167,3 +167,17 @@ def test_a_share_outside_its_range_is_refused(name, value):
     words, fixations = load_synthetic_data()
     with pytest.raises(ValueError, match=name):
         api.animate_scanpath(words, fixations, **{name: value})
+
+
+def test_a_flag_highlight_grows_and_fades_with_its_marker():
+    flags = {"short": {"mode": "Highlight", "threshold_ms": 10_000}}
+    fig, run = _replay(grow_fixations=True, fade_fixations=True, fixation_flags=flags)
+    ring_slot = run["trails"][-1]
+    assert ring_slot != run["points"][0]
+    onsets = fig.layout.meta["scanpath_frame_times_ms"]
+    k = next(k for k, ms in enumerate(onsets) if ms == run["times"][2])
+    ring = fig.frames[k].data[ring_slot]
+    assert ring.marker.size[2] == pytest.approx(13 * DEFAULT_GROW_START)
+    assert list(ring.marker.size[:2]) == [13, 13]
+    assert ring.marker.opacity[0] == pytest.approx(DEFAULT_FADE_OPACITY)
+    assert ring.marker.opacity[2] == 1.0

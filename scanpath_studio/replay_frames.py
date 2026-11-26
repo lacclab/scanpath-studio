@@ -65,10 +65,15 @@ def reading(
         "current": slots.get(spec["idx_curr"]),
         "sizes": (spec["sizes"] + 8).tolist() if spec["idx_curr"] is not None else [],
     }
-    # Only a replay that grows or fades carries the keys, so one that does
-    # neither is the same figure, byte for byte, as before they existed.
+    # Only a replay that grows or fades carries these keys; one that does
+    # neither carries none of them. The flag highlights grow and fade with the
+    # markers they ring.
     if grow or fade:
-        run["trails"] = [slots[idx] for idx in spec["idx_trails"]]
+        run["trails"] = [
+            slots[idx]
+            for idx in [*spec["idx_trails"], *(o["idx"] for o in spec["flag_overlays"])]
+            if slots.get(idx) is not None
+        ]
         run["grow"] = bool(grow)
         run["fade"] = bool(fade)
         run["grow_start"] = float(grow_start)
@@ -92,11 +97,13 @@ def growth(run: dict, i: int, time_ms: float) -> float:
 
 def _restyle_trail(trace: dict, i: int, frac: float, *, fade: float | None) -> dict:
     """The trail with fixation ``i`` grown to ``frac`` of its size and, with a
-    ``fade`` share, every earlier fixation at that share of its opacity. A
-    glyph trail's text layers carry no marker size or opacity and are left as
-    they are."""
+    ``fade`` share, every earlier fixation at that share of its opacity. One
+    size for every point (a flag highlight's) is spread to one per point. A
+    glyph trail's text layers carry no marker size and are left as they are."""
     marker = trace.get("marker") or {}
     sizes = marker.get("size")
+    if isinstance(sizes, int | float) and not isinstance(sizes, bool):
+        sizes = [sizes] * len(trace["x"])
     if not isinstance(sizes, list):
         return trace
     changes: dict = {}
@@ -220,14 +227,15 @@ FRAME_AT_JS = """function frameAtTime(terminal, readings, ms, name) {
     }
     (run.trails || []).forEach(function (slot) {
       var g = data[slot], m = g.marker || {}, changes = {};
-      if (!Array.isArray(m.size)) { return; }
+      var sizes = typeof m.size === 'number' ? g.x.map(function () { return m.size; }) : m.size;
+      if (!Array.isArray(sizes)) { return; }
       if (frac < 1) {
-        changes.size = m.size.slice();
+        changes.size = sizes.slice();
         changes.size[i] = changes.size[i] * frac;
       }
       if (run.fade) {
         var full = m.opacity == null ? 1 : +m.opacity;
-        changes.opacity = m.size.map(function (_, k) { return k < i ? full * run.fade_opacity : full; });
+        changes.opacity = sizes.map(function (_, k) { return k < i ? full * run.fade_opacity : full; });
       }
       if (changes.size || changes.opacity) {
         data[slot] = Object.assign({}, g, {marker: Object.assign({}, m, changes)});

@@ -19,7 +19,7 @@ Arguments: free-form — e.g. `"chips reset on rerun" compare` (new issue),
 implementing). An issue with an older `[VIZ-37]`-style ID in its title is
 found with `gh issue list --state all --search VIZ-37`.
 
-## Conventions (non-negotiable)
+## Conventions
 
 - **GitHub's `#N` is the ID.** Issues get a plain title — no `[PREFIX-N]` —
   and commits, PRs and changelog fragments cite `#N`. Nothing is allocated by

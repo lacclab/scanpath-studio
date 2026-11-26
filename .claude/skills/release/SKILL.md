@@ -24,7 +24,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 
 1. `git status` — the working tree must be clean. `git fetch origin` and start
    from an up-to-date `origin/main`. Stop and report if not.
-2. `ruff check .` and `ruff format --check .`
+2. `uv run --extra lint ruff check .` and `uv run --extra lint ruff format --check .`
    must pass (CI's Lint job gates on both).
 3. `python scripts/changelog_fragments.py check` passes and `changelog.d/`
    holds fragments — a release with none is almost always a mistake; confirm
@@ -54,7 +54,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 4. **Citation** — set `version` and `date-released` (today, ISO format) in
    `CITATION.cff` to match. If the year changed, set `CITATION["year"]` in
    `scanpath_studio/constants.py` to it as well.
-5. **Verify parity** — run `pytest tests/test_citation.py` (it enforces
+5. **Verify parity** — run `uv run --extra test pytest tests/test_citation.py` (it enforces
    version and release-year parity between the package and `CITATION.cff`).
 6. **Golden captures** — `uv run --extra test python scripts/capture_golden.py`
    writes `tests/fixtures/golden/v<version>/` (this release's share links,

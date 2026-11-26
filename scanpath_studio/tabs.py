@@ -401,6 +401,7 @@ from scanpath_studio.plots import (
     reading_stimulus_image,
     replay_page,
     replay_page_box,
+    replay_saccade_opacity,
     replay_size_key_range,
     set_replay_clock,
     stimulus_image_settings,
@@ -5838,7 +5839,7 @@ def _build_and_render_animation(
         )
         # The frames were built at full opacity (`_plan_replay`).
         fig.update_traces(
-            opacity=animation_settings.saccade_opacity,
+            opacity=replay_saccade_opacity(animation_settings),
             selector=dict(meta="saccades"),
         )
         # A co-animation whose two size ranges differ has no one key.

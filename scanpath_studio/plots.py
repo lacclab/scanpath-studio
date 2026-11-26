@@ -3302,6 +3302,15 @@ _RGB_FUNCTION = re.compile(
 )
 
 
+def replay_saccade_opacity(settings: FigureSettings) -> float:
+    """The replay's saccade line and arrowhead opacity: the figure's, dimmed
+    by ``fade_opacity`` while earlier fixations fade, since one line trace
+    takes one opacity. Every surface that sets the replay's saccade opacity
+    reads it here, so a later stamp never undoes the fade."""
+    fade = settings.fade_fixations and settings.show_fixations
+    return settings.saccade_opacity * (settings.fade_opacity if fade else 1.0)
+
+
 def _faded_and_full(color: str, alpha: float) -> tuple[str, str] | None:
     """A fixation number's colour at ``alpha`` and at full strength, for a
     replay that fades earlier fixations; ``None`` for a colour that takes no
@@ -7671,12 +7680,9 @@ def _render_scanpath_animation(
     show_saccade_arrows = settings.show_saccade_arrows
     show_order = show_fixations and settings.show_order
     # Fading dims what came before the current fixation: the earlier markers
-    # and numbers per frame (`replay_frames`), and the saccades as a whole,
-    # since one line trace takes one opacity.
+    # and numbers per frame (`replay_frames`), and the saccades as a whole.
     fade = settings.fade_fixations and show_fixations
-    saccade_opacity = settings.saccade_opacity * (
-        settings.fade_opacity if fade else 1.0
-    )
+    saccade_opacity = replay_saccade_opacity(settings)
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color

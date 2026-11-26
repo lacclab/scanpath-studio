@@ -609,6 +609,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "align_connectors": "global_align_connectors",
     # Autoplay the animated replay on load (default on, so always emitted).
     "anim_autoplay": "global_anim_autoplay",
+    # The replay's growing current fixation and fading earlier ones.
+    "anim_grow_fixations": "global_anim_grow_fixations",
+    "anim_fade_fixations": "global_anim_fade_fixations",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     # Each colour scale's bar has its own switch; the one they shared before,
@@ -1929,6 +1932,8 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "stimulus_image": "global_show_stimulus_image",
     "full_monitor": "global_fit_to_monitor",
     "autoplay": "global_anim_autoplay",
+    "grow_fixations": "global_anim_grow_fixations",
+    "fade_fixations": "global_anim_fade_fixations",
 }
 
 

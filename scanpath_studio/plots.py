@@ -291,6 +291,11 @@ class FigureSettings:
     #: figure that travels without its caption (`export.annotate_figure`).
     show_credit: bool = False
     playback_speed: float = 1.0
+    #: Replay only: the current fixation's marker grows from small to its full
+    #: duration size over the fixation's own duration.
+    grow_fixations: bool = False
+    #: Replay only: every fixation before the current one is drawn faded.
+    fade_fixations: bool = False
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
     show_legend: bool = False
@@ -8369,7 +8374,14 @@ def _render_scanpath_animation(
     if frame_times:
         slots = {idx: slot for slot, idx in enumerate(traces_idx_in_frame)}
         readings = [
-            replay_frames.reading(s, slots, redact=settings.redact_text, comparing=dual)
+            replay_frames.reading(
+                s,
+                slots,
+                redact=settings.redact_text,
+                comparing=dual,
+                grow=settings.grow_fixations and show_fixations,
+                fade=settings.fade_fixations and show_fixations,
+            )
             for s in specs
         ]
         terminal = dict(
@@ -11607,6 +11619,8 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
         "trial_labels",
         "layout",
         "style_a",
@@ -11641,6 +11655,8 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
         # A comparison reads B's filters off `style_b` instead.
         "fixation_flags_b",
         # Names, not an option: read by `_labelled_columns`.

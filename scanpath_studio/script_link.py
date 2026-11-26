@@ -119,6 +119,8 @@ _SAME_VALUE = {
     # The replay's player.
     "playback_speed": "single_playback_speed",
     "autoplay": "global_anim_autoplay",
+    "grow_fixations": "global_anim_grow_fixations",
+    "fade_fixations": "global_anim_fade_fixations",
     **{name: option.state_key for name, option in FIXATION_LABEL_OPTIONS.items()},
     **{name: option.state_key for name, option in OPACITY_OPTIONS.items()},
     **{

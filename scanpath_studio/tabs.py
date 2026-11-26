@@ -151,6 +151,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FIXATION_GLYPH_SYMBOLS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FOCUS_MAPPING_KEY,
@@ -5667,6 +5668,8 @@ def _plan_replay(
             else "Scanpath B"
         ),
         autoplay=viz_settings.get("anim_autoplay", True),
+        grow_fixations=bool(viz_settings.get("anim_grow_fixations")),
+        fade_fixations=bool(viz_settings.get("anim_fade_fixations")),
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
         # The co-animation wears the rail's per-scanpath styles, as the static
@@ -7126,6 +7129,38 @@ def render_single_trial_tab(
                     persist_state="session",
                     disabled=anim_disabled,
                     help="Start the replay when you open the reading.",
+                )
+                # Both restyle the fixation markers, so they do nothing while
+                # fixations are hidden or drawn as a glyph (♥, a text layer).
+                marks_reason = (
+                    "Turn on **Fixations** to use this."
+                    if not st.session_state.get("global_show_fix", True)
+                    else "A glyph shape (♥) neither grows nor fades."
+                    if st.session_state.get("global_fixation_symbol")
+                    in FIXATION_GLYPH_SYMBOLS
+                    else ""
+                )
+                _check_row(
+                    "Current fixation",
+                    check_label="Grow over its duration",
+                    check_share=0.76,
+                    key="global_anim_grow_fixations",
+                    persist_state="session",
+                    disabled=anim_disabled or bool(marks_reason),
+                    help="The current fixation starts small and reaches its "
+                    "full size when its duration has passed."
+                    + (f" {marks_reason}" if marks_reason else ""),
+                )
+                _check_row(
+                    "Earlier fixations",
+                    check_label="Fade",
+                    check_share=0.76,
+                    key="global_anim_fade_fixations",
+                    persist_state="session",
+                    disabled=anim_disabled or bool(marks_reason),
+                    help="Draw the fixations before the current one faded, so "
+                    "the current one stands out."
+                    + (f" {marks_reason}" if marks_reason else ""),
                 )
                 # The duration depends on both readings when comparing.
                 anim_timing_slot = st.container() if animate else None

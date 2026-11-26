@@ -168,8 +168,9 @@ class TestTheBrowserGetsTheSameFrames:
     @needs_node
     @pytest.mark.parametrize("dual", [False, True])
     @pytest.mark.parametrize("show_fixations", [True, False])
+    @pytest.mark.parametrize("grow_and_fade", [False, True])
     def test_compact_streamlit_frames_match_every_full_trace(
-        self, dual, show_fixations, tmp_path
+        self, dual, show_fixations, grow_and_fade, tmp_path
     ):
         from scanpath_studio import plots, replay_frames
         from scanpath_studio.synthetic import load_synthetic_data
@@ -188,10 +189,13 @@ class TestTheBrowserGetsTheSameFrames:
             show_fixations=show_fixations,
             show_order=True,
             show_saccade_arrows=True,
-            fixation_symbol="heart",
+            # A glyph neither grows nor fades, so those draw plain markers.
+            fixation_symbol="circle" if grow_and_fade else "heart",
             fixation_outline_color="magenta",
             fixation_flags={"short": {"mode": "Highlight", "threshold_ms": 110}},
             anim_grid_step_ms=70,
+            grow_fixations=grow_and_fade,
+            fade_fixations=grow_and_fade,
         )
         full, _ = plots.build_scanpath_replay(words, fixations, **kwargs)
         compact, _ = plots.build_scanpath_replay(

@@ -89,6 +89,8 @@ keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Playback
 | --- | --- |
 | **Speed** | How fast the video plays, from ×0.25 to ×8: ×1 is the participant's recorded pace, ×2 twice as fast, ×0.5 half as fast. |
 | **Autoplay** | Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play. |
+| **Current fixation** → **Grow over its duration** | The current fixation starts small and reaches its full size when its duration has passed, so a long fixation visibly takes longer. Link: `anim_grow_fixations=1`; command line: `--grow-fixations`; Python: `grow_fixations=True`. |
+| **Earlier fixations** → **Fade** | Draw the fixations before the current one faded, so the current one stands out. Link: `anim_fade_fixations=1`; command line: `--fade-fixations`; Python: `fade_fixations=True`. |
 | **Duration** | For information only: the trial's reading time, and how long the video runs at this speed. |
 | **Smoothness** | How smooth the video is: **Coarse**, **Standard** or **Fine**. More frames play more smoothly but take longer to build. Moving either slider below makes it **Custom**. |
 | **Frame timing** → **Frame interval** | Reading time between frames, in ms. |

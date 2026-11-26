@@ -100,6 +100,8 @@ def test_the_app_draws_the_figure_the_options_describe(color_by_line, monkeypatc
         "background_image_opacity": state.get("global_stimulus_image_opacity"),
         "anim_grid_step_ms": viz["anim_grid_step_ms"],
         "anim_max_frames": viz["anim_max_frames"],
+        "grow_fixations": viz["anim_grow_fixations"],
+        "fade_fixations": viz["anim_fade_fixations"],
         "palette": state.get("global_palette"),
     }
     for key, value in options.items():
@@ -308,6 +310,8 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
     assert set(options) - set(written) <= {
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
         "heatmap_range",
         "highlight_text_color",
         "plot_frame_color",
@@ -315,14 +319,28 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
         "show_raw_gaze",
         "show_saccades",
     }
-    replay = ["--anim-grid-step-ms", "50", "--anim-max-frames", "200"]
+    replay = [
+        "--anim-grid-step-ms",
+        "50",
+        "--anim-max-frames",
+        "200",
+        "--grow-fixations",
+        "--fade-fixations",
+    ]
     cli.main(
         ["open", "D", "-p", "p", "-t", "t", "--print", *_render_flags(options), *replay]
     )
     printed = capsys.readouterr().out.strip()
     assert _query(printed) == _query(
         sps.app_link(
-            "D", "p", "t", **written, anim_grid_step_ms=50.0, anim_max_frames=200
+            "D",
+            "p",
+            "t",
+            **written,
+            anim_grid_step_ms=50.0,
+            anim_max_frames=200,
+            grow_fixations=True,
+            fade_fixations=True,
         )
     )
 

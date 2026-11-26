@@ -52,6 +52,7 @@ lists the four render views. The reference and compact Share snippets use
 | `fixation_outline_width` / `_color` | ✅ | ✅ | ✅ | A zero width disables the color. Hollow marks and A/B metric or category outlines supply their own rings. |
 | `show_compare_legend`, `compare_stimulus` | ❌ | ✅ (co-animation) | ✅ | Widgets in `tabs.py` (⚙ Compare options) |
 | `anim_autoplay`, replay grid step / max frames, `playback_speed` | ❌ | ✅ | ❌ | Widgets in `tabs.py` (⚙ Playback) |
+| `grow_fixations`, `fade_fixations` | ❌ | ✅ | ❌ | ⚙ Playback. The trail's marker size and opacity per frame (`replay_frames`); a glyph shape (♥) neither grows nor fades |
 | `canvas_b`, `background_image_b*` | ❌ | ❌ | ✅ (split only) | B's own screen and page; `None` = same as A |
 
 The canvas / font controls (`app.render_canvas_controls`: line spacing,

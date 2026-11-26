@@ -931,6 +931,9 @@ _VIZ_WIDGET_DEFAULTS = {
     # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the replay
     # player starts it at the configured speed (plots.animation_player_post_script).
     "global_anim_autoplay": True,
+    # The replay's current fixation grows over its duration; earlier ones fade.
+    "global_anim_grow_fixations": False,
+    "global_anim_fade_fixations": False,
     # The animation frame grid. Step = smoothness; max frames = the ceiling that
     # keeps a long reading's GIF/MP4 bounded (it coarsens the step, and the popover
     # says so).
@@ -7210,6 +7213,8 @@ def _collect_viz_settings(
         illustration_text=str(ss.get("global_illustration_text") or ""),
         # Autoplay the animated replay on load (default on).
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
+        anim_grow_fixations=bool(ss.get("global_anim_grow_fixations")),
+        anim_fade_fixations=bool(ss.get("global_anim_fade_fixations")),
         # The animation frame grid (smoothness vs. frame count).
         anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
         anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),

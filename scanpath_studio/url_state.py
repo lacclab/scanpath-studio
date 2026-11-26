@@ -72,6 +72,7 @@ from .constants import (
     DATA_WORKSPACE_REQUEST,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FADE_OPACITY_BOUNDS,
     FIXATION_DURATION_FLAGS,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
@@ -82,6 +83,7 @@ from .constants import (
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
+    GROW_START_BOUNDS,
     HEATMAP_OPACITY_BOUNDS,
     HEATMAP_SIGMA_BOUNDS,
     ICONS,
@@ -531,6 +533,9 @@ _DESIGN_PARAMS = {
     "show_credit": ("global_show_credit", None),
     "plot_frame_color": ("global_plot_frame_color", "color"),
     "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
+    # How small the replay's growing fixation starts, and how faint it fades.
+    "anim_grow_start": ("global_anim_grow_start", GROW_START_BOUNDS),
+    "anim_fade_opacity": ("global_anim_fade_opacity", FADE_OPACITY_BOUNDS),
     "fixation_outline_width": (
         "global_fixation_outline_width",
         FIXATION_OUTLINE_WIDTH_BOUNDS,
@@ -609,6 +614,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "align_connectors": "global_align_connectors",
     # Autoplay the animated replay on load (default on, so always emitted).
     "anim_autoplay": "global_anim_autoplay",
+    # The replay's growing current fixation and fading earlier ones.
+    "anim_grow_fixations": "global_anim_grow_fixations",
+    "anim_fade_fixations": "global_anim_fade_fixations",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     # Each colour scale's bar has its own switch; the one they shared before,
@@ -1929,6 +1937,8 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "stimulus_image": "global_show_stimulus_image",
     "full_monitor": "global_fit_to_monitor",
     "autoplay": "global_anim_autoplay",
+    "grow_fixations": "global_anim_grow_fixations",
+    "fade_fixations": "global_anim_fade_fixations",
 }
 
 

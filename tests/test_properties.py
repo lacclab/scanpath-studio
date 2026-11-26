@@ -24,6 +24,7 @@ from hypothesis import strategies as st
 from scanpath_studio import controls, data, measures, plots, url_state
 from scanpath_studio.column_names import encode_field_list
 from scanpath_studio.constants import (
+    GROW_START_BOUNDS,
     LEGEND_ARRANGEMENTS,
     LEGEND_POSITIONS,
     RESERVED_SOURCE_NAMES,
@@ -1636,3 +1637,25 @@ def test_a_script_link_s_match_waits_for_the_comparisons_subtab(match):
         url_state._apply_url_preset()
         url_state._apply_url_preset()
     assert recipient[MATCH_LINK_STATE_KEY] == {"value": match}
+
+
+@given(
+    onset=st.floats(0, 1e5, allow_nan=False),
+    duration=st.floats(1e-3, 1e4, allow_nan=False),
+    earlier=st.floats(0, 2e4, allow_nan=False),
+    later=st.floats(0, 2e4, allow_nan=False),
+    start=st.floats(*GROW_START_BOUNDS),
+)
+def test_a_growing_fixation_never_shrinks_and_stays_in_its_bounds(
+    onset, duration, earlier, later, start
+):
+    """The replay's current fixation grows monotonically from its start size
+    to its full size, and is full once its duration has passed."""
+    from scanpath_studio import replay_frames
+
+    run = {"times": [onset], "durations": [duration], "grow_start": start}
+    first, second = sorted((earlier, later))
+    a = replay_frames.growth(run, 0, onset + first)
+    b = replay_frames.growth(run, 0, onset + second)
+    assert start <= a <= b <= 1.0
+    assert replay_frames.growth(run, 0, onset + duration) == pytest.approx(1.0)

@@ -177,6 +177,18 @@ class TestTheSaccadeOpacityRebuildsNoFrame:
         assert {t.name for t in traces} == {"saccades", "saccade direction"}
         assert all(t.opacity == 0.4 for t in traces)
 
+    def test_fading_dims_the_stamped_opacity(self, page):
+        view = _render(
+            figure={"saccade_opacity": 0.4, "show_saccade_arrows": True},
+            anim_fade_fixations=True,
+            anim_fade_opacity=0.5,
+        )
+        traces = [
+            t for t in view.figure().data if t.name in ("saccades", "saccade direction")
+        ]
+        assert traces
+        assert all(t.opacity == pytest.approx(0.2) for t in traces)
+
     def test_the_replay_key_ignores_it(self):
         frames = (_words(), _fixations(), None, None, "p1", "t1", None, None)
 

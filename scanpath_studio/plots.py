@@ -38,12 +38,14 @@ from .constants import (
     DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_DURATION_SIZE_LEGEND,
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
     DEFAULT_FIXATION_OUTLINE_WIDTH,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_GRID_FONT_SIZE,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
@@ -58,12 +60,14 @@ from .constants import (
     DEFAULT_SNAP_POSITION,
     DEFAULT_TITLE_FONT_SIZE,
     DRAWABLE_PX_LIMIT,
+    FADE_OPACITY_BOUNDS,
     FIX_MARKER_OUTLINE,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
+    GROW_START_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
     LEGEND_ARRANGEMENTS,
@@ -291,6 +295,16 @@ class FigureSettings:
     #: figure that travels without its caption (`export.annotate_figure`).
     show_credit: bool = False
     playback_speed: float = 1.0
+    #: Replay only: the current fixation's marker grows from small to its full
+    #: duration size over the fixation's own duration.
+    grow_fixations: bool = False
+    #: Replay only: every fixation before the current one, its number and the
+    #: saccades are drawn faded.
+    fade_fixations: bool = False
+    #: The share of its full size a growing fixation starts at.
+    grow_start: float = DEFAULT_GROW_START
+    #: The share of its opacity a faded fixation, number or saccade keeps.
+    fade_opacity: float = DEFAULT_FADE_OPACITY
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
     show_legend: bool = False
@@ -428,12 +442,28 @@ def _order_textposition(position: str) -> str:
     ]
 
 
+#: The replay's share options, with the range each takes.
+_REPLAY_SHARE_BOUNDS = {
+    "grow_start": GROW_START_BOUNDS,
+    "fade_opacity": FADE_OPACITY_BOUNDS,
+}
+
+
 def normalize_option_value(name: str, value: object) -> object:
     """``value`` for the enumerated figure option ``name``, spelt as the
     builders compare it; any other option's value is returned as it is.
 
     Raises ``ValueError`` listing the choices for a value that is none of
     them. ``critical_span_style=None`` is the app's "None" (no marking)."""
+    if value is not None and name in _REPLAY_SHARE_BOUNDS:
+        lo, hi = _REPLAY_SHARE_BOUNDS[name]
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            number = float("nan")
+        if not lo <= number <= hi:
+            raise ValueError(f"{name}: expected {lo:g} to {hi:g}, got {value!r}")
+        return number
     if value is not None and (name in OPACITY_OPTIONS or name == "opacity"):
         try:
             return parse_opacity(value)
@@ -3270,6 +3300,25 @@ def _saccade_arrow_markers(
 _RGB_FUNCTION = re.compile(
     r"rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,[^)]*)?\)"
 )
+
+
+def replay_saccade_opacity(settings: FigureSettings) -> float:
+    """The replay's saccade line and arrowhead opacity: the figure's, dimmed
+    by ``fade_opacity`` while earlier fixations fade, since one line trace
+    takes one opacity. Every surface that sets the replay's saccade opacity
+    reads it here, so a later stamp never undoes the fade."""
+    fade = settings.fade_fixations and settings.show_fixations
+    return settings.saccade_opacity * (settings.fade_opacity if fade else 1.0)
+
+
+def _faded_and_full(color: str, alpha: float) -> tuple[str, str] | None:
+    """A fixation number's colour at ``alpha`` and at full strength, for a
+    replay that fades earlier fixations; ``None`` for a colour that takes no
+    alpha (a CSS name), whose numbers then stay as they are."""
+    try:
+        return color_with_alpha(color, alpha), color_with_alpha(color, 1.0)
+    except ValueError:
+        return None
 
 
 def color_with_alpha(color: str, alpha: float) -> str:
@@ -7630,6 +7679,10 @@ def _render_scanpath_animation(
     show_saccades = settings.show_saccades
     show_saccade_arrows = settings.show_saccade_arrows
     show_order = show_fixations and settings.show_order
+    # Fading dims what came before the current fixation: the earlier markers
+    # and numbers per frame (`replay_frames`), and the saccades as a whole.
+    fade = settings.fade_fixations and show_fixations
+    saccade_opacity = replay_saccade_opacity(settings)
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
@@ -8112,7 +8165,7 @@ def _render_scanpath_animation(
                     ),
                     # On the base trace only — a frame restates the
                     # line's x/y and style, never its opacity, so it holds.
-                    opacity=settings.saccade_opacity,
+                    opacity=saccade_opacity,
                     meta="saccades",
                     showlegend=label_line,
                     legendgroup=s["label"],
@@ -8150,7 +8203,7 @@ def _render_scanpath_animation(
                         color=s["sac_color"],
                         line=dict(width=0),
                     ),
-                    opacity=settings.saccade_opacity,
+                    opacity=saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -8369,7 +8422,21 @@ def _render_scanpath_animation(
     if frame_times:
         slots = {idx: slot for slot, idx in enumerate(traces_idx_in_frame)}
         readings = [
-            replay_frames.reading(s, slots, redact=settings.redact_text, comparing=dual)
+            replay_frames.reading(
+                s,
+                slots,
+                redact=settings.redact_text,
+                comparing=dual,
+                grow=settings.grow_fixations and show_fixations,
+                fade=fade,
+                order_colors=(
+                    _faded_and_full(s["text_color"], settings.fade_opacity)
+                    if fade
+                    else None
+                ),
+                grow_start=settings.grow_start,
+                fade_opacity=settings.fade_opacity,
+            )
             for s in specs
         ]
         terminal = dict(
@@ -11607,6 +11674,10 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
         "trial_labels",
         "layout",
         "style_a",
@@ -11641,6 +11712,10 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
         # A comparison reads B's filters off `style_b` instead.
         "fixation_flags_b",
         # Names, not an option: read by `_labelled_columns`.

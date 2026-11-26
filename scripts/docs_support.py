@@ -393,7 +393,14 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "saccade_type_legend",
         "duration_size_legend",
     ),
-    "Animate": ("anim_grid_step_ms", "anim_max_frames"),
+    "Animate": (
+        "anim_grid_step_ms",
+        "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
+    ),
     "Compare": (
         "label_a",
         "label_b",

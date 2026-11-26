@@ -64,6 +64,12 @@ GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
 GLOBAL_FIXATION_SNAP_TO_LINE = "global_fixation_snap_to_line"
 GLOBAL_FIXATION_SNAP_POSITION = "global_fixation_snap_position"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
+# The replay's current fixation grows over its duration; earlier ones fade.
+GLOBAL_ANIM_GROW_FIXATIONS = "global_anim_grow_fixations"
+GLOBAL_ANIM_FADE_FIXATIONS = "global_anim_fade_fixations"
+# How small a growing fixation starts, and how faint a faded one is.
+GLOBAL_ANIM_GROW_START = "global_anim_grow_start"
+GLOBAL_ANIM_FADE_OPACITY = "global_anim_fade_opacity"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
 # Raw gaze's own style.
@@ -233,6 +239,8 @@ DESIGN_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "heatmap_opacity": GLOBAL_HEATMAP_OPACITY,
         "saccade_arrow_size": GLOBAL_SACCADE_ARROW_SIZE,
         "fixation_outline_width": GLOBAL_FIXATION_OUTLINE_WIDTH,
+        "anim_grow_start": GLOBAL_ANIM_GROW_START,
+        "anim_fade_opacity": GLOBAL_ANIM_FADE_OPACITY,
         "fixation_colorbar_length": GLOBAL_FIXATION_COLORBAR_LENGTH,
         "heatmap_colorbar_length": GLOBAL_HEATMAP_COLORBAR_LENGTH,
     }
@@ -600,6 +608,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "snap_fixations": GLOBAL_FIXATION_SNAP_TO_LINE,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
+        "anim_grow_fixations": GLOBAL_ANIM_GROW_FIXATIONS,
+        "anim_fade_fixations": GLOBAL_ANIM_FADE_FIXATIONS,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
         "show_raw_gaze": GLOBAL_SHOW_RAW_GAZE,
         "show_fixation_colorbar": GLOBAL_SHOW_FIXATION_COLORBAR,
@@ -821,6 +831,8 @@ PLOT_CONFIG_LAYER_KEYS: Mapping[str, str] = MappingProxyType(
         "stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
         "full_monitor": GLOBAL_FIT_TO_MONITOR,
         "autoplay": GLOBAL_ANIM_AUTOPLAY,
+        "grow_fixations": GLOBAL_ANIM_GROW_FIXATIONS,
+        "fade_fixations": GLOBAL_ANIM_FADE_FIXATIONS,
     }
 )
 
@@ -1154,6 +1166,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_CROP_MARGIN_AUTO,
         GLOBAL_CROP_MARGIN_PX,
         GLOBAL_ANIM_AUTOPLAY,
+        GLOBAL_ANIM_GROW_FIXATIONS,
+        GLOBAL_ANIM_FADE_FIXATIONS,
         # coloring
         GLOBAL_PALETTE,
         GLOBAL_COLOR_BY,

@@ -5415,7 +5415,8 @@ def app_link(
         **figure_options: Figure options, as ``plot_scanpath`` takes them, with
             its ``fix_index_range`` and ``illustration_label``, plus ``palette``
             and the replay's ``anim_grid_step_ms``, ``anim_max_frames``,
-            ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
+            ``grow_fixations``, ``fade_fixations``, ``grow_start``,
+            ``fade_opacity``, ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
             value, except where it is a choice of its own (``heatmap_metric``
             counts fixations, ``fixation_flags`` turns them off). A link carries
             no file, so ``background_image`` and its size and origin are

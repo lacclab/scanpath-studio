@@ -37,19 +37,23 @@ from .code_snippet import (
     source_canvas,
 )
 from .constants import (
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FADE_OPACITY_BOUNDS,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
     FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
+    GROW_START_BOUNDS,
     OPACITY_OPTIONS,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
@@ -1741,6 +1745,34 @@ def _render_parser() -> argparse.ArgumentParser:
         "file starts playing when it opens.",
     )
     viz.add_argument(
+        "--grow-fixations",
+        action="store_true",
+        help="With --animate: the current fixation starts small and reaches "
+        "its full size when its duration has passed.",
+    )
+    viz.add_argument(
+        "--fade-fixations",
+        action="store_true",
+        help="With --animate: draw the fixations before the current one, their "
+        "numbers and the saccades faded.",
+    )
+    viz.add_argument(
+        "--grow-start",
+        type=float,
+        metavar="SHARE",
+        help="With --grow-fixations: the share of its full size a fixation "
+        f"starts at, {GROW_START_BOUNDS[0]:g}–{GROW_START_BOUNDS[1]:g} "
+        f"(default: {DEFAULT_GROW_START:g}).",
+    )
+    viz.add_argument(
+        "--fade-opacity",
+        type=float,
+        metavar="SHARE",
+        help="With --fade-fixations: the share of its opacity what has faded "
+        f"keeps, {FADE_OPACITY_BOUNDS[0]:g}–{FADE_OPACITY_BOUNDS[1]:g} "
+        f"(default: {DEFAULT_FADE_OPACITY:g}).",
+    )
+    viz.add_argument(
         "--anim-grid-step-ms",
         type=float,
         default=None,
@@ -2022,6 +2054,27 @@ _DIRECT_OPTION_FLAGS = (
 _NONE_WHEN_EMPTY = frozenset(
     {"word_hover_measure", "word_heatmap_col", "word_heatmap_title"}
 )
+
+#: The replay-only switches, handed to `animate_scanpath` beside the overrides
+#: (`plot_scanpath` takes neither) and only when set.
+ANIMATION_SWITCHES = ("grow_fixations", "fade_fixations")
+#: …and its valued options, handed over the same way when given.
+ANIMATION_VALUES = ("grow_start", "fade_opacity")
+
+
+def _animation_only(args: argparse.Namespace) -> dict:
+    """The replay-only options a command line sets, as `animate_scanpath`
+    keywords."""
+    options = {name: True for name in ANIMATION_SWITCHES if getattr(args, name)}
+    options.update(
+        {
+            name: getattr(args, name)
+            for name in ANIMATION_VALUES
+            if getattr(args, name) is not None
+        }
+    )
+    return options
+
 
 #: …and the switches, as ``option → the value the flag sets``. Passed only when
 #: flipped, so a bare `render` keeps handing the builder its own defaults.
@@ -2718,6 +2771,7 @@ def _print_reproduction_code(
         ):
             if value is not None:
                 settings[name] = value
+        settings.update(_animation_only(args))
         # The co-animation's B-side keywords ride `anim_kwargs`, not
         # `overrides`, for the same reason — without this a printed recipe for
         # `--animate --compare-with … --label-a …` would lose its labels and
@@ -3785,6 +3839,7 @@ def render(argv: list[str]) -> None:
                 illustration_label=args.illustration_label,
                 anim_grid_step_ms=args.anim_grid_step_ms,
                 anim_max_frames=args.anim_max_frames,
+                **_animation_only(args),
                 **anim_kwargs,
                 **common,
             )
@@ -4815,6 +4870,7 @@ def open_link(argv: list[str]) -> None:
     for key in ("anim_grid_step_ms", "anim_max_frames"):
         if getattr(args, key) is not None:
             options[key] = getattr(args, key)
+    options.update(_animation_only(args))
     if args.fix_index_range:
         options["fix_index_range"] = _parse_fix_index_range(args.fix_index_range)
     if args.illustration_label != "auto":

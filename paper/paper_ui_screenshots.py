@@ -93,6 +93,41 @@ def trim(path: Path) -> None:
         im.crop((0, 0, right, bottom)).save(path)
 
 
+def crop_to_content(path: Path, pad: int = TRIM_PAD) -> None:
+    """Crop a plot capture to what it draws: the text, fixations and legend.
+
+    The plot's frame and the empty canvas around the passage are dropped, so
+    a panel in a multi-panel figure spends its width on the reading.
+    """
+    try:
+        import numpy as np
+        from PIL import Image
+    except ImportError:  # optional — the uncropped capture is still usable
+        return
+    pixels = np.asarray(Image.open(path).convert("RGB")).copy()
+    ink = pixels.min(axis=2) < 243
+    # The plot's frame is a line spanning nearly the whole capture: paint any
+    # such row or column out, so it is neither content nor left in the margin.
+    frame_cols, frame_rows = ink.mean(axis=0) > 0.6, ink.mean(axis=1) > 0.6
+    pixels[:, frame_cols] = 255
+    pixels[frame_rows, :] = 255
+    ink[:, frame_cols] = False
+    ink[frame_rows, :] = False
+    im = Image.fromarray(pixels)
+    rows, cols = np.flatnonzero(ink.any(axis=1)), np.flatnonzero(ink.any(axis=0))
+    if not len(rows) or not len(cols):
+        return
+    h, w = ink.shape
+    im.crop(
+        (
+            max(0, cols[0] - pad),
+            max(0, rows[0] - pad),
+            min(w, cols[-1] + 1 + pad),
+            min(h, rows[-1] + 1 + pad),
+        )
+    ).save(path)
+
+
 def shot(page: Page, name: str, locator: Locator | None = None, **kw) -> None:
     # Tidy the page before every capture. A click Playwright had to scroll into
     # view leaves the page — or the control rail, which has a scroll area of its
@@ -174,6 +209,7 @@ def shot_plot(page: Page, name: str, key: str) -> None:
         "els => els.forEach(e => (e.style.visibility = 'hidden'))"
     )
     shot(page, name, locator=el)
+    crop_to_content(OUT / f"{name}.png")
 
 
 def nav(page: Page, label: str) -> None:
@@ -362,8 +398,14 @@ def capture(page: Page) -> None:
     for label, name in SUBTABS.items():
         page.locator(f'[data-testid="stTab"]:has-text("{label}")').first.click()
         settle(page, quiet=2.0)
-        # The Comparisons grid runs long; two rows of it say enough.
-        shot_block(page, name, tabs, max_h=800 if "comparisons" in name else 1000)
+        if label == "Comparisons":
+            # The demo has two readers, so *Same text* finds one other
+            # reading; the reader's other texts fill the grid's first row.
+            page.locator(".st-key-multi_gen_col").first.click()
+            page.get_by_role("option", name="Same participant — other texts").click()
+            settle(page, quiet=3.0)
+        # The Comparisons grid runs long; its table and first row say enough.
+        shot_block(page, name, tabs, max_h=985 if "comparisons" in name else 1000)
     page.locator('[data-testid="stTab"]:has-text("Annotations")').first.click()
     settle(page, quiet=1.5)
 
@@ -375,7 +417,11 @@ def capture(page: Page) -> None:
     print("data management", flush=True)
     nav(page, "Data")
     page.wait_for_timeout(1500)
+    page.locator('[data-testid="stTab"]:has-text("Dataset library")').first.click()
+    settle(page, quiet=2.5)
     shot(page, "fig_ui_data", full_page=True)
+    page.locator('[data-testid="stTab"]:has-text("Current dataset")').first.click()
+    settle(page, quiet=2.0)
     shot(
         page,
         "fig_ui_data_datasets",
@@ -393,6 +439,8 @@ def capture(page: Page) -> None:
 
     print("add dataset", flush=True)
     visible(page.locator('button:has-text("Add dataset")'))[0].click()
+    settle(page, quiet=1.5)
+    visible(page.locator('button:has-text("Import files")'))[0].click()
     settle(page, quiet=2.5)
     page.wait_for_timeout(3000)  # the wizard's own tour card arrives late
     close_tour(page)

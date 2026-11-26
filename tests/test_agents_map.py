@@ -35,3 +35,29 @@ def test_every_name_on_the_map_is_a_module():
     modules = {path.name for path in (ROOT / "scanpath_studio").glob("*.py")}
     stale = sorted(_mapped() - modules)
     assert not stale, f"AGENTS.md's module map names files that are gone: {stale}"
+
+
+def _rule_paths(text: str) -> set[str]:
+    header = text.split("---", 2)[1]
+    return set(re.findall(r'"scanpath_studio/([^"]+)"', header))
+
+
+def test_every_rule_loads_for_the_modules_it_names():
+    """A rule in `.claude/rules/` loads only for the files its `paths:` header
+    lists, so a module the rule names (`data.pick_column`, `plots.py`) must be
+    among them, or editing that module never shows the rule."""
+    modules = {path.stem for path in (ROOT / "scanpath_studio").glob("*.py")}
+    gaps = {}
+    for rule in sorted((ROOT / ".claude" / "rules").glob("*.md")):
+        text = rule.read_text(encoding="utf-8")
+        listed = _rule_paths(text)
+        named = set(re.findall(r"`([a-z_]+)\.[A-Za-z_]", text)) & modules
+        missing = sorted(
+            m
+            for m in named
+            if f"{m}.py" not in listed
+            and not any(p.endswith("*.py") and m.startswith(p[:-4]) for p in listed)
+        )
+        if missing:
+            gaps[rule.name] = missing
+    assert not gaps, f"add these modules to the rules' paths: headers: {gaps}"

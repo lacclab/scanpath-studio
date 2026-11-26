@@ -15,7 +15,9 @@
       "Edit(site/**)",
       "Write(site/**)",
       "Edit(scanpath_studio.egg-info/**)",
-      "Write(scanpath_studio.egg-info/**)"
+      "Write(scanpath_studio.egg-info/**)",
+      "Read(./.env)",
+      "Read(./.env.*)"
     ]
   },
   "hooks": {

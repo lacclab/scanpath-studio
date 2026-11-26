@@ -4,8 +4,9 @@ This file is deliberately short: a second copy of the house rules drifts. The
 sources of truth are
 
 - [`AGENTS.md`](../AGENTS.md) — the architecture map: modules, pipeline,
-  canonical columns, code style, gotchas, the "adding a new …" recipes,
-  releasing;
+  canonical columns, code style, the "adding a new …" recipes, releasing;
+- [`.claude/rules/`](../.claude/rules/) — the gotchas, one file per area (state
+  and the wire format, data, figures, loading, Compare);
 - [`CLAUDE.md`](../CLAUDE.md) — the working agreements: commits, changelog,
   tracking work, the approval gate;
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — setup and the checks CI gates on.

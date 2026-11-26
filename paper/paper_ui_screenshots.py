@@ -367,18 +367,6 @@ def capture(page: Page) -> None:
     page.locator('[data-testid="stTab"]:has-text("Annotations")').first.click()
     settle(page, quiet=1.5)
 
-    print("session", flush=True)
-    page.locator('[data-testid="stTopNavLink"]:has-text("Session")').first.click()
-    settle(page, quiet=2.5)
-    panel = page.locator('[data-testid="stDialog"] [role="dialog"]').first
-    shot(page, "fig_ui_session", locator=panel)
-    close = visible(page.locator('[data-testid="stDialog"] button[aria-label="Close"]'))
-    if close:
-        close[0].click()
-    else:
-        page.keyboard.press("Escape")
-    settle(page, quiet=2.0)
-
     print("corpus analysis", flush=True)
     nav(page, "Corpus Analysis")
     page.wait_for_timeout(2000)
@@ -393,6 +381,15 @@ def capture(page: Page) -> None:
         "fig_ui_data_datasets",
         locator=page.locator(".st-key-data_overview").first,
     )
+
+    # Recovery, the backup file and the reset live on the Data page's
+    # *Saved work* tab.
+    print("saved work", flush=True)
+    page.locator('[data-testid="stTab"]:has-text("Saved work")').first.click()
+    settle(page, quiet=2.0)
+    shot(page, "fig_ui_session", locator=page.locator(".st-key-data_setup_page").first)
+    page.locator('[data-testid="stTab"]:has-text("Current dataset")').first.click()
+    settle(page, quiet=2.0)
 
     print("add dataset", flush=True)
     visible(page.locator('button:has-text("Add dataset")'))[0].click()

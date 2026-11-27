@@ -23,14 +23,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.49.0},
+  version = {0.50.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Grossman, M., Gruteke Klein, K., Jakobi, D. N., Lion, E., Büth, C., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.49.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Grossman, M., Gruteke Klein, K., Jakobi, D. N., Lion, E., Büth, C., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.50.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 

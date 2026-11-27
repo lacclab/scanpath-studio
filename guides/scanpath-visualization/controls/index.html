@@ -115,7 +115,7 @@
             
   <nav class="sps-docs-channel" aria-label="Documentation edition">
     
-      <strong>Stable documentation &middot; v0.49.0</strong>
+      <strong>Stable documentation &middot; v0.50.0</strong>
       <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
     
   </nav>
@@ -2928,6 +2928,10 @@ pencil (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span>), whi
 <td>Reset every filter in the panel.</td>
 </tr>
 <tr>
+<td><strong>Filtered:</strong> line under the trial picker</td>
+<td>Shown while any filter is on, with a dot on <span class="sps-icon" data-icon="filter_alt" aria-hidden="true"></span>: how many of the dataset's trials the filters keep, which filters they are, and <strong>✕ Clear filters</strong> to reset them all.</td>
+</tr>
+<tr>
 <td><span class="sps-icon" data-icon="edit" aria-hidden="true"></span> → <strong>Show the trial summary above the plot</strong></td>
 <td>Show or hide the row of facts about the trial above the plot.</td>
 </tr>
@@ -2982,6 +2986,22 @@ keyboard, see <a href="../#keyboard-shortcuts">Keyboard shortcuts</a>. Open <str
 <tr>
 <td><strong>Autoplay</strong></td>
 <td>Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play.</td>
+</tr>
+<tr>
+<td><strong>Current fixation</strong> → <strong>Grow over its duration</strong></td>
+<td>The current fixation starts small and reaches its full size when its duration has passed, so a long fixation visibly takes longer. Link: <code>anim_grow_fixations=1</code>; command line: <code>--grow-fixations</code>; Python: <code>grow_fixations=True</code>.</td>
+</tr>
+<tr>
+<td><strong>Start size</strong></td>
+<td>How small a growing fixation starts, as a share of its full size: 0.15 (the default) starts at 15 %. Link: <code>anim_grow_start=0.3</code>; command line: <code>--grow-start 0.3</code>; Python: <code>grow_start=0.3</code>.</td>
+</tr>
+<tr>
+<td><strong>Earlier fixations</strong> → <strong>Fade</strong></td>
+<td>Draw the fixations before the current one, their numbers and the saccades faded, so the current fixation stands out. Link: <code>anim_fade_fixations=1</code>; command line: <code>--fade-fixations</code>; Python: <code>fade_fixations=True</code>.</td>
+</tr>
+<tr>
+<td><strong>Faded opacity</strong></td>
+<td>How much of its opacity what has faded keeps: 0.3 by default, 0 hides it, 1 leaves it as it is. Link: <code>anim_fade_opacity=0.5</code>; command line: <code>--fade-opacity 0.5</code>; Python: <code>fade_opacity=0.5</code>.</td>
 </tr>
 <tr>
 <td><strong>Duration</strong></td>
@@ -3438,11 +3458,11 @@ Recording setup. Click <strong>Stimulus</strong> to adjust the text or image for
 <tbody>
 <tr>
 <td><strong>Axis layout</strong></td>
-<td>Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. <strong>Connect fixations</strong> traces the windowed index sequence, including with fixation markers hidden. <strong>Hide</strong> filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
+<td>Plot horizontal or vertical screen position by fixation index or elapsed time, compare fixation index with elapsed time or duration, or plot fixation index by the word each fixation landed on. <strong>Reverse horizontal axis</strong> and <strong>Reverse vertical axis</strong> run a chart axis the other way, for example to put the first fixation at the top; the screen view keeps the stimulus as shown. <strong>Connect fixations in order</strong> joins each reading’s fixations in reading order on any chart, including with fixation markers hidden. <strong>Hide</strong> filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
 </tr>
 <tr>
 <td><strong>Choose axis fields</strong> → horizontal / vertical</td>
-<td>Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. <strong>Screen X and Y</strong> restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates.</td>
+<td>Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. <strong>Screen X and Y</strong> restores the stimulus view. Static comparisons overlay both readings on one pair of axes, or use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates.</td>
 </tr>
 <tr>
 <td><strong>Grid</strong> → <strong>Show</strong></td>
@@ -3654,7 +3674,12 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 <tr>
 <td><span class="sps-icon" data-icon="difference" aria-hidden="true"></span> <strong>Comparisons</strong></td>
 <td><strong>Match field</strong></td>
-<td>Compare with other trials: show the trials that share this trial's value of a field, such as the same text.</td>
+<td>Compare with other trials: show the trials that share this trial's value of a field, such as the same text. A Share link copied after opening this tab reopens it on the same field (<code>match=same_text</code>, <code>match=same_participant</code> or a column name). The panels use the plot's axes; on a reading chart they share one horizontal range.</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>View</strong></td>
+<td><strong>Grid</strong> draws each match in its own panel. <strong>Overlay</strong> draws the selected trial and the page's matches on one figure, each in its own colour, named in the legend and in the chip table. A Share link copied from Comparisons keeps it (<code>match_view=overlay</code>). On screen axes an overlay needs readings of the same text; on a reading chart it warns when a word axis lines up different texts.</td>
 </tr>
 <tr>
 <td></td>

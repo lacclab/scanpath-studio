@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/__init__.py: 91%</title>
+    <title>Coverage for scanpath_studio/__init__.py: 92%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_54cfdca1.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>__init__.py</b>:
-            <span class="pc_cov">91%</span>
+            <span class="pc_cov">92%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -54,8 +54,8 @@
             </div>
         </aside>
         <h2>
-            <span class="text">23 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">21<span class="text"> run</span></button>
+            <span class="text">24 statements &nbsp;</span>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">22<span class="text"> run</span></button>
             <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">2<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3___main___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.5">coverage.py v7.17.5</a>,
-            created at 2026-11-25 13:52 +0000
+            created at 2026-11-27 13:02 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -134,7 +134,7 @@
     <p class="pln"><span class="n"><a id="t52" href="#t52">52</a></span><span class="t"><span class="com"># against. `__version__` is the exact build, worked out from it lazily</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t53" href="#t53">53</a></span><span class="t"><span class="com"># (build_info.py) &#8212; &quot;0.35.0&quot; at the release itself,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t54" href="#t54">54</a></span><span class="t"><span class="com"># &quot;0.35.0.post3+g8f18219&quot; three commits after it.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t"><span class="nam">__release__</span> <span class="op">=</span> <span class="str">&quot;0.49.0&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t"><span class="nam">__release__</span> <span class="op">=</span> <span class="str">&quot;0.50.0&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t57" href="#t57">57</a></span><span class="t"><span class="com"># Public headless API (see api.py / datasets.py). Resolved lazily so</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t"><span class="com"># `import scanpath_studio` stays cheap and doesn&#x27;t pull in pandas/plotly/</span>&nbsp;</span><span class="r"></span></p>
@@ -152,44 +152,48 @@
     <p class="run run2"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">        <span class="str">&quot;trial_summary&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">    <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t"><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t"><span class="com"># `load_multipleye` is experimental too (`constants.multipleye_format_enabled`):</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t"><span class="com"># it resolves, and raises without SCANPATH_EXPERIMENTAL=1, but is not listed.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t"><span class="nam">_DATASET_EXPORTS</span> <span class="op">=</span> <span class="nam">frozenset</span><span class="op">(</span><span class="op">{</span><span class="str">&quot;load_potec&quot;</span><span class="op">,</span> <span class="str">&quot;load_multipleye&quot;</span><span class="op">,</span> <span class="str">&quot;load_onestop&quot;</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t76" href="#t76">76</a></span><span class="t"><span class="nam">_API_EXPORTS</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t77" href="#t77">77</a></span><span class="t">    <span class="op">(</span><span class="nam">frozenset</span><span class="op">(</span><span class="nam">__all__</span><span class="op">)</span> <span class="op">|</span> <span class="nam">_HELD_BACK_EXPORTS</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t78" href="#t78">78</a></span><span class="t">    <span class="op">-</span> <span class="op">{</span><span class="str">&quot;__version__&quot;</span><span class="op">,</span> <span class="str">&quot;main&quot;</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t79" href="#t79">79</a></span><span class="t">    <span class="op">-</span> <span class="nam">_DATASET_EXPORTS</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t80" href="#t80">80</a></span><span class="t"><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t81" href="#t81">81</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t82" href="#t82">82</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t83" href="#t83">83</a></span><span class="t"><span class="key">def</span> <span class="nam">__getattr__</span><span class="op">(</span><span class="nam">name</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t84" href="#t84">84</a></span><span class="t">    <span class="key">if</span> <span class="nam">name</span> <span class="op">==</span> <span class="str">&quot;__version__&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t85" href="#t85">85</a></span><span class="t">        <span class="key">from</span> <span class="op">.</span><span class="nam">build_info</span> <span class="key">import</span> <span class="nam">build_info</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t"><span class="com"># The EyeLink import is experimental too (`constants.eyelink_import_enabled`):</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t"><span class="com"># its entries resolve, and raise without SCANPATH_EXPERIMENTAL=1, but are not</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t"><span class="com"># listed.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t76" href="#t76">76</a></span><span class="t"><span class="nam">_HELD_BACK_EXPORTS</span> <span class="op">|=</span> <span class="op">{</span><span class="str">&quot;add_eyelink_dataset&quot;</span><span class="op">,</span> <span class="str">&quot;import_eyelink&quot;</span><span class="op">,</span> <span class="str">&quot;load_eyelink&quot;</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t77" href="#t77">77</a></span><span class="t"><span class="com"># `load_multipleye` is experimental too (`constants.multipleye_format_enabled`):</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t78" href="#t78">78</a></span><span class="t"><span class="com"># it resolves, and raises without SCANPATH_EXPERIMENTAL=1, but is not listed.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t79" href="#t79">79</a></span><span class="t"><span class="nam">_DATASET_EXPORTS</span> <span class="op">=</span> <span class="nam">frozenset</span><span class="op">(</span><span class="op">{</span><span class="str">&quot;load_potec&quot;</span><span class="op">,</span> <span class="str">&quot;load_multipleye&quot;</span><span class="op">,</span> <span class="str">&quot;load_onestop&quot;</span><span class="op">}</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t80" href="#t80">80</a></span><span class="t"><span class="nam">_API_EXPORTS</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t81" href="#t81">81</a></span><span class="t">    <span class="op">(</span><span class="nam">frozenset</span><span class="op">(</span><span class="nam">__all__</span><span class="op">)</span> <span class="op">|</span> <span class="nam">_HELD_BACK_EXPORTS</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t82" href="#t82">82</a></span><span class="t">    <span class="op">-</span> <span class="op">{</span><span class="str">&quot;__version__&quot;</span><span class="op">,</span> <span class="str">&quot;main&quot;</span><span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t83" href="#t83">83</a></span><span class="t">    <span class="op">-</span> <span class="nam">_DATASET_EXPORTS</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t84" href="#t84">84</a></span><span class="t"><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t85" href="#t85">85</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t86" href="#t86">86</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t">        <span class="com"># Worked out once (it may run `git describe`), then a plain attribute.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">        <span class="nam">globals</span><span class="op">(</span><span class="op">)</span><span class="op">[</span><span class="str">&quot;__version__&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">build_info</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">version</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">        <span class="key">return</span> <span class="nam">globals</span><span class="op">(</span><span class="op">)</span><span class="op">[</span><span class="str">&quot;__version__&quot;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">    <span class="key">if</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">_API_EXPORTS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">        <span class="key">from</span> <span class="op">.</span> <span class="key">import</span> <span class="nam">api</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">        <span class="key">return</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">api</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">    <span class="key">if</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">_DATASET_EXPORTS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t">        <span class="key">from</span> <span class="op">.</span> <span class="key">import</span> <span class="nam">datasets</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t87" href="#t87">87</a></span><span class="t"><span class="key">def</span> <span class="nam">__getattr__</span><span class="op">(</span><span class="nam">name</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t88" href="#t88">88</a></span><span class="t">    <span class="key">if</span> <span class="nam">name</span> <span class="op">==</span> <span class="str">&quot;__version__&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t89" href="#t89">89</a></span><span class="t">        <span class="key">from</span> <span class="op">.</span><span class="nam">build_info</span> <span class="key">import</span> <span class="nam">build_info</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t90" href="#t90">90</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">        <span class="com"># Worked out once (it may run `git describe`), then a plain attribute.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">        <span class="nam">globals</span><span class="op">(</span><span class="op">)</span><span class="op">[</span><span class="str">&quot;__version__&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">build_info</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">version</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">        <span class="key">return</span> <span class="nam">globals</span><span class="op">(</span><span class="op">)</span><span class="op">[</span><span class="str">&quot;__version__&quot;</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">    <span class="key">if</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">_API_EXPORTS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t">        <span class="key">from</span> <span class="op">.</span> <span class="key">import</span> <span class="nam">api</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t96" href="#t96">96</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t97" href="#t97">97</a></span><span class="t">        <span class="key">return</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">datasets</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t98" href="#t98">98</a></span><span class="t">    <span class="key">raise</span> <span class="nam">AttributeError</span><span class="op">(</span><span class="fst">f&quot;</span><span class="fst">module </span><span class="op">{</span><span class="nam">__name__</span><span class="op">!</span><span class="nam">r</span><span class="op">}</span><span class="fst"> has no attribute </span><span class="op">{</span><span class="nam">name</span><span class="op">!</span><span class="nam">r</span><span class="op">}</span><span class="fst">&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t99" href="#t99">99</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t97" href="#t97">97</a></span><span class="t">        <span class="key">return</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">api</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t98" href="#t98">98</a></span><span class="t">    <span class="key">if</span> <span class="nam">name</span> <span class="key">in</span> <span class="nam">_DATASET_EXPORTS</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t99" href="#t99">99</a></span><span class="t">        <span class="key">from</span> <span class="op">.</span> <span class="key">import</span> <span class="nam">datasets</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t100" href="#t100">100</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t101" href="#t101">101</a></span><span class="t"><span class="key">def</span> <span class="nam">__dir__</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">list</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t102" href="#t102">102</a></span><span class="t">    <span class="key">return</span> <span class="nam">sorted</span><span class="op">(</span><span class="nam">set</span><span class="op">(</span><span class="nam">globals</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">|</span> <span class="nam">set</span><span class="op">(</span><span class="nam">__all__</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t101" href="#t101">101</a></span><span class="t">        <span class="key">return</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">datasets</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t102" href="#t102">102</a></span><span class="t">    <span class="key">raise</span> <span class="nam">AttributeError</span><span class="op">(</span><span class="fst">f&quot;</span><span class="fst">module </span><span class="op">{</span><span class="nam">__name__</span><span class="op">!</span><span class="nam">r</span><span class="op">}</span><span class="fst"> has no attribute </span><span class="op">{</span><span class="nam">name</span><span class="op">!</span><span class="nam">r</span><span class="op">}</span><span class="fst">&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t103" href="#t103">103</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t104" href="#t104">104</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t105" href="#t105">105</a></span><span class="t"><span class="key">def</span> <span class="nam">main</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t106" href="#t106">106</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The app&#x27;s Streamlit script body. To open the app, run `scanpath-studio`;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t107" href="#t107">107</a></span><span class="t"><span class="str">    from Python, use the headless API instead.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t108" href="#t108">108</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">app</span> <span class="key">import</span> <span class="nam">main</span> <span class="key">as</span> <span class="nam">_main</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t109" href="#t109">109</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t110" href="#t110">110</a></span><span class="t">    <span class="nam">_main</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t105" href="#t105">105</a></span><span class="t"><span class="key">def</span> <span class="nam">__dir__</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">list</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t106" href="#t106">106</a></span><span class="t">    <span class="key">return</span> <span class="nam">sorted</span><span class="op">(</span><span class="nam">set</span><span class="op">(</span><span class="nam">globals</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">|</span> <span class="nam">set</span><span class="op">(</span><span class="nam">__all__</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t107" href="#t107">107</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t108" href="#t108">108</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t109" href="#t109">109</a></span><span class="t"><span class="key">def</span> <span class="nam">main</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t110" href="#t110">110</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The app&#x27;s Streamlit script body. To open the app, run `scanpath-studio`;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t111" href="#t111">111</a></span><span class="t"><span class="str">    from Python, use the headless API instead.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">    <span class="key">from</span> <span class="op">.</span><span class="nam">app</span> <span class="key">import</span> <span class="nam">main</span> <span class="key">as</span> <span class="nam">_main</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t114" href="#t114">114</a></span><span class="t">    <span class="nam">_main</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -199,7 +203,7 @@
             <a class="nav" href="z_370c57a259db20f3___main___py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.5">coverage.py v7.17.5</a>,
-            created at 2026-11-25 13:52 +0000
+            created at 2026-11-27 13:02 +0000
         </p>
     </div>
 </footer>

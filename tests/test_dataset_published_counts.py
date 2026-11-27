@@ -246,6 +246,51 @@ class TestTrialsAreTrialsNotTrialIds:
         assert _measure(words, fixations, key=("gap",))["Trials"] == 5
 
 
+class TestUnnamedParticipantsAreNotCounted:
+    """A dataset without a participant column gets a placeholder reader from the
+    loader; the table's Participants count is then unknown, not 1."""
+
+    words = pd.DataFrame(
+        {
+            "trial_id": [1, 1, 2],
+            "word_id": [1, 2, 1],
+            "word": ["a", "b", "c"],
+            "left": [0, 15, 0],
+            "right": [14, 30, 14],
+            "top": [0, 0, 0],
+            "bottom": [10, 10, 10],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "trial_id": [1, 1, 2],
+            "word_id": [1, 2, 1],
+            "x": [10.0, 20.0, 10.0],
+            "y": [5.0, 5.0, 5.0],
+            "duration": [200, 210, 190],
+        }
+    )
+
+    def test_both_tables_without_participants(self):
+        from scanpath_studio import api
+
+        loaded = api.load_scanpath_data(self.words, self.fixations, names="canonical")
+        counts = _measure(loaded.words, loaded.fixations, key=("no-participants",))
+        assert counts["Participants"] is None
+        assert counts["Trials"] == 2
+
+    def test_stimulus_words_alone(self):
+        words = normalize_words(self.words, propose_word_schema(self.words))
+        counts = _measure(words, pd.DataFrame(), key=("stimulus-words-only",))
+        assert counts["Participants"] is None
+
+    def test_named_participants_are_still_counted(self):
+        fixations = self.fixations.assign(participant_id=["p1", "p2", "p2"])
+        fixations = normalize_fixations(fixations, propose_fix_schema(fixations))
+        counts = _measure(pd.DataFrame(), fixations, key=("named-participants",))
+        assert counts["Participants"] == 2
+
+
 class TestTextsAreCountedFromEveryTable:
     """The Texts figure reads the fixations too, so a fixations-only dataset
     whose fixations name twelve texts does not say there are none."""

@@ -191,7 +191,9 @@ from scanpath_studio.crash_report import guarded
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
     IDENTITY_SCHEMA_FIELDS,
+    STIMULUS_PARTICIPANT,
     STIMULUS_WORDS_FLAG,
+    SYNTHETIC_PARTICIPANT,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -5636,6 +5638,7 @@ def remembered_dataset_counts(
         frame_fingerprint(words),
         frame_fingerprint(fixations),
         frame_fingerprint(raw_gaze),
+        _COUNTS_VERSION,
     ]
     if isinstance(entry, dict) and entry.get("key") == key:
         return dict(entry.get("counts") or {})
@@ -5653,6 +5656,14 @@ def forget_dataset_counts(keep: set | None = None) -> None:
     store = _counts_store()
     for token in [t for t in store if keep is None or t not in keep]:
         store.pop(token, None)
+
+
+#: Participant ids the loader assigns when no participant column is mapped.
+_PLACEHOLDER_PARTICIPANTS = frozenset({SYNTHETIC_PARTICIPANT, STIMULUS_PARTICIPANT})
+
+#: Part of every remembered count's key: bump it when :func:`_dataset_counts`
+#: counts differently, so counts remembered in a saved session are recomputed.
+_COUNTS_VERSION = 2
 
 
 @st.cache_data(show_spinner=False)
@@ -5682,7 +5693,7 @@ def _dataset_counts(
     raw_gaze = _raw_gaze if _raw_gaze is not None else pd.DataFrame()
     frames = (fixations, words, raw_gaze)
 
-    def _union_unique(column: str):
+    def _union_unique(column: str, placeholders: frozenset = frozenset()):
         values = set()
         found = False
         for frame in frames:
@@ -5690,7 +5701,8 @@ def _dataset_counts(
                 continue
             found = True
             values.update(frame[column].dropna().astype(str).tolist())
-        return len(values) if found else None
+        values -= placeholders
+        return (len(values) or None) if found else None
 
     # A count must not take the page down. `part_catalog` validates as
     # it counts and raises on screen metadata that disagrees across tables —
@@ -5714,7 +5726,9 @@ def _dataset_counts(
         len(trial_keys(words) | trial_keys(fixations) | trial_keys(raw_gaze)) or None
     )
     return {
-        "Participants": _union_unique("participant_id"),
+        # The ids the loader fills in when a dataset names no participants
+        # are not readers: such a dataset's count is unknown, not 1.
+        "Participants": _union_unique("participant_id", _PLACEHOLDER_PARTICIPANTS),
         # From every table that names a text, not the words alone.
         "Texts": len(text_ids(words, fixations, raw_gaze)) or None,
         "Trials": trials,

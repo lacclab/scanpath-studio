@@ -1,15 +1,16 @@
-"""What follows ✅ Add dataset: a dialog offering Open in Scanpath or Add
-another, and an **Open in Scanpath** button beside **Add dataset** on the Data
+"""What follows ✅ Add dataset: a dialog offering Open in Scanpath View or Add
+another, and an **Open in Scanpath View** button beside **Add dataset** on the Data
 page for whichever dataset the list marks Current."""
 
 from __future__ import annotations
 
-import inspect
+import ast
+from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from tests.conftest import APP_SCRIPT, NAV_KEY, pin_data_view
+from tests.conftest import APP_SCRIPT, NAV_KEY, iframe_sources, pin_data_view
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def test_the_data_page_offers_open_in_scanpath(data_page):
 
     assert data_page.session_state[NAV_KEY] == _VIEW_DATA
     button = data_page.button(key="data_open_in_scanpath")
-    assert button.label == "Open in Scanpath"
+    assert button.label == "Open in Scanpath View"
     assert "Bundled demo" in button.help
 
     button.click().run(timeout=90)
@@ -36,32 +37,117 @@ def test_the_data_page_offers_open_in_scanpath(data_page):
     assert data_page.session_state[NAV_KEY] == _VIEW_SCANPATH
 
 
-def test_the_dialog_offers_both_next_steps_by_return_value():
+def _added_dialog_app():
+    """The ✅ Add dataset dialog, raised on every run as if not yet closed."""
     from scanpath_studio import app
 
-    source = inspect.getsource(app._dataset_added_dialog)
-    assert "dataset_added_open" in source
-    assert "dataset_added_again" in source
-    # A dialog body is a fragment: a callback would rerun only the modal and
-    # leave the page behind it where it was.
-    assert "on_click=" not in source
-    assert "_go_scanpath()" in source
-    assert "_enter_add_data_wizard()" in source
-    assert 'st.rerun(scope="app")' in source
+    app._dataset_added_dialog("**Lab** added: 2 trials, 1 participant.")
 
 
-def test_main_raises_the_dialog_and_keeps_the_toast_as_the_fallback():
+def test_the_dialog_offers_both_next_steps():
+    from scanpath_studio.menu import _VIEW_SCANPATH
+
+    at = AppTest.from_function(_added_dialog_app).run()
+    assert not at.exception, at.exception
+    assert "**Lab** added: 2 trials, 1 participant." in [m.value for m in at.markdown]
+    at.button(key="dataset_added_open").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state[NAV_KEY] == _VIEW_SCANPATH
+
+    at = AppTest.from_function(_added_dialog_app).run()
+    at.button(key="dataset_added_again").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["_show_upload_wizard"] is True
+
+
+def test_the_next_step_dialogs_act_on_return_values():
+    """A dialog body is a fragment: a button callback in one would rerun only
+    the modal and leave the page behind it where it was. The two dialogs that
+    move the page — after ✅ Add dataset and after the Trial ID check — act on
+    each button's return value and rerun the whole app."""
     from scanpath_studio import app
 
-    source = inspect.getsource(app._run_app)
-    assert "_dataset_added_dialog(message)" in source
-    # The Trial ID verdict keeps priority over the run's one dialog; the
-    # counts then still arrive, as a toast.
-    assert source.index("_trial_identity_alert_dialog(") < source.index(
-        "_dataset_added_dialog(message)"
-    )
-    assert "st.toast(message" in source
-    assert "_scroll_to_section_script(DATA_OVERVIEW_KEY)" in source
+    tree = ast.parse(Path(app.__file__).read_text(encoding="utf-8"))
+    names = {"_dataset_added_dialog", "_trial_identity_alert_dialog"}
+    dialogs = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in names
+    ]
+    assert {d.name for d in dialogs} == names
+    for dialog in dialogs:
+        assert any(
+            isinstance(d, ast.Call) and ast.unparse(d.func) == "st.dialog"
+            for d in dialog.decorator_list
+        ), dialog.name
+        calls = [node for node in ast.walk(dialog) if isinstance(node, ast.Call)]
+        callbacks = [
+            kw.arg
+            for call in calls
+            for kw in call.keywords
+            if kw.arg in ("on_click", "on_change")
+        ]
+        assert not callbacks, dialog.name
+        # Every `if <col>.button(...):` branch ends in a whole-app rerun:
+        # `reruns.rerun`, the app's `st.rerun`, or Streamlit's own.
+        branches = [
+            node
+            for node in ast.walk(dialog)
+            if isinstance(node, ast.If)
+            and isinstance(node.test, ast.Call)
+            and ast.unparse(node.test.func).endswith(".button")
+        ]
+        assert len(branches) == 2, dialog.name
+        for branch in branches:
+            last = branch.body[-1]
+            assert isinstance(last, ast.Expr) and isinstance(last.value, ast.Call), (
+                dialog.name,
+                branch.lineno,
+            )
+            call = last.value
+            assert ast.unparse(call.func) in ("rerun", "st.rerun"), branch.lineno
+            assert [(kw.arg, ast.literal_eval(kw.value)) for kw in call.keywords] == [
+                ("scope", "app")
+            ], (dialog.name, branch.lineno)
+
+
+def _added_app(trial_columns=None):
+    """The 🗂️ Data page on the run after ✅ Add dataset added "Lab", with the
+    Trial ID check asked for, as the add screen asks for it."""
+    from scanpath_studio.constants import DATASET_ADDED_KEY, TRIAL_IDENTITY_CHECK_KEY
+    from tests.test_trial_identity import demo_dataset_app
+
+    at = demo_dataset_app(trial_columns)
+    at.session_state[DATASET_ADDED_KEY] = "Lab"
+    at.session_state[TRIAL_IDENTITY_CHECK_KEY] = "add"
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+@pytest.mark.timeout(240)
+def test_main_raises_the_dialog_after_an_add():
+    from scanpath_studio import app
+    from scanpath_studio.constants import DATA_OVERVIEW_KEY
+
+    at = _added_app()
+    keys = {b.key for b in at.button}
+    assert {"dataset_added_open", "dataset_added_again"} <= keys
+    assert "trial_identity_alert_edit" not in keys
+    assert any(m.value.startswith("**Lab** added: ") for m in at.markdown)
+    assert not at.toast
+    # The list of datasets, the new one Current in it, is scrolled back to.
+    scroll = app._scroll_to_section_script(DATA_OVERVIEW_KEY)
+    assert any(scroll in doc for doc in iframe_sources(at._tree))
+
+
+@pytest.mark.timeout(240)
+def test_the_trial_id_verdict_keeps_the_dialog_and_the_counts_become_a_toast():
+    at = _added_app(["article_id", "article_batch"])
+    keys = {b.key for b in at.button}
+    assert "trial_identity_alert_edit" in keys
+    assert "dataset_added_open" not in keys
+    assert [t.value for t in at.toast if t.value.startswith("**Lab** added: ")]
 
 
 def test_the_section_scroll_targets_the_key_it_is_given():
@@ -78,4 +164,4 @@ def test_the_setup_guide_no_longer_promises_to_open_the_dataset():
 
     text = " ".join(str(step.get("body", "")) for step in tour._WIZARD_GUIDE_STEPS)
     assert "saves the dataset and opens it" not in text
-    assert "Open in Scanpath" in text
+    assert "Open in Scanpath View" in text

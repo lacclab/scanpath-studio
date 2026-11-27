@@ -6,7 +6,7 @@ study is exactly what you want to hear about before rendering three hundred
 figures. Every branch of that report writes to stderr, so a regression in
 "0 matched" would otherwise go unnoticed.
 
-Everything here runs against the bundled demo, so no corpus is needed.
+Tests use the bundled demo and small local tables.
 """
 
 from __future__ import annotations
@@ -27,6 +27,58 @@ def sample():
 def _render(tmp_path, *extra):
     """Run a headless render of the bundled demo with `extra` flags."""
     cli.main(["render", "--sample", "-o", str(tmp_path / "out.html"), *extra])
+
+
+def test_metadata_reports_and_trial_listing_use_all_recording_tables(tmp_path, capsys):
+    tables = {
+        "words": "participant_id,trial_id,text_id,word_id,word,x,y,width,height\np1,t1,a,1,One,10,10,20,10\n",
+        "fixations": "participant_id,trial_id,text_id,x,y,duration_ms\np2,t2,b,10,20,200\n",
+        "raw-gaze": "participant_id,trial_id,text_id,x,y,timestamp_ms\np3,t3,c,10,20,0\n",
+        "participant-metadata": "participant_id,cohort\np1,A\np2,B\np3,C\n",
+        "trial-metadata": "trial_id,session\nt1,s1\nt2,s2\nt3,s3\n",
+        "text-metadata": "text_id,genre\na,poem\nb,story\nc,essay\n",
+    }
+    args = ["render", "--list-trials"]
+    for flag, csv in tables.items():
+        path = tmp_path / f"{flag}.csv"
+        path.write_text(csv, encoding="utf-8")
+        args.extend([f"--{flag}", str(path)])
+
+    cli.main(args)
+    out, err = capsys.readouterr()
+    assert "for 3 participants" in err
+    assert "for 3 trials" in err
+    assert "for 3 texts" in err
+    assert [line.split() for line in out.splitlines()] == [
+        ["participant_id", "trial_id", "cohort", "session", "text_id", "genre"],
+        ["p1", "t1", "A", "s1", "a", "poem"],
+        ["p2", "t2", "B", "s2", "b", "story"],
+        ["p3", "t3", "C", "s3", "c", "essay"],
+    ]
+
+
+def test_mapped_text_owns_the_join_even_if_other_tables_supply_text_ids(
+    tmp_path, capsys
+):
+    tables = {
+        "words": "participant_id,trial_id,text_id,word_id,word,x,y,width,height\np1,t1,recorded,1,One,10,10,20,10\n",
+        "fixations": "participant_id,trial_id,x,y,duration_ms\np1,t1,10,20,200\n",
+        "raw-gaze": "participant_id,trial_id,x,y,timestamp_ms\np1,t1,10,20,0\n",
+        "participant-metadata": "participant_id,text_id\np1,survey\n",
+        "text-metadata": "text_id,genre\nrecorded,poem\n",
+    }
+    args = ["render", "--list-trials"]
+    for flag, csv in tables.items():
+        path = tmp_path / f"{flag}.csv"
+        path.write_text(csv, encoding="utf-8")
+        args.extend([f"--{flag}", str(path)])
+    cli.main(args)
+    out, err = capsys.readouterr()
+    assert "in the data, not the table" not in err
+    assert [line.split() for line in out.splitlines()] == [
+        ["participant_id", "trial_id", "text_id", "genre"],
+        ["p1", "t1", "recorded", "poem"],
+    ]
 
 
 class TestParticipantMetadata:
@@ -245,7 +297,7 @@ class TestSeveralFiles:
 
 
 class TestTheAppReadsSeveralUploads:
-    """`tabs._read_metadata_uploads`: what the three metadata uploaders read."""
+    """`metadata_editor._read_metadata_uploads`: what the three metadata uploaders read."""
 
     @staticmethod
     def _upload(name: str, text: str):
@@ -257,7 +309,10 @@ class TestTheAppReadsSeveralUploads:
         return upload
 
     def test_files_are_stacked_with_their_columns_aligned(self):
-        from scanpath_studio.tabs import _metadata_upload_name, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _metadata_upload_name,
+            _read_metadata_uploads,
+        )
 
         uploads = [
             self._upload("a.csv", "participant_id,age\np1,30\n"),
@@ -268,8 +323,31 @@ class TestTheAppReadsSeveralUploads:
         assert set(frame.columns) == {"participant_id", "age", "group"}
         assert _metadata_upload_name(uploads) == "a.csv + 1 more file"
 
+    @pytest.mark.parametrize(
+        ("grain", "mapping"),
+        [
+            ("participant", ("subject_code",)),
+            ("trial", ("subject_code", "item")),
+            ("text", ("subject_code", "item")),
+        ],
+    )
+    def test_mapped_columns_keep_their_original_identity(self, grain, mapping):
+        from scanpath_studio.metadata_editor import _read_metadata_uploads
+
+        upload = self._upload(
+            "codes.csv", "subject_code,item,age\n1,02,19\n01,2,30\nNA,02,31\n"
+        )
+        frame = _read_metadata_uploads([upload], grain, mapping)
+        assert frame["subject_code"].tolist() == ["1", "01", "NA"]
+        assert frame["age"].tolist() == [19, 30, 31]
+        if "item" in mapping:
+            assert frame["item"].tolist() == ["02", "2", "02"]
+
     def test_an_unreadable_file_is_named(self):
-        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _MetadataReadError,
+            _read_metadata_uploads,
+        )
 
         uploads = [
             self._upload("a.csv", "participant_id,age\np1,30\n"),

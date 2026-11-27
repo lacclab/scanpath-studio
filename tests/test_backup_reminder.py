@@ -73,8 +73,9 @@ def test_the_reminder_shows_until_dismissed(monkeypatch):
     assert not at.exception, at.exception
     text = " ".join(str(m.value) for m in at.markdown)
     assert "This server saves nothing." in text
-    assert BACKUP_GUIDE_URL in text
-    assert "Data Management → Annotations" in text
+    # The link says what it leads to, in plain words.
+    assert f"[How to keep copies of your work ↗]({BACKUP_GUIDE_URL})" in text
+    assert "What to back up" not in text
     # Opened on Scanpath, so it offers the way to the Data Management page too.
     assert [b for b in at.button if b.key == "sps_backup_reminder_go"]
 

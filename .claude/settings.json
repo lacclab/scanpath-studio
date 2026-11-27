@@ -15,7 +15,9 @@
       "Edit(site/**)",
       "Write(site/**)",
       "Edit(scanpath_studio.egg-info/**)",
-      "Write(scanpath_studio.egg-info/**)"
+      "Write(scanpath_studio.egg-info/**)",
+      "Read(./.env)",
+      "Read(./.env.*)"
     ]
   },
   "hooks": {
@@ -26,6 +28,17 @@
           {
             "type": "command",
             "command": "sh \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ruff-on-edit.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/commit-gate.sh"
           }
         ]
       }

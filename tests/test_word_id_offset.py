@@ -1,10 +1,4 @@
-"""Detect a 1-based fixation ``word_id`` against 0-based word boxes.
-
-The bundled OneStop demo's fixation report numbers its word column ``1..N``
-while ``ia.csv``'s ``IA_ID`` runs ``0..N-1``, so every fixation's pre-assigned
-``word_id`` points at the *next* word. ``data.detect_word_id_offset`` has to
-catch that without ever firing on a correctly-numbered dataset.
-"""
+"""Detect 1-based fixation IDs paired with 0-based boxes and preserve aligned IDs."""
 
 from __future__ import annotations
 
@@ -57,7 +51,6 @@ def _fixations(word_ids, trials=("t1",)) -> pd.DataFrame:
 
 class TestDetection:
     def test_one_based_frame_is_detected(self):
-        # words 0..4, fixations 1..5 — the demo's exact shape.
         assert detect_word_id_offset(_words(5), _fixations([1, 2, 3, 4, 5])) == 1
 
     def test_zero_based_frame_is_left_alone(self):
@@ -136,24 +129,25 @@ class TestBundledSample:
         from scanpath_studio import api
 
         words, fixations = api.load_sample_data(names="canonical")
-        trial = "l37_1129_2_2_1_Adv"
-        tw = words[words["trial_id"] == trial]
-        tf = fixations[fixations["trial_id"] == trial].sort_values("order_in_trial")
-        # Both tables now run over the same id range.
-        assert float(tw["word_id"].min()) == 0.0
-        assert float(tf["word_id"].min()) == 0.0
+        trial = "l37_273_2_2_1_Adv"
+        tw, tf = (
+            frame[(frame["trial_id"] == trial) & (frame["screen_id"] == "Paragraph")]
+            for frame in (words, fixations)
+        )
+        tf = tf.sort_values("order_in_trial")
+        assert detect_word_id_offset(tw, tf) == 0
+        assert tw["word_id"].min() == tf["word_id"].min() == 1
         assert float(tf["word_id"].max()) <= float(tw["word_id"].max())
-        # The first fixation sits inside the first word's box and now says so.
+        # The first recorded fixation lands on the paragraph's first word.
         first = tf.iloc[0]
-        box = tw[tw["word_id"] == 0].iloc[0]
-        assert box["x"] <= first["x"] <= box["x"] + box["width"]
-        assert box["y"] <= first["y"] <= box["y"] + box["height"]
-        assert float(first["word_id"]) == 0.0
+        box = tw[tw["word_id"] == 1].iloc[0]
+        assert box["x"] <= first["x"] < box["x"] + box["width"]
+        assert box["y"] <= first["y"] < box["y"] + box["height"]
+        assert first["word_id"] == 1
 
 
 class TestTheShiftIsLoggedQuietly:
-    """The demo trips the shift on every load; at WARNING it would be the first
-    thing `render --sample` and `load_sample_data()` print."""
+    """Correcting an export's IDs is informative during normalization."""
 
     def test_it_is_info_not_a_warning(self, caplog):
         import logging

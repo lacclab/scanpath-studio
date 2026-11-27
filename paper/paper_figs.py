@@ -15,6 +15,7 @@ from pathlib import Path
 
 import scanpath_studio as sps
 from scanpath_studio import constants, plots
+from scanpath_studio import data as _data
 from scanpath_studio.api import save_figure
 
 
@@ -32,9 +33,8 @@ def _figures_dir() -> Path:
 
 
 FIGS = _figures_dir()
-CANVAS = (1280, 320)  # OneStop demo paragraph text-area extent (wide, few lines)
 
-SCAN_TRIAL = ("l7_1090", "l7_1090_2_2_4_Ele")  # 35 fixations, short + clean
+SCAN_TRIAL = ("l7_183", "l7_183_2_2_4_Ele")
 CMP_TEXT = "2_1_1_Ele"  # read by two demo participants
 
 
@@ -49,7 +49,8 @@ def scanpath_fig(words, fixations):
         fixations,
         pid,
         tid,
-        canvas_size=CANVAS,
+        canvas_size=constants.DEFAULT_FIGURE_SIZE,
+        fit_to_monitor=False,
         show_order=True,
         show_heatmap=False,
         show_words=False,  # no AOI grid; keep just text + fixations + saccades
@@ -73,8 +74,8 @@ def comparison_fig(words, fixations):
         fixations,
         (pa, ta),
         (pb, tb),
-        canvas_width=CANVAS[0],
-        canvas_height=CANVAS[1],
+        canvas_width=constants.DEFAULT_FIGURE_SIZE[0],
+        canvas_height=constants.DEFAULT_FIGURE_SIZE[1],
         font_family=constants.FONT_FAMILY,
         base_font_size=16,
         show_words=False,
@@ -108,7 +109,8 @@ def replay_fig(words, fixations):
             sub,
             pid,
             tid,
-            canvas_size=CANVAS,
+            canvas_size=constants.DEFAULT_FIGURE_SIZE,
+            fit_to_monitor=False,
             show_order=True,
             show_heatmap=False,
             show_words=False,
@@ -121,24 +123,37 @@ def replay_fig(words, fixations):
 
     imgs = [Image.open(p).convert("RGBA") for p, _ in frames]
     w = max(i.width for i in imgs)
-    gap = 18
-    montage = Image.new(
-        "RGBA", (w, sum(i.height for i in imgs) + gap * len(imgs) + 30), "white"
-    )
+    gap, label_height = 18, 26
+    height = sum(im.height + label_height for im in imgs) + gap * (len(imgs) - 1)
+    montage = Image.new("RGBA", (w, height), "white")
     draw = ImageDraw.Draw(montage)
     y = 0
     for (p, elapsed), im in zip(frames, imgs):
         draw.text((10, y + 4), f"{elapsed:.1f} s", fill="black")
-        montage.paste(im, (0, y + 26), im)
-        y += im.height + gap + 26
+        montage.paste(im, (0, y + label_height), im)
+        y += im.height + gap + label_height
     montage.convert("RGB").save(FIGS / "fig_replay.png")
     for p, _ in frames:
         p.unlink(missing_ok=True)
     print(f"fig_replay: 3 frames of {pid} / {tid}")
 
 
+def paragraph_demo():
+    """The bundled demo's paragraph screens, canonical, as the manuscript shows them.
+
+    The demo keeps every screen of a reading, and a multi-screen reading numbers
+    its fixations across all of them. The manuscript's figures and numbers are on
+    the paragraphs alone, each counted from its own first fixation, so the other
+    screens are left out before the tables are read."""
+    tables = (
+        frame.loc[frame["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+        for frame in _data.read_sample_tables()
+    )
+    return sps.load_scanpath_data(*tables, names="canonical")
+
+
 def main():
-    words, fixations = sps.load_sample_data()
+    words, fixations = paragraph_demo()
     scanpath_fig(words, fixations)
     comparison_fig(words, fixations)
     replay_fig(words, fixations)

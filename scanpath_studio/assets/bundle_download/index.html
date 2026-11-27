@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Download export · Scanpath Studio</title>
+<style>
+  :root { color-scheme: light dark; font: 1rem/1.5 system-ui, sans-serif; }
+  main { max-width: 38rem; margin: 12vh auto; padding: 0 1rem; }
+  a { color: LinkText; }
+</style>
+<main>
+  <h1>Download export</h1>
+  <p id="status" role="status">Preparing the ZIP download…</p>
+  <a id="download" hidden>Download ZIP</a>
+  <section id="parts" hidden>
+    <p>Save every part in the same folder. To join them on macOS or Linux, run
+      <code id="unix"></code>. On Windows, run <code id="windows"></code> in Command Prompt.</p>
+    <label>Part <input id="number" type="number" min="1" value="1"></label>
+    of <span id="total"></span> · <a id="piece">Download part 1</a>
+  </section>
+</main>
+<script>
+(async () => {
+  // The hash comes from whoever opened the page, so each value is checked
+  // before use, and the links below are same-folder paths built from encoded
+  // pieces: no value can name another host or a script URL.
+  const params = new URLSearchParams(location.hash.slice(1));
+  const folder = params.get("id") ?? "";
+  const name = params.get("name") ?? "";
+  const size = Number(params.get("size"));
+  const part = Number(params.get("part"));
+  const status = document.getElementById("status");
+  if (!/^[A-Za-z0-9_-]+$/.test(folder) || !/^scanpath_export_\d{8}_\d{6}\.zip$/.test(name) ||
+      !Number.isSafeInteger(size) || !Number.isSafeInteger(part) || part <= 0 || size <= 0) {
+    status.textContent = "Open this download from the Export panel in Scanpath Studio.";
+    return;
+  }
+  const base = "./" + encodeURIComponent(folder) + "/";
+  try {
+    if (!navigator.serviceWorker) throw new Error("Streaming is unavailable");
+    await navigator.serviceWorker.register("worker.js");
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise(resolve => navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true }));
+    }
+    const link = document.getElementById("download");
+    link.href = base + encodeURIComponent(name) + "?size=" + size + "&part=" + part;
+    link.hidden = false;
+    status.textContent = "Keep the export open in Scanpath Studio until the download finishes. If it doesn't start automatically, use the link below.";
+    link.click();
+  } catch {
+    status.textContent = "This browser cannot stream the ZIP. You can download it in parts.";
+    const section = document.getElementById("parts");
+    section.hidden = false;
+    const count = Math.ceil(size / part);
+    const number = document.getElementById("number");
+    const link = document.getElementById("piece");
+    document.getElementById("unix").textContent = "cat " + name + ".part* > " + name;
+    document.getElementById("windows").textContent = "copy /b " + name + ".part* " + name;
+    document.getElementById("total").textContent = count;
+    number.max = count;
+    function selectPart() {
+      const i = number.valueAsNumber;
+      link.hidden = !Number.isInteger(i) || i < 1 || i > count;
+      if (link.hidden) return;
+      link.href = base + (i - 1) + ".part";
+      link.download = name + ".part" + String(i - 1).padStart(8, "0");
+      link.textContent = "Download part " + i;
+    }
+    number.oninput = selectPart;
+    selectPart();
+  }
+})();
+</script>
+</html>

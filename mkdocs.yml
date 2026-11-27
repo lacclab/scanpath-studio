@@ -129,12 +129,12 @@ nav:
           - tutorials/data-collection/index.md
           - Check a session: tutorials/data-collection/check-a-session.md
           - Compare two eye trackers: tutorials/data-collection/compare-eye-trackers.md
-          - Audit an experimenter: tutorials/data-collection/audit-an-experimenter.md
+          - Review an experimenter's sessions: tutorials/data-collection/audit-an-experimenter.md
       - Filter data:
           - tutorials/data-filtering/index.md
           - Exclude unsuitable trials: tutorials/data-filtering/exclude-unsuitable-trials.md
           - Select participants by a field: tutorials/data-filtering/select-participants.md
-          - Find the trials an analysis needs: tutorials/data-filtering/find-trials-for-an-analysis.md
+          - Find trials with specific fixation patterns: tutorials/data-filtering/find-trials-for-an-analysis.md
       - Export customized figures:
           - tutorials/exporting-figures/index.md
           - Export one figure: tutorials/exporting-figures/export-one-figure.md
@@ -144,7 +144,7 @@ nav:
           - tutorials/corpus-analysis/index.md
           - Analyze one text: tutorials/corpus-analysis/analyze-one-text.md
           - Compare groups or conditions: tutorials/corpus-analysis/compare-groups.md
-          - See progression over time: tutorials/corpus-analysis/progression-over-time.md
+          - Track changes over time: tutorials/corpus-analysis/progression-over-time.md
   - Feature guides:
       - guides/index.md
       - Scanpath visualization:
@@ -174,6 +174,7 @@ nav:
   - Reference:
       - Python API: api.md
       - CLI reference: cli.md
+  - What's new: whats-new.md
   - About: about.md
 
 # Fail the strict build on a link to a heading that does not exist, not only on
@@ -186,10 +187,12 @@ validation:
 
 # The abbreviation list is appended to every page by pymdownx.snippets; it is
 # not a page of its own. The dataset-adapter contract is developer material,
-# read on GitHub from CONTRIBUTING.md.
+# read on GitHub from CONTRIBUTING.md. Design specs under superpowers/ are
+# working documents for contributors, not user docs.
 exclude_docs: |
   includes/
   contributing-a-dataset.md
+  superpowers/
 
 hooks:
   - scripts/mkdocs_hooks.py
@@ -232,6 +235,7 @@ plugins:
         security.md: https://github.com/lacclab/scanpath-studio/blob/main/SECURITY.md
         benchmark-corpora.md: guides/loading-data/index.md
         multipleye.md: guides/loading-data/index.md
+        guides/loading-data/multipleye.md: guides/loading-data/index.md
         rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
         # Folded into Getting started and the FAQ.
@@ -294,6 +298,7 @@ plugins:
           - gallery/*.md
         About:
           - about.md
+          - whats-new.md
 
 markdown_extensions:
   - abbr

@@ -18,7 +18,7 @@ print(gallery_figure("highlighted-text"))
 
 === "In the app"
 
-    1. Load a Words table with a true/false column that marks the words to highlight, and your Fixations table. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Load a Words table with a true/false column that marks the words to highlight, and your Fixations table. Open the dataset in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. In :material/article: **Stimulus** ▾, tick **Highlight words** and choose that column.
     3. Under **Style**, keep **Mark text** and pick the highlight color in the box beside it. To show only the highlighted text and the fixations, turn off :material/arrow_outward: **Saccades**.
 
@@ -28,7 +28,7 @@ print(gallery_figure("highlighted-text"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
       --highlight-column is_in_aspan --critical-span-style mark-text \
       --no-saccades -o highlighted-text.html
     ```

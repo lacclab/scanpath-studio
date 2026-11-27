@@ -7,7 +7,7 @@ time (s) = 0.0 · Number of fixations = 0" — measured zeros for things nobody
 measured.
 
 These tests build the raw-gaze-only fixture from the bundled demo's own raw
-gaze (`sample_data/raw_gaze.csv`, one synthesized trial) and walk it through
+gaze (a short excerpt from one recording) and walk it through
 every surface a fixation dataset works on: the API, the CLI, the code snippet,
 the export bundle, and the app's Scanpath and Corpus views.
 
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import json
+import shlex
 import zipfile
 
 import pandas as pd
@@ -43,13 +44,23 @@ from scanpath_studio.utils import combo_source, reading_key
 from tests.conftest import APP_SCRIPT
 
 LAYER = "global_show_raw_gaze"
-SAMPLE_RAW_GAZE = "scanpath_studio/sample_data/raw_gaze.csv"
 
 
 @pytest.fixture(scope="module")
 def raw_gaze() -> pd.DataFrame:
-    """The bundled demo's raw gaze: one trial of samples, normalized."""
-    return api.load_sample_raw_gaze(names="canonical")
+    """A short extract of one recorded reading for the single-trial cases."""
+    samples = api.load_sample_raw_gaze(names="canonical")
+    trial = samples["trial_id"].iloc[0]
+    return samples[samples["trial_id"] == trial].head(100).copy()
+
+
+@pytest.fixture(scope="module")
+def gaze_file(raw_gaze, tmp_path_factory) -> str:
+    path = tmp_path_factory.mktemp("raw_gaze") / "gaze.csv"
+    raw_gaze[["participant_id", "unique_trial_id", "x", "y", "timestamp_ms"]].to_csv(
+        path, index=False
+    )
+    return str(path)
 
 
 @pytest.fixture(scope="module")
@@ -71,6 +82,49 @@ def _key(raw_gaze):
 # -----------------------------------------------------------------------------
 # (b) the Illustration disclosure — nothing is derived from samples
 # -----------------------------------------------------------------------------
+
+
+def test_raw_gaze_only_reader_and_text_reach_the_wizard_and_data_editor(
+    raw_gaze, monkeypatch
+):
+    from scanpath_studio import controls, metadata, metadata_editor
+
+    reader, trial = _key(raw_gaze)
+    text_id = str(raw_gaze["text_id"].iloc[0])
+    state = {}
+    monkeypatch.setattr(metadata_editor.st, "session_state", state)
+    for grain, column, value in (
+        ("participant", "participant_id", reader),
+        ("trial", "trial_id", trial),
+        ("text", "text_id", text_id),
+    ):
+        _, raw, _ = metadata.grain_keys(grain)
+        state[raw] = pd.DataFrame({column: [value], "label": ["match"]})
+        state[f"{grain}_metadata_id_column"] = (
+            column if grain == "participant" else [column]
+        )
+        state[f"{grain}_metadata_keep_fields"] = ["label"]
+    metadata_editor.commit_deferred_metadata({"raw_gaze": raw_gaze})
+    for grain in ("participant", "trial", "text"):
+        attached, _, _ = metadata.grain_keys(grain)
+        assert len(state[attached].report.matched) == 1
+        assert state[attached].report.is_clean
+    readings = controls.metadata_readings(None, None, raw_gaze)
+    assert readings.to_records(index=False).tolist() == [(reader, trial, text_id)]
+
+
+def test_editing_raw_gaze_preserves_the_text_mapping():
+    from scanpath_studio import data, metadata
+
+    source = pd.DataFrame(
+        {"participant_id": ["r"], "trial_id": ["t"], "x": [1], "y": [2]}
+    )
+    samples = data.normalize_raw_gaze(source, data.propose_raw_gaze_schema(source))
+    remapped = data.remap_normalized_frame(
+        samples, data.propose_raw_gaze_schema(samples), kind="raw_gaze"
+    )
+    words = source.assign(text_id="passage", **{data.TEXT_ID_MAPPED: True})
+    assert metadata.text_keys(metadata.recording_keys(remapped, words)) == {"passage"}
 
 
 def test_raw_gaze_is_never_an_illustration_reason():
@@ -155,7 +209,7 @@ def test_the_note_above_the_plot_says_nothing_is_detected():
     )
     assert "Raw gaze only" in note
     assert "does not detect fixations" in note
-    assert "**Animate** draws fixations" in note
+    assert "**Animation** draws fixations" in note
     # Off → it says how to see them.
     assert "Turn on" in tabs._no_fixations_note(
         trial_has_fixations=False,
@@ -358,12 +412,12 @@ class TestApi:
             sps.animate_scanpath(words, None, pid, tid)
 
     def test_figure_code_writes_a_samples_only_recipe_that_runs(
-        self, raw_gaze, tmp_path
+        self, raw_gaze, tmp_path, gaze_file
     ):
         pid, tid = _key(raw_gaze)
         code = sps.figure_code(
             source="raw_gaze",
-            source_options={"raw_gaze": [SAMPLE_RAW_GAZE]},
+            source_options={"raw_gaze": [gaze_file]},
             participant=pid,
             trial=tid,
             show_raw_gaze=True,
@@ -382,38 +436,40 @@ class TestApi:
 
 
 class TestCli:
-    def test_raw_gaze_alone_is_an_input(self, capsys, raw_gaze):
-        cli.main(["render", "--raw-gaze", SAMPLE_RAW_GAZE, "--list-trials"])
+    def test_raw_gaze_alone_is_an_input(self, capsys, raw_gaze, gaze_file):
+        cli.main(["render", "--raw-gaze", gaze_file, "--list-trials"])
         out = capsys.readouterr().out
         assert raw_gaze["trial_id"].iloc[0] in out
 
-    def test_it_renders_the_samples(self, tmp_path):
+    def test_it_renders_the_samples(self, tmp_path, gaze_file):
         out = tmp_path / "rg.html"
-        cli.main(["render", "--raw-gaze", SAMPLE_RAW_GAZE, "-o", str(out)])
+        cli.main(["render", "--raw-gaze", gaze_file, "-o", str(out)])
         assert "Raw gaze" in out.read_text(encoding="utf-8")
 
     @pytest.mark.parametrize(
         "flags", [["--animate"], ["--compare-with", "p_other:t_other"]]
     )
-    def test_the_fixation_modes_say_why_not(self, tmp_path, flags):
+    def test_the_fixation_modes_say_why_not(self, tmp_path, flags, gaze_file):
         with pytest.raises(SystemExit, match="does not turn into fixations"):
             cli.main(
                 [
                     "render",
                     "--raw-gaze",
-                    SAMPLE_RAW_GAZE,
+                    gaze_file,
                     "-o",
                     str(tmp_path / "rg.html"),
                     *flags,
                 ]
             )
 
-    def test_print_code_names_the_samples_as_the_data(self, tmp_path, capsys):
+    def test_print_code_names_the_samples_as_the_data(
+        self, tmp_path, capsys, gaze_file
+    ):
         cli.main(
             [
                 "render",
                 "--raw-gaze",
-                SAMPLE_RAW_GAZE,
+                gaze_file,
                 "-o",
                 str(tmp_path / "rg.html"),
                 "--print-code",
@@ -423,9 +479,15 @@ class TestCli:
         out = capsys.readouterr().out
         assert "words, fixations = None, None" in out
         assert "--sample" not in out
-        assert f"render --raw-gaze {SAMPLE_RAW_GAZE}" in out
+        command = out[out.index("scanpath-studio render") :].replace("\\\n", " ")
+        assert shlex.split(command)[:4] == [
+            "scanpath-studio",
+            "render",
+            "--raw-gaze",
+            gaze_file,
+        ]
 
-    def test_raw_gaze_beside_another_input_is_still_a_layer(self):
+    def test_raw_gaze_beside_another_input_is_still_a_layer(self, gaze_file):
         with pytest.raises(SystemExit):
             cli.main(
                 [
@@ -434,7 +496,7 @@ class TestCli:
                     "nowhere",
                     "--sample",
                     "--raw-gaze",
-                    SAMPLE_RAW_GAZE,
+                    gaze_file,
                     "-o",
                     "x.html",
                 ]
@@ -659,7 +721,7 @@ class TestScanpathView:
         assert not at.exception, at.exception
         assert [trace.name for trace in figures[-1].data] == ["Raw gaze"]
         captions = " ".join(c.value for c in at.caption)
-        assert "**Animate** draws fixations" in captions
+        assert "**Animation** draws fixations" in captions
 
     def test_every_samples_only_trial_is_pickable(self, two_trial_raw_gaze):
         at = self._open(two_trial_raw_gaze, demo_first=False)
@@ -719,8 +781,8 @@ class TestScanpathView:
         at.run()
         assert not at.exception, at.exception
         text = " ".join(i.value for i in at.info)
-        assert "this dataset has no Words table" in text
-        assert "Raw gaze samples carry no reading measures" in text
+        assert "add a Words table with per-word measures" in text
+        assert "Raw gaze samples do not include per-word reading measures" in text
 
     def test_the_heatmap_greys_only_with_neither_fixations_nor_words(self, raw_gaze):
         """No fixations and no words: nothing for the heatmap to draw. Words
@@ -764,9 +826,12 @@ def test_list_trials_lists_each_trial_any_table_has_once(raw_gaze):
 
 @pytest.fixture(scope="module")
 def two_screen_raw_gaze(raw_gaze) -> pd.DataFrame:
+    """The extract split over two screens. The demo's samples carry their own
+    screen, so both the screen and its position are rewritten together."""
     half = len(raw_gaze) // 2
     screens = ["s1"] * half + ["s2"] * (len(raw_gaze) - half)
-    return raw_gaze.assign(screen_id=screens)
+    positions = [1] * half + [2] * (len(raw_gaze) - half)
+    return raw_gaze.assign(screen_id=screens, screen_index=positions)
 
 
 def test_multipart_samples_draw_one_screen_at_a_time(two_screen_raw_gaze):
@@ -780,6 +845,149 @@ def test_multipart_samples_draw_one_screen_at_a_time(two_screen_raw_gaze):
     assert len(second.data[0].x) == len(two_screen_raw_gaze) - n_first
     with pytest.raises(ValueError, match="Unknown screen"):
         sps.plot_scanpath(raw_gaze=two_screen_raw_gaze, screen="s9")
+
+
+def test_screen_with_only_samples_is_listed_drawn_and_exported():
+    from scanpath_studio.export import ExportOptions, bulk_export
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fix = make_multipart_synthetic_data()
+    pid, tid = _key(fix)
+    # Only the last screen has events. The sample file has no mapped Text ID
+    # or ordinal, and lists the overlapping screen second.
+    words, fix = (f[f.screen_id.eq("question")] for f in (words, fix))
+    source = pd.DataFrame(
+        {
+            "participant_id": pid,
+            "trial_id": tid,
+            "screen_id": ["intro", "intro", "question"],
+            "x": [12, None, 19],
+            "y": [13, None, 20],
+            "timestamp_ms": [0, 1, 500],
+            "canvas_width": [640, 640, None],
+            "canvas_height": [480, 480, None],
+            "pupil_area": [100, 0, 110],
+        },
+        index=[7, 8, 10],
+    )
+    samples = api.load_raw_gaze(source, names="canonical")
+    catalog = api.list_parts(words, fix, raw_gaze=samples)
+    assert catalog.screen_id.tolist() == ["intro", "question"]
+    assert catalog.screen_index.tolist() == [1, 2]
+    assert catalog.text_id.iloc[1] == words.text_id.iat[0]
+    fig = api.plot_scanpath(
+        words, fix, pid, tid, screen="intro", raw_gaze=samples, fit_to_monitor=True
+    )
+    assert not any(t.name == "Fixations" for t in fig.data)
+    assert list(fig.layout.xaxis.range) == [0, 640]
+    assert list(fig.layout.yaxis.range) == [480, 0]
+    trace = next(t for t in fig.data if t.name == "Raw gaze")
+    assert list(trace.customdata) == [0, 1]
+    payload, progress = bulk_export(
+        api.list_trials(words, fix, raw_gaze=samples),
+        words,
+        fix,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={},
+        raw_gaze=samples,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=False,
+            include_raw_gaze=True,
+        ),
+    )
+    assert not progress.errors
+    with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+        paths = [path for path in bundle.namelist() if path.endswith("/raw_gaze.csv")]
+        assert len(paths) == 2
+        for path in paths:
+            table = pd.read_csv(bundle.open(path))
+            screen = table.screen_id.unique().item()
+            assert f"-{screen}/" in path
+            assert (
+                table.pupil_area.tolist()
+                == source.loc[source.screen_id.eq(screen), "pupil_area"].tolist()
+            )
+
+
+@pytest.mark.parametrize("combine", [False, True])
+def test_unassigned_rows_are_exported_exactly_once(combine):
+    from scanpath_studio.export import ExportOptions, bulk_export
+    from scanpath_studio.synthetic import example_import_tables
+
+    words, events = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    pid, tid = _key(events)
+    source = pd.DataFrame(
+        {
+            "participant_id": pid,
+            "trial_id": tid,
+            "screen_id": ["  ", "a", None, "b"],
+            "x": [1, 2, 3, 4],
+            "y": 10,
+            "timestamp_ms": [10, 11, 12, 13],
+        }
+    )
+    samples = api.load_raw_gaze(source, names="canonical")
+    parts = api.list_parts(words, events, pid, tid, raw_gaze=samples)
+    assert parts.screen_id.tolist() == ["a", "b"] and parts.screen_index.tolist() == [
+        1,
+        2,
+    ]
+    combos = api.list_trials(words, events, raw_gaze=samples)
+    payload, progress = bulk_export(
+        combos,
+        words,
+        events,
+        raw_gaze=samples,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={},
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=False,
+            include_measures=False,
+            include_fixations=True,
+            include_raw_gaze=True,
+            combine_trials=combine,
+        ),
+    )
+    assert not progress.errors
+    with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+        gaze_tables = [
+            pd.read_csv(bundle.open(path))
+            for path in bundle.namelist()
+            if path.endswith(("raw_gaze.csv", "all_raw_gaze.csv"))
+        ]
+        assert sorted(pd.concat(gaze_tables).timestamp_ms) == [10, 11, 12, 13]
+        if not combine:
+            assert sorted(
+                pd.read_csv(
+                    bundle.open(
+                        next(
+                            p
+                            for p in bundle.namelist()
+                            if p.endswith("/raw_gaze.csv") and "/screens/" not in p
+                        )
+                    )
+                ).timestamp_ms
+            ) == [10, 12]
+        fixation_tables = [
+            pd.read_csv(bundle.open(path))
+            for path in bundle.namelist()
+            if path.endswith("fixations.csv")
+        ]
+        assert len(pd.concat(fixation_tables)) == len(events)
 
 
 def test_render_lists_the_screens_of_multipart_samples(
@@ -803,7 +1011,7 @@ def test_render_lists_the_screens_of_multipart_samples(
     assert "s1" in out and "s2" in out
 
 
-def test_the_layer_switched_off_is_written_out(raw_gaze, tmp_path):
+def test_the_layer_switched_off_is_written_out(raw_gaze, tmp_path, gaze_file):
     """`plot_scanpath` turns the layer on for the frame it is handed, so on a
     samples-only source *off* must be written, in both flavours."""
     state = cs.FigureState(
@@ -813,7 +1021,7 @@ def test_the_layer_switched_off_is_written_out(raw_gaze, tmp_path):
         trial=_key(raw_gaze)[1],
     )
     source = cs.SnippetSource(
-        kind=cs.SOURCE_RAW_GAZE, options={"raw_gaze": [SAMPLE_RAW_GAZE]}
+        kind=cs.SOURCE_RAW_GAZE, options={"raw_gaze": [gaze_file]}
     )
     code = cs.reproduction_code(source, state)
     assert "show_raw_gaze=False" in code.python
@@ -822,11 +1030,13 @@ def test_the_layer_switched_off_is_written_out(raw_gaze, tmp_path):
     # …and both draw no samples.
     assert not sps.plot_scanpath(raw_gaze=raw_gaze, show_raw_gaze=False).data
     out = tmp_path / "off.html"
-    cli.main(["render", "--raw-gaze", SAMPLE_RAW_GAZE, "--no-raw-gaze", "-o", str(out)])
+    cli.main(["render", "--raw-gaze", gaze_file, "--no-raw-gaze", "-o", str(out)])
     assert '"name":"Raw gaze"' not in out.read_text(encoding="utf-8").replace(" ", "")
 
 
-def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
+def test_render_joins_metadata_against_the_samples(
+    raw_gaze, tmp_path, capsys, gaze_file
+):
     """With raw gaze as the only input the metadata tables join against its
     readers and trials, not against the empty fixations."""
     pid, _ = _key(raw_gaze)
@@ -836,7 +1046,7 @@ def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
         [
             "render",
             "--raw-gaze",
-            SAMPLE_RAW_GAZE,
+            gaze_file,
             "--participant-metadata",
             str(readers),
             "--list-trials",

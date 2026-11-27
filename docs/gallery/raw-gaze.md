@@ -8,7 +8,7 @@ hide:
 
 # Raw gaze
 
-Gaze samples under translucent fixations. The bundled demo's gaze samples are synthetic.
+EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -18,9 +18,9 @@ print(gallery_figure("raw-gaze"))
 
 === "In the app"
 
-    1. Load a Raw gaze table with your Fixations and Words tables. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open the bundled demo in the :material/route: **Scanpath View**. In **Select trial**, choose `l37_273` and `2_2_2_Adv`, and set **Screen** to **Paragraph**.
     2. Turn on :material/grain: **Raw gaze** and turn off :material/arrow_outward: **Saccades**.
-    3. In :material/blur_on: **Fixations** ▾ → **Marker** → **Opacity**, set 0.35 so the samples show through.
+    3. In :material/blur_on: **Fixations** → **Opacity**, set 0.35 so the samples show through.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 
@@ -28,7 +28,7 @@ print(gallery_figure("raw-gaze"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_2_2_Adv \
+      -p l37_273 -t l37_273_2_2_2_Adv --screen Paragraph \
       --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
       --highlight-column '' \
       -o raw-gaze.html

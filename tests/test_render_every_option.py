@@ -27,6 +27,7 @@ import pytest
 from scanpath_studio import api, cli
 from scanpath_studio import code_snippet as cs
 from scanpath_studio.constants import SACCADE_CLASS_COLORS
+from scanpath_studio.figure_views import options_for_view
 
 #: A 1x1 PNG, for the stimulus-image flags.
 _PNG_1x1 = bytes.fromhex(
@@ -35,10 +36,9 @@ _PNG_1x1 = bytes.fromhex(
     "426082"
 )
 
-#: The one demo trial the bundled raw gaze covers, and a second reading of a
-#: different reader to compare it with.
-TRIAL = ("l37_1129", "l37_1129_2_2_2_Adv")
-OTHER = ("l7_1090", "l7_1090_2_2_2_Adv")
+#: Two recorded readings of the same paragraph.
+TRIAL = ("l37_273", "l37_273_2_2_2_Adv")
+OTHER = ("l7_183", "l7_183_2_2_2_Adv")
 
 #: Every figure option at a value that is *not* its default. The guard below
 #: asserts this covers `api.figure_options(kind)` for every kind, so adding an
@@ -62,6 +62,8 @@ NON_DEFAULT = {
     "word_heatmap_title": "Surprisal",
     "x_field": "order_in_trial",
     "y_field": "duration_ms",
+    "reverse_x_axis": True,
+    "reverse_y_axis": True,
     "color_by": "duration_ms",
     "color_by_line": True,
     "fixation_color": "#aa0000",
@@ -74,7 +76,7 @@ NON_DEFAULT = {
     "marker_size_range": (5, 20),
     "marker_size_scale": "log",
     "marker_duration_range": (80.0, 900.0),
-    "duration_size_legend": False,
+    "duration_size_legend": True,
     "legend_layout": {
         "saccades": {
             "position": "right-outside",
@@ -93,6 +95,7 @@ NON_DEFAULT = {
     "word_hover_measure": "first_fixation_ms",
     "order_font_size": 14,
     "order_font_color": "#222222",
+    "order_label_position": "inside",
     "saccade_color": "#123456",
     "saccade_style": "dash",
     "saccade_width": 3.0,
@@ -156,6 +159,10 @@ NON_DEFAULT = {
     # The replay's own.
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,
+    "grow_fixations": True,
+    "fade_fixations": True,
+    "grow_start": 0.4,
+    "fade_opacity": 0.5,
     # The comparison's (and the co-animation's).
     "show_legend": False,  # on by default
     "compare_stimulus": "b",
@@ -299,6 +306,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             "marker_duration_range",
             (80.0, 900.0),
         ),
+        (["--duration-size-legend"], "duration_size_legend", True),
         (["--no-duration-size-legend"], "duration_size_legend", False),
         (["--no-color-legend"], "show_color_legend", False),
         (["--no-highlight-legend"], "show_highlight_legend", False),
@@ -326,6 +334,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         (["--heatmap-range", "0", "900"], "heatmap_range", (0.0, 900.0)),
         (["--order-font-size", "14"], "order_font_size", 14),
         (["--order-font-color", "#222222"], "order_font_color", "#222222"),
+        (["--order-label-position", "below"], "order_label_position", "below"),
         (["--text-color", "#333333"], "text_color", "#333333"),
         (["--highlight-text-color", "#444444"], "highlight_text_color", "#444444"),
         (["--span-border-color", "#555555"], "span_border_color", "#555555"),
@@ -339,6 +348,8 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         ),
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
+        (["--reverse-x"], "reverse_x_axis", True),
+        (["--reverse-y"], "reverse_y_axis", True),
         (["--no-full-monitor"], "fit_to_monitor", False),
         (["--crop-margin", "30"], "crop_margin", 30.0),
         (["--no-fixation-colorbar"], "show_fixation_colorbar", False),
@@ -387,6 +398,103 @@ def test_each_static_flag_reaches_its_keyword(monkeypatch, flags, kwarg, expecte
     assert cs._comparable(seen[kwarg]) == cs._comparable(expected)
 
 
+_BUILDER_FOR_KIND = {
+    "static": "plot_scanpath",
+    "animation": "animate_scanpath",
+    "comparison": "compare_scanpaths",
+}
+#: A value the command writes and the builder receives in another spelling of
+#: the same meaning.
+_SAME_MEANING = {"heatmap_metric": (None, "counts")}
+
+
+#: The same options with every layer the maximal table switches off back on, so
+#: the styling those layers take is written and checked too.
+_LAYERS_ON = {
+    "show_fixations": True,
+    "show_saccades": True,
+    "show_plot_frame": True,
+    "critical_span_style": "Mark text",
+    # A smoothed heatmap scales to its own peak, so its range is not written.
+    "heatmap_style": api.figure_options("static")["heatmap_style"],
+}
+
+
+def _command_reaches_builder(kind, settings, monkeypatch) -> tuple[set, list]:
+    """Run the Share → Code command for `settings`; return the options it wrote
+    and those that reached the builder changed."""
+    state = _maximal_state(kind)
+    state.settings.update(settings)
+    command, _ = cs.cli_snippet(DEMO, state)
+    argv = shlex.split(command.replace(" \\\n", " "))[1:]
+    if "-o" in argv:
+        index = argv.index("-o")
+        del argv[index : index + 2]
+    seen = _spy(monkeypatch, _BUILDER_FOR_KIND[kind])
+    cli.main([*argv, "-o", "out.html"])
+
+    def written(flags: list[str]) -> bool:
+        n = len(flags)
+        return n > 0 and any(argv[i : i + n] == flags for i in range(len(argv)))
+
+    checked, wrong = set(), []
+    for key, value in state.settings.items():
+        emit = cs._CLI_EMITTERS.get(key)
+        if emit is None or not written(emit(value)):
+            continue
+        checked.add(key)
+        got = seen.get(key, "<not passed>")
+        if _SAME_MEANING.get(key) == (value, got):
+            continue
+        if cs._comparable(got) != cs._comparable(value):
+            wrong.append(f"{key}: wrote {value!r}, builder got {got!r}")
+    return checked, wrong
+
+
+#: Options no command for that figure writes as their own flags, each with why;
+#: every other option the builder takes must be written and checked.
+_NOT_WRITTEN_ALONE = {
+    "saccade_class_colors": "merged into --saccade-type-color pairs, checked in "
+    "test_each_static_flag_reaches_its_keyword",
+    "style_b": "a single replay writes a reduced --style-b spec",
+}
+
+
+@pytest.mark.parametrize("kind", cs.KINDS)
+def test_every_option_the_command_writes_reaches_the_builder(
+    kind, monkeypatch, tmp_path
+):
+    """Run the 🔗 Share → Code command for every option changed, and check each
+    option it writes arrives at the builder with its value.
+
+    Parsing the command (above) proves each flag exists; a flag also has to be
+    handed on (`cli._DIRECT_OPTION_FLAGS`, `_SWITCH_OPTION_FLAGS` or its own
+    code), or `render` accepts it and draws the default. A layer that is off
+    takes no styling, so the command runs twice: as the maximal table has it,
+    and with those layers on. Between them every option with an emitter must be
+    checked, or the coverage silently shrinks."""
+    monkeypatch.chdir(tmp_path)
+    for name in ("page.png", "page_b.png"):
+        (tmp_path / name).write_bytes(_PNG_1x1)
+    # `render` refuses a replay with both fixations and saccades off, so a
+    # replay draws one in each pass: fixations first, then saccades.
+    replay = kind == "animation"
+    first = {"show_fixations": True} if replay else {}
+    layered = {**_LAYERS_ON, "show_fixations": False} if replay else _LAYERS_ON
+    checked, wrong = _command_reaches_builder(kind, first, monkeypatch)
+    more, more_wrong = _command_reaches_builder(kind, layered, monkeypatch)
+    assert not wrong + more_wrong, wrong + more_wrong
+    # What this figure draws with (`figure_views`, the render-path owner).
+    comparing = kind != "static"
+    expected = options_for_view(
+        api.figure_options(kind), kind, comparing=comparing
+    ) & set(cs._CLI_EMITTERS)
+    unchecked = expected - checked - more - set(_NOT_WRITTEN_ALONE)
+    assert not unchecked, (
+        f"never written by the command, so never checked: {sorted(unchecked)}"
+    )
+
+
 def test_a_bare_render_passes_none_of_them(monkeypatch):
     """A flag left off must leave the builder its own default — the switches
     in particular are passed only when flipped."""
@@ -401,23 +509,26 @@ def test_the_sample_raw_gaze_reaches_the_builder(monkeypatch):
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--sample-raw-gaze"])
     frame = seen["raw_gaze"]
-    assert set(frame["trial_id"]) == {TRIAL[1]}
+    assert {TRIAL[1], OTHER[1]} <= set(frame["trial_id"])
 
 
 def test_a_raw_gaze_file_reaches_the_builder(monkeypatch, tmp_path):
     path = tmp_path / "gaze.csv"
-    api.load_sample_raw_gaze(names="canonical").to_csv(path, index=False)
+    samples = api.load_sample_raw_gaze(names="canonical").head(100)
+    samples.to_csv(path, index=False)
     seen = _spy(monkeypatch, "plot_scanpath")
     cli.main([*_BASE, "--raw-gaze", str(path)])
-    assert len(seen["raw_gaze"]) == len(api.load_sample_raw_gaze(names="canonical"))
+    assert len(seen["raw_gaze"]) == len(samples)
 
 
 def test_a_raw_gaze_mapping_names_the_columns(monkeypatch, tmp_path):
     """`--raw-gaze-schema` is `--fix-schema`'s twin: a table whose columns
     auto-detection can't read is mapped by hand."""
     path = tmp_path / "gaze.csv"
-    frame = api.load_sample_raw_gaze(names="canonical").rename(
-        columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"}
+    frame = (
+        api.load_sample_raw_gaze(names="canonical")
+        .head(100)
+        .rename(columns={"x": "GX", "y": "GY", "trial_id": "TRIAL"})
     )
     frame.drop(columns=["unique_trial_id", "text_id"]).to_csv(path, index=False)
     with pytest.raises(SystemExit, match="--raw-gaze-schema"):
@@ -719,13 +830,129 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
             "Reader A",
             "--label-b",
             "Reader B",
-            "--fixation-opacity",
-            "0.5",
+            "--no-fixations",
         ],
     )
-    assert f"--compare-with {OTHER[0]}:{OTHER[1]}" in printed
+    assert f"--compare-participant {OTHER[0]}" in printed
+    assert f"--compare-trial {OTHER[1]}" in printed
     assert "--label-a 'Reader A'" in printed
+    assert "--no-fixations" in printed
+    assert [(t.name, t.mode) for t in first.data if t.showlegend] == [
+        ("Reader A", "lines"),
+        ("Reader B", "lines"),
+    ]
     assert first.to_json() == second.to_json()
+
+
+@pytest.mark.parametrize("replay", [False, True], ids=["compare", "co-animation"])
+def test_b_fixation_window_round_trips(monkeypatch, capsys, replay):
+    """B's window is a builder parameter, so the printed recipe names it, in
+    both languages."""
+    mode = ["--animate", "--anim-max-frames", "8"] if replay else []
+    flags = [*_COMPARE, *mode, "--compare-fix-index-range", "5:30"]
+    original, from_cli, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--compare-fix-index-range 5:30" in command
+    assert original.to_json() == from_cli.to_json()
+    (whole,) = _figures(monkeypatch, [[*_BASE[:-2], *_COMPARE, *mode, "-o", "a.html"]])
+    assert whole.to_json() != original.to_json()
+
+    _figures(
+        monkeypatch, [[*_BASE[:-2], *flags, "--print-code", "python", "-o", "a.html"]]
+    )
+    python = capsys.readouterr().out
+    assert "fix_index_range_b=(5, 30)" in python
+    namespace = {}
+    exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["fig"].to_json() == original.to_json()
+
+
+@pytest.mark.parametrize("replay", [False, True], ids=["compare", "co-animation"])
+def test_compact_code_keeps_the_drawn_styles_in_both_languages(
+    monkeypatch, capsys, replay
+):
+    flags = [
+        *_COMPARE,
+        "--fixation-index",
+        "--order-font-color",
+        "#654321",
+        "--marker-size-range",
+        "12",
+        "31",
+        "--saccade-width",
+        "8",
+        "--style-a",
+        "fix_color=#aa0000,saccade_width=3",
+        "--style-b",
+        "fix_color=#00aa00,marker_size_range=6:18,box_color=#ff8800",
+    ]
+    if replay:
+        flags += ["--animate", "--anim-max-frames", "8"]
+    original, from_cli, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--order-font-color" not in command and "--saccade-width" not in command
+    assert "fix_color=#aa0000" in command and "--marker-size-range" in command
+    assert ("box_color=#ff8800" in command) == (not replay)
+
+    _figures(
+        monkeypatch, [[*_BASE[:-2], *flags, "--print-code", "python", "-o", "a.html"]]
+    )
+    python = capsys.readouterr().out
+    assert "order_font_color=" not in python and "\n    saccade_width=" not in python
+    assert "'fix_color': '#00aa00'" in python
+    namespace = {}
+    exec(compile(python, "<compact snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["fig"].to_json() == from_cli.to_json() == original.to_json()
+
+
+def test_a_co_animation_keeps_the_single_style_when_a_filter_can_hide_all_of_b(
+    monkeypatch, capsys
+):
+    flags = [
+        *_COMPARE,
+        "--animate",
+        "--anim-max-frames",
+        "8",
+        "--fixation-index",
+        "--order-font-color",
+        "#654321",
+        "--compare-fixation-flag",
+        "short=hide,threshold_ms=99999",
+    ]
+    original, reproduced, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--order-font-color" in command
+    assert any(
+        t.mode == "text" and t.textfont.color == "#654321" for t in original.data
+    )
+    assert original.to_json() == reproduced.to_json()
+
+
+def test_a_words_only_first_screen_in_caller_frames_keeps_the_single_replay_style():
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = api.load_scanpath_data(
+        *make_multipart_synthetic_data(), names="canonical"
+    )
+    a, b = ("synthetic", "multipart_demo"), ("b", "multipart_demo")
+    words_b = words.assign(participant_id=b[0])
+    fix_b = fixations[fixations["screen_id"] == "question"].assign(participant_id=b[0])
+    options = {
+        "words_b": words_b,
+        "fixations_b": fix_b,
+        "show_order": True,
+        "order_font_color": "#654321",
+    }
+    compact = cs.figure_kwargs(
+        options, "animation", compare=cs.CompareTarget(participant=b[0], trial=b[1])
+    )
+    assert compact["order_font_color"] == "#654321"
+
+    original = api.animate_scanpath(words, fixations, *a, trial_b=b, **options)
+    reproduced = api.animate_scanpath(
+        words, fixations, *a, trial_b=b, words_b=words_b, fixations_b=fix_b, **compact
+    )
+    assert original.to_json() == reproduced.to_json()
+    assert any(
+        t.mode == "text" and t.textfont.color == "#654321" for t in reproduced.data
+    )
 
 
 def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):

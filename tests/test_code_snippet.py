@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import shlex
 
 import pytest
@@ -33,6 +34,80 @@ def _state(kind: str = "static", **overrides) -> cs.FigureState:
 
 
 DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled demo")
+
+
+@pytest.fixture
+def lab_fixations(tmp_path):
+    path = tmp_path / "lab.csv"
+    path.write_text(
+        'participant_id,trial_id,x,y,duration_ms,fixation_id,timestamp_ms,"pupil, left"\n'
+        "A,1,10,100,110,1,1000,17\nA,1,20,100,120,2,1250,18\n"
+        "B,round:2,248,100,110,1,1000,27\nB,round:2,258,100,120,2,1250,28\n"
+        "B:round,2,718,100,110,1,1000,37\nB:round,2,728,100,120,2,1250,38\n"
+    )
+    return path
+
+
+def _reproduced_traces(source, state, path):
+    import re
+
+    command, unsupported = cs.cli_snippet(source, state, output=str(path))
+    assert not unsupported
+    cli.main(shlex.split(command.replace("\\\n", " "))[1:])
+    page = path.read_text()
+    # Plotly's document embeds the trace array directly after the figure ID.
+    call = list(re.finditer(r'Plotly\.newPlot\(\s*"[^"]+",\s*', page))[-1]
+    return json.JSONDecoder().raw_decode(page[call.end() :])[0]
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+@pytest.mark.parametrize(
+    ("reader", "trial", "first_x"), [("B", "round:2", 248), ("B:round", "2", 718)]
+)
+def test_generated_command_compares_the_intended_reading(
+    lab_fixations, tmp_path, kind, reader, trial, first_x
+):
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES, options={"fixations": [lab_fixations]}
+    )
+    state = cs.FigureState(
+        kind=kind,
+        settings=api.figure_options(kind),
+        participant="A",
+        trial="1",
+        compare=cs.CompareTarget(
+            participant=reader, trial=trial, layout="side_by_side"
+        ),
+    )
+    data = _reproduced_traces(source, state, tmp_path / "comparison.html")
+    label = "Scanpath B" if kind == "animation" else f"{trial} · {reader}"
+    trace = next(
+        t for t in data if t.get("name") == label and isinstance(t.get("x"), list)
+    )
+    assert trace["x"][0] == first_x
+
+
+@pytest.mark.parametrize("fields", [["duration_ms", "pupil, left"], []])
+def test_generated_hover_command_preserves_order_values_and_empty_selection(
+    lab_fixations, tmp_path, fields
+):
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES, options={"fixations": [lab_fixations]}
+    )
+    state = cs.FigureState(
+        kind="static",
+        settings={**api.figure_options(), "fixation_hover_fields": fields},
+        participant="A",
+        trial="1",
+    )
+    data = _reproduced_traces(source, state, tmp_path / "hover.html")
+    trace = next(t for t in data if t.get("name") == "Fixations")
+    if fields:
+        assert "pupil, left: %{customdata[1]}" in trace["hovertemplate"]
+        assert trace["customdata"] == [["110 ms", 17], ["120 ms", 18]]
+    else:
+        assert trace["hovertemplate"] == "<extra></extra>"
+        assert not trace.get("customdata")
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +193,7 @@ def test_a_raw_gaze_file_is_named_in_both_forms():
     )
     code = cs.reproduction_code(source, _state(figure={"show_raw_gaze": True}))
     assert "sps.load_raw_gaze('gaze.csv', raw_gaze_schema=" in code.python
-    flat = code.cli.replace(" \\\n ", " ")
+    flat = _one_line(code.cli)
     assert "--raw-gaze gaze.csv" in flat
     assert "--raw-gaze-schema" in flat
     assert not code.caveats
@@ -334,7 +409,7 @@ def test_a_comparison_names_both_scanpaths():
     assert "('p1', 't1')" in code.python
     assert "('p2', 't2')" in code.python
     assert "layout='side_by_side'" in code.python
-    assert "--compare-with p2:t2" in code.cli
+    assert "--compare-participant p2 --compare-trial t2" in _one_line(code.cli)
     # The settings vocabulary's `side_by_side` is `side-by-side` on the CLI.
     assert "--compare-layout side-by-side" in code.cli
 
@@ -369,6 +444,11 @@ def test_an_animation_carries_its_playback_settings():
             ),
             "load_onestop(",
             "--onestop-regime repeated",
+        ),
+        (
+            cs.SnippetSource(kind=cs.SOURCE_MULTIPLEYE, options={"root": "d/MPE"}),
+            "load_multipleye(",
+            "--multipleye d/MPE",
         ),
         (
             cs.SnippetSource(
@@ -517,6 +597,7 @@ def _figure_fingerprint(fig) -> tuple:
             str(trace.name),
             str(getattr(marker, "symbol", None)),
             str(getattr(marker, "color", None)),
+            str(getattr(marker, "opacity", None)),
             str(getattr(marker, "colorscale", None)),
             str(getattr(line, "color", None)),
             str(getattr(line, "width", None)),
@@ -692,12 +773,12 @@ def test_figure_code_with_no_trial_draws_what_render_draws(tmp_path, monkeypatch
 
 
 def test_figure_code_names_a_trial_half_given(monkeypatch):
-    python = api.figure_code(participant="l7_1090")
-    assert "trials.iloc[:, 0] == 'l7_1090'" in python
+    python = api.figure_code(participant="l7_183")
+    assert "trials.iloc[:, 0] == 'l7_183'" in python
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
     namespace: dict = {}
     exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
-    assert namespace["participant"] == "l7_1090"
+    assert namespace["participant"] == "l7_183"
 
 
 def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
@@ -708,6 +789,23 @@ def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cli.main(shlex.split(command.replace(" \\\n", " "))[1:])
     assert (tmp_path / "scanpath.html").is_file()
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_figure_code_keeps_b_fixation_window(kind):
+    both = api.figure_code(
+        kind=kind,
+        participant="p1",
+        trial="t1",
+        compare=("p2", "t2"),
+        fix_index_range_b=(5, 30),
+        flavor="both",
+    )
+    assert "fix_index_range_b=(5, 30)" in both
+    assert "--compare-fix-index-range 5:30" in both
+    # Without a B there is no window of B's to write.
+    alone = api.figure_code(kind=kind, fix_index_range_b=(5, 30), flavor="both")
+    assert "fix_index_range_b" not in alone and "compare-fix-index" not in alone
 
 
 def test_figure_code_flavours():
@@ -747,6 +845,67 @@ def _rendered_figures(monkeypatch, argv_list) -> list:
     for argv in argv_list:
         cli.main(argv)
     return figures
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+@pytest.mark.parametrize("override", [False, True])
+def test_print_palette_reproduces_both_readers(
+    monkeypatch, capsys, tmp_path, lab_fixations, kind, override
+):
+    path = str(tmp_path / "pair.html")
+    args = [
+        "render",
+        "--fixations",
+        str(lab_fixations),
+        "-p",
+        "A",
+        "-t",
+        "1",
+        "--compare-participant",
+        "B",
+        "--compare-trial",
+        "round:2",
+        "--palette",
+        "print",
+        "--print-code",
+        "python",
+        "-o",
+        path,
+    ]
+    if kind == "animation":
+        args.append("--animate")
+    options = {}
+    if override:
+        options["style_b"] = {"hollow": False, "saccade_style": "solid", "opacity": 0}
+        args += ["--style-b", "hollow=false,saccade_style=solid,opacity=0"]
+
+    rendered = _rendered_figures(monkeypatch, [args])
+    original = rendered[0]
+    printed = capsys.readouterr().out
+    exec(compile(printed, "<printed Python>", "exec"), {})  # noqa: S102
+    assert _figure_fingerprint(rendered[1]) == _figure_fingerprint(original)
+
+    command = api.figure_code(
+        kind=kind,
+        source="files",
+        source_options={"fixations": [str(lab_fixations)]},
+        participant="A",
+        trial="1",
+        compare=("B", "round:2"),
+        palette="print",
+        flavor="cli",
+        output=path,
+        **options,
+    )
+    cli.main(shlex.split(_one_line(command))[1:])
+    assert _figure_fingerprint(rendered[2]) == _figure_fingerprint(original)
+    label = "Scanpath B" if kind == "animation" else "round:2 · B"
+    marks = next(
+        t.marker for t in original.data if t.mode == "markers" and t.name == label
+    )
+    assert (marks.color, marks.opacity) == (
+        ("#666666", 0.0) if override else ("rgba(0,0,0,0)", 0.7)
+    )
 
 
 @pytest.mark.parametrize("palette", ["Print / grayscale", "High contrast"])
@@ -863,7 +1022,7 @@ def _panel(**session):
 def test_the_panel_says_what_to_do_before_a_figure_exists():
     at = _panel()
     copy = " ".join(element.value for element in at.caption)
-    assert "Scanpath view" in copy
+    assert "Scanpath View" in copy
     assert "_snippet_code_current" not in at.session_state
 
 
@@ -1203,17 +1362,25 @@ def test_the_animation_frame_budget_reaches_the_command():
     assert not {"anim_grid_step_ms", "anim_max_frames"} & set(code.cli_unsupported)
 
 
-def test_a_comparison_command_omits_the_flags_its_render_path_ignores():
-    """`render`'s compare branch does not pass it to `compare_scanpaths`, and
-    the Python form correctly omits it — so emitting it would be the two
-    flavours of one recipe contradicting each other."""
+def test_a_comparison_keeps_the_illustration_override_in_both_forms():
     state = _state(
         kind="comparison",
         illustration_label="hide",
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
-    command = cs.reproduction_code(DEMO, state).cli
-    assert "--illustration-label" not in command
+    code = cs.reproduction_code(DEMO, state)
+    assert "--illustration-label hide" in code.cli
+    assert "illustration_label='hide'" in code.python
+
+    labeled = _state(
+        kind="comparison",
+        compare=state.compare,
+        illustration_label="show",
+        figure={"illustration_text": "Class example"},
+    )
+    visible = cs.reproduction_code(DEMO, labeled)
+    assert "--illustration-text 'Class example'" in visible.cli
+    assert "illustration_text='Class example'" in visible.python
 
 
 @pytest.mark.parametrize("kind", ["comparison", "animation"])
@@ -1230,6 +1397,30 @@ def test_each_scanpaths_screen_is_named_in_both_forms(kind):
     command = _one_line(code.cli)
     assert "--screen s2" in command and "--compare-screen q1" in command
     assert not any("extract_part" in note for note in code.caveats)
+
+
+def test_render_parses_option_like_ids_for_both_readings_and_screens():
+    state = cs.FigureState(
+        kind="comparison",
+        participant="-reader",
+        trial="--animate",
+        screen="-page",
+        compare=cs.CompareTarget(
+            participant="--reader", trial="-trial", screen="--page"
+        ),
+    )
+    command, _ = cs.cli_snippet(DEMO, state)
+    args = cli._render_parser().parse_args(shlex.split(_one_line(command))[2:])
+    assert (args.participant, args.trial, args.screen) == (
+        "-reader",
+        "--animate",
+        "-page",
+    )
+    assert (args.compare_participant, args.compare_trial, args.compare_screen) == (
+        "--reader",
+        "-trial",
+        "--page",
+    )
 
 
 def test_the_raster_geometry_reaches_both_flavours():
@@ -1253,7 +1444,7 @@ def test_a_dual_animation_names_scanpath_b_in_both_forms():
     )
     code = cs.reproduction_code(DEMO, state)
     assert "trial_b=('p2', 't2')" in code.python
-    assert "--compare-with p2:t2" in code.cli
+    assert "--compare-participant p2 --compare-trial t2" in _one_line(code.cli)
     assert not any("replays A alone" in note for note in code.caveats)
 
 
@@ -1278,7 +1469,8 @@ def test_a_second_datasets_b_is_named_in_its_own_tables(kind):
         assert keyword in code.python, keyword
     assert "('p2', 't2')" in code.python
     cli_line = _one_line(code.cli)
-    assert "--compare-with p2:t2 --compare-words B_WORDS" in cli_line
+    assert "--compare-participant p2 --compare-trial t2" in cli_line
+    assert "--compare-words B_WORDS" in cli_line
     assert "--compare-fixations B_FIXATIONS --compare-dataset-name PoTeC" in cli_line
     # No screen stated, so neither half invents one.
     assert "setup_b" not in code.python and "--compare-canvas" not in cli_line
@@ -1342,7 +1534,7 @@ def test_render_accepts_a_second_datasets_command_line(kind, capsys):
     command = cs.reproduction_code(DEMO, state, explicit=True).cli
     argv = shlex.split(command.replace(" \\\n", " "))[2:]
     args = cli._render_parser().parse_args(argv)
-    assert args.compare_with == "p2:t2"
+    assert cli._comparison_ids(args) == ("p2", "t2")
     assert args.compare_words == ["B_WORDS"]
     assert args.compare_fixations == ["B_FIXATIONS"]
     assert args.compare_dataset_name == "PoTeC"
@@ -1441,6 +1633,408 @@ def test_print_code_names_the_second_dataset_it_was_given(
     assert repr(b_fixations) in printed
     assert "--compare-canvas 2560x1440" in _one_line(printed)
     assert "canvas_width=2560" in printed
+
+
+@pytest.fixture()
+def hand_mapped_second_dataset(tmp_path):
+    """The bundled demo's tables with every mapped column renamed past
+    auto-detection, and the mappings that read them: a B uploaded and mapped by
+    hand in the app."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    from scanpath_studio import data
+
+    sample = Path(cs.__file__).parent / "sample_data"
+    paths, schemas = [], {}
+    for name, infer, option in (
+        ("ia", data.infer_word_schema, "word_schema"),
+        ("fixations", data.infer_fix_schema, "fix_schema"),
+    ):
+        frame = pd.read_parquet(sample / f"{name}.parquet")
+        mapped = {field: column for field, column in infer(frame).items() if column}
+        opaque = {column: f"col{i}" for i, column in enumerate(mapped.values())}
+        path = tmp_path / f"b_{name}.parquet"
+        frame.rename(columns=opaque).to_parquet(path)
+        paths.append(str(path))
+        schemas[option] = {field: opaque[column] for field, column in mapped.items()}
+    return paths[0], paths[1], schemas
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+def test_a_hand_mapped_second_dataset_reproduces_from_both_halves(
+    kind, demo_trial, hand_mapped_second_dataset, tmp_path, monkeypatch
+):
+    """B's files load only with the mapping the app read them with, so both
+    recipes carry it (``word_schema=`` / ``--compare-word-schema``) and draw
+    the figure B's own corpus draws."""
+    words, fixations, participant, trial = demo_trial
+    b_words, b_fixations, schemas = hand_mapped_second_dataset
+    with pytest.raises(api.SchemaError):
+        api.load_scanpath_data(b_words, b_fixations)
+    combos = api.list_trials(words, fixations)
+    other = combos[combos["trial_id"] != trial].iloc[0]
+    reader_b = (str(other["participant_id"]), str(other["trial_id"]))
+    state = cs.FigureState(
+        kind=kind,
+        settings=api.figure_options(kind),
+        participant=participant,
+        trial=trial,
+        canvas=(2560, 1440),
+        compare=cs.CompareTarget(
+            participant=reader_b[0],
+            trial=reader_b[1],
+            layout="side_by_side",
+            dataset="Pilot",
+            canvas=(2560, 1440),
+            schemas=schemas,
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state, output=str(tmp_path / "figure.html"))
+    figures: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **_: figures.append(fig))
+    python = code.python.replace("'B_WORDS'", repr(b_words)).replace(
+        "'B_FIXATIONS'", repr(b_fixations)
+    )
+    exec(compile(python, "<snippet>", "exec"), {})  # noqa: S102
+    swap = {"B_WORDS": b_words, "B_FIXATIONS": b_fixations}
+    argv = [swap.get(t, t) for t in shlex.split(code.cli.replace(" \\\n", " "))]
+    cli.main(argv[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    # B is the reading its renamed copy holds, read under its own mapping.
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+
+    words_b, fixations_b = api.load_scanpath_data(
+        b_words, b_fixations, **schemas, names="canonical"
+    )
+    common = {
+        "words_b": words_b,
+        "fixations_b": fixations_b,
+        "dataset_b": "Pilot",
+        "setup_b": SetupSnapshot(
+            canvas_width=2560,
+            canvas_height=1440,
+            screen_provenance=Provenance.MEASURED,
+        ),
+        "canvas_size": (2560, 1440),
+    }
+    expected = (
+        api.compare_scanpaths(
+            words,
+            fixations,
+            (participant, trial),
+            reader_b,
+            layout="side_by_side",
+            **common,
+        )
+        if kind == "comparison"
+        else api.animate_scanpath(
+            words, fixations, participant, trial, trial_b=reader_b, **common
+        )
+    )
+    assert _figure_fingerprint(cli_fig) == _figure_fingerprint(expected)
+
+
+def test_print_code_carries_bs_mappings(
+    demo_trial, hand_mapped_second_dataset, tmp_path, capsys
+):
+    """`render` reads B's files with ``--compare-word-schema`` /
+    ``--compare-fix-schema``, and the recipe it prints passes the same mappings
+    on."""
+    _words, _fixations, participant, trial = demo_trial
+    b_words, b_fixations, schemas = hand_mapped_second_dataset
+    word_schema = json.dumps(schemas["word_schema"], separators=(",", ":"))
+    fix_schema = json.dumps(schemas["fix_schema"], separators=(",", ":"))
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            participant,
+            "-t",
+            trial,
+            "--compare-with",
+            f"{participant}:{trial}",
+            "--compare-words",
+            b_words,
+            "--compare-word-schema",
+            word_schema,
+            "--compare-fixations",
+            b_fixations,
+            "--compare-fix-schema",
+            fix_schema,
+            "--compare-layout",
+            "side-by-side",
+            "--print-code",
+            "both",
+            "-o",
+            str(tmp_path / "cmp.html"),
+        ]
+    )
+    printed = _one_line(capsys.readouterr().out)
+    assert f"--compare-word-schema {shlex.quote(word_schema)}" in printed
+    assert f"--compare-fix-schema {shlex.quote(fix_schema)}" in printed
+    assert "word_schema={" in printed and "fix_schema={" in printed
+
+
+@pytest.mark.parametrize(
+    ("flag", "table"),
+    [
+        ("--compare-word-schema", "--compare-words"),
+        ("--compare-fix-schema", "--compare-fixations"),
+        ("--compare-raw-gaze-schema", "--compare-raw-gaze"),
+    ],
+)
+def test_a_mapping_for_b_needs_bs_table(flag, table, demo_trial, tmp_path):
+    _words, _fixations, participant, trial = demo_trial
+    with pytest.raises(SystemExit, match=f"{flag} maps the {table} table"):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                participant,
+                "-t",
+                trial,
+                "--compare-with",
+                f"{participant}:{trial}",
+                flag,
+                '{"x": "X"}',
+                "-o",
+                str(tmp_path / "cmp.png"),
+            ]
+        )
+
+
+def test_bs_raw_gaze_mapping_reaches_both_halves():
+    state = _state(
+        kind="comparison",
+        figure={"show_raw_gaze": True},
+        compare=cs.CompareTarget(
+            participant="p2",
+            trial="t2",
+            dataset="Pilot",
+            raw_gaze=("b_gaze.csv",),
+            schemas={"raw_gaze_schema": {"x": "gx", "y": "gy"}},
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state)
+    assert (
+        "raw_gaze_b = sps.load_raw_gaze('b_gaze.csv', "
+        "raw_gaze_schema={'x': 'gx', 'y': 'gy'})"
+    ) in code.python
+    assert (
+        "--compare-raw-gaze b_gaze.csv --compare-raw-gaze-schema "
+        """'{"x":"gx","y":"gy"}'"""
+    ) in _one_line(code.cli)
+
+
+def test_figure_code_takes_bs_tables_and_mappings():
+    out = _one_line(
+        api.figure_code(
+            kind="comparison",
+            participant="p1",
+            trial="t1",
+            compare=("p2", "t2"),
+            compare_dataset="Pilot",
+            compare_source_options={
+                "words": "b_words.csv",
+                "fixations": ["b_fix_1.csv", "b_fix_2.csv"],
+                "word_schema": {"participant": "Reader"},
+            },
+            flavor="both",
+        )
+    )
+    assert "B_WORDS" not in out and "B_FIXATIONS" not in out
+    assert "'b_words.csv'" in out and "['b_fix_1.csv', 'b_fix_2.csv']" in out
+    assert "word_schema={ 'participant': 'Reader', }" in out
+    assert "--compare-words b_words.csv" in out
+    assert """--compare-word-schema '{"participant":"Reader"}'""" in out
+    assert "--compare-fixations b_fix_1.csv b_fix_2.csv" in out
+
+
+@pytest.mark.timeout(300)
+def test_the_app_publishes_an_uploaded_bs_mapping():
+    """Compare B from an upload mapped by hand: the figure's snippet state
+    carries B's mapping, as written in B's own files, so Share → Code reads B's
+    files as the app did."""
+    import pandas as pd
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+
+    words, fixations = api.build_authored_scanpath("Read this short line")
+    schemas = {
+        "words": {"participant": "Reader", "trial": "Item"},
+        "fixations": {"participant": "Reader", "x": "Gaze X"},
+    }
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.session_state["_datasets"] = {
+        "Pilot": {
+            "words": words.assign(participant_id="reader", trial_id="t1"),
+            "fixations": fixations.assign(participant_id="reader", trial_id="t1"),
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+            "source_recipe": {
+                "schemas": schemas,
+                "steps": ["aggregate_char_boxes"],
+                "derived": ["session"],
+            },
+        }
+    }
+    at.session_state["single_compare_toggle"] = True
+    at.session_state[COMPARE_SOURCE_STATE_KEY] = "Pilot"
+    at.run()
+    assert not at.exception, at.exception
+    state = at.session_state[cs.SNIPPET_STATE_KEY]
+    assert state.kind == "comparison" and state.compare.dataset == "Pilot"
+    assert state.compare.schemas == {
+        "word_schema": schemas["words"],
+        "fix_schema": schemas["fixations"],
+    }
+    code = cs.reproduction_code(DEMO, state)
+    cli_line = _one_line(code.cli)
+    assert """--compare-word-schema '{"participant":"Reader","trial":"Item"}'""" in (
+        cli_line
+    )
+    # What B's add did that its mapping can't repeat is said, as it is for A.
+    note = next(n for n in code.caveats if "second dataset" in n)
+    assert "About `Pilot`:" in note
+    assert cs.UPLOAD_STEP_NOTES["aggregate_char_boxes"] in note
+    assert "`session`, made from the file names" in note
+
+
+def test_a_session_set_b_says_how_to_load_it(monkeypatch):
+    """B's recipe loads two tables, which a session set is not."""
+    import streamlit as st
+
+    monkeypatch.setattr(
+        st,
+        "session_state",
+        {"_datasets": {"Set": {"source_recipe": {"multipleye": {"root": None}}}}},
+    )
+    schemas, caveats = url_state.second_dataset_load("Set")
+    assert schemas == {}
+    assert "MultiplEYE session set" in caveats[0]
+    assert url_state.second_dataset_load("PoTeC") == ({}, ())
+
+
+def test_bs_tables_need_a_comparison(demo_trial, tmp_path):
+    """Without `--compare-with` there is no B to load them as."""
+    _words, _fixations, participant, trial = demo_trial
+    with pytest.raises(SystemExit, match="--compare-words load scanpath B's"):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                participant,
+                "-t",
+                trial,
+                "--compare-words",
+                "b.csv",
+                "-o",
+                str(tmp_path / "a.png"),
+            ]
+        )
+
+
+def test_render_reads_bs_raw_gaze_under_its_mapping(
+    demo_trial, hand_mapped_second_dataset, tmp_path, monkeypatch
+):
+    """B's samples, their columns renamed past auto-detection, load with
+    ``--compare-raw-gaze-schema`` and draw under B's scanpath."""
+    import pandas as pd
+
+    from scanpath_studio import data
+
+    _words, _fixations, participant, trial = demo_trial
+    b_words, b_fixations, schemas = hand_mapped_second_dataset
+    gaze = pd.read_parquet(
+        cs.__file__.rsplit("/", 1)[0] + "/sample_data/raw_gaze.parquet"
+    )
+    gaze = gaze[gaze["unique_trial_id"] == trial]
+    mapped = {f: c for f, c in data.infer_raw_gaze_schema(gaze).items() if c}
+    opaque = {column: f"g{i}" for i, column in enumerate(mapped.values())}
+    gaze.rename(columns=opaque).to_parquet(tmp_path / "b_gaze.parquet")
+    gaze_schema = {field: opaque[column] for field, column in mapped.items()}
+    figures: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **_: figures.append(fig))
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            participant,
+            "-t",
+            trial,
+            "--screen",
+            "Paragraph",
+            "--compare-with",
+            f"{participant}:{trial}",
+            "--compare-screen",
+            "Paragraph",
+            "--compare-words",
+            b_words,
+            "--compare-word-schema",
+            json.dumps(schemas["word_schema"]),
+            "--compare-fixations",
+            b_fixations,
+            "--compare-fix-schema",
+            json.dumps(schemas["fix_schema"]),
+            "--compare-raw-gaze",
+            str(tmp_path / "b_gaze.parquet"),
+            "--compare-raw-gaze-schema",
+            json.dumps(gaze_schema),
+            "--compare-layout",
+            "side-by-side",
+            "-o",
+            str(tmp_path / "cmp.html"),
+        ]
+    )
+    (fig,) = figures
+    samples = [t for t in fig.data if t.name and t.name.endswith("raw gaze")]
+    # The reading spans several screens; B draws the samples of the one named.
+    assert [len(t.x) for t in samples] == [int((gaze["part"] == "Paragraph").sum())]
+
+
+def test_figure_code_reads_bs_options_strictly():
+    with pytest.raises(ValueError, match="compare_source_options takes"):
+        api.figure_code(
+            kind="comparison",
+            compare=("p2", "t2"),
+            compare_source_options={"fixation_schema": {"x": "X"}},
+        )
+    # Tables alone make B a second dataset, named as render names it.
+    out = _one_line(
+        api.figure_code(
+            kind="comparison",
+            compare=("p2", "t2"),
+            compare_source_options={"words": "b.csv", "fixations": "f.csv"},
+            flavor="both",
+        )
+    )
+    assert "dataset_b='Dataset B'" in out and "--compare-words b.csv" in out
+
+
+def test_figure_code_loads_no_placeholder_for_as_samples_when_only_b_has_them():
+    out = api.figure_code(
+        kind="comparison",
+        source="files",
+        source_options={"words": "a.csv", "fixations": "f.csv"},
+        compare=("p2", "t2"),
+        compare_dataset="Pilot",
+        compare_source_options={"raw_gaze": "b_gaze.csv"},
+        show_raw_gaze=True,
+        flavor="both",
+    )
+    assert "raw_gaze_b = sps.load_raw_gaze('b_gaze.csv')" in out
+    assert "raw_gaze = sps.load_raw_gaze" not in out
+    assert "--raw-gaze raw_gaze.csv" not in _one_line(out)
+    assert "--compare-raw-gaze b_gaze.csv" in _one_line(out)
 
 
 def test_figure_code_takes_bs_screen():
@@ -1617,7 +2211,7 @@ def test_hand_set_comparison_labels_reach_both_flavours():
     `compare_stimulus`, which have the same shape for the same reason."""
     code = cs.reproduction_code(DEMO, _compare_state(labels=("Reader A", "Reader B")))
     assert "    labels=('Reader A', 'Reader B')," in code.python
-    flat = code.cli.replace(" \\\n ", " ")
+    flat = _one_line(code.cli)
     assert "--label-a 'Reader A' --label-b 'Reader B'" in flat
     assert not code.cli_unsupported
 
@@ -1644,12 +2238,12 @@ def test_the_co_animations_labels_are_no_longer_cli_unsupported():
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
     code = cs.reproduction_code(DEMO, state)
-    flat = code.cli.replace(" \\\n ", " ")
+    flat = _one_line(code.cli)
     assert "--label-a A" in flat
     assert "--label-b B" in flat
     # `render` refuses the labels without the second reading, so the command
     # names it — without it, the copied command would fail.
-    assert "--compare-with p2:t2" in flat
+    assert "--compare-participant p2 --compare-trial t2" in _one_line(flat)
     assert not code.cli_unsupported
 
 
@@ -2016,6 +2610,21 @@ def test_what_the_loader_cannot_replay_is_named():
     # they are all there is to change.
     assert "`words.csv`" in source.note and "fixations.csv" not in source.note
 
+    # A MultiplEYE dataset reads its session set again with its own loader.
+    folder = cs.upload_source(
+        "MPE",
+        {"multipleye": {"root": "/d/MPE", "fixation_source": "fixations"}},
+        words=True,
+        fixations=True,
+    )
+    assert folder.kind == cs.SOURCE_MULTIPLEYE and folder.note == ""
+    assert folder.options["root"] == "/d/MPE"
+    uploaded = cs.upload_source(
+        "MPE", {"multipleye": {"root": None}}, words=True, fixations=True
+    )
+    assert uploaded.kind == cs.SOURCE_MULTIPLEYE
+    assert cs.MULTIPLEYE_ROOT_PLACEHOLDER in uploaded.note
+
 
 def test_an_edited_mapping_is_restated_in_the_files_names():
     """✏️ Edit dataset stores a mapping onto the canonical columns; the
@@ -2084,7 +2693,7 @@ def test_render_args_hand_their_schemas_to_the_snippet_source():
         authoring=None,
         potec=None,
         onestop=None,
-        source=None,
+        multipleye=None,
         words=["w.csv"],
         fixations=["f.csv"],
         word_schema='{"trial": "TRIAL"}',

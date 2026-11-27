@@ -1,5 +1,7 @@
 """Pytest configuration and fixtures for scanpath visualization tests."""
 
+import os
+import zlib
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +17,35 @@ from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 #: it, not the process CWD, so ``"streamlit_app.py"`` would look for
 #: ``tests/streamlit_app.py``. Always pass this constant.
 APP_SCRIPT = str(Path(__file__).resolve().parents[1] / "streamlit_app.py")
+
+#: ``k/n``: run only the k-th of n disjoint shares of the suite, so CI can
+#: split one run over n machines. Each test goes to the share its node id hashes
+#: to, the same in every process (xdist workers collect independently), and
+#: the n shares together are the whole suite.
+SHARD_ENV = "SCANPATH_TEST_SHARD"
+
+
+def shard_of(nodeid: str, total: int) -> int:
+    """The 1-based share of ``total`` that the test ``nodeid`` belongs to."""
+    return zlib.crc32(nodeid.encode("utf-8")) % total + 1
+
+
+def pytest_collection_modifyitems(config, items):
+    spec = os.environ.get(SHARD_ENV)
+    if not spec:
+        return
+    usage = f"{SHARD_ENV}={spec}: expected k/n with 1 <= k <= n"
+    try:
+        index, total = (int(part) for part in spec.split("/"))
+    except ValueError:
+        raise pytest.UsageError(usage) from None
+    if not 1 <= index <= total:
+        raise pytest.UsageError(usage)
+    kept = [item for item in items if shard_of(item.nodeid, total) == index]
+    config.hook.pytest_deselected(
+        items=[item for item in items if shard_of(item.nodeid, total) != index]
+    )
+    items[:] = kept
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -215,9 +246,7 @@ def pin_view(at, view: str) -> None:
     """
     at.session_state[NAV_KEY] = view
     at.session_state[NAV_MIRROR_KEY] = None
-    # A first run pinned to a view is about that view, but the first-visit
-    # welcome tour takes a first run to Scanpath, where its steps point. Count
-    # the tour as seen unless the test has already decided.
+    # A test that goes straight to a view skips the first-visit invitation.
     if "tour_seen" not in at.session_state:
         at.session_state["tour_seen"] = True
     if hasattr(at, "_finished_page_script_hash"):
@@ -225,9 +254,67 @@ def pin_view(at, view: str) -> None:
         at._page_hash = ""
 
 
-def pin_data_view(at) -> None:
-    """:func:`pin_view` for the 🗂️ Data page — the common case."""
+def pin_data_view(at, *, section: str | None = None) -> None:
+    """Open Data Management, optionally selecting a workspace tab."""
+    from scanpath_studio.constants import DATA_WORKSPACE_KEY, DATA_WORKSPACE_REQUEST
+
     pin_view(at, VIEW_DATA)
+    # AppTest does not echo the browser's selected native tab on the next run.
+    if (
+        section is None
+        and DATA_WORKSPACE_REQUEST not in at.session_state
+        and DATA_WORKSPACE_KEY in at.session_state
+    ):
+        section = at.session_state[DATA_WORKSPACE_KEY]
+    if section is not None:
+        at.session_state[DATA_WORKSPACE_REQUEST] = section
+
+
+def page_nodes(node, around: tuple = ()):
+    """Every element and block under ``node`` in screen order, each as
+    ``(node, around)``: the blocks it sits in, outermost first.
+
+    Pass ``at._tree`` for the whole page. A keyed container's node carries
+    its key, which is how a test finds the parts of a layout that ``AppTest``
+    has no accessor for.
+    """
+    children = getattr(node, "children", None) or {}
+    for index in sorted(children):
+        child = children[index]
+        yield child, around
+        yield from page_nodes(child, (*around, child))
+
+
+def find_keyed(at, key: str):
+    """The one node keyed ``key`` on the page, with the blocks around it."""
+    found = [
+        (node, around)
+        for node, around in page_nodes(at._tree)
+        if getattr(node, "key", None) == key
+    ]
+    assert len(found) == 1, f"{key!r} is drawn {len(found)} times"
+    return found[0]
+
+
+def keys_around(at, key: str) -> list[str]:
+    """The keys of the keyed containers around the node keyed ``key``,
+    outermost first."""
+    _node, around = find_keyed(at, key)
+    return [k for block in around if (k := getattr(block, "key", None))]
+
+
+def keys_in_screen_order(node) -> list[str]:
+    """The key of every keyed node under ``node``, in screen order."""
+    return [k for child, _ in page_nodes(node) if (k := getattr(child, "key", None))]
+
+
+def iframe_sources(node) -> list[str]:
+    """The document of every ``st.iframe`` under ``node``, in screen order."""
+    return [
+        child.proto.srcdoc
+        for child, _ in page_nodes(node)
+        if getattr(child, "type", None) == "iframe"
+    ]
 
 
 def picked_trial_id(value) -> str | None:
@@ -252,7 +339,7 @@ def picker_trial_id(option: str) -> str:
 
 
 def arm_debug_dialog(at) -> None:
-    """Ask for the ❓ Help → About → Debug modal on the *next* run.
+    """Ask for the Debug drawer on the *next* run.
 
     Call it before **every** ``at.run()`` in a flow that drives the dialog, not
     just the first. In a browser an interaction inside a dialog reruns only the
@@ -267,6 +354,47 @@ def arm_debug_dialog(at) -> None:
 
 def open_data_view(at, timeout: int = 60):
     """Switch to the 🗂️ Data page and rerun, so its body renders."""
+    pin_data_view(at)
+    return at.run(timeout=timeout)
+
+
+def open_dataset_editor(at, timeout: int = 60):
+    """Open ✏️ Edit dataset on the open dataset's row, as a user does.
+
+    A built-in source's column-mapping panels are drawn only while it is
+    open; on every other run their picks are read from session state."""
+    from scanpath_studio.app import _dataset_row_slug
+
+    pin_data_view(at, section="Dataset library")
+    at.run(timeout=timeout)
+    token = str(at.session_state["data_source_choice"])
+    at.button(key=f"dataset_row_edit_{_dataset_row_slug(token)}").click()
+    pin_data_view(at)
+    return at.run(timeout=timeout)
+
+
+def edit_builtin_mapping(at, picks: dict, timeout: int = 60):
+    """Change a built-in source's column mapping the way a user does.
+
+    Opens ✏️ Edit dataset, sets each ``{widget key: value}`` in its panels and
+    presses ✅ Save changes — until then the panels are a draft and the
+    dataset keeps its mapping."""
+    open_dataset_editor(at, timeout=timeout)
+    for key, value in picks.items():
+        widget = next(
+            (
+                w
+                for group in (at.selectbox, at.multiselect, at.radio)
+                for w in group
+                if w.key == key
+            ),
+            None,
+        )
+        assert widget is not None, f"no mapping widget {key!r} in the editor"
+        widget.set_value(value)
+    pin_data_view(at)
+    at.run(timeout=timeout)
+    at.button(key="builtin_mapping_save").click()
     pin_data_view(at)
     return at.run(timeout=timeout)
 

@@ -130,6 +130,75 @@ def test_custom_quick_view_remembers_manual_settings(monkeypatch):
     assert store["global_fixation_opacity"] == 0.42
 
 
+def test_the_custom_tile_keeps_compare_and_the_replay_settings(monkeypatch):
+    """Every view tile, Custom included, leaves Compare and the replay as they
+    are: Custom brings back its own design, not the viewing it was left in."""
+    store = _viz_store()
+    store.update({"single_compare_toggle": False, "single_playback_speed": 1.0})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    controls._choose_plot_view("scanpath", None)
+    assert controls._active_quick_view() == "scanpath"
+    store["global_fixation_opacity"] = 0.42
+    assert controls._active_quick_view() == "custom"
+    controls._choose_plot_view("heatmap", "custom")
+    assert controls._active_quick_view() == "heatmap"
+    viewing = {
+        "single_compare_toggle": True,
+        "single_playback_speed": 2.0,
+        "global_anim_autoplay": False,
+        "global_anim_grid_step_ms": 40,
+        "global_anim_max_frames": 900,
+    }
+    store.update(viewing)
+
+    controls._choose_plot_view("custom", "heatmap")
+
+    assert store["global_fixation_opacity"] == 0.42
+    assert store["global_show_heatmap"] is False
+    assert {key: store[key] for key in viewing} == viewing
+
+
+def test_view_mode_settings_neither_drift_nor_change_with_a_tile(monkeypatch):
+    """The keys every tile keeps are exactly the ones the drift check skips:
+    changing the replay leaves the view lit, and no tile changes it back."""
+    store = _viz_store()
+    store.update({"single_compare_toggle": False, "single_playback_speed": 1.0})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    controls._choose_plot_view("scanpath", None)
+    assert controls._active_quick_view() == "scanpath"
+    viewing = {
+        "single_compare_toggle": True,
+        "single_playback_speed": 2.0,
+        "global_anim_autoplay": False,
+        "global_anim_quality": "Custom",
+        "global_anim_grid_step_ms": 40,
+        "global_anim_max_frames": 900,
+    }
+    assert all(controls._is_view_mode_key(key) for key in viewing)
+    store.update(viewing)
+    assert controls._active_quick_view() == "scanpath"
+
+    current = "scanpath"
+    for tile in ("heatmap", "illustration", "gaze_over_time", "custom", "scanpath"):
+        controls._choose_plot_view(tile, current)
+        assert controls._active_quick_view() == tile
+        assert {key: store[key] for key in viewing} == viewing, tile
+        current = tile
+
+
+def test_a_view_sets_both_readings_marker_size(monkeypatch):
+    """A view's marker size reaches Compare's per-reading sizes, and the next
+    view puts them back with the rest of its defaults."""
+    store = _viz_store()
+    store.update({"cmp0_marker_size_range": (10, 30), "cmp1_marker_size_range": (5, 9)})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    for name, expected in (("gaze_over_time", (4, 4)), ("heatmap", (8, 24))):
+        controls._apply_view_preset(name)
+        assert store["global_marker_size_range"] == expected
+        assert store["cmp0_marker_size_range"] == expected
+        assert store["cmp1_marker_size_range"] == expected
+
+
 def test_scanpath_quick_view_clears_custom_configuration(monkeypatch):
     store = _viz_store()
     store.update(
@@ -223,6 +292,46 @@ def test_full_monitor_changes_only_framing_state_and_cache_input(monkeypatch):
     assert dict(key_off)["fit_to_monitor"] is False
 
 
+@pytest.mark.parametrize("key", ["background_image", "background_image_b"])
+def test_a_stimulus_page_replaced_on_disk_misses_the_figure_cache(key, tmp_path):
+    """The figure embeds the page's bytes, so its cache key follows the file at
+    that path, not only the path: a page re-exported over the old one shows."""
+    import os
+
+    words = pd.DataFrame({"word_id": [1], "x": [0.0], "y": [0.0]})
+    fixations = pd.DataFrame({"x": [1.0], "y": [1.0], "duration_ms": [200.0]})
+    page = tmp_path / "page.png"
+    page.write_bytes(b"\x89PNG first")
+    first = tabs._figure_input_key(words, fixations, {key: str(page)})
+    assert tabs._figure_input_key(words, fixations, {key: str(page)}) == first
+    # A copy that keeps the old page's size and modification time (`cp -p`).
+    stamp = page.stat()
+    page.write_bytes(b"\x89PNG other")
+    os.utime(page, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    assert page.stat().st_size == stamp.st_size
+    assert tabs._figure_input_key(words, fixations, {key: str(page)}) != first
+    # A missing file and an inline page still make a key.
+    page.unlink()
+    assert tabs._figure_input_key(words, fixations, {key: str(page)})
+    assert tabs._figure_input_key(words, fixations, {key: "data:image/png;base64,AA=="})
+
+
+def test_every_page_path_the_figure_embeds_is_stamped_in_its_key():
+    """The figure settings that name a page file are the ones
+    `_figure_input_key` stamps; a new one must be added there."""
+    from dataclasses import fields
+
+    from scanpath_studio.plots import FigureSettings
+
+    paths = {
+        f.name
+        for f in fields(FigureSettings)
+        if f.name.startswith("background_image")
+        and not f.name.removesuffix("_b").endswith(("_size", "_origin", "_opacity"))
+    }
+    assert paths == tabs._IMAGE_PATH_INPUTS
+
+
 # --- narrowing the trial pool is not a design edit ---------------------------
 
 
@@ -231,8 +340,8 @@ def test_mirror_keys_and_late_defaults_are_not_drift():
     applied = {"global_fixation_opacity": 0.7, "global_show_saccades": True}
     late = {
         **applied,
-        # A slider's typed twin and the span-highlight mirrors, registered the
-        # first time their popover draws.
+        # A slider's typed twin, registered the first time its popover draws,
+        # and the span-highlight mirrors a saved design can still hold.
         "global_fixation_opacity__num": 0.7,
         "global_marker_size_range__num_lo": 8,
         "global_highlight_span_on": True,
@@ -281,7 +390,7 @@ class TestTrialFiltersKeepTheDesign:
         # A trial with no fixations must not wipe the user's hover picks; the
         # unit test above covers that, since the demo has no such reader, so
         # this narrows by the demo's two readers.
-        for participant in (["l37_1129"], ["l7_1090"], []):
+        for participant in (["l37_273"], ["l7_183"], []):
             box = next(m for m in at.multiselect if m.key == "filter_participants")
             box.set_value(participant)
             self._run(at)
@@ -322,20 +431,23 @@ def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
 
 @pytest.mark.timeout(180)
 def test_animate_says_why_layers_are_greyed():
-    """Why layers are greyed is the switches' hover text, not a caption under
-    the Animate row — Animate says what it greys, and each greyed switch says
-    why, only while it is greyed."""
+    """During Animation each disabled layer explains why in its hover text."""
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
     at.run()
-    assert "Heatmap and Raw gaze switches are greyed" in (
-        at.toggle(key="single_animate").help
-    )
-    greyed = ("global_show_fix", "global_show_heatmap", "global_show_raw_gaze")
+    greyed = ("global_show_heatmap", "global_show_raw_gaze")
     assert not any(at.toggle(key=key).help for key in greyed)
     at.toggle(key="single_animate").set_value(True).run()
     assert not at.exception
-    assert not any("Replay draws its own fixations" in c.value for c in at.caption)
+    assert not at.toggle(key="global_show_fix").disabled
     for key in greyed:
         toggle = at.toggle(key=key)
         assert toggle.disabled, key
-        assert toggle.help.startswith("Greyed while Animate is on"), key
+        assert (
+            toggle.help
+            == controls._ANIMATE_GREYS[
+                {
+                    "global_show_heatmap": "heatmap",
+                    "global_show_raw_gaze": "rawgaze",
+                }[key]
+            ]
+        )

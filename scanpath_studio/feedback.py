@@ -1,17 +1,4 @@
-"""*Send feedback* — the ❓ Help entry that says where each kind of feedback goes.
-
-**Nothing is sent from the app.** Every route is a GitHub page the user opens in
-their browser and submits themselves, so recordings stay on the user's computer
-and the app needs no feedback service. The dialog lists four routes (a bug
-report, a feature request, an idea or general comment, a question) and, for a
-bug report, the details its template asks for — version, install, Python,
-Streamlit, OS — in a block with a *Copy* button, so a report doesn't depend on
-the user finding the version first.
-
-The details are shown, not put into the issue URL: the user sees exactly what
-they paste, and the template's own sections stay intact (a ``body=`` parameter
-would replace them).
-"""
+"""Local troubleshooting answers and the project's GitHub support routes."""
 
 from __future__ import annotations
 
@@ -19,98 +6,152 @@ import platform
 
 import streamlit as st
 
-from scanpath_studio.constants import CITATION, ICONS
+from scanpath_studio import persistence
+from scanpath_studio.build_info import INSTALL_KINDS, build_info, install_kind
+from scanpath_studio.constants import CITATION, ICONS, drift_correction_enabled
 from scanpath_studio.crash_report import guarded
 
-#: The session flag the ❓ Help entry sets and :func:`maybe_show_feedback` serves.
 _REQUESTED_KEY = "_feedback_dialog_requested"
 
-#: (key, label, icon key, url, what it is for) — the dialog's routes, in order.
-ROUTES: tuple[tuple[str, str, str, str, str], ...] = (
-    (
-        "bug",
-        "Report a bug",
-        "bug",
-        CITATION["bug_report_url"],
-        "Something is wrong or crashes. Paste the details below into the report.",
-    ),
-    (
-        "feature",
-        "Suggest a feature",
-        "feature_request",
-        CITATION["feature_request_url"],
-        "Something the app should do.",
-    ),
-    (
-        "idea",
-        "Share an idea",
-        "comment",
-        CITATION["ideas_url"],
-        "Anything else: what works, what is confusing.",
-    ),
-    (
-        "question",
-        "Ask a question",
-        "question",
-        CITATION["questions_url"],
-        "How do I…? Is this expected?",
-    ),
-)
+
+def _storage_answer() -> str:
+    """Describe this session's recovery state and the relevant next action."""
+    local = persistence.server_bound_to_loopback()
+    location = (
+        "Your files are processed on this computer."
+        if local
+        else "Your files are processed on this server. Use the desktop app to keep uploads on your computer."
+    )
+    saving = persistence.persistence_enabled(str(st.context.url or ""))
+    backups = (
+        "Keep your original files. Before refreshing, export annotations from "
+        "**Data Management → Current dataset → Annotations** and plot settings from "
+        "**Scanpath → Share → Settings file**."
+    )
+    if not saving:
+        recovery = f"Uploads stay in memory for this session. {backups}"
+    elif st.session_state.get(persistence.SAVE_CONFLICT_KEY) or st.session_state.get(
+        persistence.SAVE_FAILED_KEY
+    ):
+        recovery = f"The app couldn’t update the recovery copy. Your unsaved edits are still in this tab. {backups}"
+    elif persistence.persistence_paused(st.session_state):
+        recovery = f"Recovery saving is paused for this session. {backups} Reload to retry the saved copy."
+    else:
+        recovery = (
+            "A recovery copy keeps your datasets, settings and annotations between visits. "
+            "In **Data Management → Saved work**, open **Your session → "
+            "Saved session details → Clear saved session…** to remove it."
+        )
+    return f"{location} {recovery}"
+
+
+def troubleshooting_items() -> list[tuple[str, str]]:
+    """Short answers available offline, with links into this edition's documentation."""
+    docs = build_info().docs_url
+    items = [
+        (
+            "The fixations don’t line up with the words.",
+            "Check that the Words and Fixations tables describe the same trial and "
+            "screen, with coordinates in pixels measured from the same origin. "
+            "Correct any offset or scale difference in the source files before importing "
+            "again. If only the figure’s framing is wrong, check **Screen** under "
+            "**Data Management → Current dataset → Edit dataset → Recording setup**. "
+            f"[Files and units]({docs}guides/loading-data/#tables)",
+        ),
+        (
+            "An imported column is mapped to the wrong field.",
+            "Open **Data Management → Current dataset → Edit dataset**. Under "
+            "**Data tables & column mapping**, choose the right column and save your "
+            "changes. If the column was left out during import, add the dataset again "
+            "from the original files and keep that column.",
+        ),
+        (
+            "Corpus Analysis shows no reading measures.",
+            "Check which dataset and trials are selected. Corpus Analysis needs a Words "
+            "table with a per-word measure such as first fixation duration. For an "
+            "imported dataset, open **Data Management → Current dataset → Edit dataset** "
+            "and map that column under **Words → Reading measures**. "
+            f"[Reading measures]({docs}guides/loading-data/#reading-measures)",
+        ),
+        (
+            "My coauthor can’t open my shared view.",
+            "Links carry settings. The demo and available public corpora open directly. "
+            "For uploads, choose **Download setup file** in **Data Management → Current "
+            "dataset → Edit dataset**. Send it with the original files. Your coauthor "
+            "uses **Add dataset → Import files → Start from → A setup file**, imports "
+            "under the name in the link and reopens it at their app’s address. "
+            f"[Sharing a view]({docs}guides/scanpath-visualization/controls/#under-the-plot)",
+        ),
+        (
+            "Where is my data stored? Will it survive a refresh?",
+            f"{_storage_answer()} [Privacy and storage]({docs}about/#privacy)",
+        ),
+        (
+            "A PDF, image bundle or video won’t export.",
+            "These exports need Chrome, Chromium or Edge on the computer running "
+            "Scanpath Studio. Install one locally or ask the server administrator. "
+            "For a figure you can save now, choose **HTML** or use **PNG** or **SVG** "
+            "under the current plot. "
+            f"[Export troubleshooting]({docs}faq/#export-fails)",
+        ),
+    ]
+    if drift_correction_enabled():
+        items.append(
+            (
+                "What does drift correction change?",
+                "In Full mode, **Fixations → Drift correction** moves the displayed "
+                "fixations to their estimated text lines. Your table keeps the recorded "
+                "coordinates. Open **Line assignment** to compare the ten methods from "
+                "Carr et al. (2021).",
+            )
+        )
+    return items
 
 
 def environment_details() -> str:
-    """The lines a bug report needs, as plain text for the user to paste.
-
-    Where the server is not on loopback (the online demo, a shared install),
-    the OS and install are the *server's*, so it says so rather than let them
-    read as the user's own computer.
-    """
-    import streamlit
-
+    """Version and system details the user can copy into a bug report."""
     from scanpath_studio import __version__
-    from scanpath_studio.build_info import INSTALL_KINDS, install_kind
-    from scanpath_studio.persistence import server_bound_to_loopback
 
-    where = "this computer" if server_bound_to_loopback() else "a server"
+    where = "this computer" if persistence.server_bound_to_loopback() else "a server"
+    kind = install_kind()
     return "\n".join(
         (
             f"Scanpath Studio {__version__}",
-            f"Installed with: {INSTALL_KINDS.get(install_kind(), install_kind())}",
+            f"Installed with: {INSTALL_KINDS.get(kind, kind)}",
             f"Running on: {where}",
             f"OS: {platform.platform(terse=True)} ({platform.machine()})",
-            f"Python {platform.python_version()} · Streamlit {streamlit.__version__}",
+            f"Python {platform.python_version()} · Streamlit {st.__version__}",
         )
     )
 
 
 def _arm_feedback() -> None:
-    """Request the dialog. Called by the ❓ Help nav entry
-    (``menu._arm_help_action``); a dialog can't open from there, so this only
-    sets the flag :func:`maybe_show_feedback` serves early in ``main()``."""
+    """Request troubleshooting from Help or About before the next full rerun."""
     st.session_state[_REQUESTED_KEY] = True
 
 
 def maybe_show_feedback() -> None:
-    """Open the dialog if the ❓ Help entry armed it. Served beside
-    ``maybe_show_about`` for the same reason: before the heavy plot work, so the
-    modal does not wait out the rerun."""
+    """Open the requested dialog before the app draws the current plot."""
     if st.session_state.pop(_REQUESTED_KEY, False):
         _feedback_dialog()
 
 
-@st.dialog(f"{ICONS['feedback']} Send feedback", width="medium")
+@st.dialog(f"{ICONS['feedback']} Troubleshooting & feedback", width="medium")
 @guarded()
 def _feedback_dialog() -> None:
-    """Four routes to GitHub, and the details to paste into a bug report."""
-    st.caption("Each link opens GitHub. The app sends nothing itself.")
-    for key, label, icon, url, purpose in ROUTES:
-        st.link_button(
-            f"{label} ↗",
-            url,
-            help=purpose,
-            icon=ICONS[icon],
-            width="stretch",
-            type="primary" if key == "bug" else "secondary",
+    for problem, answer in troubleshooting_items():
+        with st.expander(problem):
+            st.markdown(answer)
+
+    st.markdown("**Contact the project on GitHub**")
+    with st.container(horizontal=True, gap="small"):
+        st.link_button("Ask a question ↗", CITATION["questions_url"])
+        reporting = st.button("Report a bug", key="help_report_bug")
+        st.link_button("Suggest an improvement ↗", CITATION["ideas_url"])
+    if reporting:
+        st.markdown(
+            "Tell us what you did, what you expected and what happened. "
+            "Copy these details into the GitHub report."
         )
-    st.caption("For a bug report, paste:")
-    st.code(environment_details(), language=None, wrap_lines=True)
+        st.code(environment_details(), language=None, wrap_lines=True)
+        st.link_button("Open bug report on GitHub ↗", CITATION["bug_report_url"])

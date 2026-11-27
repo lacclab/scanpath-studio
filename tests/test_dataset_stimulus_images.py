@@ -317,8 +317,8 @@ class TestTheAddScreen:
         session["data_source_choice"] = "My corpus"
         app.set_dataset_stimulus_images("My corpus", "/imgs", "")
         wizard.rename_dataset("My corpus", "Pilot")
-        assert set(session[DATASET_STIMULUS_IMAGES_KEY]) == {"Pilot"}
-        wizard._remove_dataset("Pilot")
+        assert set(session[DATASET_STIMULUS_IMAGES_KEY]) == {"My corpus"}
+        wizard._remove_dataset("My corpus")
         assert session[DATASET_STIMULUS_IMAGES_KEY] == {}
 
 
@@ -434,7 +434,7 @@ def test_the_editor_saves_the_folder_with_its_dataset(tmp_path):
     run(at)
     assert folder_key not in field_keys(at)  # the editor is closed
 
-    at.button(key=f"dataset_row_edit_{app._dataset_row_slug(DEMO_CHOICE)}").click()
+    at.button(key="data_edit_current").click()
     run(at)
     assert {folder_key, pattern_key} <= field_keys(at)
     at.text_input(key=folder_key).input(str(tmp_path))
@@ -451,6 +451,8 @@ def test_the_editor_saves_the_folder_with_its_dataset(tmp_path):
     # Another dataset's editor starts from its own (no) folder.
     at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
     run(at)
+    pin_data_view(at, section="Dataset library")
+    at.run(timeout=90)
     at.button(key=f"dataset_row_edit_{app._dataset_row_slug(SYNTHETIC_CHOICE)}").click()
     run(at)
     other_folder, _ = app._stimulus_field_keys(SYNTHETIC_CHOICE)

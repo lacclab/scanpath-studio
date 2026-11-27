@@ -6,15 +6,14 @@ description: "Export a publication-ready scanpath, gaze heatmap or comparison fi
 
 Save a scanpath, heatmap or comparison at the size you need.
 
-**Design presets**, **Compare** and **My designs** are in the **Full**
-mode: switch to it in the top bar of the :material/route: **Scanpath** view,
-or add `ui=full` to the app's address
-([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)). In Essentials, the view tiles choose the figure.
+In either mode, use the view tiles to choose a figure. For **Compare readings**
+and **My views**, switch to **Full** at the top of the
+:material/route: **Scanpath View**
+([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 ## 1. Choose the view { #1-choose-the-view }
 
-Pick a trial in the :material/route: **Scanpath** view. Choose one of the
-**Design presets**, or set the layers in the Plot controls. Turn on
+Pick a trial in the :material/route: **Scanpath View**. Choose a **View** tile, or set the layers in Full. Turn on
 :material/compare: **Compare** if the figure needs two readings.
 Check that text and markers are readable and nothing is clipped.
 
@@ -46,10 +45,15 @@ Click the download button for the chosen format, such as **⬇ Download PNG**.
 
 ## 4. Reuse the design or share the figure
 
-- :material/palette: **My designs** in the Plot controls saves the look for
+- :material/palette: **My views** in the Plot controls saves the look for
   other trials.
 - :material/share: **Share** → **Link** reopens the trial and its settings.
-  The link does not carry data you uploaded, so load that data separately.
+  For data you imported, send the source files and tell the recipient the
+  dataset name shown in the link. They can open the link after importing
+  the files under that name. If a comparison uses two imported datasets,
+  send both. Someone who has only A can open its trial and return to the
+  link after adding B. Your own copy of the link still works if you rename
+  either dataset later.
 - [**Share** → **Code**](../../guides/exporting/index.md#from-the-app-to-a-script)
   gives Python or CLI code that redraws the figure.
 - **Share** → **Settings file** → **Download settings** saves the settings,

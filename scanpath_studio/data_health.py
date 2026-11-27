@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from .constants import DRAWABLE_PX_LIMIT
+from .data import DURATION_MISSING, synthesized_onset_mask
 from .multipart import SCREEN_ID
 
 #: How many offending rows a finding quotes.
@@ -64,12 +65,29 @@ class HealthFinding:
             "examples": list(self.examples),
         }
 
+    def to_json_record(self) -> dict:
+        """Keep missing cells and signed infinity distinguishable in a JSON report."""
+
+        def cell(value):
+            if pd.isna(value):
+                return None
+            if isinstance(value, (float, np.floating)) and np.isinf(value):
+                return "Infinity" if value > 0 else "-Infinity"
+            return value
+
+        record = self.to_record()
+        record["examples"] = [
+            {key: cell(value) for key, value in row.items()} for row in self.examples
+        ]
+        return record
+
 
 @dataclass(frozen=True)
 class _Check:
     key: str
     table: str
     title: str
+    topic: str
     columns: tuple[str, ...]
     #: ``frame → {label: mask}``; the finding's rows are their union.
     masks: Callable[[pd.DataFrame], dict[str, pd.Series]]
@@ -82,7 +100,36 @@ def _number(frame: pd.DataFrame, column: str) -> pd.Series:
 
 def _duration_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
     duration = _number(frame, "duration_ms")
-    return {"negative": duration < 0, "zero": duration == 0}
+    zero = (duration == 0) & ~_cut_at_recording_end(frame, duration)
+    return {"negative": duration < 0, "zero": zero}
+
+
+def _cut_at_recording_end(frame: pd.DataFrame, duration: pd.Series) -> pd.Series:
+    """Fixations that begin as their screen's recording ends.
+
+    A fixation report clips each fixation to the recording period, so one that
+    starts on the period's last millisecond is kept at 0 ms. It is recognised
+    by its onset: no fixation of the same reading (and screen) ends after it,
+    and some fixation there lasts longer than 0 ms. On a screen whose every
+    duration is 0 ms the durations themselves are in doubt, so nothing there is
+    recognised; nor is a fixation whose duration was blank (loaded as 0 ms),
+    nor anything without measured onsets or reading keys.
+    """
+    keys = [c for c in ("participant_id", "trial_id", SCREEN_ID) if c in frame]
+    if "timestamp_ms" not in frame or not {"participant_id", "trial_id"} <= set(keys):
+        return pd.Series(False, index=frame.index)
+    onset = _number(frame, "timestamp_ms")
+    # A made-up onset (the reading order) is no clock, and a blank duration
+    # loaded as 0 ms was never measured.
+    measured = ~synthesized_onset_mask(frame)
+    if DURATION_MISSING in frame:
+        measured &= ~frame[DURATION_MISSING].fillna(False).astype(bool)
+    groups = [frame[k] for k in keys]
+    last_end = (
+        (onset + duration.clip(lower=0)).groupby(groups, dropna=False).transform("max")
+    )
+    timed = (duration > 0).groupby(groups, dropna=False).transform("any")
+    return measured & onset.notna() & np.isfinite(onset) & (onset >= last_end) & timed
 
 
 def _timing_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
@@ -131,10 +178,10 @@ def _box_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
 
 #: What a per-screen screen size the figure cannot use does, on either table.
 _CANVAS_CONSEQUENCE = (
-    "They stay in every table and export. The figure ignores a screen size that "
-    "is not one finite, positive number per screen, and draws that screen at the "
-    "size in the Recording setup instead (in the API and on the command line, the "
-    "size given or one fitted to the data)."
+    "These rows stay in your tables and exports. Each screen needs "
+    "consistent, finite, positive dimensions. If its size is invalid or "
+    "inconsistent, the figure uses Recording setup instead. The API and CLI "
+    "use the supplied screen size, or estimate one from the data."
 )
 
 
@@ -145,16 +192,23 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_duration",
         "fixations",
         "Fixations lasting 0 ms or less",
+        "fixation durations",
         ("duration_ms",),
         _duration_masks,
-        "They stay in every table and export, and count at their value in "
-        "duration sums (reading time, dwell). The plot draws them at the smallest "
-        "marker size. A blank or unreadable duration cell also loads as 0 ms.",
+        (
+            "These rows stay in your tables and exports. Their durations, including"
+            " negative values, are included in totals such as reading time and dwell "
+            "time. The plot uses the smallest marker size for them. Blank or "
+            "unreadable durations also load as 0 ms. A 0 ms fixation that starts "
+            "as its screen's recording ends is not counted: the fixation report "
+            "cuts it short there."
+        ),
     ),
     _Check(
         "fixation_timing",
         "fixations",
         "Fixations with an infinite duration or onset",
+        "fixation timing",
         ("duration_ms", "timestamp_ms"),
         _timing_masks,
         "They stay in every table and export. An infinite duration makes every "
@@ -167,6 +221,7 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_position",
         "fixations",
         "Fixations with no usable position",
+        "fixation positions",
         ("x", "y"),
         _position_masks,
         "They stay in every table and export. The plot leaves out their markers "
@@ -178,15 +233,18 @@ CHECKS: tuple[_Check, ...] = (
         "raw_gaze_position",
         "raw_gaze",
         "Raw-gaze samples with no usable position",
+        "gaze sample positions",
         ("x", "y"),
         _position_masks,
-        "They stay in the table and its export. The raw-gaze layer leaves them "
-        "out. Missing positions are common in raw gaze (blinks, track loss).",
+        "Their timestamps and other recorded fields stay in the table and its "
+        "export. A sample needs both coordinates to appear on the spatial plot. "
+        "Missing positions are common during blinks or tracking loss.",
     ),
     _Check(
         "word_box_size",
         "words",
         "Word boxes with no area or no usable position",
+        "word boxes",
         ("x", "y", "width", "height"),
         _box_masks,
         "They stay in every table and export. A box with no area contains no "
@@ -199,6 +257,7 @@ CHECKS: tuple[_Check, ...] = (
         "word_canvas",
         "words",
         "Word rows with an unusable screen size",
+        "screen dimensions",
         ("canvas_width", "canvas_height"),
         _canvas_masks,
         _CANVAS_CONSEQUENCE,
@@ -207,6 +266,7 @@ CHECKS: tuple[_Check, ...] = (
         "fixation_canvas",
         "fixations",
         "Fixations with an unusable screen size",
+        "screen dimensions",
         ("canvas_width", "canvas_height"),
         _canvas_masks,
         _CANVAS_CONSEQUENCE,
@@ -218,6 +278,34 @@ def _examples(frame: pd.DataFrame, mask: pd.Series, columns, n: int) -> tuple:
     keys = [c for c in _EXAMPLE_KEYS if c in frame.columns]
     shown = frame.loc[mask, [*keys, *columns]].head(n)
     return tuple(shown.to_dict("records"))
+
+
+def affected_rows(frame: pd.DataFrame, finding: HealthFinding) -> pd.DataFrame:
+    """All affected rows of one check, using the same predicates as its totals."""
+    check = next((c for c in CHECKS if c.key == finding.check), None)
+    if check is None or not set(check.columns) <= set(frame):
+        return frame.iloc[:0]
+    masks = check.masks(frame).values()
+    selected = np.logical_or.reduce(
+        [m.fillna(False).to_numpy(dtype=bool) for m in masks]
+    )
+    columns = dict.fromkeys(
+        (*_EXAMPLE_KEYS, "source_file", "fixation_id", "word_id", *check.columns)
+    )
+    return frame.loc[selected, [c for c in columns if c in frame]].reset_index(
+        drop=True
+    )
+
+
+def applicable_checks(frames: dict) -> list[_Check]:
+    """Checks for which the dataset supplies rows and all required columns."""
+    return [
+        check
+        for check in CHECKS
+        if (frame := frames.get(check.table)) is not None
+        and not frame.empty
+        and all(column in frame for column in check.columns)
+    ]
 
 
 def check_data_health(
@@ -237,12 +325,8 @@ def check_data_health(
     """
     frames = {"words": words, "fixations": fixations, "raw_gaze": raw_gaze}
     findings: list[HealthFinding] = []
-    for check in CHECKS:
+    for check in applicable_checks(frames):
         frame = frames[check.table]
-        if frame is None or frame.empty:
-            continue
-        if any(c not in frame.columns for c in check.columns):
-            continue
         masks = {k: m.fillna(False) for k, m in check.masks(frame).items()}
         union = pd.Series(False, index=frame.index)
         for mask in masks.values():

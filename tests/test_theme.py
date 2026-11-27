@@ -153,3 +153,17 @@ def test_wordmark_has_a_transparent_dark_variant():
     css = app_mod._logo_theme_css()
     assert "light-dark(url(data:image/png" in css
     assert "prefers-color-scheme: dark" in css
+
+
+# --- The hosted demo's cache budget --------------------------------------------
+# Streamlit reads this value only when the server starts, and AppTest never
+# starts one, so an invalid value would first show as Streamlit Cloud failing
+# to boot.
+
+
+def test_cache_data_budget_is_a_value_streamlit_accepts():
+    from streamlit.byte_util import config_max_cache_data_size_to_bytes
+
+    server = tomllib.loads(_CONFIG_TOML.read_text(encoding="utf-8"))["server"]
+    budget = config_max_cache_data_size_to_bytes(server["maxCacheDataSize"])
+    assert budget == 1024**3

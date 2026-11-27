@@ -15,7 +15,14 @@ import inspect
 
 import pytest
 
-from tests.conftest import APP_SCRIPT, pin_view
+from tests.conftest import (
+    APP_SCRIPT,
+    find_keyed,
+    keys_around,
+    keys_in_screen_order,
+    open_dataset_editor,
+    page_nodes,
+)
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -92,8 +99,15 @@ class TestThePartHeadline:
     def test_the_add_screens_own_parts_stay_plain(self):
         """`note` is opt-in: "Dataset name" needs no explanation, and a dotted
         underline under a self-evident title is noise."""
-        source = " ".join(inspect.getsource(_render_data_setup_source()).split())
-        assert "note=" not in source
+        from scanpath_studio import app
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run()
+        assert not at.exception, at.exception
+        parts = TestThePageItDraws._parts(at)
+        assert len(parts) >= 3, parts
+        assert not [part for part in parts if "sps-fhelp" in part]
 
     def test_the_hover_carrier_is_styled_inside_a_part(self):
         """`.sps-fhelp` only gets its dotted-underline cue in the contexts named
@@ -103,22 +117,13 @@ class TestThePartHeadline:
         assert ".sps-wiz-part .sps-fhelp" in get_app_css()
 
 
-def _render_data_setup_source():
-    from scanpath_studio.wizard import _render_data_setup
-
-    return _render_data_setup
-
-
 class TestThePageItDraws:
     """Drive the real app on the 🗂️ Data view and read what it rendered."""
 
     @staticmethod
     def _data_page():
-        from scanpath_studio.constants import _VIEW_DATA
-
         at = AppTest.from_file(APP_SCRIPT, default_timeout=600)
-        pin_view(at, _VIEW_DATA)
-        at.run()
+        open_dataset_editor(at)
         assert not at.exception, at.exception
         assert [e.value for e in at.error] == []
         return at
@@ -168,53 +173,40 @@ class TestThePageItDraws:
         ] == []
 
     def test_the_recording_setup_body_still_renders(self):
-        """Re-hosting it must not drop it: the provenance summary is the read-only
-        mode's whole content."""
+        """The demo editor offers the recording setup controls under its heading."""
         at = self._data_page()
-        cells = [
-            m.value for m in at.markdown if "sps-readonly-map-label" in str(m.value)
-        ]
-        assert len(cells) >= 3
+        assert any(w.key.endswith("_setup_screen_mode") for w in at.segmented_control)
 
 
 class TestTheSlotOrder:
     """Creation order is screen order, so the reservations *are* the layout."""
 
-    @staticmethod
-    def _positions(*names):
-        from scanpath_studio import app
-
-        # `main` wraps the run in a loading scope; `_run_app` is the run.
-        source = inspect.getsource(app._run_app)
-        found = {}
-        for name in names:
-            marker = f"{name} = editor_page.container("
-            assert marker in source, name
-            found[name] = source.index(marker)
-        return found
-
     def test_metadata_sits_with_the_mapping_ahead_of_recording_setup(self):
         """The add screen's order: every upload and its mapping, the metadata
         tables under the same heading, then Recording setup and Stimulus images
         — and only then the parts that need the finished dataset."""
-        pos = self._positions(
-            "editor_part_data_slot",
-            "setup_metadata_slot",
-            "setup_recording_slot",
-            "setup_stimulus_slot",
-            "setup_identity_slot",
-            "setup_preproc_slot",
-            "editor_footer_slot",
-        )
-        assert (
-            pos["editor_part_data_slot"]
-            < pos["setup_metadata_slot"]
-            < pos["setup_recording_slot"]
-            < pos["setup_stimulus_slot"]
-            < pos["setup_identity_slot"]
-            < pos["setup_preproc_slot"]
-            < pos["editor_footer_slot"]
-        )
+        at = TestThePageItDraws._data_page()
+        keys = keys_in_screen_order(at._tree)
+        # Each part's headline, in the slot reserved for it.
+        for slot, step in (
+            ("tutorial_recording_setup", "edit_setup"),
+            ("tutorial_stimulus_images", "edit_stimulus"),
+            ("tutorial_trial_identity", "edit_identity"),
+            ("tutorial_preprocessing", "edit_preproc"),
+        ):
+            assert slot in keys_around(at, f"wiz_part_{step}"), step
+        order = [
+            "wiz_part_edit_data",
+            "tutorial_column_mapping",
+            "tutorial_participant_metadata",
+            "wiz_part_edit_setup",
+            "wiz_part_edit_stimulus",
+            "wiz_part_edit_identity",
+            "wiz_part_edit_preproc",
+            "dataset_editor_footer",
+        ]
+        positions = [keys.index(key) for key in order]
+        assert positions == sorted(positions), order
 
 
 class TestTheRehostedRenderer:
@@ -236,18 +228,49 @@ class TestTheRehostedRenderer:
             name = "setup_host" if "setup_host" in params else "host"
             assert params[name].default is None, func.__name__
 
-    def test_a_hosted_provenance_note_drops_its_heading(self):
-        source = " ".join(
-            inspect.getsource(_render_setup_provenance_note_source()).split()
-        )
-        assert "box = st if host is None else host" in source
-        assert 'if host is None: box.markdown("##### Recording setup")' in source
+    @pytest.mark.parametrize("hosted", [False, True])
+    def test_a_hosted_provenance_note_drops_its_heading(self, hosted):
+        """Inline the note titles itself; in a host — the editor's own
+        Recording setup part — it draws its summary there, untitled."""
+        at = AppTest.from_function(_provenance_note_app)
+        at.session_state["hosted"] = hosted
+        at.run()
+        assert not at.exception, at.exception
+        titles = [m for m in at.markdown if m.value.startswith("##### Recording setup")]
+        assert len(titles) == (0 if hosted else 1)
+        cells = [
+            node
+            for node, _ in page_nodes(at._tree)
+            if node.type == "markdown" and "sps-readonly-map-cell" in node.value
+        ]
+        assert len(cells) == 3
+        if hosted:
+            part, _ = find_keyed(at, "setup_part")
+            in_part = {id(node) for node, _ in page_nodes(part)}
+            assert all(id(cell) in in_part for cell in cells)
 
 
-def _render_setup_provenance_note_source():
+def _provenance_note_app():
+    """The recording-setup note for a known setup, inline or in a host."""
+    import streamlit as st
+
+    from scanpath_studio.experimental_setup import SetupSnapshot
     from scanpath_studio.tabs import _render_setup_provenance_note
 
-    return _render_setup_provenance_note
+    st.session_state["_wizard_setup_snapshot"] = SetupSnapshot().to_dict()
+    if st.session_state.get("hosted"):
+        _render_setup_provenance_note(host=st.container(key="setup_part"))
+    else:
+        _render_setup_provenance_note()
+
+
+def _no_mapping_app():
+    """The editor's mapping section for a source with no mapping to show."""
+    import streamlit as st
+
+    from scanpath_studio.tabs import _render_column_mapping_section
+
+    _render_column_mapping_section(setup_host=st.container(key="setup_part"))
 
 
 class TestNoNumberedPartIsLeftEmpty:
@@ -295,19 +318,13 @@ class TestNoNumberedPartIsLeftEmpty:
         assert written == []
 
     def test_no_mapping_available_does_not_skip_the_setup_part(self):
-        """Mode C (no mapping) must not `return` before the setup part, or the
-        part below it is stranded."""
-        source = " ".join(
-            inspect.getsource(_render_column_mapping_section_source()).split()
-        )
-        _head, _, tail = source.partition(
-            'st.info("No column mapping available for the current dataset.")'
-        )
-        assert tail, "the no-mapping branch moved — re-check this assertion"
-        assert "_render_setup_provenance_note(host=setup_host)" in tail
-
-
-def _render_column_mapping_section_source():
-    from scanpath_studio.tabs import _render_column_mapping_section
-
-    return _render_column_mapping_section
+        """Mode C (no mapping) must still fill the setup part, or the part's
+        headline is stranded over nothing."""
+        at = AppTest.from_function(_no_mapping_app).run()
+        assert not at.exception, at.exception
+        assert [i.value for i in at.info] == [
+            "No column mapping available for the current dataset."
+        ]
+        part, _ = find_keyed(at, "setup_part")
+        said = [str(n.value) for n, _ in page_nodes(part) if n.type == "caption"]
+        assert any("doesn't state the screen" in s for s in said), said

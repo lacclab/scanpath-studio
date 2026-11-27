@@ -1,84 +1,160 @@
-"""Tests for the synthesized raw-gaze demo sample (update_sample_data)."""
+"""The published L1 demo readings share one clock with their EyeLink samples."""
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+import pytest
 
 from scanpath_studio.update_sample_data import (
-    _RAW_GAZE_COLUMNS,
-    synthesize_raw_gaze,
+    DEFAULT_OUTPUT_DIR,
+    extract_raw_gaze,
+    without_lost_pupil,
+    write_tables,
 )
 
 
-def _fixations():
+def _report():
     return pd.DataFrame(
         {
-            "participant_id": ["p1", "p1", "p1", "p1", "p1"],
-            "unique_trial_id": ["p1_T1", "p1_T1", "p1_T1", "p1_T2", "p1_T2"],
-            "CURRENT_FIX_X": [100, 200, 300, 100, 200],
-            "CURRENT_FIX_Y": [100, 100, 100, 300, 300],
-            "CURRENT_FIX_DURATION": [200, 150, 180, 100, 120],
-            "CURRENT_FIX_START": [0, 400, 800, 0, 300],
+            "participant_id": ["reader"],
+            "unique_trial_id": ["reader_p"],
+            "unique_paragraph_id": ["p"],
+            "TRIAL_START_TIME": [1000],
+            "IP_START_TIME": [1010],
+            "IP_END_TIME": [1014],
+            "EYE_TRACKED": ["Left"],
         }
     )
 
 
-def _ia(trial="p1_T1"):
-    return pd.DataFrame({"participant_id": ["p1"], "unique_trial_id": [trial]})
+_ASC = """START 900 LEFT SAMPLES EVENTS
+SAMPLES GAZE LEFT RATE 1000.00
+901 11.1 12.3 500 ...
+END 950 SAMPLES EVENTS
+START 1000 LEFT SAMPLES EVENTS
+PUPIL AREA
+SAMPLES GAZE LEFT RATE 1000.00
+1009 1.1 2.2 500 ...
+1010 9.3 71.2 501 ...
+1011 . . 0 ...
+1012 3.2 . 0 ...
+1013 -3.1 208.8 502 ...
+1014 2.2 3.3 500 ...
+END 1020 SAMPLES EVENTS
+"""
 
 
-def test_synthesize_keys_to_shared_trial():
-    rg = synthesize_raw_gaze(_fixations(), _ia("p1_T1"), seed=1)
-    assert list(rg.columns) == _RAW_GAZE_COLUMNS
-    assert not rg.empty
-    # Only the trial present in BOTH tables is used.
-    assert set(rg["unique_trial_id"]) == {"p1_T1"}
-    assert set(rg["participant_id"]) == {"p1"}
-    # Gaze points stay within the trial's spatial extent (+ jitter).
-    assert rg["x"].between(50, 350).all()
-    assert rg["y"].between(50, 150).all()
-
-
-def test_synthesize_empty_without_shared_trial():
-    rg = synthesize_raw_gaze(_fixations(), _ia("p1_NOPE"), seed=1)
-    assert rg.empty
-    assert list(rg.columns) == _RAW_GAZE_COLUMNS
-
-
-def test_synthesize_is_deterministic():
-    a = synthesize_raw_gaze(_fixations(), _ia("p1_T1"), seed=7)
-    b = synthesize_raw_gaze(_fixations(), _ia("p1_T1"), seed=7)
-    pd.testing.assert_frame_equal(a, b)
-
-
-def test_synthesize_handles_missing_columns():
-    bad_fix = pd.DataFrame({"participant_id": ["p1"], "unique_trial_id": ["p1_T1"]})
-    rg = synthesize_raw_gaze(bad_fix, _ia("p1_T1"))
-    assert rg.empty
-
-
-def test_bundled_raw_gaze_overlaps_a_bundled_trial():
-    """The shipped raw_gaze sample covers a (participant, trial) that exists in
-    the shipped fixations — otherwise the app filters it to 0 rows."""
-    import pytest
-
-    from scanpath_studio.data import load_sample_data, load_sample_raw_gaze
-
-    _, fixations = load_sample_data()
-    raw_gaze = load_sample_raw_gaze()
-    if raw_gaze.empty:
-        pytest.skip("no bundled raw-gaze sample")
-    assert {"participant_id", "unique_trial_id"}.issubset(raw_gaze.columns)
-    fix_keys = set(
-        zip(
-            fixations["participant_id"].astype(str),
-            fixations["unique_trial_id"].astype(str),
-        )
+@pytest.mark.parametrize(
+    ("declared", "column"), [("AREA", "pupil_area"), ("DIAMETER", "pupil_diameter")]
+)
+def test_extracts_the_report_interval_on_the_trial_clock(tmp_path, declared, column):
+    (tmp_path / "reader_clean.asc").write_text(
+        _ASC.replace("PUPIL AREA", f"PUPIL {declared}")
     )
-    rg_keys = set(
-        zip(
-            raw_gaze["participant_id"].astype(str),
-            raw_gaze["unique_trial_id"].astype(str),
-        )
+    gaze = extract_raw_gaze(_report(), tmp_path)
+    assert gaze["timestamp_ms"].tolist() == [10, 11, 12, 13]
+    np.testing.assert_equal(gaze["x"].to_numpy(), [9.3, np.nan, 3.2, -3.1])
+    np.testing.assert_equal(gaze["y"].to_numpy(), [71.2, np.nan, np.nan, 208.8])
+    # EyeLink's 0 for a sample without a position is no measurement.
+    np.testing.assert_equal(gaze[column].to_numpy(), [501, np.nan, np.nan, 502])
+    assert set(gaze["eye"]) == {"Left"}
+
+
+def test_a_lost_eyes_zero_pupil_is_missing_but_a_measured_zero_stays():
+    assert np.isnan(without_lost_pupil(np.nan, np.nan, 0.0))
+    assert np.isnan(without_lost_pupil(3.2, np.nan, 0.0))
+    assert without_lost_pupil(3.2, 4.0, 0.0) == 0
+    assert without_lost_pupil(np.nan, np.nan, 480.0) == 480
+
+
+def test_raw_gaze_ships_as_parquet_alone(tmp_path):
+    (tmp_path / "raw_gaze.csv").write_text("left,over\n")
+    table = pd.DataFrame({"x": [1.0], "y": [2.0]})
+    write_tables(tmp_path, ia=table, raw_gaze=table)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "ia.csv",
+        "ia.parquet",
+        "raw_gaze.parquet",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("asc", "problem"),
+    [
+        (_ASC.replace("START 1000", "START 999"), "no matching recording block"),
+        (_ASC.replace("GAZE LEFT", "GAZE RIGHT"), "monocular GAZE LEFT"),
+        (_ASC.replace("GAZE LEFT", "HREF LEFT"), "monocular GAZE LEFT"),
+        (_ASC.replace("PUPIL AREA", "PUPIL UNKNOWN"), "pupil measurement type"),
+        (_ASC.replace("END 1020 SAMPLES EVENTS", ""), "Missing END"),
+    ],
+)
+def test_mismatched_or_incomplete_recordings_stop_the_build(tmp_path, asc, problem):
+    (tmp_path / "reader.asc").write_text(asc)
+    with pytest.raises(ValueError, match=problem):
+        extract_raw_gaze(_report(), tmp_path)
+
+
+def test_bundled_samples_match_the_public_recordings_and_report_windows():
+    raw = pd.read_parquet(DEFAULT_OUTPUT_DIR / "raw_gaze.parquet")
+    assert not (DEFAULT_OUTPUT_DIR / "raw_gaze.csv").exists()
+    fixes = pd.read_parquet(DEFAULT_OUTPUT_DIR / "fixations.parquet")
+    words = pd.read_parquet(DEFAULT_OUTPUT_DIR / "ia.parquet")
+    # Every screen of a reading has its own interest period and samples.
+    keys = ["participant_id", "unique_trial_id", "part"]
+    screens = fixes.groupby(keys)
+    gaze = raw.groupby(keys)
+    assert set(gaze.groups) == set(screens.groups) == set(words.groupby(keys).groups)
+    assert raw.groupby(keys[:2]).ngroups == 24
+    assert len(gaze) == 124
+    assert raw["unique_paragraph_id"].nunique() == 12
+    assert (
+        gaze["unique_paragraph_id"]
+        .first()
+        .equals(screens["unique_paragraph_id"].first())
     )
-    assert rg_keys & fix_keys, "bundled raw gaze overlaps no bundled trial"
+    assert gaze["screen_index"].first().equals(screens["screen_index"].first())
+    bounds = screens[["IP_START_TIME", "IP_END_TIME", "TRIAL_START_TIME"]].first()
+    times = gaze["timestamp_ms"].agg(["min", "max"])
+    assert (times["min"] >= bounds["IP_START_TIME"] - bounds["TRIAL_START_TIME"]).all()
+    assert (times["max"] < bounds["IP_END_TIME"] - bounds["TRIAL_START_TIME"]).all()
+    assert gaze["timestamp_ms"].diff().dropna().eq(1).all()
+    assert gaze.size().equals(bounds["IP_END_TIME"] - bounds["IP_START_TIME"])
+    assert len(raw) == 640_441
+    assert raw["part"].eq("Paragraph").sum() == 401_200
+    lost = raw[["x", "y"]].isna().any(axis=1)
+    assert lost.sum() == 19_043
+    # A sample without a position has no pupil value either; every measured
+    # pupil is a real size.
+    assert raw["pupil_area"].isna().equals(lost)
+    assert raw["pupil_area"].min() >= 30
+    assert gaze["eye"].first().equals(screens["EYE_TRACKED"].first())
+    # First paragraph sample for each reader, transcribed from the two ASCs.
+    passage = raw[raw["part"].eq("Paragraph")].drop(columns=["part", "screen_index"])
+    first = passage.groupby("participant_id", sort=True).first()
+    assert list(first.itertuples(name=None)) == [
+        (
+            "l37_273",
+            "l37_273_2_2_1_Adv",
+            "2_2_1_Adv",
+            381.6,
+            208.8,
+            5835,
+            1362,
+            "Right",
+        ),
+        ("l7_183", "l7_183_2_2_1_Adv", "2_2_1_Adv", 369.9, 208.5, 7165, 1501, "Left"),
+    ]
+
+
+def test_demo_highlights_match_the_released_per_word_labels():
+    words = pd.read_parquet(DEFAULT_OUTPUT_DIR / "ia.parquet")
+    assert set(words["auxiliary_span_type"]) == {"critical", "distractor", "outside"}
+    # The spans are ranges of the paragraph's words; the other screens carry the
+    # labels by word position, so only the paragraph's words are flagged.
+    passage = words["part"].eq("Paragraph")
+    for flag, label in (("is_in_aspan", "critical"), ("is_in_dspan", "distractor")):
+        assert words[flag].equals(words["auxiliary_span_type"].eq(label) & passage)
+        assert (
+            words.loc[~passage, flag.replace("is_in_", "") + "_ind_start"].isna().all()
+        )

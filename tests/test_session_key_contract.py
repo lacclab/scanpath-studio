@@ -290,6 +290,8 @@ def test_deep_link_seeds_frozen_state_keys():
         # assertion below vacuous for them.
         sk.COMPARE_PARAM: "p2:t2",
         sk.COMPARE_SOURCE_PARAM: "synthetic",
+        # Parked for the Comparisons subtab (`MATCH_LINK_STATE_KEY`).
+        sk.PARAM_MATCH: "same_text",
     }
     # Plausible values per encoding — a bad one would be dropped with a warning
     # (asserted empty below), which would hide a missing key. A param whose
@@ -315,6 +317,7 @@ def test_deep_link_seeds_frozen_state_keys():
     validated["heatmap_style"] = "Smoothed"
     validated["heatmap_colorbar_orientation"] = "Horizontal"
     validated["marker_size_scale"] = "linear"
+    validated["order_label_position"] = "inside"
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Hide"
         validated[f"fixclass_{category}_symbol"] = "x"
@@ -323,6 +326,22 @@ def test_deep_link_seeds_frozen_state_keys():
     validated["cmp_b_saccade_classes"] = "forward,regression"
     # The print width's unit.
     validated["export_width_unit"] = "in"
+    # The rest of the closed vocabularies: each control's own option.
+    validated.update(
+        {
+            "bg_choice": "White",
+            "critical_span_style": "Underline",
+            "fixation_symbol": "square",
+            "heatmap_metric": "duration_ms",
+            "heatmap_norm": "Log",
+            "illustration_label": "Auto",
+            "palette": "Print / grayscale",
+            "preproc_short_policy": "Merge",
+            "saccade_color_mode": "By type",
+            "saccade_render_mode": "Arc",
+            "saccade_style": "Dashed",
+        }
+    )
     # A per-scanpath line style is the selectbox's own label.
     validated.update(
         {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}
@@ -539,10 +558,11 @@ def _restore_config_app():
             "duration_size_legend": False,
             "order_font_size": 12,
             "order_font_color": "#000000",
+            "order_label_position": "below",
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},
-        # Figure & canvas → Legends: every legend, as the writer saves them.
+        # Figure → Legends: every legend, as the writer saves them.
         "legends": {
             "compare": {"position": "left", "arrangement": "stacked", "size": 14},
             "saccades": {"position": "right", "arrangement": "auto", "size": None},
@@ -556,6 +576,8 @@ def _restore_config_app():
         "axes": {
             "x_field": numeric[0],
             "y_field": numeric[1],
+            "reverse_x": True,
+            "reverse_y": True,
             "coordinate_grid": True,
             "coordinate_grid_auto": False,
             "coordinate_grid_spacing": 250.0,
@@ -619,8 +641,14 @@ def _restore_config_app():
         "selection": {
             "participant_id": "p1",
             "trial_id": "t1",
-            # Schema 6 — scanpath B by identity, in the same dataset.
-            "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
+            "fixation_window": [2, 4],
+            "window_all_trials": False,
+            "compare": {
+                "participant_id": "p2",
+                "trial_id": "t1",
+                "screen_id": "2",
+                "fixation_window": [3, 5],
+            },
         },
         "mode": {"animate": True, "compare": True},
         # The finer design choices.
@@ -634,6 +662,8 @@ def _restore_config_app():
             "show_credit": True,
             "plot_frame_color": "#999999",
             "saccade_arrow_size": 18.0,
+            "anim_grow_start": 0.4,
+            "anim_fade_opacity": 0.5,
             "fixation_outline_width": 1.5,
             "fixation_outline_color": "#336699",
             "coordinate_grid_font_size": 12,
@@ -805,7 +835,7 @@ def test_compare_selection_round_trips_through_the_share_link():
 
 
 def _compare_share_unshareable_app():
-    """A stored upload as B can't travel — the link must say so, not drop it."""
+    """A stale selection naming a removed source cannot be shared."""
     import streamlit as st
 
     from scanpath_studio.constants import DEMO_CHOICE
@@ -835,16 +865,59 @@ def test_an_unshareable_compare_source_is_declared_not_dropped():
     # the recipient on a trial id looked up in the *wrong* corpus.
     assert sk.COMPARE_PARAM not in emitted
     assert sk.COMPARE_SOURCE_PARAM not in emitted
+    assert sk.COMPARE_DATASET_PARAM not in emitted
+    assert sk.COMPARE_DATASET_ID_PARAM not in emitted
     assert any("My upload" in caveat for caveat in at.session_state["_caveats"])
 
 
-def test_url_bound_widget_keys_frozen():
-    # Streamlit's bind="query-params" makes the key the URL param and the tab
-    # label its value: renaming either breaks a bookmarked Corpus Analysis view.
+def test_b_dataset_reference_params_are_pinned():
+    params = {
+        sk.COMPARE_DATASET_PARAM,
+        sk.COMPARE_DATASET_ID_PARAM,
+        sk.COMPARE_DATASET_DIGEST_PARAM,
+        sk.COMPARE_CORPUS_PARAM,
+    }
+    assert params == {
+        "cmp_dataset",
+        "cmp_dataset_id",
+        "cmp_dataset_digest",
+        "cmp_corpus",
+    }
+    assert params <= sk.URL_SELECTION_PARAMS
+    assert params <= sk.URL_OPTIONAL_PARAMS
+
+
+def test_match_param_is_pinned():
+    """The Comparisons subtab's *Match field*: navigation, written only from
+    that subtab, so a link may lack it and the settings file never has it."""
+    assert sk.PARAM_MATCH == "match"
+    assert sk.PARAM_MATCH in sk.URL_SELECTION_PARAMS
+    assert sk.PARAM_MATCH in sk.URL_OPTIONAL_PARAMS
+    assert sk.PARAM_MATCH not in sk.SHARE_PARAMS
+    assert sk.MATCH_LINK_STATE_KEY == "_match_link"
+    assert sk.MATCH_LINK_STATE_KEY in sk.URL_SEEDED_STATE_KEYS
+
+
+def test_fixation_window_scope_param_is_pinned():
+    """*Keep this range across trials* on the link: a switch, written only
+    while on, so a link may lack it."""
+    assert sk.SHARE_TOGGLE_PARAMS["fix_range_all_trials"] == (
+        "single_fix_range_all_trials"
+    )
+    assert "fix_range_all_trials" in sk.URL_OPTIONAL_PARAMS
+
+
+def test_corpus_bookmark_keys_and_sections_frozen():
+    # Existing links and tutorial steps still use the published section names.
     from scanpath_studio import tabs
 
-    assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
+    assert sk.URL_BOUND_WIDGET_KEYS == {
+        "corpus_subtab",
+        "corpus_group_by",
+        "corpus_measure",
+    }
     assert tabs.CORPUS_SUBTABS == (
+        "Overview",
         "Per text",
         "Per sentence",
         "Per participant",
@@ -888,3 +961,10 @@ def test_the_groups_setup_survives_another_subtab():
     assert not at.exception, at.exception
     assert at.toggle(key="groups_compare").value is True
     assert at.multiselect(key="cmp_b").value == ["Adv", "Ele"]
+
+
+def test_replay_fixations_param_is_pinned():
+    """A replay link with fixations hidden says so explicitly; one without
+    this param was written before it existed and reopens with fixations."""
+    assert sk.REPLAY_FIXATIONS_PARAM == "replay_fixations"
+    assert "replay_fixations" in sk.URL_OPTIONAL_PARAMS

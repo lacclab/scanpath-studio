@@ -279,7 +279,7 @@ def test_the_run_logs_its_computations_and_selections():
 
 
 def _boot_with_debug_open(**session) -> AppTest:
-    """Boot with the ❓ Help → About → Debug modal open.
+    """Boot with the Debug drawer open.
 
     Its widgets render only while it is open, and `arm_debug_dialog` has to be
     repeated before every run (AppTest replays the whole script rather than
@@ -322,7 +322,7 @@ def test_the_toggle_reveals_the_panel():
 
 
 def test_debug_opens_from_about_not_the_help_menu():
-    """Debug is not in the ❓ Help menu; it is a button at the foot of About."""
+    """About's App details tab opens the Debug drawer."""
     from scanpath_studio import debug_log, menu
 
     assert "help_debug" not in menu._HELP_PAGES
@@ -334,7 +334,8 @@ def test_debug_opens_from_about_not_the_help_menu():
 
     at = AppTest.from_function(script).run()
     assert not at.exception, at.exception
-    at.button(key="about_open_debug").click().run()
+    details = next(tab for tab in at.tabs if tab.label == "App details")
+    details.button(key="about_open_debug").click().run()
     assert not at.exception, at.exception
     assert at.session_state[debug_log._DEBUG_DIALOG_KEY] is True
 

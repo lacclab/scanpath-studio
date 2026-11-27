@@ -134,9 +134,117 @@ class TestChecks:
         assert len(findings) == 4
         assert all("stay in" in f.consequence for f in findings)
 
-    def test_the_bundled_demo_is_clean(self):
-        words, fixations = api.load_sample_data()
-        assert check_data_health(words, fixations, api.load_sample_raw_gaze()) == []
+    def test_the_bundled_demo_reports_only_its_recorded_gaze_gaps(self):
+        """The demo's one 0 ms fixation starts as the interest period of its
+        Answers screen ends, so the report cut it short and it is not flagged."""
+        words, fixations = api.load_sample_data(names="canonical")
+        assert (fixations["duration_ms"] == 0).sum() == 1
+        findings = check_data_health(words, fixations, api.load_sample_raw_gaze())
+        assert [(f.check, f.severity, f.rows) for f in findings] == [
+            ("raw_gaze_position", "note", 19_043),
+        ]
+
+    @pytest.mark.parametrize(
+        ("onsets", "durations", "flagged"),
+        [
+            # Starts as the last fixation ends: cut by the recording's end.
+            ([0.0, 100.0, 300.0], [100.0, 200.0, 0.0], 0),
+            # Another fixation ends after it: a 0 ms fixation mid-reading.
+            ([0.0, 100.0, 300.0], [100.0, 0.0, 200.0], 1),
+            # Starts before the previous fixation ends: overlapping, not cut.
+            ([0.0, 100.0, 250.0], [100.0, 200.0, 0.0], 1),
+            # No onset to tell by.
+            ([0.0, 100.0, np.nan], [100.0, 200.0, 0.0], 1),
+        ],
+    )
+    def test_a_fixation_cut_at_the_recording_end_is_not_flagged(
+        self, onsets, durations, flagged
+    ):
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "timestamp_ms": onsets,
+                "duration_ms": durations,
+            }
+        )
+        found = _by_check(check_data_health(None, fixations))
+        rows = found["fixation_duration"].rows if "fixation_duration" in found else 0
+        assert rows == flagged
+
+    def test_each_screen_ends_its_own_recording(self):
+        """On a trial over several screens, each screen's last fixation is
+        judged against its own screen, not the whole trial."""
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1"] * 4,
+                "screen_id": ["a", "a", "b", "b"],
+                "timestamp_ms": [0.0, 100.0, 500.0, 600.0],
+                "duration_ms": [100.0, 0.0, 100.0, 50.0],
+            }
+        )
+        assert "fixation_duration" not in _by_check(check_data_health(None, fixations))
+
+    def test_a_screen_with_no_timed_fixation_flags_them_all(self):
+        """Every duration 0 ms (a duration mapped to the wrong column): the
+        last fixation is not taken for one cut at the end."""
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "timestamp_ms": [0.0, 100.0, 300.0],
+                "duration_ms": [0.0, 0.0, 0.0],
+            }
+        )
+        found = _by_check(check_data_health(None, fixations))["fixation_duration"]
+        assert found.rows == 3
+
+    def test_a_blank_last_duration_is_still_flagged(self):
+        """A blank duration loads as 0 ms but was never measured, so it is
+        flagged even on the reading's last fixation."""
+        raw = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "CURRENT_FIX_START": [0, 250, 500],
+                "CURRENT_FIX_DURATION": [200, 250, None],
+                "CURRENT_FIX_X": [1.0, 2.0, 3.0],
+                "CURRENT_FIX_Y": [1.0, 1.0, 1.0],
+            }
+        )
+        fixations = api.load_scanpath_data(fixations=raw, names="canonical").fixations
+        found = _by_check(check_data_health(None, fixations))["fixation_duration"]
+        assert found.breakdown == {"zero": 1}
+
+    def test_a_reading_order_is_no_clock(self):
+        """Without mapped onsets the app numbers fixations 0, 1, 2, …; that is
+        no time, so a 0 ms fixation at the end is still flagged. Read as a
+        clock, these short durations would end before it starts."""
+        raw = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "CURRENT_FIX_DURATION": [0.2, 1.0, 0.0],
+                "CURRENT_FIX_X": [1.0, 2.0, 3.0],
+                "CURRENT_FIX_Y": [1.0, 1.0, 1.0],
+            }
+        )
+        fixations = api.load_scanpath_data(fixations=raw, names="canonical").fixations
+        found = _by_check(check_data_health(None, fixations))["fixation_duration"]
+        assert found.breakdown == {"zero": 1}
+
+    def test_a_negative_duration_at_the_end_is_still_flagged(self):
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                "timestamp_ms": [0.0, 300.0],
+                "duration_ms": [100.0, -5.0],
+            }
+        )
+        found = _by_check(check_data_health(None, fixations))["fixation_duration"]
+        assert found.breakdown == {"negative": 1}
 
     def test_a_table_without_the_columns_is_not_checked(self):
         assert check_data_health(pd.DataFrame({"a": [1]}), pd.DataFrame()) == []
@@ -156,7 +264,10 @@ class TestApi:
 
     def test_clean_data_gives_an_empty_table_with_its_columns(self):
         words, fixations = api.load_sample_data()
-        table = api.check_data_health(words, fixations)
+        paragraph = [
+            frame[frame["part"] == "Paragraph"] for frame in (words, fixations)
+        ]
+        table = api.check_data_health(*paragraph)
         assert table.empty
         assert {"table", "check", "rows", "what_happens"} <= set(table.columns)
 
@@ -196,13 +307,55 @@ def test_the_data_page_names_the_dataset_s_own_columns(clean):
     assert not at.exception
     if clean:
         assert not at.warning
-        assert any("No issues found" in c.value for c in at.caption)
+        assert any("No issues found" in c.value for c in at.success)
+        assert any(
+            "fixation durations and fixation positions" in c.value for c in at.caption
+        )
         return
     (warning,) = at.warning
     assert "Fixations lasting 0 ms or less" in warning.value
-    assert "1 of 2 fixation rows, in 1 trial (1 negative)" in warning.value
+    assert "1 of 2 fixation rows in 1 trial (1 negative)" in warning.value
     assert "`CURRENT_FIX_DURATION`" in warning.value
-    assert any("Flagged rows are kept" in c.value for c in at.caption)
+    assert any("Flagged rows stay" in c.value for c in at.caption)
+
+
+def _run_sheet_navigation_app():
+    import streamlit as st
+
+    from scanpath_studio.tabs import render_data_health
+
+    dataset = st.selectbox("Dataset", ["First", "Second"])
+    if st.radio("Panel", ["Data checks", "Tables"]) == "Data checks":
+        render_data_health(None, None, None, dataset=dataset)
+
+
+def test_run_sheet_survives_navigation_and_belongs_to_its_dataset():
+    at = AppTest.from_function(_run_sheet_navigation_app)
+
+    def show_sheet():
+        at.session_state["data_run_sheet"] = True
+        at.run()
+        assert not at.exception, at.exception
+
+    at.run()
+    assert not at.success and not at.file_uploader
+    assert any("no recording values" in item.value for item in at.info)
+    show_sheet()
+    at.file_uploader[0].upload("roster.csv", b"participant_id,trial_id\np,t\n").run()
+    assert any(b.label == "Download comparison (CSV)" for b in at.download_button)
+    at.radio[0].set_value("Tables").run()
+    at.radio[0].set_value("Data checks").run()
+    show_sheet()
+    assert any(m.value == "roster.csv" for m in at.markdown)
+    at.selectbox[0].select("Second").run()
+    show_sheet()
+    assert len(at.file_uploader) == 1
+    assert not at.download_button
+    at.selectbox[0].select("First").run()
+    show_sheet()
+    at.button(key="remove_run_sheet").click().run()
+    assert len(at.file_uploader) == 1
+    assert not at.download_button
 
 
 def test_the_api_reads_frames_under_the_datasets_own_names():
@@ -224,3 +377,50 @@ def test_the_api_reads_frames_under_the_datasets_own_names():
     assert row["rows"] == 1
     assert "CURRENT_FIX_DURATION" in row["columns"]
     assert "CURRENT_FIX_DURATION" in row["examples"][0]
+
+
+class TestDurationMissingMark:
+    """The mark that tells a blank duration from a recorded 0 ms."""
+
+    @staticmethod
+    def _stored():
+        from scanpath_studio import data
+        from scanpath_studio.tabs import _FIX_REMAP_CANON, _remap_proposed
+
+        raw = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "CURRENT_FIX_START": [0, 250, 500],
+                "CURRENT_FIX_DURATION": [200, 250, None],
+                "alt": [200, 250, 0],
+                "CURRENT_FIX_X": [1.0, 2.0, 3.0],
+                "CURRENT_FIX_Y": [1.0, 1.0, 1.0],
+            }
+        )
+        stored = api.load_scanpath_data(
+            fixations=raw, names="canonical", keep_columns=["alt"]
+        ).fixations
+        schema = _remap_proposed(
+            data.infer_fix_schema(raw), stored.columns, _FIX_REMAP_CANON
+        )
+        return stored, schema
+
+    def test_an_edit_that_keeps_the_duration_keeps_the_mark(self):
+        from scanpath_studio import data
+
+        stored, schema = self._stored()
+        edited = data.remap_normalized_frame(stored, schema, kind="fixations")
+        assert edited[data.DURATION_MISSING].tolist() == [False, False, True]
+
+    def test_an_edit_to_a_recorded_duration_drops_the_mark(self):
+        """Duration remapped to a column that recorded every value: its 0 ms
+        at the recording end is measured, and not flagged."""
+        from scanpath_studio import data
+
+        stored, schema = self._stored()
+        edited = data.remap_normalized_frame(
+            stored, dict(schema, duration="alt"), kind="fixations"
+        )
+        assert data.DURATION_MISSING not in edited
+        assert "fixation_duration" not in _by_check(check_data_health(None, edited))

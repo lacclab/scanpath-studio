@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import session_keys as sk
 from scanpath_studio import tabs, ui_mode
+from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
 from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
-from tests.conftest import APP_SCRIPT, pin_view
+from tests.conftest import (
+    APP_SCRIPT,
+    find_keyed,
+    iframe_sources,
+    keys_around,
+    page_nodes,
+    pin_view,
+)
 
 SWITCH = "ui_mode_switch"
 SYNTHETIC_SOURCE = "Synthetic test trial"
@@ -39,6 +49,21 @@ def test_seed_mode_reads_the_link_then_the_cookie():
     cookies = {sk.UI_MODE_COOKIE: "full"}
     assert ui_mode.seed_mode({}, {}, cookies) == "full"
     assert ui_mode.seed_mode({}, {}, {}) == "essentials"
+
+
+def test_a_link_to_comparisons_opens_full_unless_it_names_a_mode():
+    """Comparisons is only in Full, so a `match=` link opens there over the
+    cookie's Essentials; the link's own `ui=` and the session's mode still win."""
+    cookies = {sk.UI_MODE_COOKIE: "essentials"}
+    match = {sk.PARAM_MATCH: "same_text"}
+    assert ui_mode.seed_mode({}, match, cookies) == "full"
+    assert ui_mode.seed_mode({}, {**match, sk.PARAM_UI: "junk"}, cookies) == "full"
+    assert (
+        ui_mode.seed_mode({}, {**match, sk.PARAM_UI: "essentials"}, {}) == "essentials"
+    )
+    session = {sk.UI_MODE: "essentials"}
+    assert ui_mode.seed_mode(session, match, {}) == "essentials"
+    assert ui_mode.seed_mode({}, {sk.PARAM_MATCH: ""}, cookies) == "essentials"
 
 
 def test_seed_mode_writes_the_session_key():
@@ -196,8 +221,6 @@ def test_switch_css_lifts_the_switch_into_the_top_bar():
     assert 'data-testid="stMainMenu"' in css
     # Bigger than the default control: 1rem text, 2.5rem tall.
     assert "min-height: 2.5rem" in css and "font-size: 1rem" in css
-    # The title row that holds it leaves the flow.
-    assert "position: absolute" in css and "height: 0" in css
     # Below the fallback width it is an in-flow, right-aligned row.
     assert f"@media (max-width: {ui_mode._SWITCH_FALLBACK_PX}px)" in css
     assert "align-items: flex-end" in css
@@ -213,8 +236,6 @@ def test_switch_stacks_between_the_header_and_the_tour():
     assert header < ui_mode.SWITCH_Z_INDEX < tour.GUIDE_Z_INDEX < 1000060
     assert f"z-index: {tour.GUIDE_Z_INDEX};" in tour._CARD_CSS
     assert f"z-index: {tour.GUIDE_Z_INDEX};" in tour._GUIDE_MOVE_CSS
-    # The welcome step's backdrop stays under the header, as the nav is.
-    assert "z-index: 999980;" in tour._WELCOME_CSS
 
 
 def test_the_status_widget_moves_out_from_under_the_switch():
@@ -236,6 +257,22 @@ def test_the_status_widget_moves_out_from_under_the_switch():
     assert "width: 17.5rem !important" in css
 
 
+def test_switch_css_moves_the_switch_left_of_cloud_toolbar_actions():
+    """Community Cloud draws Fork / GitHub just left of the ⋮ menu, where the
+    switch sits: the switch moves left of them, and only when there are any."""
+    css = ui_mode.switch_css(True)
+    assert (
+        '[data-testid="stToolbarActions"]:not(:empty)'
+        " { width: 5.5rem; justify-content: flex-end; }" in css
+    )
+    assert (
+        '.stApp:has([data-testid="stToolbarActions"]:not(:empty))'
+        " .st-key-tour_grp_ui_mode { right: 9rem; }" in css
+    )
+    assert "width: 23.5rem !important" in css
+    assert "stToolbarActions" not in ui_mode.switch_css(False)
+
+
 def test_the_cookie_script_takes_no_room_in_the_switch_box():
     """The script that writes the cookie appears only once the switch is
     used; its frame sits in a container that takes no room, so the box the
@@ -246,22 +283,21 @@ def test_the_cookie_script_takes_no_room_in_the_switch_box():
     )
     assert rule in ui_mode.switch_css(True)
     assert rule in ui_mode.switch_css(False)
-    import inspect
-
-    source = inspect.getsource(ui_mode.render_switch)
-    assert "box.container(key=COOKIE_BOX_KEY)" in source
-    assert "with cookie:" in source
     at = _boot()
+    # In the switch's box on every run, empty until the switch is used.
+    assert keys_around(at, ui_mode.COOKIE_BOX_KEY)[-1] == ui_mode.SWITCH_BOX_KEY
+    cookie, _ = find_keyed(at, ui_mode.COOKIE_BOX_KEY)
+    assert not list(page_nodes(cookie))
     at.segmented_control(key=SWITCH).set_value("full").run()
     assert not at.exception
-    assert _has_cookie_embed(at)
+    cookie, _ = find_keyed(at, ui_mode.COOKIE_BOX_KEY)
+    assert any("sps_ui_mode" in doc for doc in iframe_sources(cookie))
 
 
-def test_switch_css_hidden_still_collapses_the_title_row():
+def test_switch_is_hidden_outside_scanpath():
     css = ui_mode.switch_css(False)
     assert "display: none !important" in css
     assert "position: fixed" not in css
-    assert "position: absolute" in css
 
 
 def test_deselecting_the_switch_keeps_the_mode():
@@ -293,12 +329,13 @@ def test_more_lists_cover_the_spec():
     for word in ("filter", "sort", "slider", "trial summary table"):
         assert word in titles("picker")
     for word in (
-        "replay",
+        "playback",
         "compare",
-        "layer style",
+        "layers",
         "filters & highlights",
-        "figure & canvas",
-        "saved designs",
+        "axes",
+        "figure",
+        "my presets",
     ):
         assert word in titles("rail")
     assert [t.split(" ", 1)[1] for t, _ in more["subtabs"]] == [
@@ -317,6 +354,52 @@ def test_more_button_switches_to_advanced():
     assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
     assert at.segmented_control(key=SWITCH).value == "full"
+
+
+@pytest.mark.parametrize("index", range(4))
+def test_every_picker_tool_opens_full_mode(index):
+    at = _boot()
+    at.button(key=f"more_picker_tool_{index}").click().run()
+    assert not at.exception
+    assert at.segmented_control(key=SWITCH).value == "full"
+
+
+def test_heatmap_range_and_position_preview_follow_the_selected_reading(monkeypatch):
+    charts = {}
+
+    def chart(fig, *, key, **kwargs):
+        charts[key] = fig
+
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", chart)
+    at = _boot(mode="full")
+    at.checkbox(key="global_fixation_snap_to_line").check().run()
+    # Compare two cached figures: Plotly discards empty axis-title dictionaries
+    # on the first pickle round trip.
+    at.run()
+    illustration = json.loads(charts["single"].to_json())
+    at.toggle(key="preview_unsnapped_positions").set_value(True).run()
+    assert not at.exception
+    assert json.loads(charts["single"].to_json()) == illustration
+    original = charts["unsnapped_preview"]
+    assert original.layout.yaxis.range == charts["single"].layout.yaxis.range
+    assert original.layout.xaxis.range == charts["single"].layout.xaxis.range
+
+    def positions(fig):
+        return next(
+            tuple(t.y) for t in fig.data if t.name == "Fixations" and t.y is not None
+        )
+
+    assert positions(original) != positions(charts["single"])
+    at.toggle(key="preview_unsnapped_positions").set_value(False).run()
+    assert json.loads(charts["single"].to_json()) == illustration
+    at.button(key="viz_view_heatmap").click().run()
+    bar = next(t for t in charts["single"].data if t.name == "heatmap colorbar")
+    at.button(key="pin_word_heatmap_range").click().run()
+    at.button(key="single_next_trial").click().run()
+    assert not at.exception
+    pinned = next(t for t in charts["single"].data if t.name == "heatmap colorbar")
+    assert pinned.meta["word_heatmap_range"] == bar.meta["word_heatmap_range"]
+    assert "fixed range" in pinned.marker.colorbar.title.text
 
 
 def test_simple_picker_keeps_every_widget_alive():
@@ -378,28 +461,51 @@ def test_more_triggers_are_muted_by_the_stylesheet():
 
 
 def _tile_type(at: AppTest, name: str) -> str:
-    return at.button(key=f"simple_view_{name}").proto.type
+    return at.button(key=f"viz_view_{name}").proto.type
 
 
-def test_simple_view_animation_turns_animate_on_with_scanpath_layers():
+def test_animation_keeps_the_underlying_static_layers():
     at = _boot()
-    at.button(key="simple_view_heatmap").click().run()
+    at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_show_heatmap"] is True
-    at.button(key="simple_view_animation").click().run()
+    at.button(key="viz_view_animation").click().run()
     assert not at.exception
     assert at.session_state["single_animate"] is True
-    assert at.session_state["global_show_heatmap"] is False
-    assert at.session_state["global_show_fix"] is True
-    assert _tile_type(at, "animation") == "primary"
-    assert _tile_type(at, "scanpath") == "secondary"
+    assert at.session_state["global_show_heatmap"] is True
+    assert at.toggle(key="single_animate").value
+    assert at.toggle(key="global_show_fix").value is True
+    assert at.session_state["_quick_view_selection"] == "heatmap"
+    assert _lit_tiles(at) == ["heatmap"]
+    at.toggle(key="single_animate").set_value(False).run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["heatmap"]
+    assert at.toggle(key="global_show_heatmap").value is True
+    assert at.toggle(key="global_show_fix").value is False
+    assert at.toggle(key="global_show_saccades").value is False
+
+
+def test_saccades_only_replay_keeps_a_hand_edited_scanpath():
+    at = _boot(mode="full")
+    at.slider(key="global_saccade_width").set_value(4.5).run()
+    at.toggle(key="global_show_fix").set_value(False).run()
+    for replay in (True, False):
+        at.toggle(key="single_animate").set_value(replay).run()
+        assert not at.exception
+        assert _lit_tiles(at) == ["custom"]
+        assert not at.toggle(key="global_show_fix").value
+        assert at.toggle(key="global_show_saccades").value
+        figure = at.session_state[SNIPPET_STATE_KEY]
+        assert figure.kind == ("animation" if replay else "static")
+        assert figure.settings["show_fixations"] is False
+        assert figure.settings["show_saccades"] is True
+        assert figure.settings["saccade_width"] == 4.5
 
 
 @pytest.mark.parametrize("name", ["heatmap", "illustration"])
-def test_simple_view_static_tiles_turn_animate_off(name):
+def test_viz_view_static_tiles_turn_animate_off(name):
     at = _boot()
-    at.button(key="simple_view_animation").click().run()
     assert at.session_state["single_animate"] is True
-    at.button(key=f"simple_view_{name}").click().run()
+    at.button(key=f"viz_view_{name}").click().run()
     assert not at.exception
     assert at.session_state["single_animate"] is False
     if name == "heatmap":
@@ -407,109 +513,149 @@ def test_simple_view_static_tiles_turn_animate_off(name):
     else:
         assert at.session_state["global_fixation_snap_to_line"] is True
     assert _tile_type(at, name) == "primary"
-    assert _tile_type(at, "animation") == "secondary"
+    assert not at.toggle(key="single_animate").value
 
 
-@pytest.mark.parametrize(
-    ("active", "animating", "expected"),
-    [
-        ("scanpath", True, "animation"),
-        ("scanpath", False, "scanpath"),
-        ("heatmap", False, "heatmap"),
-        ("illustration", False, "illustration"),
-        ("heatmap", True, None),
-        ("illustration", True, None),
-        ("custom", False, None),
-        ("custom", True, None),
-        ("design:mine", False, None),
-    ],
-)
-def test_simple_active_view(monkeypatch, active, animating, expected):
-    from scanpath_studio import controls
-
-    monkeypatch.setattr(controls, "_active_quick_view", lambda: active)
-    assert controls.simple_active_view(animating=animating) == expected
-
-
-def test_simple_views_are_the_four_tiles():
-    from scanpath_studio import controls
-
-    assert controls.SIMPLE_VIEWS == ("animation", "scanpath", "heatmap", "illustration")
-
-
-def test_simple_rail_keeps_advanced_widgets_alive():
-    at = _boot()
-    assert at.toggle(key="single_animate") is not None
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_both_modes_draw_one_grid_and_palette(mode):
+    at = _boot(mode=mode)
+    names = [
+        btn.label
+        for btn in at.button
+        if btn.key
+        in {
+            "viz_view_gaze_over_time",
+            "viz_view_custom",
+            "viz_view_scanpath",
+            "viz_view_heatmap",
+            "viz_view_illustration",
+        }
+    ]
+    assert names == ["Scanpath", "Heatmap", "Illustration", "Gaze over time", "Custom"]
+    replay_state = "on" if at.toggle(key="single_animate").value else "off"
+    assert at.button(key="viz_view_animation").label == f"Animation *{replay_state}*"
+    assert at.button(key="viz_palette_default_colorblind_safe").proto.type == "primary"
+    assert at.button(key="viz_palette_print_grayscale").label == "Grayscale"
     assert at.toggle(key="single_compare_toggle") is not None
     assert at.toggle(key="global_show_fix") is not None
-    assert at.button(key="reset_viz_settings_btn") is not None
-    assert at.button(key="viz_view_custom") is not None
-    assert at.selectbox(key="global_palette") is not None
     assert "iconpop_more_rail" in {p.key for p in at.get("popover")}
-    for name in ("animation", "scanpath", "heatmap", "illustration"):
-        assert at.button(key=f"simple_view_{name}") is not None
 
 
-def test_advanced_rail_still_draws_the_simple_tiles_hidden():
-    """Both modes draw the same tree; CSS hides the other mode's containers."""
+def test_animation_preserves_custom_scanpath_and_comparison_across_modes():
     at = _boot(mode="full")
-    assert at.button(key="simple_view_scanpath") is not None
-    assert at.button(key="viz_view_scanpath") is not None
+    at.color_picker(key="global_fixation_color").pick("#123456").run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    selection = at.session_state["single_compare_trial"]
+    at.toggle(key="single_animate").set_value(True).run()
+    at.select_slider(key="single_playback_speed").set_value(2.0).run()
+    for mode in ("essentials", "full"):
+        at.segmented_control(key=SWITCH).set_value(mode).run()
+        assert not at.exception
+        assert at.toggle(key="single_animate").value
+        assert _lit_tiles(at) == ["custom"]
+        assert at.session_state["global_fixation_color"] == "#123456"
+        assert at.session_state["global_palette"] == "Custom"
+        assert at.session_state["single_playback_speed"] == 2.0
+        assert at.session_state["single_compare_toggle"]
+        assert at.session_state["single_compare_trial"] == selection
+    at.button(key="viz_view_scanpath").click().run()
+    assert _lit_tiles(at) == ["scanpath"]
+    assert at.session_state["global_fixation_color"] == "#123456"
+    assert at.session_state["single_compare_toggle"]
 
 
-def test_rail_wrappers_are_keyed_for_the_mode_css():
-    """Every Full-only rail part sits in an ``adv_only_*`` container, and the
-    Essentials parts in ``simple_only_*`` ones, so `mode_css` hides them."""
-    import inspect
-    import re
-
-    from scanpath_studio import controls, tabs
-
-    rail = inspect.getsource(tabs.render_single_trial_tab)
-    # The two mode rows share one wrapper, so Essentials leaves no empty
-    # `tour_grp_view_modes` behind.
-    for name in ("rail_modes", "rail_reset"):
-        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
-    source = inspect.getsource(controls.render_plot_controls)
-    for name in (
-        "rail_presets",
-        "rail_designs",
-        "rail_fix",
-        "rail_sac",
-        "rail_stim",
-        "rail_boxes",
-        "rail_heatmap",
-        "rail_rawgaze",
-        "rail_filter",
-        "rail_figure",
-    ):
-        assert re.search(rf'advanced_only\(\s*viz,\s*"{name}"\s*\)', source), name
-    assert 'simple_only(viz, "views")' in source
-    assert 'simple_only(viz, "rail_more")' in source
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_replay_settings_leave_the_view_highlighted(mode):
+    """How the replay plays is not part of the design: changing it keeps the
+    view's tile lit, and Essentials does not list it as a setting from Full."""
+    at = _boot(mode=mode)
+    at.toggle(key="single_animate").set_value(True).run()
+    assert _lit_tiles(at) == ["scanpath"]
+    at.select_slider(key="single_playback_speed").set_value(2.0).run()
+    at.checkbox(key="global_anim_autoplay").uncheck().run()
+    _smoothness(at).set_value("Fine").run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["scanpath"]
+    assert at.session_state["_quick_view_selection"] == "scanpath"
+    assert "hidden_note_to_advanced" not in {button.key for button in at.button}
+    at.button(key="viz_view_heatmap").click().run()
+    assert _lit_tiles(at) == ["heatmap"]
+    assert at.session_state["single_playback_speed"] == 2.0
+    assert at.session_state["global_anim_autoplay"] is False
+    assert at.session_state["global_anim_quality"] == "Fine"
 
 
-def test_picker_wrappers_are_keyed_for_the_mode_css():
-    """The trial picker's Full-only parts (the filter funnel, the chips'
-    menu, the summary table, the sort popover and the slider) each sit in an
-    ``adv_only_*`` container, and the ＋ More list in a ``simple_only_*`` one."""
-    import inspect
-    import re
+@pytest.mark.parametrize("compare", [True, False], ids=["on", "off"])
+def test_the_custom_tile_leaves_compare_as_it_is(compare):
+    """Compare is a way of viewing the figure: like every other tile, Custom
+    brings back its own design without switching Compare on or off."""
+    at = _boot(mode="full")
+    at.toggle(key="single_animate").set_value(False).run()
+    at.color_picker(key="global_fixation_color").pick("#123456").run()
+    at.toggle(key="single_compare_toggle").set_value(not compare).run()
+    assert _lit_tiles(at) == ["custom"]
+    at.button(key="viz_view_heatmap").click().run()
+    at.toggle(key="single_compare_toggle").set_value(compare).run()
+    assert _lit_tiles(at) == ["heatmap"]
+    at.button(key="viz_view_custom").click().run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["custom"]
+    assert at.session_state["global_fixation_color"] == "#123456"
+    assert at.session_state["single_compare_toggle"] is compare
+    assert at.toggle(key="single_compare_toggle").value is compare
 
-    from scanpath_studio import tabs, utils
 
-    picker = inspect.getsource(tabs.render_single_trial_tab)
-    for name in ('"trial_filters"', '"chip_fields"', r"ui_mode\.TRIAL_CHIPS"):
-        assert re.search(rf"ui_mode\.advanced_only\(\s*\w+,\s*{name}\s*\)", picker), (
-            name
-        )
-    assert re.search(r'ui_mode\.simple_only\(\s*host,\s*"picker_more"\s*\)', picker)
-    trials = inspect.getsource(utils._select_trial_none_mode)
-    for name in ("TRIAL_SORT", "TRIAL_SLIDER"):
-        assert re.search(
-            rf"_advanced_part\(\s*\w+,\s*ui_mode\.{name},\s*key_prefix\s*\)", trials
-        ), name
-    helper = inspect.getsource(utils._advanced_part)
-    assert "ui_mode.advanced_only(host, name)" in helper
+@pytest.mark.parametrize("cross_dataset", [False, True])
+def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
+    cross_dataset,
+):
+    at = _boot(mode="full")
+    if cross_dataset:
+        at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state[sk.COMPARE_SOURCE_STATE_KEY] = "Bundled demo"
+        at.run()
+    at.button(key="viz_view_illustration").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    if cross_dataset:
+        assert at.session_state[sk.COMPARE_SOURCE_STATE_KEY] == "Bundled demo"
+    at.toggle(key="single_animate").set_value(False).run()
+    assert _lit_tiles(at) == ["scanpath"]
+    assert at.button(key="viz_view_illustration").disabled
+    at.toggle(key="single_compare_toggle").set_value(False).run()
+    assert _lit_tiles(at) == ["illustration"]
+
+
+#: A control in each mode-only part of the Scanpath view → the container that
+#: holds the part: the rail's and the trial picker's Full-only parts, then the
+#: ＋ More lists that stand in for them in Essentials.
+_MODE_ONLY_PARTS = {
+    "single_animate": "adv_only_rail_animation",
+    "reset_viz_settings_btn": "adv_only_rail_reset",
+    "design_shell": "adv_only_rail_designs",
+    "plot_setting_finder": "adv_only_plot_editor",
+    "iconpop_filter_trials": "adv_only_trial_filters",
+    "iconpop_chip_fields": "adv_only_chip_fields",
+    "tour_grp_chips": f"adv_only_{ui_mode.TRIAL_CHIPS}",
+    "iconpop_sort_trial_single": f"adv_only_{ui_mode.TRIAL_SORT}",
+    "single_trial_pos": f"adv_only_{ui_mode.TRIAL_SLIDER}",
+    "iconpop_more_rail": "simple_only_rail_more",
+    "iconpop_more_picker": "simple_only_picker_more",
+}
+
+
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_mode_only_parts_sit_in_the_containers_mode_css_hides(mode):
+    """Each mode-only part is drawn in both modes, inside the container whose
+    key `mode_css` hides in the other mode — so a switch changes what shows,
+    never what is drawn, and no widget loses its value."""
+    at = _boot(mode=mode)
+    for control, container in _MODE_ONLY_PARTS.items():
+        assert container in keys_around(at, control), control
+    other = "simple_only_" if mode == "full" else "adv_only_"
+    assert f'[class*="st-key-{other}"] {{ display: none !important; }}' in (
+        ui_mode.mode_css(mode)
+    )
 
 
 def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "essentials") -> AppTest:
@@ -534,11 +680,14 @@ def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "essentials") -> A
 def _assert_animation_keeps_the_static_tile(at: AppTest) -> None:
     """Animation asks for the replay, which a trial without fixations cannot
     draw: the static figure stays, and so does its tile."""
-    at.button(key="simple_view_animation").click().run()
-    assert not at.exception, at.exception
-    assert at.session_state["single_animate"] is True
-    assert _tile_type(at, "scanpath") == "primary"
-    assert _tile_type(at, "animation") == "secondary"
+    requested = at.session_state["single_animate"]
+    for expected in (not requested, requested):
+        at.toggle(key="single_animate").set_value(expected).run()
+        assert not at.exception, at.exception
+        assert at.session_state["single_animate"] == expected
+        assert _tile_type(at, "scanpath") == "primary"
+        assert at.toggle(key="single_animate").value == expected
+        assert (_tile_type(at, "animation") == "primary") == expected
 
 
 def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
@@ -551,7 +700,9 @@ def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
         *sps.load_sample_data(names="canonical"), names="canonical"
     )
     gaze = api.load_sample_raw_gaze(names="canonical")
-    extra = gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
+    # One reading's samples, screens and all, under a trial id of their own.
+    first = gaze["trial_id"].eq(gaze["trial_id"].iloc[0])
+    extra = gaze[first].assign(trial_id="samples_only", unique_trial_id="samples_only")
     at = _open_gaze_dataset(words, fixations, pd.concat([gaze, extra]))
     picker = at.selectbox(key="single_trial_id")
     picker.set_value(next(o for o in picker.options if "samples_only" in str(o)))
@@ -576,7 +727,12 @@ def _open_samples_only(mode: str = "essentials") -> AppTest:
     )
 
 
-SIMPLE_TILES = ("animation", "scanpath", "heatmap", "illustration")
+SIMPLE_TILES = ("scanpath", "heatmap", "illustration", "gaze_over_time", "custom")
+
+
+def _smoothness(at: AppTest):
+    """The replay's Smoothness selectbox, drawn under a shadow key that moves."""
+    return next(box for box in at.selectbox if box.key.startswith("_anim_quality__w"))
 
 
 def _lit_tiles(at: AppTest) -> list[str]:
@@ -593,27 +749,10 @@ def test_samples_only_dataset_opens_simple_on_the_scanpath_tile():
     assert at.session_state["global_show_raw_gaze"] is True
 
 
-def test_samples_only_dataset_keeps_the_advanced_highlight():
-    """Only Essentials' tiles read through the seed; Full's presets still
-    highlight Custom."""
+def test_samples_only_dataset_in_full_highlights_the_same_view():
     at = _open_samples_only("full")
-    assert at.button(key="viz_view_custom").proto.type == "primary"
-    assert at.button(key="viz_view_scanpath").proto.type == "secondary"
-
-
-def test_samples_only_dataset_with_the_layer_changed_lights_no_tile():
-    at = _open_samples_only()
-    at.toggle(key="global_show_raw_gaze").set_value(False).run()
-    assert not at.exception, at.exception
-    assert _lit_tiles(at) == []
-
-
-def test_samples_only_dataset_with_another_setting_changed_lights_no_tile():
-    at = _open_samples_only()
-    at.toggle(key="global_show_stimulus").set_value(False).run()
-    assert not at.exception, at.exception
-    assert at.session_state["global_show_raw_gaze"] is True
-    assert _lit_tiles(at) == []
+    assert _lit_tiles(at) == ["scanpath"]
+    assert at.session_state["global_show_raw_gaze"]
 
 
 @pytest.mark.parametrize(
@@ -640,9 +779,6 @@ def test_rail_mode_wrappers_keep_the_rail_spacing():
         '.st-key-scanpath_rail [class*="st-key-simple_only_"] > div:last-child '
         "{ margin-bottom: 0 !important; }"
     ) in css
-    # The View tiles are drawn like the design presets they stand in for.
-    assert '.st-key-scanpath_rail [class*="st-key-simple_view_"] button {' in css
-    assert ".st-key-scanpath_rail .st-key-tour_grp_simple_views {" in css
 
 
 HIGH_CONTRAST = "High contrast"
@@ -656,23 +792,23 @@ def _palette_colors(at: AppTest, name: str) -> dict:
 
 def test_simple_palette_pick_keeps_the_tile_lit():
     at = _boot()
-    at.button(key="simple_view_scanpath").click().run()
-    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    at.button(key="viz_view_scanpath").click().run()
+    at.button(key="viz_palette_high_contrast").click().run()
     assert not at.exception
     assert at.session_state["global_palette"] == HIGH_CONTRAST
     assert _lit_tiles(at) == ["scanpath"]
-    # Any other plot setting still reads as leaving the view.
+    # A layer edit customizes this scanpath.
     at.toggle(key="global_show_stimulus").set_value(False).run()
-    assert _lit_tiles(at) == []
+    assert _lit_tiles(at) == ["custom"]
 
 
 def test_simple_tile_keeps_the_palette():
     from scanpath_studio import controls
 
     at = _boot()
-    at.button(key="simple_view_scanpath").click().run()
-    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
-    at.button(key="simple_view_heatmap").click().run()
+    at.button(key="viz_view_scanpath").click().run()
+    at.button(key="viz_palette_high_contrast").click().run()
+    at.button(key="viz_view_heatmap").click().run()
     assert not at.exception
     assert at.session_state["global_show_heatmap"] is True
     assert at.session_state["global_palette"] == HIGH_CONTRAST
@@ -685,40 +821,37 @@ def test_simple_tile_keeps_the_palette():
     # It holds on the next run too, and through the replay tile.
     at.run()
     assert at.session_state["global_palette"] == HIGH_CONTRAST
-    at.button(key="simple_view_animation").click().run()
+    at.toggle(key="single_animate").set_value(True).run()
     assert at.session_state["global_palette"] == HIGH_CONTRAST
-    assert _lit_tiles(at) == ["animation"]
+    assert at.toggle(key="single_animate").value
+    assert _lit_tiles(at) == ["heatmap"]
 
 
-def test_simple_hand_edited_colour_lights_no_tile():
+def test_custom_marker_color_selects_custom():
     """A colour past every palette is shaped in Full, and counts."""
     at = _boot()
-    at.button(key="simple_view_scanpath").click().run()
-    # One run for the preset's held writes to settle (`write_through`).
-    at.run()
+    at.button(key="viz_view_scanpath").click().run()
+    # Straight after the view: the preset holds its write to the picker
+    # (`write_through`), and a pick of the user's own still stands.
     at.color_picker(key="global_fixation_color").pick("#123456").run()
     assert not at.exception
     assert at.session_state["global_palette"] == "Custom"
-    assert _lit_tiles(at) == []
+    assert _lit_tiles(at) == ["custom"]
 
 
-def test_advanced_palette_pick_still_drops_the_preset_to_custom():
+def test_full_view_tiles_keep_the_selected_palette():
     at = _boot(mode="full")
-    at.button(key="viz_view_scanpath").click().run()
-    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
-    assert at.button(key="viz_view_custom").proto.type == "primary"
-    assert at.button(key="viz_view_scanpath").proto.type == "secondary"
-    # A Full preset starts from the default colours.
+    at.button(key="viz_palette_high_contrast").click().run()
+    assert _lit_tiles(at) == ["scanpath"]
     at.button(key="viz_view_heatmap").click().run()
-    assert at.session_state["global_palette"] != HIGH_CONTRAST
-    assert at.button(key="viz_view_heatmap").proto.type == "primary"
+    assert at.session_state["global_palette"] == HIGH_CONTRAST
+    assert _lit_tiles(at) == ["heatmap"]
 
 
 def _subtab_labels(at: AppTest) -> list[str]:
     """The labels of the per-trial subtab bar (the one holding ``Share``)."""
-    labels = [t.label for t in at.tabs]
-    assert tabs.SUBTAB_SHARE in labels
-    return labels
+    bar = next(bar for bar in at.get("tab_container") if bar.key == "single_subtab")
+    return [tab.label for tab in bar.tabs]
 
 
 def test_subtab_labels_for_simple():
@@ -771,7 +904,7 @@ def test_simple_export_has_no_bundle():
     assert not at.exception
     headings = [str(m.value) for m in at.markdown]
     assert any("Current figure" in h for h in headings)
-    assert not any("Export bundle" in h for h in headings)
+    assert not any(e.label == "Export bundle" for e in at.expander)
     assert not [r for r in at.radio if r.key == "bulk_export_scope"]
 
 
@@ -780,7 +913,7 @@ def test_advanced_export_keeps_the_bundle():
     at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
     at.run()
     assert not at.exception
-    assert any("Export bundle" in str(m.value) for m in at.markdown)
+    assert any(e.label == "Export bundle" for e in at.expander)
 
 
 def test_simple_more_subtab_lists_advanced_and_switches():
@@ -822,8 +955,8 @@ def test_more_in_simple_falls_back_to_advanceds_first_subtab():
 def test_fresh_simple_session_opens_on_the_replay():
     at = _boot()
     assert at.session_state["single_animate"] is True
-    assert _tile_type(at, "animation") == "primary"
-    assert _tile_type(at, "scanpath") == "secondary"
+    assert at.toggle(key="single_animate").value
+    assert _tile_type(at, "scanpath") == "primary"
 
 
 def test_advanced_session_keeps_the_static_start():
@@ -919,7 +1052,7 @@ def test_a_plain_simple_session_shows_no_note():
 
 def test_advanced_never_shows_the_note():
     at = _boot(mode="full")
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run()
     at.run()
     assert not at.exception
@@ -941,7 +1074,7 @@ def test_shared_link_with_a_filter_shows_the_note():
         at.query_params["show_raw_gaze"] = "1"
         pin_view(at, _VIEW_SCANPATH)
         at.run()
-        at.session_state["filter_participants"] = ["l7_1090"]
+        at.session_state["filter_participants"] = ["l7_183"]
         # The panel publishes the filter on one run, `app.main` applies it on
         # the next.
         at.run()
@@ -970,7 +1103,7 @@ def test_simple_sort_order_shows_the_note():
 def test_simple_compare_from_link_keeps_b_picker():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.query_params["ui"] = "essentials"
-    at.query_params["compare"] = "l37_1129:l37_1129_2_2_1_Adv"
+    at.query_params["compare"] = "l37_273:l37_273_2_2_1_Adv"
     pin_view(at, _VIEW_SCANPATH)
     at.run()
     assert not at.exception
@@ -1009,19 +1142,6 @@ def test_more_picker_describes_the_summary_table():
     assert "condition" in line and "above the plot" in line
 
 
-def test_simple_view_tiles_are_bigger_than_advanced_presets():
-    from scanpath_studio.styles import get_app_css
-
-    css = " ".join(get_app_css().split())
-    sel = ".st-key-scanpath_rail .st-key-tour_grp_simple_views button {"
-    assert sel in css
-    assert "min-height: 4rem" in css.split(sel)[1].split("}")[0]
-    assert "font-size: 1.05rem" in css
-    # The narrow tiers keep the grid on one line per tile.
-    assert "font-size: 0.95rem" in css
-    assert ".st-key-quick_views_grid button" not in css.split(sel)[1].split("}")[0]
-
-
 def test_simple_export_points_to_the_bundle_in_advanced():
     at = _boot()
     at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
@@ -1032,7 +1152,7 @@ def test_simple_export_points_to_the_bundle_in_advanced():
     assert not at.exception
     assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
-    assert any("Export bundle" in str(m.value) for m in at.markdown)
+    assert any(e.label == "Export bundle" for e in at.expander)
 
 
 def test_advanced_export_has_no_pointer():
@@ -1056,3 +1176,104 @@ def test_cookie_follows_the_viewers_choice_not_the_session_mode():
         ui_mode._choose_mode("essentials")
         state[sk.UI_MODE] = "full"
         assert ui_mode.cookie_mode() == "essentials"
+
+
+_PANEL_WIDGETS = (
+    "checkbox",
+    "toggle",
+    "selectbox",
+    "radio",
+    "segmented_control",
+    "pills",
+    "multiselect",
+    "number_input",
+    "text_input",
+)
+
+
+def _move_off_current_value(widget, kind: str) -> bool:
+    """Give `widget` a different valid value; False when it has none to give."""
+    if kind in ("checkbox", "toggle"):
+        widget.set_value(not widget.value)
+        return True
+    if kind in ("multiselect", "pills", "segmented_control") and isinstance(
+        widget.value, (list, tuple)
+    ):
+        # Choosing every option reveals whatever depends on one (PNG's options).
+        chosen = list(widget.value)
+        if any(o not in chosen for o in widget.options):
+            widget.set_value(list(widget.options))
+        elif chosen:
+            widget.set_value(chosen[:-1])
+        else:
+            return False
+        return True
+    if kind in ("selectbox", "radio", "segmented_control", "pills"):
+        # By position: `options` are the shown labels, `value` the raw value,
+        # and a format function makes them differ.
+        current = getattr(widget, "index", None)
+        others = [o for i, o in enumerate(widget.options) if i != current]
+        if current is None:
+            others = [o for o in widget.options if o != widget.value]
+        if not others:
+            return False
+        widget.set_value(others[-1])
+        return True
+    if kind == "number_input":
+        step = widget.step or 1
+        value = widget.value if widget.value is not None else (widget.min or 0)
+        upper = widget.max if widget.max is not None else value + step
+        widget.set_value(value + step if value + step <= upper else value - step)
+        return True
+    if kind == "text_input":
+        widget.set_value((widget.value or "") + "x")
+        return True
+    return False
+
+
+def test_a_trip_through_essentials_keeps_every_export_choice():
+    """The bulk-export panel's choices survive Full → Essentials → Full.
+
+    Essentials draws no bulk-export panel, so a control there without
+    `persist_state` loses its value on the trip. Every keyed control the panel
+    draws, and every one those choices reveal, is moved off its value first."""
+    prefix = "bulk_export"
+    at = _boot(mode="full")
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception, at.exception
+    moved: list[str] = []
+    # A choice can reveal more controls (a PNG format, its options), so keep
+    # moving whatever is newly drawn until nothing new appears.
+    for _ in range(4):
+        fresh = []
+        for kind in _PANEL_WIDGETS:
+            for widget in getattr(at, kind):
+                key = getattr(widget, "key", None) or ""
+                if (
+                    key.startswith(prefix)
+                    and key not in moved
+                    and not widget.disabled
+                    and _move_off_current_value(widget, kind)
+                ):
+                    fresh.append(key)
+        if not fresh:
+            break
+        moved += fresh
+        at.run()
+        assert not at.exception, at.exception
+    assert len(moved) >= 5, f"too few export controls found to test: {moved}"
+    before = {key: at.session_state[key] for key in moved if key in at.session_state}
+
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
+    assert not at.exception, at.exception
+    at.segmented_control(key=SWITCH).set_value("full").run()
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception, at.exception
+    lost = {
+        key: (value, at.session_state[key] if key in at.session_state else "<gone>")
+        for key, value in before.items()
+        if key not in at.session_state or at.session_state[key] != value
+    }
+    assert not lost, f"export choices reset by a trip through Essentials: {lost}"

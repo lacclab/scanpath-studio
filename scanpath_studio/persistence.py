@@ -11,7 +11,7 @@ is comes from its own bind address, never from the browser — see
 Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
-in-app 🗂️ Data → *Saved on this computer* section
+in-app 🗂️ Data → *Saved work* section
 (``app._render_saved_here_section``), the ``scanpath-studio cache`` CLI
 subcommand and ``api.cache_status``. The stored files are deleted from outside
 the app — ``scanpath-studio cache --clear`` / ``api.clear_cache``, both
@@ -48,7 +48,7 @@ import secrets
 import tempfile
 import threading
 import time
-from collections.abc import MutableMapping
+from collections.abc import Callable, MutableMapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -58,31 +58,46 @@ import pandas as pd
 
 import scanpath_studio.annotations as annotations_mod
 
-from . import progress
+from . import dataset_credit, progress
 from .constants import (
+    DATASET_ALIASES_KEY,
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    DATASET_NAME_MAX_CHARS,
     DATASET_SETUP_OVERRIDES_KEY,
     DATASET_STIMULUS_IMAGES_KEY,
     DOWNLOAD_DIR_KEY,
+    GUIDE_RETURN_KEY,
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    RESERVED_SOURCE_NAMES,
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
     SETUP_OVERRIDE_SESSION_KEYS,
 )
+from .dataset_identity import DATASET_IDS_KEY, dataset_share_id, forget_dataset_identity
+from .file_lock import file_lock
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
+    COMPARE_B_FILTER_STATE_KEYS,
     COMPARE_IDENTITY_STATE_KEY,
     COMPARE_SOURCE_STATE_KEY,
     DESIGN_PRESETS,
+    EXPORT_FIGURE_DPI,
+    EXPORT_FIGURE_WIDTH,
+    EXPORT_FIGURE_WIDTH_UNIT,
+    PENDING_COMPARE_STATE_KEY,
     PLOT_CONFIG_STATE_KEYS,
+    SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_FIX_RANGE,
     SINGLE_PLAYBACK_SPEED,
     SINGLE_SCREEN_ID,
+    SINGLE_SHOW_CHIPS,
+    SINGLE_TRIAL_CHOSEN,
     compare_state_keys,
     keep_legacy_marker_scale,
     rename_legacy_keys,
@@ -101,6 +116,11 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
+_ANNOTATION_BASE_KEY = "_local_annotation_base"
+_MANIFEST_BASE_KEY = "_local_persistence_manifest_base"
+_MANIFEST_REVISION_KEY = "_local_persistence_manifest_revision"
+SAVE_CONFLICT_KEY = "_local_persistence_save_conflict"
+SAVE_FAILED_KEY = "_local_persistence_save_failed"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -164,6 +184,7 @@ _METADATA_FILE_RE = re.compile(r"^metadata(?:-[0-9a-f]+)?\.json$")
 _STALE_AFTER_S = 600.0
 _SWEPT_KEY = "_local_persistence_swept"
 _STATE_LOCK = threading.RLock()
+_CACHE_LOCK_FILE = ".scanpath-recovery.lock"
 _LOGGER = logging.getLogger(__name__)
 _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     "data_source_choice",
@@ -196,10 +217,23 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     SINGLE_COMPARE_SCREEN_ID,
     *compare_state_keys(0),
     *compare_state_keys(1),
+    # B's fixation and saccade filters, kept as A's `global_*` ones are.
+    *COMPARE_B_FILTER_STATE_KEYS,
+    # The figure's print width and resolution, kept like the rest of the figure.
+    EXPORT_FIGURE_WIDTH,
+    EXPORT_FIGURE_WIDTH_UNIT,
+    EXPORT_FIGURE_DPI,
+    # Two view preferences a link carries: whether the trial summary shows
+    # above the plot, and "keep this fixation range across trials".
+    SINGLE_SHOW_CHIPS,
+    "single_fix_range_all_trials",
     # The descriptions the user wrote: their own words, like the design
     # library. A plain session key so editing one never touches the stored
     # frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
+    DATASET_ALIASES_KEY,
+    DATASET_IDS_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    dataset_credit.STORE_KEY,
     # Each dataset's stimulus-image folder and pattern, kept the same way and
     # for the same reason. A local path in a local cache.
     DATASET_STIMULUS_IMAGES_KEY,
@@ -208,6 +242,10 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # decides again and turns back on a layer the user switched off.
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
+    # The same for the dataset's declared font (`app.seed_canvas_state`): a
+    # relaunch must not snap a font the user changed back to the corpus'.
+    "_font_seeded_for",
+    "_font_snap_restore",
     # The folder the user chose for corpus downloads. A preference, like the
     # design library: a restart must not send the next download back to the
     # default folder.
@@ -219,6 +257,51 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
 }
+_FIXATION_WINDOW = (
+    "The fixation window belongs to the reading it was drawn on. A settings "
+    "file restores it only once its reading is found in the open data "
+    "(url_state._restore_selection); the cache would put it on whatever "
+    "reading opens first, where the slider clamps it and silently hides "
+    "fixations."
+)
+#: Keys a link or a settings file restores that the cache leaves out, each with
+#: the reason. Any other such key must be in `_SESSION_KEYS`:
+#: `tests/test_saved_state_contract.py` fails on one that is in neither.
+NOT_CACHED: dict[str, str] = {
+    "global_word_hover_measure": (
+        "Superseded by global_word_hover_fields, which the cache keeps: the app "
+        "draws word hover from that list."
+    ),
+    PENDING_COMPARE_STATE_KEY: (
+        "A one-shot handoff that B's picker resolves on the next run; the cache "
+        "keeps what it resolves to, B's dataset and identity."
+    ),
+    SINGLE_TRIAL_CHOSEN: (
+        "A one-shot handoff that the trial picker resolves; the cache keeps the "
+        "reading it resolves to (single_trial_id)."
+    ),
+    SINGLE_FIX_RANGE: _FIXATION_WINDOW,
+    "single_fix_range_user_set": _FIXATION_WINDOW,
+    SINGLE_COMPARE_FIX_RANGE: _FIXATION_WINDOW,
+    "single_compare_fix_range_user_set": _FIXATION_WINDOW,
+}
+#: The durable session keys that hold the user's work rather than a tab's
+#: view: two sessions sharing the cache must not overwrite each other's copy
+#: of them, so another session's change to one makes a save a conflict, as a
+#: changed dataset does (:func:`_manifest_base`). Every other durable key —
+#: the page, the trial on screen, the view and plot settings, the wizard's
+#: mapping — is the saving tab's own, and the last save wins it.
+_SHARED_SESSION_KEYS = frozenset(
+    {
+        DESIGN_PRESETS,
+        DATASET_ALIASES_KEY,
+        DATASET_IDS_KEY,
+        DATASET_DESCRIPTIONS_KEY,
+        dataset_credit.STORE_KEY,
+        DATASET_STIMULUS_IMAGES_KEY,
+        DATASET_SETUP_OVERRIDES_KEY,
+    }
+)
 
 
 def is_loopback_url(url: str = "") -> bool:
@@ -345,6 +428,19 @@ def _dataset_identity(session: MutableMapping[str, Any]) -> list:
     return datasets
 
 
+def _durable_settings(session: MutableMapping[str, Any]) -> dict:
+    """Recover the viewer's own settings when the app closes during a guide."""
+    values = {
+        key: _json_safe(value)
+        for key, value in session.items()
+        if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
+    }
+    for key, original in session.get(GUIDE_RETURN_KEY, {}).items():
+        if key in _SESSION_KEYS:
+            values[key] = _json_safe(original)
+    return values
+
+
 def _state_fingerprint(
     session: MutableMapping[str, Any], metadata_signature: list | None = None
 ) -> str:
@@ -352,11 +448,7 @@ def _state_fingerprint(
     if metadata_signature is None:
         metadata_signature = _metadata_signature(session)
     datasets = _dataset_identity(session)
-    values = {
-        key: _json_safe(value)
-        for key, value in session.items()
-        if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
-    }
+    values = _durable_settings(session)
     # Annotations: the live store by content, every other dataset's by revision.
     annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
@@ -459,9 +551,11 @@ def _manifest_for(
     root: Path,
     dataset_identity: list,
     written: list[Path],
+    annotations: dict,
 ) -> dict:
     """The manifest this save writes, with the frames of every changed dataset
-    written beside it under new names (``written`` lists them).
+    written beside it under new names (``written`` lists them), and
+    ``annotations`` — `{"datasets": {name: [records]}}`, each dataset's own.
 
     A dataset reuses its last entry — no Parquet is written — when its
     identity is the one that entry was written for and the files it names are
@@ -513,20 +607,15 @@ def _manifest_for(
     for name, record in _failed(session).items():
         datasets.setdefault(name, record["entry"])
 
-    values = {key: _json_safe(session[key]) for key in _SESSION_KEYS if key in session}
-    values.update(
-        {
-            key: _json_safe(value)
-            for key, value in session.items()
-            if str(key).startswith(COLUMN_MAPPING_PREFIX)
-        }
-    )
+    values = _durable_settings(session)
+    if values.get(COMPARE_SOURCE_STATE_KEY) == "This dataset":
+        # A literal upload ID. Older manifests used this text for A's source.
+        values[COMPARE_SOURCE_STATE_KEY] = {"dataset": "This dataset"}
     return {
         "schema": SCHEMA_VERSION,
         "datasets": datasets,
         "session": values,
-        # `{"datasets": {name: [records]}}` — each dataset's own.
-        "annotations": annotations_mod.cache_payload(session),
+        "annotations": annotations,
     }
 
 
@@ -590,6 +679,166 @@ def _save_metadata(
     }
 
 
+class RecoveryConflictError(ValueError):
+    """Publishing this tab's changes would overwrite newer saved work."""
+
+
+class AnnotationConflictError(RecoveryConflictError):
+    """Two sessions independently changed the same cached trial or screen."""
+
+
+def _merge_saved_annotations(base, local, disk):
+    """Apply this session's annotation edits to the latest saved annotations."""
+    if disk == base or disk == local:
+        return local
+    if local == base:
+        return disk
+
+    def entries(payload):
+        if isinstance(payload, list):
+            payload = {"unassigned": payload}
+        payload = payload or {}
+        by_dataset = {
+            **(payload.get("datasets") or {}),
+            None: payload.get("unassigned", []),
+        }
+        return {
+            (owner, key): value
+            for owner, records in by_dataset.items()
+            for key, value in annotations_mod.records_to_store(records).items()
+        }
+
+    before, edited, latest = map(entries, (base, local, disk))
+    result = latest.copy()
+    for key in before.keys() | edited.keys():
+        mine, old, saved = edited.get(key), before.get(key), latest.get(key)
+        if mine == old:
+            continue
+        if saved != old and saved != mine:
+            owner, reading = key
+            raise AnnotationConflictError(
+                f"Another session changed the annotation for {owner or 'unassigned dataset'}, "
+                f"{' / '.join(reading)}. Your local changes are still open. Export them from "
+                "Data Management → Annotations, then reopen the saved session and review the imported notes."
+            )
+        if mine is None:
+            result.pop(key, None)
+        else:
+            result[key] = mine
+    owners = {}
+    for (owner, key), entry in result.items():
+        owners.setdefault(owner, {})[key] = entry
+    unassigned = owners.pop(None, {})
+    merged = {
+        "datasets": {
+            owner: annotations_mod.store_to_records(store)
+            for owner, store in owners.items()
+        }
+    }
+    if unassigned:
+        merged["unassigned"] = annotations_mod.store_to_records(unassigned)
+    return merged
+
+
+def _cache_file_lock(root: Path, *, reading: bool = False):
+    # A failed dataset or metadata sidecar can outlive its directory.
+    return (
+        file_lock(root / _CACHE_LOCK_FILE, reading=reading)
+        if root.is_dir()
+        else contextlib.nullcontext()
+    )
+
+
+def _digest(snapshot: dict) -> str:
+    encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _manifest_revision(manifest: dict) -> str:
+    """Identify one saved copy: everything in it but its annotations.
+
+    What removing a held-back dataset's or metadata tables' files checks: any
+    save since this session read the copy, by any session, may name them as
+    readable, so only the very copy it read lets it delete them.
+    """
+    return _digest({k: v for k, v in manifest.items() if k != "annotations"})
+
+
+def _manifest_base(manifest: dict) -> str:
+    """Identify what a save may replace only from the copy it last read.
+
+    That is the datasets, their metadata tables and the session keys that are
+    the user's work about them (:data:`_SHARED_SESSION_KEYS`): another
+    session's change to any of them makes this one's save a conflict.
+    Annotations merge by trial instead. The rest of the session block — the
+    page, the trial on screen, the view and plot settings — belongs to each
+    tab, and the last tab to save wins it, as it does the dataset table's
+    remembered counts.
+    """
+    snapshot = {
+        key: value
+        for key, value in manifest.items()
+        if key not in ("annotations", "session", "dataset_counts")
+    }
+    session = manifest.get("session")
+    snapshot["session"] = (
+        {key: value for key, value in session.items() if key in _SHARED_SESSION_KEYS}
+        if isinstance(session, dict)
+        else session
+    )
+    return _digest(snapshot)
+
+
+def _remember_saved_copy(session, manifest: dict) -> None:
+    """Note the copy on disk this session has now read or written."""
+    session[_MANIFEST_BASE_KEY] = _manifest_base(manifest)
+    session[_MANIFEST_REVISION_KEY] = _manifest_revision(manifest)
+
+
+def _check_saved_copy(session, root: Path, *, exact: bool = False) -> dict | None:
+    """Read under the cache lock, before writing or removing any files.
+
+    A save needs the copy's :func:`_manifest_base` to be the one this session
+    last read or wrote; ``exact`` (removing files) needs its
+    :func:`_manifest_revision` to be.
+    """
+    try:
+        disk = _as_mapping(
+            json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        )
+    except FileNotFoundError:
+        disk = None
+    except (OSError, ValueError) as exc:
+        raise RecoveryConflictError(
+            "This tab couldn't read the saved copy to check for changes. "
+            "Your edits are still open. Keep this tab open until you've copied or exported them."
+        ) from exc
+    identify, key = (
+        (_manifest_revision, _MANIFEST_REVISION_KEY)
+        if exact
+        else (_manifest_base, _MANIFEST_BASE_KEY)
+    )
+    if (identify(disk) if disk is not None else None) != session.get(key):
+        raise RecoveryConflictError(
+            "The saved work on this computer changed in another session. "
+            "Your edits are still in this tab and haven't been saved. "
+            "Copy or export them before closing or reloading. To download notes, open "
+            "Data Management → Annotations."
+        )
+    return disk
+
+
+def _can_discard_saved_files(session, root: Path) -> bool:
+    try:
+        _check_saved_copy(session, root, exact=True)
+    except RecoveryConflictError as exc:
+        session[SAVE_CONFLICT_KEY] = str(exc)
+        return False
+    return True
+
+
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     """Save local datasets and durable session preferences, all or nothing.
 
@@ -599,6 +848,9 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     names as they were (the new files are removed again), so the next launch
     restores the whole previous session; after it, the whole new one. Files no
     manifest names any longer are removed only once the new one is in place.
+
+    Raises RecoveryConflictError if the saved copy changed since this session
+    restored or saved it. Independent annotation edits merge by trial.
     """
     with _STATE_LOCK:
         failed = _failed(session)
@@ -613,11 +865,35 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
         if session.get(_LAST_FINGERPRINT_KEY) == fingerprint:
             return False
         root.mkdir(parents=True, exist_ok=True)
+        return _publish_state(session, root, metadata_signature, fingerprint)
+
+
+def _publish_state(
+    session: MutableMapping[str, Any],
+    root: Path,
+    metadata_signature: list,
+    fingerprint: str,
+) -> bool:
+    """Write and retire files while the same disk revision stays exclusively ours."""
+    with file_lock(root / _CACHE_LOCK_FILE):
+        disk = _check_saved_copy(session, root)
+        # Merged before any file is written: a conflict must cost nothing,
+        # since it recurs on every rerun until the user resolves it.
+        local_annotations = annotations_mod.cache_payload(session)
+        annotations = local_annotations
+        if disk is not None:
+            annotations = _merge_saved_annotations(
+                session.get(_ANNOTATION_BASE_KEY, {"datasets": {}}),
+                local_annotations,
+                disk.get("annotations", {"datasets": {}}),
+            )
         dataset_identity = _dataset_identity(session)
         written: list[Path] = []
         swapped = False
         try:
-            manifest = _manifest_for(session, root, dataset_identity, written)
+            manifest = _manifest_for(
+                session, root, dataset_identity, written, annotations
+            )
             metadata, metadata_bookkeeping = _save_metadata(
                 session, root, metadata_signature, written
             )
@@ -641,6 +917,9 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
                 # Named by no manifest: this save's files would only be litter.
                 for path in written:
                     _unlink_quietly(path)
+        _remember_saved_copy(session, manifest)
+        session[_ANNOTATION_BASE_KEY] = local_annotations
+        session.pop(SAVE_CONFLICT_KEY, None)
         session[_LAST_FINGERPRINT_KEY] = fingerprint
         session[_LAST_DATASET_IDENTITY_KEY] = dataset_identity
         # The live datasets' entries only: a held-back one is merged in by
@@ -779,42 +1058,42 @@ def restore_state(
     if session.get(_RESTORED_KEY):
         return False
     session[_RESTORED_KEY] = True
-    with _STATE_LOCK:
-        return _restore_manifest(session, root, skip_session_keys)
+    if not root.is_dir():
+        return False
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            path = root / "manifest.json"
+            if not path.exists():
+                return False
+            manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
+            schema = int(manifest.get("schema", 0))
+            if schema != SCHEMA_VERSION:
+                raise ValueError(
+                    f"it was saved by another version (format {schema}; this one "
+                    f"reads {SCHEMA_VERSION})"
+                )
+            stored_datasets = _as_mapping(manifest.get("datasets", {}))
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+            # An empty session must never overwrite data it could not open.
+            session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
+            session[_PAUSED_KEY] = True
+            _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
+            return False
+        return _restore_manifest(
+            session, root, skip_session_keys, manifest, stored_datasets
+        )
 
 
 def _restore_manifest(
-    session: MutableMapping[str, Any], root: Path, skip_session_keys
+    session: MutableMapping[str, Any],
+    root: Path,
+    skip_session_keys,
+    manifest,
+    stored_datasets,
 ) -> bool:
-    """The body of :func:`restore_state`, under its lock."""
-    path = root / "manifest.json"
-    if not path.exists():
-        return False
-    try:
-        # Read and check the manifest's *shape* before touching the session.
-        # It is a file on disk, so any JSON value can be in it — `[]`, `null`,
-        # a dataset entry that is a string — and each of those must fail here,
-        # as an unreadable cache, not escape as an AttributeError on every
-        # launch.
-        manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
-        schema = int(manifest.get("schema", 0))
-        if schema != SCHEMA_VERSION:
-            raise ValueError(
-                f"it was saved by another version (format {schema}; this one "
-                f"reads {SCHEMA_VERSION})"
-            )
-        stored_datasets = _as_mapping(manifest.get("datasets", {}))
-    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
-        # The cache is there but cannot be read as a whole. Opening without
-        # it is right — a damaged cache must never stop the app — but
-        # overwriting it is not: the next save would replace whatever is
-        # still recoverable with this session's empty state. So saving
-        # pauses and the app says why (`cache_failure`), with a way to try
-        # again or to clear it.
-        session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
-        session[_PAUSED_KEY] = True
-        _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
-        return False
+    """Apply the validated manifest while its referenced sidecars remain locked."""
+    _remember_saved_copy(session, manifest)
     # What the manifest on disk names, so the save that replaces it
     # removes what the new one no longer does.
     session[_LAST_REFERENCED_KEY] = sorted(_manifest_references(root, manifest))
@@ -852,7 +1131,19 @@ def _restore_manifest(
     # Only the names that were not already open actually *landed* — an
     # in-memory dataset of the same name shadows the stored one above.
     summary = {"datasets": len(set(restored_datasets) - set(existing))}
-    skip = set(skip_session_keys)
+    # A private link looks up the restored tables by their local ID or display
+    # name before deciding which saved view settings it can replace.
+    skip = set() if callable(skip_session_keys) else set(skip_session_keys)
+    for key in (DATASET_ALIASES_KEY, DATASET_IDS_KEY):
+        if key in stored_session and key not in skip:
+            restored = {
+                token: item
+                for token, item in stored_session.pop(key).items()
+                if token not in existing
+            }
+            session[key] = {**restored, **(session.get(key) or {})}
+    if callable(skip_session_keys):
+        skip = set(skip_session_keys())
     # Counted before the loop below writes it: `setdefault` means a
     # design library already in this session keeps its own, so the stored
     # one restored nothing.
@@ -864,12 +1155,15 @@ def _restore_manifest(
     for key, value in stored_session.items():
         if key not in skip:
             session.setdefault(key, value)
+    for token in restored_datasets:
+        dataset_share_id(session, token)
     # Per dataset, `{"datasets": {name: [records]}}`. An older manifest
     # holds one flat list naming no dataset; `restore_payload` files it
     # under the datasets it belongs to, once — see its docstring. A
     # held-back dataset's annotations restore too: they are filed under
     # its name and written back with it.
     try:
+        session[_ANNOTATION_BASE_KEY] = manifest.get("annotations", {"datasets": {}})
         summary["annotations"] = annotations_mod.restore_payload(
             session, manifest.get("annotations")
         )
@@ -931,6 +1225,16 @@ def _read_dataset(root: Path, entry: Any) -> dict:
         payload[frame_key] = pd.read_parquet(_frame_path(root, relative))
     for frame_key in _FRAME_KEYS:
         payload.setdefault(frame_key, pd.DataFrame())
+    # Older imports assigned a screen-local row count to this clock when the
+    # user mapped no screen onset. The saved mapping identifies those counts.
+    schema = (payload.get("schemas") or {}).get("fixations")
+    fixations = payload["fixations"]
+    if (
+        isinstance(schema, dict)
+        and not schema.get("screen_timestamp")
+        and "screen_timestamp_ms" in fixations
+    ):
+        payload["fixations"] = fixations.drop(columns="screen_timestamp_ms")
     return payload
 
 
@@ -980,7 +1284,7 @@ def retry_failed_datasets(session, root: Path | None = None) -> dict[str, str]:
     failed = _failed(session)
     if not failed:
         return {}
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory, reading=True):
         live = dict(session.get("_datasets", {}))
         entries = session.get(_LAST_DATASET_ENTRIES_KEY)
         # The reuse bookkeeping stays valid only if it described the session
@@ -1003,6 +1307,8 @@ def retry_failed_datasets(session, root: Path | None = None) -> dict[str, str]:
             failed.pop(name)
         if recovered:
             session["_datasets"] = live
+            for token in recovered:
+                dataset_share_id(session, token)
             if reusable:
                 session[_LAST_DATASET_ENTRIES_KEY] = {**entries, **recovered}
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
@@ -1014,15 +1320,16 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
     """Remove one held-back dataset from the cache: its entry and its files.
 
     The next save writes the manifest without it. Its annotations and metadata
-    tables are kept — they are filed by name, like every dataset's, and are the
-    user's own work — so a dataset added again under that name finds them.
+    tables keep their owner so another upload cannot inherit them.
     """
     directory = state_directory() if root is None else root
     failed = _failed(session)
     record = failed.pop(str(name), None)
     if record is None:
         return False
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory):
+        if not _can_discard_saved_files(session, directory):
+            return False
         entry = record.get("entry")
         frames = entry.get("frames") if isinstance(entry, dict) else None
         # Only the files its entry names, never guessed from its name: a
@@ -1038,6 +1345,17 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
                 continue  # never delete outside the cache folder
         for path in paths:
             _unlink_quietly(path)
+        from . import metadata
+
+        if (
+            name not in (session.get("_datasets") or {})
+            and name not in annotations_mod.dataset_names(session)
+            and name not in (session.get(metadata.DATASET_STORE_KEY) or {})
+            and name != session.get(metadata.OWNER_KEY)
+            and not failed_metadata(session)
+        ):
+            forget_dataset_identity(session, name)
+            dataset_credit.save_credit(session, name, {})
         _set_failed(session, failed)
     return True
 
@@ -1084,7 +1402,16 @@ def _restorable_session(stored: Any) -> dict:
             key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
         ):
             continue
-        if key == DATASET_DESCRIPTIONS_KEY:
+        if key == dataset_credit.STORE_KEY:
+            # ``{dataset: credit}``; anything else is dropped.
+            if isinstance(value, dict):
+                clean[key] = {
+                    str(name): credit
+                    for name, payload in value.items()
+                    if (credit := dataset_credit.clean_credit(payload))
+                }
+            continue
+        if key in (DATASET_DESCRIPTIONS_KEY, DATASET_ALIASES_KEY, DATASET_IDS_KEY):
             # ``{dataset: sentence}``; anything else is dropped.
             if isinstance(value, dict):
                 clean[key] = {
@@ -1121,6 +1448,12 @@ def _restorable_session(stored: Any) -> dict:
                     for name, setup in value.items()
                     if isinstance(setup, dict)
                 }
+            continue
+        if key == COMPARE_SOURCE_STATE_KEY:
+            if isinstance(value, str):
+                clean[key] = "" if value == "This dataset" else value
+            elif value == {"dataset": "This dataset"}:
+                clean[key] = "This dataset"
             continue
         if key == COMPARE_IDENTITY_STATE_KEY:
             # ``[participant_id, trial_id]`` in JSON; the picker reads a tuple.
@@ -1245,7 +1578,7 @@ def retry_failed_metadata(session, root: Path | None = None) -> str | None:
     directory = state_directory() if root is None else root
     from . import metadata as metadata_mod
 
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory, reading=True):
         try:
             payloads = _read_metadata_file(directory, held.get("pointer"))
             metadata_mod.restore_dataset_payloads(session, payloads)
@@ -1265,11 +1598,14 @@ def discard_failed_metadata(session, root: Path | None = None) -> bool:
     Only that copy: the datasets, their annotations and the tables attached
     this session are left alone, and the next save writes the latter.
     """
-    held = session.pop(_FAILED_METADATA_KEY, None)
+    held = session.get(_FAILED_METADATA_KEY)
     if not isinstance(held, dict):
         return False
     directory = state_directory() if root is None else root
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory):
+        if not _can_discard_saved_files(session, directory):
+            return False
+        session.pop(_FAILED_METADATA_KEY)
         try:
             path = _metadata_path(directory, held.get("pointer"))
         except ValueError:
@@ -1295,7 +1631,9 @@ def _metadata_files(root: Path) -> list[Path]:
 
 def forget_state(root: Path) -> None:
     """Remove the known persistence files without recursively deleting ``root``."""
-    with _STATE_LOCK:
+    if not root.is_dir():
+        return
+    with _STATE_LOCK, _cache_file_lock(root):
         manifest = root / "manifest.json"
         if manifest.exists():
             manifest.unlink()
@@ -1312,67 +1650,594 @@ def forget_state(root: Path) -> None:
                 pass
 
 
-def rename_cached_dataset(
-    session: MutableMapping[str, Any],
-    old: str,
-    new: str,
-    root: Path | None = None,
-) -> bool:
-    """Follow a dataset rename through the cache instead of rewriting it.
+class StoredDatasetExistsError(ValueError):
+    """The recovery cache already holds a dataset of the requested name."""
 
-    A dataset's Parquet files are not named after the dataset (a token per
-    write; an older cache names them after the old name's slug, and keeps
-    those names), so a rename moves no file: re-keying
-    ``manifest.json`` — one atomic replacement — and this session's reuse
-    bookkeeping keeps the next :func:`save_state` on the cheap reuse path, which
-    rewrites the manifest only and leaves no orphan behind.
 
-    Call it **after** the store itself has been re-keyed: the new reuse identity is
-    read from the live ``session["_datasets"]``. Best-effort like the rest of this
-    module — on any failure the session's bookkeeping is dropped so the next save
-    rebuilds the cache in full rather than trusting it.
+def _read_manifest_for_update(root: Path) -> dict:
+    """The manifest a headless write adds to: a new one when none is stored.
+
+    A manifest that exists but does not read, or that another version wrote,
+    is an error, never replaced: writing over it would cost every dataset in it.
     """
-    if old == new:
-        return False
-    directory = state_directory() if root is None else root
+    path = root / "manifest.json"
+    if not path.exists():
+        return {
+            "schema": SCHEMA_VERSION,
+            "datasets": {},
+            "session": {},
+            "annotations": {"datasets": {}},
+        }
+    try:
+        manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
+        schema = int(manifest.get("schema", 0))
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        raise ValueError(
+            f"The saved work at {root} can't be read ({_failure_reason(exc)}), "
+            "so nothing was added to it. Open the app to see what it says, or "
+            "clear it with `scanpath-studio cache --clear`."
+        ) from exc
+    if schema != SCHEMA_VERSION:
+        raise ValueError(
+            f"The saved work at {root} was written by another version of Scanpath "
+            f"Studio (format {schema}; this one writes {SCHEMA_VERSION}), so "
+            "nothing was added to it."
+        )
+    manifest = dict(manifest)
+    manifest["datasets"] = dict(_as_mapping(manifest.get("datasets", {})))
+    manifest["session"] = dict(_as_mapping(manifest.get("session", {})))
+    return manifest
+
+
+class StoredDatasetNotFoundError(LookupError):
+    """The recovery cache holds no dataset of the requested name."""
+
+
+@contextlib.contextmanager
+def _manifest_update(root: Path):
+    """Change the manifest from outside the app, as a save does: under the cache
+    lock, new files first, then the manifest swapped in one rename.
+
+    Yields ``(manifest, written)``: the body edits ``manifest`` in place and
+    lists every file it writes in ``written``, so a failure removes them again
+    and leaves the saved copy as it was. Files only the old manifest named go
+    once the new one is in place.
+    """
     with _STATE_LOCK:
-        try:
-            manifest_path = directory / "manifest.json"
-            if manifest_path.is_file():
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                datasets = dict(manifest.get("datasets", {}))
-                if old in datasets:
-                    datasets[new] = datasets.pop(old)
-                    manifest["datasets"] = datasets
-                    values = dict(manifest.get("session", {}))
-                    if values.get("data_source_choice") == old:
-                        values["data_source_choice"] = new
-                        manifest["session"] = values
-                    _atomic_text(
-                        json.dumps(
-                            manifest, ensure_ascii=False, sort_keys=True, indent=2
-                        ),
-                        manifest_path,
-                    )
-            entries = session.get(_LAST_DATASET_ENTRIES_KEY)
-            if isinstance(entries, dict) and old in entries:
-                entries = dict(entries)
-                entries[new] = entries.pop(old)
-                session[_LAST_DATASET_ENTRIES_KEY] = entries
-                session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
-            return True
-        except (OSError, ValueError, TypeError, KeyError):
-            for key in (
-                _LAST_FINGERPRINT_KEY,
-                _LAST_DATASET_IDENTITY_KEY,
-                _LAST_DATASET_ENTRIES_KEY,
-            ):
-                session.pop(key, None)
-            _LOGGER.warning(
-                "Could not follow a dataset rename through the local cache.",
-                exc_info=True,
+        root.mkdir(parents=True, exist_ok=True)
+        with file_lock(root / _CACHE_LOCK_FILE):
+            manifest = _read_manifest_for_update(root)
+            before = _manifest_references(root, manifest)
+            written: list[Path] = []
+            swapped = False
+            try:
+                yield manifest, written
+                encoded = json.dumps(
+                    _json_safe(manifest), ensure_ascii=False, sort_keys=True, indent=2
+                )
+                _atomic_text(encoded, root / "manifest.json")
+                swapped = True
+            finally:
+                if not swapped:
+                    for path in written:
+                        _unlink_quietly(path)
+            after = _manifest_references(root, manifest)
+            _remove_unreferenced(root, after, before - after, sweep=False)
+
+
+def _session_map(values: dict, key: str) -> dict:
+    return dict(_as_mapping(values.get(key) or {}))
+
+
+def _metadata_owners(manifest: dict) -> set[str]:
+    """The datasets the stored metadata tables belong to (``"name:grain"``)."""
+    pointer = manifest.get("metadata")
+    tables = pointer.get("tables") if isinstance(pointer, dict) else None
+    return {
+        str(table).rpartition(":")[0]
+        for table in (tables if isinstance(tables, list) else ())
+    }
+
+
+def _stored_tokens(manifest: dict, label: str) -> list[str]:
+    """The store keys of the saved datasets the list shows as ``label``
+    (ignoring case)."""
+    aliases = _session_map(manifest["session"], DATASET_ALIASES_KEY)
+    return [
+        token
+        for token in manifest["datasets"]
+        if str(aliases.get(token) or token).casefold() == label.casefold()
+    ]
+
+
+def store_dataset(
+    payload: dict,
+    name: str,
+    *,
+    description: str | None = None,
+    select: bool = True,
+    replace: bool = False,
+    keep_setup: bool = False,
+    trial_metadata: dict | None = None,
+    drop_trial_metadata: bool = False,
+    root: Path | None = None,
+) -> str:
+    """Add one dataset to the recovery cache from outside the app.
+
+    ``payload`` is a ``_datasets`` entry as the ➕ Add-dataset wizard builds it:
+    canonical ``words`` / ``fixations`` / ``raw_gaze`` frames beside the
+    entry's own keys (``schemas``, ``column_names``, ``setup`` …). The next app
+    session on this computer restores it like a dataset added in the app; a tab
+    already open sees it once reloaded.
+
+    ``name`` is the name the dataset list shows. A name a built-in source holds,
+    or another dataset shows (a renamed built-in), is refused, and one a stored
+    dataset holds (ignoring case) raises :class:`StoredDatasetExistsError`
+    unless ``replace``, which swaps that dataset's tables and keeps its
+    annotations, metadata tables and share ID — and its description unless a
+    new one is given, and with ``keep_setup`` its recording setup. ``select``
+    makes it the dataset the next session opens on.
+
+    ``trial_metadata`` is the dataset's trial table as
+    ``metadata.session_payloads`` builds it, written into the metadata sidecar
+    under this dataset's store key, as the app saves a table attached on the
+    Data page; left out, a replaced dataset keeps the one it has, unless
+    ``drop_trial_metadata`` drops it.
+
+    An app tab that saved before this finds the saved copy changed on its next
+    save and says so, as it does when two tabs change the same saved work.
+    Returns the dataset's store key.
+    """
+    label = str(name or "").strip()
+    if not label:
+        raise ValueError("A dataset needs a name.")
+    if len(label) > DATASET_NAME_MAX_CHARS:
+        raise ValueError(
+            f"A dataset name can be at most {DATASET_NAME_MAX_CHARS} characters; "
+            f"{label[:20]!r}… has {len(label)}."
+        )
+    if label.casefold() in {n.casefold() for n in RESERVED_SOURCE_NAMES}:
+        raise ValueError(
+            f"{label!r} is the name of a built-in data source. Choose another name."
+        )
+    root = state_directory() if root is None else Path(root)
+    with _manifest_update(root) as (manifest, written):
+        datasets = manifest["datasets"]
+        values = manifest["session"]
+        aliases = _session_map(values, DATASET_ALIASES_KEY)
+        ids = _session_map(values, DATASET_IDS_KEY)
+        descriptions = _session_map(values, DATASET_DESCRIPTIONS_KEY)
+        existing = _stored_tokens(manifest, label)
+        if existing and not replace:
+            raise StoredDatasetExistsError(
+                f"A dataset named {label!r} is already saved on this computer. "
+                "Pass replace=True (--replace) to replace its tables, or "
+                "choose another name."
             )
-            return False
+        if not existing and any(
+            str(shown).casefold() == label.casefold() for shown in aliases.values()
+        ):
+            raise ValueError(
+                f"{label!r} is the name a renamed dataset is shown under. "
+                "Choose another name."
+            )
+        if existing:
+            token = existing[0]
+        else:
+            annotation_owners = _as_mapping(
+                _as_mapping(manifest.get("annotations") or {}).get("datasets") or {}
+            )
+            occupied = (
+                set(datasets)
+                | set(aliases)
+                | set(ids)
+                | set(descriptions)
+                | set(annotation_owners)
+                | _metadata_owners(manifest)
+            )
+            token = label if label not in occupied else f"upload-{_new_token()}"
+        payload = dict(payload)
+        old_entry = _as_mapping(datasets.get(token) or {})
+        old_setup = _as_mapping(old_entry.get("metadata") or {}).get("setup")
+        if existing and keep_setup and isinstance(old_setup, dict):
+            payload["setup"] = old_setup
+        if token != label:
+            aliases[token] = label
+        ids.setdefault(token, secrets.token_hex(16))
+        if description is not None and description.strip():
+            descriptions[token] = description.strip()
+        (root / "datasets").mkdir(exist_ok=True)
+        if trial_metadata is not None:
+            _put_metadata_table(root, manifest, token, "trial", trial_metadata, written)
+        elif drop_trial_metadata and existing:
+            _drop_metadata_table(root, manifest, token, "trial", written)
+        datasets[token] = _write_dataset(payload, root / "datasets", written)
+        counts = manifest.get("dataset_counts")
+        if isinstance(counts, dict):
+            # Remembered for the tables being replaced; the app recounts.
+            counts.pop(token, None)
+        if aliases:
+            values[DATASET_ALIASES_KEY] = aliases
+        values[DATASET_IDS_KEY] = ids
+        if descriptions:
+            values[DATASET_DESCRIPTIONS_KEY] = descriptions
+        if select:
+            values["data_source_choice"] = token
+    return token
+
+
+#: Session keys holding one entry per dataset, keyed by its store key: a
+#: removed dataset's entry goes with it, as ``wizard._remove_dataset`` drops it.
+_PER_DATASET_SESSION_KEYS = (
+    DATASET_ALIASES_KEY,
+    DATASET_IDS_KEY,
+    DATASET_DESCRIPTIONS_KEY,
+    dataset_credit.STORE_KEY,
+    DATASET_STIMULUS_IMAGES_KEY,
+)
+#: What the trial picker holds for the dataset it is open on: a removed open
+#: dataset's reading goes too, so the next session opens on its default.
+_OPEN_DATASET_SESSION_KEYS = (
+    "data_source_choice",
+    "single_trial_id",
+    "single_participant",
+    "single_slider",
+    SINGLE_SCREEN_ID,
+)
+
+
+def _stored_metadata_tables(
+    root: Path, manifest: dict, action: str, advice: str
+) -> dict:
+    """The stored metadata tables, ``{dataset: {grain: payload}}``; a sidecar
+    that does not read is an error naming what was not done (``action``) and
+    what to do instead (``advice``)."""
+    pointer = manifest.get("metadata")
+    if not isinstance(pointer, dict):
+        return {}
+    try:
+        stored = _as_mapping(_read_metadata_file(root, pointer))
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        raise ValueError(
+            f"The saved metadata tables at {root} can't be read "
+            f"({_metadata_failure_reason(exc)}), so nothing was {action}. "
+            f"{advice}"
+        ) from exc
+    return dict(_as_mapping(stored.get("datasets") or {}))
+
+
+def _write_metadata_tables(root: Path, manifest: dict, tables: dict, written) -> None:
+    """Write ``tables`` to a new sidecar (listed in ``written``) and point the
+    manifest at it, or drop the pointer when none is left; the old file goes
+    once the manifest is swapped."""
+    if not tables:
+        manifest.pop("metadata", None)
+        return
+    name = f"metadata-{_new_token()}.json"
+    written.append(root / name)
+    _atomic_text(
+        json.dumps(_json_safe({"datasets": tables}), ensure_ascii=False), root / name
+    )
+    manifest["metadata"] = {
+        "file": name,
+        "tables": [
+            f"{dataset}:{grain}"
+            for dataset, grains in tables.items()
+            for grain in _as_mapping(grains)
+        ],
+    }
+
+
+def _put_metadata_table(
+    root: Path, manifest: dict, token: str, grain: str, table: dict, written
+) -> None:
+    """Store ``table`` as ``token``'s ``grain`` table, keeping its others and
+    every other dataset's."""
+    tables = _stored_metadata_tables(
+        root,
+        manifest,
+        "saved",
+        "Open the app and attach the table on the Data Management page instead.",
+    )
+    tables[token] = {**_as_mapping(tables.get(token) or {}), grain: table}
+    _write_metadata_tables(root, manifest, tables, written)
+
+
+def _drop_metadata_table(
+    root: Path, manifest: dict, token: str, grain: str, written
+) -> None:
+    """Drop ``token``'s ``grain`` table, keeping its others and every other
+    dataset's."""
+    if token not in _metadata_owners(manifest):
+        return
+    tables = _stored_metadata_tables(
+        root,
+        manifest,
+        "saved",
+        "Open the app and remove the table on the Data Management page instead.",
+    )
+    own = dict(_as_mapping(tables.get(token) or {}))
+    if own.pop(grain, None) is None:
+        return
+    if own:
+        tables[token] = own
+    else:
+        tables.pop(token, None)
+    _write_metadata_tables(root, manifest, tables, written)
+
+
+def _drop_metadata_tables(root: Path, manifest: dict, token: str, written) -> None:
+    """Write the stored metadata tables again without ``token``'s, to a new file
+    (listed in ``written``); the old one goes once the manifest is swapped."""
+    if token not in _metadata_owners(manifest):
+        return
+    tables = _stored_metadata_tables(
+        root,
+        manifest,
+        "removed",
+        "Open the app and remove the dataset on the Data Management page instead.",
+    )
+    tables.pop(token, None)
+    _write_metadata_tables(root, manifest, tables, written)
+
+
+def remove_stored_dataset(name: str, *, root: Path | None = None) -> str:
+    """Remove a saved dataset from the recovery cache from outside the app.
+
+    ``name`` is the name the dataset list shows (ignoring case). What the app's
+    remove takes goes too: its tables, annotations, metadata tables,
+    description, share ID, credit and stimulus-image folder, its place as
+    scanpath B, and — when the saved session had it open — the reading on
+    screen, so the next session opens on the default dataset. A dataset the
+    app held back as unreadable is removed the same way.
+
+    Raises :class:`StoredDatasetNotFoundError` when no saved dataset has the
+    name. Returns the removed dataset's store key.
+    """
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    missing = StoredDatasetNotFoundError(
+        f"No dataset named {label!r} is saved on this computer."
+    )
+    if not (root / "manifest.json").exists():
+        raise missing
+    with _manifest_update(root) as (manifest, written):
+        tokens = _stored_tokens(manifest, label)
+        if not tokens:
+            raise missing
+        token = tokens[0]
+        _drop_metadata_tables(root, manifest, token, written)
+        manifest["datasets"].pop(token)
+        annotations = _as_mapping(manifest.get("annotations") or {})
+        owners = dict(_as_mapping(annotations.get("datasets") or {}))
+        if owners.pop(token, None) is not None:
+            manifest["annotations"] = {**annotations, "datasets": owners}
+        counts = manifest.get("dataset_counts")
+        if isinstance(counts, dict):
+            counts.pop(token, None)
+        values = manifest["session"]
+        for key in _PER_DATASET_SESSION_KEYS:
+            entries = _session_map(values, key)
+            if entries.pop(token, None) is not None:
+                values[key] = entries
+        if values.get("data_source_choice") == token:
+            for key in _OPEN_DATASET_SESSION_KEYS:
+                values.pop(key, None)
+        if values.get(COMPARE_SOURCE_STATE_KEY) in (token, {"dataset": token}):
+            values.pop(COMPARE_SOURCE_STATE_KEY, None)
+            values.pop(COMPARE_IDENTITY_STATE_KEY, None)
+        _leave_dataset_values(values, token)
+    return token
+
+
+def _stored_dataset(manifest: dict, label: str) -> tuple[str, str]:
+    """``(store key, shown name)`` of the saved dataset the list shows as
+    ``label``, or :class:`StoredDatasetNotFoundError`."""
+    tokens = _stored_tokens(manifest, label)
+    if not tokens:
+        hint = (
+            " A built-in or public dataset's annotations are exported and "
+            "imported in the app, on Data Management → Annotations."
+            if label.casefold() in {n.casefold() for n in RESERVED_SOURCE_NAMES}
+            else ""
+        )
+        raise StoredDatasetNotFoundError(
+            f"No dataset named {label!r} is saved on this computer.{hint}"
+        )
+    token = tokens[0]
+    aliases = _session_map(manifest["session"], DATASET_ALIASES_KEY)
+    return token, str(aliases.get(token) or token)
+
+
+def _stored_readings(
+    root: Path, entry: Any
+) -> tuple[frozenset[tuple[str, str]], frozenset[tuple[str, str, str]], bool]:
+    """A saved dataset's readings, as the app keys annotations on them.
+
+    ``(trials, screens, multipart)``: every ``(participant, trial)`` any of
+    its tables has — the trial picker's ids, ``unique_trial_id`` where a table
+    has one (`annotations.upload_trials`) — every ``(participant, trial,
+    screen)``, and whether it was recorded over several screens. Only the id
+    columns are read.
+    """
+    import pyarrow.parquet as pq
+
+    trials: set[tuple[str, str]] = set()
+    screens: set[tuple[str, str, str]] = set()
+    multipart = False
+    for relative in _as_mapping(_as_mapping(entry).get("frames", {})).values():
+        path = _frame_path(root, relative)
+        names = set(pq.read_schema(path).names)
+        trial = "unique_trial_id" if "unique_trial_id" in names else "trial_id"
+        if not {"participant_id", trial} <= names:
+            continue
+        columns = ["participant_id", trial]
+        if "screen_id" in names:
+            multipart = True
+            columns.append("screen_id")
+        frame = pd.read_parquet(path, columns=columns).drop_duplicates()
+        pids, tids = frame["participant_id"].astype(str), frame[trial].astype(str)
+        trials.update(zip(pids, tids))
+        if "screen_id" in frame:
+            on_screen = frame["screen_id"].notna()
+            screens.update(
+                zip(
+                    pids[on_screen],
+                    tids[on_screen],
+                    frame.loc[on_screen, "screen_id"].astype(str),
+                )
+            )
+    return frozenset(trials), frozenset(screens), multipart
+
+
+def _stored_multipart(root: Path, entry: Any) -> bool:
+    """Whether a saved dataset's tables carry screens, from their schemas.
+
+    A table file that is gone or unreadable says no: whether to list screens
+    is all it decides, and the annotations still say so themselves.
+    """
+    import pyarrow.parquet as pq
+
+    for relative in _as_mapping(_as_mapping(entry).get("frames", {})).values():
+        try:
+            if "screen_id" in pq.read_schema(_frame_path(root, relative)).names:
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def _annotation_owners(manifest: dict) -> tuple[dict, dict]:
+    """The manifest's ``annotations`` value, as ``(payload, {owner: records})``.
+
+    An older manifest's flat list is entries no dataset owns yet
+    (`annotations.restore_payload`), kept as ``unassigned``.
+    """
+    stored = manifest.get("annotations")
+    if isinstance(stored, list):
+        stored = {"datasets": {}, "unassigned": stored}
+    payload = dict(_as_mapping(stored or {}))
+    return payload, dict(_as_mapping(payload.get("datasets") or {}))
+
+
+def stored_annotations(
+    name: str, *, root: Path | None = None
+) -> tuple[str, dict, bool]:
+    """A saved dataset's annotations, read from outside the app.
+
+    Returns ``(shown name, store, multipart)``: the store as
+    `annotations.records_to_store` builds it. Raises
+    :class:`StoredDatasetNotFoundError` when no saved dataset has the name.
+    """
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        raise StoredDatasetNotFoundError(
+            f"No dataset named {label!r} is saved on this computer."
+        )
+    with _cache_file_lock(root, reading=True):
+        manifest = _read_manifest_for_update(root)
+        token, shown = _stored_dataset(manifest, label)
+        _, owners = _annotation_owners(manifest)
+        records = owners.get(token)
+        store = annotations_mod.records_to_store(
+            [
+                r
+                for r in (records if isinstance(records, list) else [])
+                if isinstance(r, dict)
+            ]
+        )
+        multipart = _stored_multipart(root, manifest["datasets"][token])
+    return shown, store, multipart
+
+
+def write_stored_annotations(
+    name: str,
+    incoming: dict,
+    *,
+    replace: bool = False,
+    root: Path | None = None,
+) -> tuple[str, int, list, dict]:
+    """Write annotations into a saved dataset from outside the app.
+
+    ``incoming`` is ``{reading key: given fields}``
+    (`annotations.frame_entries` / `record_entries`). The readings the
+    dataset's stored tables have are written — merged with its annotations
+    by `annotations.apply_entries`, or with ``replace`` in place of them —
+    under the cache lock, the manifest swapped in one rename; the others are
+    left out. An app tab already open merges its own edits with these by
+    reading on its next save, and shows these once reloaded.
+
+    Returns ``(shown name, readings written, unknown keys, the dataset's
+    store afterwards)``. Raises :class:`StoredDatasetNotFoundError` when no
+    saved dataset has the name.
+    """
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        raise StoredDatasetNotFoundError(
+            f"No dataset named {label!r} is saved on this computer."
+        )
+    with _manifest_update(root) as (manifest, _written):
+        token, shown = _stored_dataset(manifest, label)
+        trials, screens, _ = _stored_readings(root, manifest["datasets"][token])
+        known, unknown = annotations_mod.resolve_readings(incoming, trials, screens)
+        if replace and not known:
+            # Replacing with nothing — an empty file, or one made for another
+            # dataset — would delete every annotation the dataset has.
+            raise ValueError(
+                f"None of the {len(incoming)} readings given is in {shown!r}, so "
+                "its annotations were not replaced."
+                if incoming
+                else f"No annotations were given, so those of {shown!r} were not "
+                "replaced."
+            )
+        payload, owners = _annotation_owners(manifest)
+        records = owners.get(token)
+        before = annotations_mod.records_to_store(
+            [
+                r
+                for r in (records if isinstance(records, list) else [])
+                if isinstance(r, dict)
+            ]
+        )
+        after = annotations_mod.apply_entries(before, known, replace=replace)
+        if after:
+            owners[token] = annotations_mod.store_to_records(after)
+        else:
+            owners.pop(token, None)
+        manifest["annotations"] = {**payload, "datasets": owners}
+    return shown, len(known), unknown, after
+
+
+def _leave_dataset_values(values: dict, token: str) -> None:
+    """What leaving ``token`` does to the figure, done to the saved session
+    since the app will not open it again: its recording setup comes off the
+    ``global_*`` keys, which get back what they held before it
+    (`app._restore_setup_override_stash`), and its raw-gaze default is no
+    longer the one decided (`app.seed_raw_gaze_default`)."""
+    if values.get(SETUP_OVERRIDE_FOR_KEY) == token:
+        values.pop(SETUP_OVERRIDE_FOR_KEY, None)
+        stashed = values.pop(SETUP_OVERRIDE_RESTORE_KEY, None)
+        for key, value in _as_mapping(stashed or {}).items():
+            if value is None:
+                values.pop(key, None)
+            else:
+                values[key] = value
+    seeded = values.get(RAW_GAZE_SEEDED_FOR_KEY)
+    if isinstance(seeded, str) and seeded.split("\x1f", 1)[0] == token:
+        values.pop(RAW_GAZE_SEEDED_FOR_KEY, None)
+    # Its declared font comes off too, putting back what the font controls
+    # held before it (`app.seed_canvas_state`).
+    font_for = values.get("_font_seeded_for")
+    if isinstance(font_for, list | tuple) and font_for and font_for[0] == token:
+        values.pop("_font_seeded_for", None)
+        stashed = values.pop("_font_snap_restore", None)
+        for key, value in _as_mapping(stashed or {}).items():
+            if value is None:
+                values.pop(key, None)
+            else:
+                values[key] = value
 
 
 def restore_local_state(
@@ -1380,13 +2245,15 @@ def restore_local_state(
     url: str,
     *,
     protect_data_source: bool = False,
-    protect_view: bool = False,
+    protect_view: bool | Callable[[], bool] = False,
 ) -> bool:
     """Restore this machine's cached session, once, and say whether to announce it.
 
     ``protect_data_source`` keeps the stored dataset choice out (a link named
     its own), and ``protect_view`` the stored view (a link opens on the view it
-    was made for, not on whichever one this machine used last).
+    was made for, not on whichever one this machine used last). A callable
+    decides that after this machine’s datasets have been recovered and before
+    its saved view settings are applied.
 
     The return value is **not** "a manifest was applied" — that is
     :func:`restore_state`'s answer. Every rerun writes the cache, so a session
@@ -1430,13 +2297,70 @@ def restore_local_state(
             session[_RESTORE_PENDING_KEY] = str(marker)
         except OSError:
             pass  # a cache we cannot write to simply goes without the breaker
-    protected = {"data_source_choice"} if protect_data_source else set()
-    if protect_view:
-        protected.add("main_nav")
-    if not restore_state(session, root, skip_session_keys=protected):
+
+    def protected_keys():
+        protected = {"data_source_choice"} if protect_data_source else set()
+        view_claimed = protect_view() if callable(protect_view) else protect_view
+        if view_claimed:
+            protected.add("main_nav")
+        return protected
+
+    if not restore_state(session, root, skip_session_keys=protected_keys):
         _finish_restore(session)
         return False
     return restored_from_cache(session)
+
+
+def stored_dataset_reference(
+    name: str, *, root: Path | None = None
+) -> tuple[str, str | None, str] | None:
+    """How a link names the saved dataset the list shows as ``name``
+    (ignoring case): ``(shown name, share ID, digest of its tables)``, the
+    three params 🔗 Share writes for it, so the app opens it without asking
+    whether it is the sender's data. ``None`` when no saved dataset has the
+    name, or the saved work can't be read.
+
+    The digest is the one the app computes for the dataset once restored,
+    so its tables are read here as a session restores them.
+    """
+    from .data import share_dataset_fingerprint
+
+    label = str(name or "").strip()
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        return None
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            manifest = _read_manifest_for_update(root)
+            tokens = _stored_tokens(manifest, label)
+            if not tokens:
+                return None
+            token = tokens[0]
+            payload = _read_dataset(root, manifest["datasets"][token])
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return None
+    session = manifest["session"]
+    shown = str(_session_map(session, DATASET_ALIASES_KEY).get(token) or token)
+    share_id = _session_map(session, DATASET_IDS_KEY).get(token)
+    return shown, share_id, share_dataset_fingerprint(payload)
+
+
+def stored_dataset_aliases(*, root: Path | None = None) -> dict[str, str]:
+    """The names the saved session gives datasets in its list, renamed ones
+    the app has itself included: ``{source: name}``. Empty when nothing is
+    saved or the saved work can't be read."""
+    root = state_directory() if root is None else Path(root)
+    if not (root / "manifest.json").exists():
+        return {}
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            manifest = _read_manifest_for_update(root)
+            aliases = _session_map(manifest["session"], DATASET_ALIASES_KEY)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return {}
+    return {str(token): str(alias) for token, alias in aliases.items() if alias}
 
 
 def local_state_restored(session) -> bool:
@@ -1478,7 +2402,7 @@ def restored_summary(session) -> dict:
     """How much of *what* this session got back from the cache, by kind.
 
     ``{"datasets": n, "annotations": n, "designs": n, "metadata": n}`` — what
-    the *Saved on this computer* section counts, and what a user would recognise as
+    the *Saved work* section counts, and what a user would recognise as
     their last session (``metadata`` is the number of attached participant /
     trial / text tables). View settings are deliberately absent: they restore, but
     silently (see :func:`restore_local_state`). Empty when no restore
@@ -1537,6 +2461,11 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
     if session is not None:
         for key in (
             _LAST_FINGERPRINT_KEY,
+            _MANIFEST_BASE_KEY,
+            _MANIFEST_REVISION_KEY,
+            _ANNOTATION_BASE_KEY,
+            SAVE_CONFLICT_KEY,
+            SAVE_FAILED_KEY,
             _LAST_DATASET_IDENTITY_KEY,
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
@@ -1560,7 +2489,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
 def clear_saved_work(session) -> bool:
     """Delete what is saved on this computer and start over.
 
-    The Data page's *Clear what is saved…*. Deleting the files alone
+    The Data page's *Clear saved session…*. Deleting the files alone
     would be undone within a click, because every run ends in
     ``save_local_state`` and this tab still holds the datasets, annotations and
     settings. So the session is emptied too: the next run is a first visit (the
@@ -1658,15 +2587,20 @@ def cache_status(
         # back. A stat per file, never a Parquet read: this runs on every
         # render of the Data page. (A file that is present but corrupt shows
         # only when the app tries to read it.)
+        stored_session = dict(manifest.get("session", {}))
+        aliases = stored_session.get(DATASET_ALIASES_KEY)
+        aliases = aliases if isinstance(aliases, dict) else {}
         good, damaged = [], []
         for name, entry in sorted(datasets.items()):
+            label = aliases.get(name)
+            label = label if isinstance(label, str) and label else str(name)
             reason = _entry_problem(directory, entry)
             if reason:
-                damaged.append({"name": str(name), "reason": reason})
+                damaged.append({"name": label, "reason": reason})
                 continue
             good.append(
                 {
-                    "name": str(name),
+                    "name": label,
                     "rows": {
                         key: int(value)
                         for key, value in dict(entry.get("rows") or {}).items()
@@ -1686,7 +2620,6 @@ def cache_status(
         status["annotations"] = annotations_mod.payload_count(
             manifest.get("annotations")
         )
-        stored_session = dict(manifest.get("session", {}))
         status["designs"] = len(dict(stored_session.get(DESIGN_PRESETS, {})))
         pointer = dict(manifest.get("metadata") or {})
         status["metadata"] = len(list(pointer.get("tables") or []))
@@ -1748,11 +2681,17 @@ def save_local_state(session, url: str) -> bool:
     if not persistence_enabled(url) or persistence_paused(session):
         return False
     try:
-        return save_state(session, state_directory())
+        written = save_state(session, state_directory())
+        session.pop(SAVE_FAILED_KEY, None)
+        return written
+    except RecoveryConflictError as exc:
+        session[SAVE_CONFLICT_KEY] = str(exc)
+        return False
     except Exception:
         # Persistence is a recovery convenience, never a reason for the app to
         # stop rendering (read-only homes, full disks, or unsupported Parquet
         # values are all recoverable by continuing without this save).
+        session[SAVE_FAILED_KEY] = True
         _LOGGER.warning(
             "Could not persist the local Scanpath Studio session.", exc_info=True
         )

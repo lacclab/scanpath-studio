@@ -147,8 +147,9 @@ def test_stimulus_master_switch_suppresses_and_restores_the_border():
     assert len(_span_outlines(_static(at))) == 1
 
 
-def test_mark_text_stays_inactive_while_text_is_hidden():
-    at = _rail(**{**BORDER, "global_critical_span_style": "Mark text"})
+@pytest.mark.parametrize("style", ["Mark text", "Underline"])
+def test_label_highlight_stays_inactive_while_text_is_hidden(style):
+    at = _rail(**{**BORDER, "global_critical_span_style": style})
     assert at.session_state["_viz"]["highlight_column"] is None
     at.session_state["global_show_labels"] = True
     _rerun(at)
@@ -428,8 +429,8 @@ def _color_bar_tip(at: AppTest) -> str:
     ("color_by", "says"),
     [
         ("(uniform)", "the markers are one color"),
-        ("line", "Figure &amp; canvas ▾ → Legends → Fixation colors"),
-        ("eye", "Figure &amp; canvas ▾ → Legends → Fixation colors"),
+        ("line", "Figure → Legends → Fixation colors"),
+        ("eye", "Figure → Legends → Fixation colors"),
     ],
 )
 def test_a_greyed_color_bar_row_says_why_and_where(color_by, says):
@@ -465,8 +466,8 @@ def test_color_by_offers_retained_numeric_columns_after_the_familiar_ones():
     fixations = fixations.assign(saccade_ok=True, label=["a", "b", "c", "d"])
     options = color_field_options(fixations)
     assert options.index("pupil_size") > options.index("timestamp_ms")
-    # Identifiers, positions, flags and text are not colour scales.
-    for column in ("x", "y", "fixation_id", "saccade_ok", "label"):
+    assert "label" in options  # a categorical colour, independent of row order
+    for column in ("x", "y", "fixation_id", "saccade_ok"):
         assert column not in options
     # Bookkeeping never shows.
     assert "_timestamp_synthesized" not in color_field_options(

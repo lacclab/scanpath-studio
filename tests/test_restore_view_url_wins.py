@@ -20,9 +20,6 @@ def _first_run(page_url_path: str, restored_view: str) -> AppTest:
     ``main_nav``, the way the recovery cache leaves it before the nav draws."""
     at = AppTest.from_file(APP_SCRIPT)
     at.session_state[NAV_KEY] = restored_view
-    # A restored session never starts the welcome tour, which would take the
-    # first run to Scanpath; this fakes the restore without its marker.
-    at.session_state["tour_seen"] = True
     at._page_hash = calc_hash(page_url_path) if page_url_path else ""
     at.run(timeout=90)
     assert not at.exception, at.exception
@@ -51,7 +48,7 @@ def test_a_bare_visit_resumes_the_restored_view():
 
 def test_later_requests_still_switch_the_view():
     """Only the first run defers to the URL: the app's own requests (the Data
-    page's Open in Scanpath, the tour, Add dataset) keep working after it."""
+    page's Open in Scanpath View, the tour, Add dataset) keep working after it."""
     at = _first_run("data", _VIEW_CORPUS)
     at.session_state[NAV_KEY] = _VIEW_SCANPATH
     at.run(timeout=90)

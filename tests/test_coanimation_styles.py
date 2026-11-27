@@ -200,12 +200,33 @@ def test_frames_carry_the_per_scanpath_saccade_line():
     assert frame_lines == {("#112233", "dot", 1.5), ("#445566", "dash", 6.0)}
 
 
-def test_order_numbers_take_the_scanpath_colour():
-    fig = _co_animation(style_a=STYLE_A, style_b=STYLE_B, show_order=True)
-    colours = [
-        t.textfont.color for t in fig.data if t.mode == "text" and t.name is None
-    ]
-    assert colours == ["#00ff00", "#ff00ff"]
+def test_fixation_index_color_in_each_public_view():
+    words_a, fix_a = _frames("p")
+    words_b, fix_b = _frames("q")
+    words, fixations = pd.concat([words_a, words_b]), pd.concat([fix_a, fix_b])
+    a, b = ("p", "t"), ("q", "t")
+    color = "#123456"
+    common = dict(show_order=True, show_word_labels=False, order_font_color=color)
+    styles = dict(style_a=STYLE_A, style_b=STYLE_B)
+
+    def assert_index_colors(figure, expected):
+        # Without word labels, only the fixation numbers draw text. Inspect
+        # the replay frames too, since they can overwrite a trace's styling.
+        for traces in [figure.data, *(frame.data for frame in figure.frames)]:
+            assert [
+                trace.textfont.color for trace in traces if "text" in (trace.mode or "")
+            ] == expected
+
+    assert_index_colors(api.plot_scanpath(words, fixations, *a, **common), [color])
+    assert_index_colors(api.animate_scanpath(words, fixations, *a, **common), [color])
+    expected = [STYLE_A["fix_color"], STYLE_B["fix_color"]]
+    for layout in ("overlay", "side_by_side", "stacked"):
+        fig = api.compare_scanpaths(
+            words, fixations, a, b, layout=layout, **common, **styles
+        )
+        assert_index_colors(fig, expected)
+    replay = api.animate_scanpath(words, fixations, *a, trial_b=b, **common, **styles)
+    assert_index_colors(replay, expected)
 
 
 def test_size_ranges_share_one_duration_scale():
@@ -311,7 +332,7 @@ def test_cli_animate_compare_forwards_the_styles(tmp_path, monkeypatch):
         return real(*args, **kwargs)
 
     monkeypatch.setattr(api, "animate_scanpath", spy)
-    participant = "l37_1129"
+    participant = "l37_273"
     cli.main(
         [
             "render",
@@ -319,9 +340,9 @@ def test_cli_animate_compare_forwards_the_styles(tmp_path, monkeypatch):
             "-p",
             participant,
             "-t",
-            "l37_1129_2_1_1_Ele",
+            "l37_273_2_1_1_Ele",
             "--compare-with",
-            f"{participant}:l37_1129_2_1_3_Adv",
+            f"{participant}:l37_273_2_1_3_Adv",
             "--animate",
             "--style-a",
             "fix_color=#00ff00,opacity=0.2",
@@ -368,6 +389,8 @@ def test_app_co_animation_wears_the_rail_styles_and_static_gets_them_back(
     monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
     tabs._cached_replay_view.clear()
     monkeypatch.setattr(tabs, "make_comparison_figure", compare)
+    # A cache hit would never reach the spied builder.
+    tabs._cached_comparison_figure.clear()
 
     at = AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)

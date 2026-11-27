@@ -24,6 +24,26 @@ import docs_support  # noqa: E402
 from scanpath_studio import api, cli, tour  # noqa: E402
 
 
+def test_whats_new_uses_fragments_only_in_dev(monkeypatch):
+    from changelog_fragments import Fragment
+
+    from scanpath_studio import __release__
+
+    monkeypatch.setattr(
+        "changelog_fragments.load",
+        lambda: ([Fragment((), "added", "Unreleased feature.")], []),
+    )
+    monkeypatch.setenv("SCANPATH_DOCS_CHANNEL", "stable")
+    stable = docs_support.whats_new()
+    assert f"v{__release__}" in stable
+    assert "Unreleased feature." not in stable
+    monkeypatch.setenv("SCANPATH_DOCS_CHANNEL", "dev")
+    dev = docs_support.whats_new()
+    assert "## In development" in dev
+    assert "Unreleased feature." in dev
+    assert stable in dev
+
+
 @pytest.mark.parametrize(
     ("command", "parser"),
     [
@@ -33,6 +53,14 @@ from scanpath_studio import api, cli, tour  # noqa: E402
         ("check", cli._check_parser),
         ("cache", cli._cache_parser),
         ("version", cli._version_parser),
+        (
+            "annotations export",
+            lambda: cli._annotations_action_parser("export"),
+        ),
+        (
+            "annotations import",
+            lambda: cli._annotations_action_parser("import"),
+        ),
     ],
 )
 def test_the_cli_reference_lists_every_flag(command, parser):
@@ -68,6 +96,30 @@ def test_the_figure_option_reference_describes_every_option():
     assert rows
     for row in rows:
         assert row.rstrip("| ").split(" | ")[-1].strip(), row
+
+
+def test_figure_reference_names_the_views_that_draw_the_option():
+    rows = {
+        line.split("`")[1]: line
+        for line in docs_support.figure_options_reference().splitlines()
+        if line.startswith("| `")
+    }
+    assert "*Single plot, Single replay.*" in rows["order_font_color"]
+    assert "`fix_color` in `style_a` or `style_b`" in rows["order_font_color"]
+    assert "<br>*" not in rows["order_font_size"]
+    assert "<br>*" not in rows["order_label_position"]
+    assert "unless its style supplies one" in rows["marker_size_range"]
+    assert "*Single plot.*" in rows["heatmap_style"]
+    assert "*Single plot, Compare.*" in rows["heatmap_colorbar_length"]
+    assert "*Single plot, Compare.*" in rows["raw_gaze_marker_size"]
+    for name in (
+        "compare_stimulus",
+        "label_b",
+        "fixation_flags_b",
+        "style_a",
+        "words_b",
+    ):
+        assert "*Compare, Compare + Animate.*" in rows[name]
 
 
 def test_a_figure_option_without_a_section_fails_the_build():

@@ -107,9 +107,13 @@ def _run(fig, steps, tmp_path) -> dict:
     return json.loads(done.stdout)
 
 
-def _run_page(fig, steps, tmp_path, *, slot: bool = False) -> dict:
+def _run_page(
+    fig, steps, tmp_path, *, slot: bool = False, parent=None, queue: bool = False
+) -> dict:
     """`_run` on the layout `plots.replay_page` gives the page: the figure's
-    own controls hidden, and the player's toolbar in their place."""
+    own controls hidden, and the player's toolbar in their place. ``parent`` is
+    the page around the replay's frame, and ``queue`` gives Plotly a frame queue
+    whose newer draws interrupt older ones (see the harness)."""
     page, _script = replay_page(fig)
     layout = page["layout"]
     config = {
@@ -120,6 +124,8 @@ def _run_page(fig, steps, tmp_path, *, slot: bool = False) -> dict:
         "frames": len(fig.frames),
         "steps": steps,
         "slot": slot,
+        "parent": parent,
+        "queue": queue,
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config), encoding="utf-8")
@@ -347,7 +353,9 @@ class TestToolbar:
         assert bar["width"] == "960px"
         assert bar["height"] == f"{REPLAY_TOOLBAR_PX}px"
         assert bar["attributes"]["aria-label"] == "Replay controls"
-        assert bar["buttons"] == [b.label for b in fig.layout.updatemenus[0].buttons]
+        assert bar["buttons"] == [
+            b.label for b in fig.layout.updatemenus[0].buttons
+        ] + ["‹", "›"]
         assert bar["font"] == fig.layout.updatemenus[0].font.family
         slider = fig.layout.sliders[0]
         assert bar["range"]["max"] == str(len(fig.frames) - 1)
@@ -401,6 +409,27 @@ class TestToolbar:
         assert [(int(n), at) for n, at in log["shown"] if at >= 5010] == [(0, 5010)]
         assert log["toolbar"]["range"]["value"] == "0"
 
+    def test_slider_keys_pause_at_zero_and_resume_after_a_held_space(self, tmp_path):
+        log = _run_page(
+            _replay(),
+            [
+                ["key", {"key": "Home"}],  # autoplay is still on frame zero
+                ["run_until", 1000],
+                ["key", {"key": " "}],
+                ["run_until", 2010],
+                ["key", {"key": " "}],
+                ["key", {"key": " ", "repeat": True}],
+                ["run_until", 4010],
+                ["key", {"key": " "}],
+                ["run_until", 5010],
+            ],
+            tmp_path,
+        )
+        assert not [at for _, at in log["shown"] if 0 < at < 1000 or 2010 < at < 4010]
+        before = [int(n) for n, at in log["shown"] if 1000 <= at <= 2010]
+        resumed = [int(n) for n, at in log["shown"] if at >= 4010]
+        assert 0 < before[-1] == resumed[0] < resumed[-1]
+
     def test_seeking_shows_that_frame_and_stops_the_clock(self, tmp_path):
         fig = _replay()
         log = _run_page(
@@ -414,6 +443,104 @@ class TestToolbar:
         assert log["toolbar"]["readout"] == (
             slider.currentvalue.prefix + slider.steps[300].label
         )
+
+    def test_a_burst_of_seeks_draws_only_the_last(self, tmp_path):
+        fig = _replay(autoplay=False)
+        last = len(fig.frames) - 1
+        log = _run_page(
+            fig,
+            [["seek_burst", [last, 0, 1, last, 0, 1, 0]], ["run_until", 100]],
+            tmp_path,
+            queue=True,
+        )
+        assert [int(n) for n, _ in log["shown"]] == [0]
+        assert log["toolbar"]["range"]["value"] == "0"
+        assert log["unhandled"] == []
+
+    def test_a_draw_another_one_interrupts_is_not_an_error(self, tmp_path):
+        # Plotly rejects a queued draw without a reason when a newer one
+        # replaces it, whichever script asked for the newer one.
+        log = _run_page(
+            _replay(autoplay=False),
+            [["seek", 10], ["seek", 20], ["seek", 30], ["animate", 40]],
+            tmp_path,
+            queue=True,
+        )
+        assert [int(n) for n, _ in log["shown"]] == [10, 20, 30, 40]
+        assert log["unhandled"] == []
+
+    @pytest.mark.parametrize(
+        ("how", "reason"), [("missing", "undefined"), ("error", "Error: draw failed")]
+    )
+    def test_a_draw_that_fails_still_reaches_the_page(self, tmp_path, how, reason):
+        log = _run_page(
+            _replay(autoplay=False),
+            [["fail_next", how], ["seek", 10], ["run_until", 100]],
+            tmp_path,
+            queue=True,
+        )
+        assert log["unhandled"] == [reason]
+
+    @pytest.mark.parametrize(
+        ("parent", "scheme"),
+        [
+            (None, "light"),  # a saved replay, a page of its own
+            ({"scheme": "light"}, "light"),
+            ({"scheme": "dark"}, "dark"),
+            ({"scheme": "normal"}, "light"),
+            ("cross-origin", "light"),
+        ],
+    )
+    def test_the_readout_follows_the_theme_of_the_page_showing_it(
+        self, tmp_path, parent, scheme
+    ):
+        # System colours under `light dark` would follow the computer's setting,
+        # not the app's theme: one scheme, read from the app, decides the chip.
+        log = _run_page(
+            _replay(autoplay=False), [["run_until", 100]], tmp_path, parent=parent
+        )
+        style = log["toolbar"]["readout_style"]
+        assert style["colorScheme"] == scheme
+        assert (style["color"], style["background"]) == ("CanvasText", "Canvas")
+
+    @pytest.mark.parametrize(
+        ("at_ms", "button", "onset"),
+        [
+            # Paused mid-way through the fixation at 800 ms: the fixations on
+            # either side of it, never the one already on screen.
+            (880, "previous", 400),
+            (880, "next", 1200),
+            # On an onset, and in the saccade after a fixation.
+            (800, "previous", 400),
+            (1080, "previous", 400),
+            # Before the second onset there is no earlier fixation.
+            (200, "previous", 0),
+        ],
+    )
+    def test_fixation_steps_go_from_the_fixation_on_screen(
+        self, tmp_path, at_ms, button, onset
+    ):
+        fig = _replay(autoplay=False)
+        frame = _times(fig).index(at_ms)
+        log = _run_page(
+            fig, [["seek", frame], ["toolbar", button], ["run_until", 100]], tmp_path
+        )
+        assert f"onset {onset} ms" in log["toolbar"]["readout"]
+
+    def test_repeated_previous_presses_walk_back_one_fixation_each(self, tmp_path):
+        fig = _replay(autoplay=False)
+        log = _run_page(
+            fig,
+            [["seek", _times(fig).index(880)]]
+            + [["toolbar", "previous"]] * 2
+            + [["toolbar", "next"]],
+            tmp_path,
+        )
+        assert "onset 400 ms" in log["toolbar"]["readout"]
+
+    def test_the_player_needs_no_find_last_index(self):
+        # Array.prototype.findLastIndex needs Safari 15.4 or later.
+        assert "findLastIndex" not in animation_player_post_script(_replay())
 
     def test_a_figure_drawing_its_own_controls_gets_no_toolbar(self, tmp_path):
         log = _run(_replay(), [["run_until", 100]], tmp_path)

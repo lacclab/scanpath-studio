@@ -58,10 +58,17 @@ _SACC = MEASURES["sacc_amp"]
 
 @pytest.fixture(scope="module")
 def demo():
-    """The bundled demo, normalized once, plus the text/reader each view uses."""
+    """The bundled demo's Paragraph screens, normalized once, plus the
+    text/reader each view uses.
+
+    Each demo reading spans several screens, and a per-text view of a frame with
+    screens scopes to one (the first, when none is named); these views are about
+    the paragraph, so it is the only screen left."""
     words_raw, fixations_raw = load_sample_data()
     words = normalize_words(words_raw, infer_word_schema(words_raw))
     fixations = normalize_fixations(fixations_raw, infer_fix_schema(fixations_raw))
+    words = words[words["screen_id"] == "Paragraph"]
+    fixations = fixations[fixations["screen_id"] == "Paragraph"]
     fixations = ensure_fixation_enrichment(fixations, words)
     text_col = next(
         c
@@ -254,6 +261,7 @@ class TestPerTextFigures:
             **_FW,
         )
         assert len(fig.data) == 1  # no lo/hi → line only
+        assert "band" not in fig.layout.title.text
 
     def test_feature_scatter_numeric(self, demo):
         feats = available_features(demo.words)

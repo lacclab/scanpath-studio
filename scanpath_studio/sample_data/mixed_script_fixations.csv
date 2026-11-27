@@ -1,0 +1,12 @@
+participant_id,trial_id,x,y,timestamp_ms,duration_ms
+reader,passage,650,84,0,105
+reader,passage,558,84,120,90
+reader,passage,455,84,225,180
+reader,passage,360,84,425,90
+reader,passage,245,84,540,125
+reader,passage,110,84,680,150
+reader,passage,680,162,850,100
+reader,passage,585,162,970,140
+reader,passage,471,162,1140,100
+reader,passage,580,162,1270,80
+reader,passage,344,162,1370,160

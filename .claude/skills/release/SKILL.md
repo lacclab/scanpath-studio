@@ -24,11 +24,19 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 
 1. `git status` — the working tree must be clean. `git fetch origin` and start
    from an up-to-date `origin/main`. Stop and report if not.
-2. `ruff check .` and `ruff format --check .`
+2. `uv run --extra lint ruff check .` and `uv run --extra lint ruff format --check .`
    must pass (CI's Lint job gates on both).
 3. `python scripts/changelog_fragments.py check` passes and `changelog.d/`
    holds fragments — a release with none is almost always a mistake; confirm
    with the user if empty.
+4. **The app's media show this release.** List what changed in the UI since
+   the media were last captured:
+   `git log --oneline $(git log -1 --format=%H -- docs/assets/screenshots)..origin/main -- scanpath_studio/ ':!scanpath_studio/api.py' ':!scanpath_studio/cli.py'`.
+   If any of it is visible in the app (a control, a label, a header element,
+   a layout change), stop and refresh the media first: run
+   `sh scripts/refresh_docs_media.sh` on a branch from `origin/main`, look
+   through every changed image, and land it as its own PR before cutting the
+   release. Name the commits you judged invisible when you skip this.
 
 ## Steps
 
@@ -46,22 +54,32 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 4. **Citation** — set `version` and `date-released` (today, ISO format) in
    `CITATION.cff` to match. If the year changed, set `CITATION["year"]` in
    `scanpath_studio/constants.py` to it as well.
-5. **Verify parity** — run `pytest tests/test_citation.py` (it enforces
+5. **Verify parity** — run `uv run --extra test pytest tests/test_citation.py` (it enforces
    version and release-year parity between the package and `CITATION.cff`).
-6. **Full test run** — `pytest -n auto`. Stop and report failures; do not
-   release a failing tree.
-7. **Commit + PR** — commit the changes (the three files plus the deleted fragments) with message `Release v<version>`
+6. **Golden captures** — `uv run --extra test python scripts/capture_golden.py`
+   writes `tests/fixtures/golden/v<version>/` (this release's share links,
+   settings files and recovery cache) and refreshes the figure digests.
+   `tests/test_wire_golden.py` then keeps every release's captures restoring,
+   which is how a later refactor learns it broke a link users hold.
+7. **Commit + PR** — commit the changes (the three files, the golden captures and the deleted fragments) with message `Release v<version>`
    (no AI co-author trailer — repo rule), push the branch, and open a PR to
    `main`, and turn on auto-merge so it lands once CI is green. Do not tag the
    branch.
-8. **Wait for the merge** — tagging is part of `/release`, so don't hand off
-   here. Wait in the background (Bash `run_in_background`, which re-invokes
-   you when it exits) rather than polling in the foreground:
+8. **Every supported Python** — on the pushed release branch, so it tests the
+   release commit: `gh workflow run ci.yml --ref <branch>`. It prints no run
+   id; find the run with
+   `gh run list --workflow ci.yml --branch <branch> --event workflow_dispatch -L1`.
+   PRs test one Python only, so this is where 3.11–3.15 are checked before
+   anything is published.
+9. **Wait for both** — the merge and that run. Tagging is part of `/release`,
+   so don't hand off here. Wait in the background (Bash `run_in_background`,
+   which re-invokes you when it exits) rather than polling in the foreground:
+   `gh run watch <run-id> --exit-status` for the run, and
    `until [ "$(gh pr view <n> --json state -q .state)" = MERGED ]; do
-   [ "$(gh pr view <n> --json state -q .state)" = CLOSED ] && exit 1; sleep 60; done`.
-   If CI fails, the PR closes, or the wait times out, stop and report — do
-   not tag.
-9. **Tag on main** — once merged: `git fetch origin`, check that
+   [ "$(gh pr view <n> --json state -q .state)" = CLOSED ] && exit 1; sleep 60; done`
+   for the merge. If either fails, the PR closes, or the wait times out, stop
+   and report — do not tag.
+10. **Tag on main** — once merged: `git fetch origin`, check that
    `origin/main`'s `scanpath_studio/__init__.py` holds the new version, then
    `git tag v<version> origin/main` and `git push origin v<version>`. Running
    `/release` is the go-ahead for this push — no separate confirmation.

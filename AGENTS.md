@@ -35,31 +35,43 @@ scanpath_studio/
 ├─ App shell
 │  ├─ app.py             entry point: page config, the data-source registry and loaders (`prepare_data`,
 │  │                     `_normalize_pair`), trial filters, view dispatch, and the 🗂️ Data Management page
-│  │                     (📂 Available datasets, ✏️ Edit dataset, *Saved on this computer*)
+│  │                     (Current dataset and its editor, Dataset library, Saved work)
 │  ├─ menu.py            the header: Streamlit's `st.navigation(position="top")` with three views
 │  │                     (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management) and ❓ Help's action
 │  │                     entries, which arm a dialog and bounce back to the current view
 │  ├─ ui_mode.py         the Scanpath view's Essentials | Full mode: how it is seeded (`?ui=`, cookie),
 │  │                     the header switch, the CSS that hides the other mode's containers, ＋ More lists
 │  ├─ tabs.py            the views' panels: Scanpath (plot + rail + subtabs), Corpus Analysis, the Data page
+│  ├─ corpus_overview.py the Texts and Participants summary charts, selection and profile drill-down
+│  ├─ corpus_navigation.py the Corpus Analysis destinations and published summary/profile bookmarks
 │  ├─ controls.py        the Scanpath rail, the column-mapping UI and the trial filters
+│  ├─ metadata_editor.py the participant, trial and text metadata controls shared by the wizard and Data Management
+│  ├─ upload_ui.py       shared file-read error messages for the upload controls
 │  ├─ fields.py          the `label | field` row primitive shared by the rail, the wizard and the subtabs
 │  ├─ wizard.py          the ➕ Add-dataset wizard (and dataset naming, rename, removal)
 │  ├─ wizard_shell.py    the wizard's part registry (`STEPS`) and ✏️ Edit dataset's (`EDITOR_STEPS`)
 │  ├─ dataset_table.py   the pure row model behind 📂 Available datasets
 │  ├─ url_state.py       deep links, 🔗 Share (Link · Code · File), settings-file save/restore + migrations
+│  ├─ script_link.py     the link a script writes (`api.app_link`, `open`): figure keywords → link params
 │  ├─ session_keys.py    the session keys / URL params that are a wire format, as constants
 │  ├─ plot_config.py     the settings-file serializer shared by Share and the export bundle
-│  ├─ tour.py            welcome tour, task tutorials and the setup guide
+│  ├─ tour.py            sample invitation, task guides and the optional import walkthrough
+│  ├─ feedback.py        offline troubleshooting, GitHub support links and bug-report details
 │  ├─ loading.py         loading cards (revealed by a timer thread) with Cancel
 │  ├─ progress.py        a Streamlit-free progress + cancel hook for loaders and builders
+│  ├─ reruns.py          `rerun` / `switch_page`, the app's `st.rerun` / `st.switch_page`: keep held writes
 │  ├─ constants.py       palette, defaults, `ICONS`, citation metadata, experimental-feature gates
 │  ├─ styles.py          injected CSS
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
-│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About → Debug)
+│  ├─ debug_log.py       in-app log + state inspector (❓ Help → About & citation → App details → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
+│  ├─ utils.py           trial selection, statistics and labelling helpers shared by the views
+│  ├─ plot_navigation.py the rail's *Find a setting…*: which plot editor owns a setting
+│  ├─ viz_history.py     session-local undo and redo of plot edits
+│  ├─ keyboard.py        keyboard shortcuts for the Scanpath page and its figure
 │  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
-│  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
+│  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py,
+│                        subtab_scroll.py
 │                        browser-only helpers installed into the parent document
 ├─ Data
 │  ├─ data.py            schema inference, normalization, filtering, the stimulus join, fingerprints
@@ -67,8 +79,19 @@ scanpath_studio/
 │  ├─ multipart.py       trials recorded over several screens
 │  ├─ metadata.py        participant / trial / text metadata tables (never broadcast onto frames)
 │  ├─ annotations.py     favorites / tags / notes, one store per dataset
-│  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop
+│  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop; the experimental MultiplEYE reader
+│  ├─ eyelink.py         the experimental EyeLink EDF import: the `edf2asc` wrapper (found, never
+│  │                     bundled), ASC reading, trials / screens from `.vcl` draw lists and `.ias`
+│  │                     interest areas, composed stimulus images, the resumable study folder and
+│  │                     `load_eyelink`
 │  ├─ compare_source.py  Compare's second dataset (scanpath B): widget-free readiness + loading
+│  ├─ dataset_identity.py
+│  │                     local dataset ownership, portable references for uploads, `unique_name`
+│  ├─ dataset_credit.py  a lab's optional dataset credit, shared by the dataset editor and exports
+│  ├─ study_checks.py    a lab's planned readings and file mappings checked against the recordings
+│  ├─ cohort_audit.py    the evidence behind a cohort profile; two revisions of a study compared
+│  ├─ fixation_source.py one fixation traced back to the input cells it was drawn from
+│  ├─ file_lock.py       an advisory lock shared by processes publishing local files
 │  ├─ experimental_setup.py
 │  │                     display-geometry conversions + `SetupSnapshot` with per-group provenance
 │  ├─ persistence.py     the on-device recovery cache (loopback / desktop only)
@@ -90,15 +113,31 @@ scanpath_studio/
 │  ├─ plots.py           `FigureSettings` (the render contract) + every Plotly builder + layer split
 │  ├─ code_snippet.py    the Python / CLI code that reproduces the figure on screen
 │  ├─ export.py          bulk export (figures + tables, per trial or combined)
+│  ├─ bulk_renderer.py   Kaleido page reuse and browser recycling for bulk figures
 │  ├─ animation_export.py GIF / MP4 from the replay (warm Kaleido + Pillow / imageio-ffmpeg)
 │  ├─ export_status.py   shared export stages and byte signatures
+│  ├─ figure_views.py    which figure options each view honours (`options_for_view`): the render paths
+│  ├─ chart_axes.py      coordinates shared by fixation charts and their raw-gaze layer
+│  ├─ replay_frames.py   a replay as completed traces plus each reading's fixation onsets
+│  ├─ publication.py, publication_ui.py
+│  │                     portable publication figures (one renderer for app, offline editor, CLI)
+│  ├─ panel_proof.py, panel_proof_ui.py
+│  │                     a two-panel comparison at its physical print size, and its export
+│  ├─ export_archive.py  disk-backed bulk downloads, served one ZIP piece per request
+│  ├─ export_dictionary.py
+│  │                     the types and units of the CSV columns an export bundle writes
+│  ├─ export_png.py      lossless compression of the browser-drawn PNGs for bulk export
+│  ├─ export_retry.py    retries a bundle's failed figure files within the session
 │  └─ authoring.py, authoring_component.py
 │                        the manually authored scanpath ("Create manually") and its canvas
 └─ Headless & distribution
    ├─ api.py             the public Python API (`load_scanpath_data`, `plot_scanpath`, `animate_scanpath`,
    │                     `compare_scanpaths`, `save_figure`, `figure_code`, …)
-   ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `cache`, `version`, `analyze`
+   ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `add`, `remove`, `open`, `cache`,
+   │                     `version`, `analyze`
    ├─ __init__.py        `__release__`, the lazy `__version__`, and lazy re-exports of `api.py`
+   ├─ __main__.py, streamlit_entry.py
+   │                     `python -m scanpath_studio` → the CLI; the script `run` hands to `streamlit run`
    ├─ citation.py        the citation in every format (BibTeX, APA, RIS, CSL-JSON, a figure credit),
    │                     the public corpora's own, and `corpus_for` (the dataset → its corpus)
    ├─ file_citation.py   writes the citation into each exported file's metadata, editing bytes in place
@@ -110,7 +149,7 @@ scanpath_studio/
 
 `sample_data/` holds the bundled demo; `desktop/` the PyInstaller launcher, spec
 and smoke tests; `paper/` the scripts that make the manuscript's figures;
-`scripts/` docs, release and recording helpers.
+`scripts/` docs, release and recording helpers, and `eyegenbench_to_studio.py`, which adds EyeGenBench corpora and model runs as datasets (`api.add_dataset`).
 
 ### Pipeline
 
@@ -141,6 +180,16 @@ After `normalize_words` / `normalize_fixations`:
   `screen_fixation_id`, and per-screen canvas metadata. Scientific grouping
   uses `(participant_id, trial_id, screen_id)`; coordinate spaces are never
   connected across screens.
+- **Text Word IDs.** A Word/IA ID column that holds text and not one number
+  (`w1`, `Hello_3`) is read as keys (`data.read_word_ids`): the text goes to
+  `word_key` (`constants.WORD_KEY`, shown and exported under the column's own
+  name), and `word_id` stays numeric for every consumer — on the words, each
+  key's position in its text (and screen), 1, 2, … in the row order of the
+  reading that lists the most of the text's keys, one number for every reader
+  (`data._number_word_keys`); on the fixations, the number of the word with
+  exactly that key in the same trial (`data.match_text_word_ids`, in
+  `harmonize_frames`). A column with any
+  number in it is read as numbers, and its other cells as blanks.
 - `data.INTERNAL_COLUMNS` (`_aoi_trial_id`, `_base_trial_id`,
   `_stimulus_words`, …) stay in the frames and the recovery cache and are
   dropped by `data.drop_internal_columns` wherever data leaves the app (export,
@@ -178,10 +227,13 @@ the box that starts there. Positions *inside* a word go through
 `word_char_advance` / `word_glyph_span`.
 
 The **fixation→word assignment** is the data's own when the fixation table maps
-a Word ID — used exactly as given, a blank staying blank. Only when it has
+a Word ID — used exactly as given, a blank staying blank; a text Word ID is
+looked up by its exact text in its trial's words, and a text ID is never
+matched to a number, nor a number to a text ID. Only when it has
 none does `measures.assign_fixations_to_words` derive it from geometry:
 box containment, else `word_id = NaN` (no snapping to a nearby word). That
-assignment feeds the reading measures and the "out-of-text" flag
+assignment feeds the reading measures. The "out-of-text" flag uses the recorded
+coordinates and actual box containment, independently of the mapped Word ID
 (`measures.fixation_in_text_mask`); "color by line" derives visual lines from
 word-box `y` clustering (`measures.cluster_word_lines`) because `line_idx` is
 often a constant in IA exports.
@@ -238,7 +290,15 @@ Some finished-but-unvalidated or unfinished features are off unless
   refused, the export bundle offers no measure family, and Corpus Analysis drops
   the views computed from fixations; the computation register marks these
   entries `computations.EXPERIMENTAL_IDS`;
-- Corpus Analysis's *Per sentence* subtab.
+- Corpus Analysis's *Per sentence* subtab;
+- the MultiplEYE session-set format (`multipleye_format_enabled`): the
+  wizard's *Dataset format* choice, `datasets.load_multipleye` and
+  `render --multipleye`. A dataset already added that way still opens;
+- EyeLink EDF import (`eyelink_import_enabled`, the `edf` extra): `eyelink.py`'s
+  entries, `api.import_eyelink` / `load_eyelink` / `add_eyelink_dataset`, the
+  CLI's `import-eyelink` and `render --eyelink-study` raise without the flag.
+  `edf2asc` comes from the user's EyeLink Developers Kit (`SCANPATH_EDF2ASC`,
+  `PATH`, known install folders).
 
 Hidden, not broken: the code and its tests stay, CLI flags still parse (they
 are only hidden from `--help`), and the docs site does not describe them.
@@ -246,30 +306,31 @@ are only hidden from `--help`), and the docs site does not describe them.
 ## Build / Lint / Test
 
 ```bash
-# Install in editable mode — the test + lint extras give CI's toolchain
-# (pandas 3, ruff pinned in `lint`); a bare `pytest`/`ruff` on PATH may be
-# another interpreter and another version.
-pip install -e ".[test,lint]"                # or: uv sync --extra test --extra lint
+# Run everything through uv: it resolves CI's toolchain (pandas 3, the ruff
+# pinned in the `lint` extra). A bare `pytest` / `ruff` / `python` on PATH can
+# be another interpreter with another pandas and an older ruff, and pass code
+# CI rejects. (`pip install -e ".[test,lint]"` in a venv is the non-uv route.)
 
 # Run the app — bind to loopback: the recovery cache and local folder access
 # are off on a server other machines can reach, and a bare `streamlit run`
 # listens on every interface.
-streamlit run streamlit_app.py --server.address 127.0.0.1
 uv run streamlit run streamlit_app.py --server.address 127.0.0.1
-scanpath-studio                              # binds 127.0.0.1 itself
+uv run scanpath-studio                       # binds 127.0.0.1 itself
 
-# Tests (in that environment — e.g. prefix with `uv run --extra test`)
-pytest -n auto                      # the full suite (CI runs it this way)
-pytest tests/test_measures.py       # one file
-pytest --cov                        # coverage; config + floor in pyproject.toml
+# Tests
+uv run --extra test pytest -n auto tests/test_measures.py  # the tests for what you changed
+uv run --extra test pytest -n auto                   # the full suite (CI runs it on every PR)
+uv run --extra test pytest --cov                     # coverage; floor in pyproject.toml
+uv run --extra test python scripts/verify_change.py  # see a change work (/verify)
 
-# Lint
-ruff check .
-ruff check --select I --fix .
-ruff format .
+# Lint — the `lint` extra, never `test`'s ruff
+uv run --extra lint ruff check .
+uv run --extra lint ruff format .
 
-# Regenerate bundled sample data (needs the full OneStop CSVs, or --source-dir)
-python -m scanpath_studio.update_sample_data
+# Regenerate the bundled L1 demo from the OneStop Full per-part reports, the raw ASC
+# files and the Experiment Builder project the readers ran (its DataViewer draw lists
+# and runtime images give each screen's stimulus)
+uv run python -m scanpath_studio.update_sample_data --source-dir /path/to/onestop-full --asc-dir /path/to/asc --experiment-dir /path/to/ose_2p_l1_l60_tower_st
 
 # Standalone desktop bundle (needs `pip install . pyinstaller` — non-editable)
 # Output: dist/ScanpathStudio.app on macOS, dist/ScanpathStudio/ elsewhere.
@@ -277,10 +338,9 @@ pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
 python desktop/smoke_test.py     # signature + selfcheck + server-boot smoke test
 
 # Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
-pip install -e ".[docs]"
-mkdocs serve                 # local preview
-mkdocs build --strict        # CI gate on every PR and on deploy
-uv run --with playwright python scripts/capture_docs_screenshots.py  # re-capture app screenshots
+uv run --extra docs mkdocs serve           # local preview
+uv run --extra docs mkdocs build --strict  # CI gate; don't add -q, it hides the warnings --strict fails on
+sh scripts/refresh_docs_media.sh           # re-capture every screenshot, GIF and video of the app
 ```
 
 User-facing docs live in `docs/` and publish to
@@ -290,11 +350,15 @@ printed example output, CLI and figure-option references, and the Cite page are
 generated at build time by `exec="true"` fences calling
 `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
-CI (GitHub Actions) runs pytest on Python 3.11–3.14, ruff lint + format checks,
-`mkdocs build --strict`, and one `pytest --cov` leg that fails below
-`[tool.coverage.report] fail_under` in `pyproject.toml`. The HTML coverage
-report and the README badge are published with the docs site for each release
-tag.
+CI (GitHub Actions) runs, on every PR and every merge to `main`: the whole
+suite once, on Python 3.12, split over four jobs (`Tests k/4`, by
+`SCANPATH_TEST_SHARD` in `tests/conftest.py`), whose coverage the `Coverage`
+job adds up and fails below `[tool.coverage.report] fail_under` in
+`pyproject.toml`; ruff lint + format checks; `mkdocs build --strict`; a browser
+smoke test; and a Windows export check. Every supported Python (3.11–3.15) runs
+weekly, on each `v*` tag, and by hand (`gh workflow run ci.yml --ref <branch>`,
+which `/release` does before tagging). The HTML coverage report and the README
+badge are published with the docs site for each release tag.
 
 ## Code style
 
@@ -395,240 +459,48 @@ toggle, option, or parameter) is only "done" when it reaches **all** of them:
 
 Every figure option also needs a `render` flag and a `code_snippet` emitter:
 `tests/test_render_every_option.py` sets each option off its default and fails
-on one the Share → Code snippet cannot reproduce.
+on one the Share → Code snippet cannot reproduce, or whose command does not
+reach the builder.
+
+What else fails when a surface is missed:
+- `tests/test_saved_state_contract.py`: a key a link carries but the settings
+  file or the recovery cache drops;
+- `tests/test_widget_bounds.py`: a control's range differs from the link's
+  clamp;
+- `tests/test_url_garbage.py`: a menu value a link would drop;
+- `tests/test_wire_golden.py`: a released link, settings file or cache that no
+  longer restores;
+- `tests/test_shape_matrix.py`: a data shape that misses a surface.
 
 ## Gotchas
 
-**State and the wire format**
+The rules that are not obvious from reading one file live one file per area
+in `.claude/rules/`, so Claude Code loads each only when it works on the files the
+area covers (their `paths:` header). Read the one for the area you change:
 
-- URL deep-link presets are applied before widgets render (`app.py`); renaming
-  a `global_*` / `single_*` / `filter_*` widget key, a URL param or a settings
-  key breaks links and saved files already in the world.
-  `tests/test_session_key_contract.py` pins them. Changing the settings file's
-  shape means bumping `session_keys.PLOT_CONFIG_SCHEMA_VERSION` and registering
-  a migration in `url_state._PLOT_CONFIG_MIGRATIONS`.
-- **`persist_state="session"` on every persisted widget.** A control that
-  renders only sometimes loses its key at the end of a run in which it did not
-  render, and remounts at its proto default. Every widget on a `global_*` /
-  `single_*` / `cmp{idx}_*` / wire-format key passes `persist_state="session"`;
-  `tests/test_widget_value_sync.py` fails if one doesn't.
-- **A programmatic write to a widget inside a popover can be undone by the
-  browser**, which keeps echoing the value the widget last showed. Write such
-  keys with `controls.write_through(key, value)`.
-- **Never pass `value=` / `index=` to a gated (disabled) widget** — disabling
-  must not rewrite the stored value a deep link or saved file carries.
-- **Anything drawn only sometimes above a view goes inside a container drawn
-  every run.** Streamlit matches a rerun's elements to the last run's by
-  position, so one element more or fewer above `sps_view` shifts the whole view
-  and redraws it from nothing. `st.dialog`, a bare `st.toast` and
-  `@st.fragment` are safe; a bare `st.warning`, `st.markdown` or iframe is not.
-- **Essentials and Full draw the same widgets.** The modes are shown as
-  **Essentials** (code: `SIMPLE`, `simple_only`) and **Full** (code: `ADVANCED`,
-  `advanced_only`). Full-only UI sits in a
-  `ui_mode.advanced_only(host, name)` container (Essentials' own in
-  `ui_mode.simple_only`), one container per item, and `ui_mode.mode_css` hides
-  the other mode's by CSS. Never skip rendering a widget by mode: a widget not
-  drawn loses its value, and the rerun's element positions shift. The one
-  structural difference is the list of subtabs under the plot. The mode is
-  the viewer's own: `?ui=essentials|full` is read on a session's first run,
-  but Share never writes it into a link.
-- **Never give `st.select_slider` a single option** — the browser slider throws
-  and blanks the tab (invisible to AppTest). Guard any new slider, as the trial
-  picker does.
-- **Code changes not showing? Restart the server.** Streamlit doesn't reload
-  imported modules on rerun, and `st.cache_data` doesn't hash
-  transitively-called helpers.
+- [State and the wire format](.claude/rules/state-and-wire-format.md) — widgets, session keys, deep links and settings files.
+- [Data](.claude/rules/data.md) — loading, normalizing and joining the dataset's tables.
+- [Figures](.claude/rules/figures.md) — building, embedding and exporting figures.
+- [Loading and performance](.claude/rules/loading-and-performance.md) — slow steps, loading cards and the plot stage.
+- [Compare](.claude/rules/compare.md) — Compare's second dataset (scanpath B).
 
-**Data**
-
-- **A dataset's column-name map must survive every rewrite of its entry.**
-  `column_names.ColumnNames` records what each canonical column was called in
-  the user's files; anything that rewrites `_datasets[name]` carries
-  `column_names` along, and showing a column name goes through the map. The
-  API's frames are under the dataset's own names; package code that reads them
-  itself passes `names="canonical"`.
-- **A trial filter decides readings, never rows of one table** — see *Trial
-  annotations & filtering*.
-- **One trial pool, the union, on every surface.** A trial is listed when any
-  table has it (words, fixations, raw gaze); a table that lacks it draws as an
-  empty layer. `data.trial_pool` is the rule (`api.list_trials`, `render
-  --list-trials`) and `utils.combo_source` the app's form of it.
-- **Raw gaze can be a dataset's only table.** Nothing derives fixations from
-  samples; the 🔵 Raw gaze layer turns on by default for such a dataset.
-- Schema auto-detection (`data.pick_column`) matches candidate names case- and
-  separator-insensitively and drops one trailing unit block
-  (`Fixation Duration [ms]` == `fixation_duration`), so the `*_CANDIDATES`
-  lists hold only distinct conventions. A second pass accepts a whole-token
-  match (`AOI_LEFT`, `LEFT_px`) only when exactly one column survives it;
-  ambiguity falls through to manual mapping.
-- `*` on a mapping field means exactly "validation blocks without it". A Word/IA
-  ID is read as a number, so one that holds no numbers is no location.
-- **pandas joins NaN to NaN** — in `merge` and in `Series.map` over a dict — so
-  any lookup keyed on a word id drops missing keys first.
-- Repeated readings of a trial get a `_r2` suffix on `trial_id` (ranked on
-  `TRIAL_INDEX`) unless the Trial ID is mapped to several columns, which builds
-  a composite id with `data.compose_id` (escaping `_` and `\`). Any mapping is
-  authoritative over a literal `unique_trial_id` column.
-- **A built-in dataset's recording setup is an override, never an edit of the
-  corpus** (`constants.DATASET_SETUP_OVERRIDES_KEY`). A share link elides the
-  setup against the *source's* screen, since a recipient has no override.
-- Every fingerprint is exact: a frame is hashed in full or named by where it
-  came from (`data.stamp_source` / `adopt_source`, `frame_cache`,
-  `assign_derived`), never sampled. A new large frame made every rerun needs
-  one of these, or it is hashed each run.
-- The bundled `raw_gaze.{csv,parquet}` is **synthesized** from one real
-  bundled trial's fixations (OneStop ships no sample-level gaze); it must stay
-  keyed to a trial present in the bundled fixations.
-
-**Figures**
-
-- **Don't render the spatial plots with `st.plotly_chart`.** It pins the chart
-  width to the column while keeping the layout height, which mis-scales the
-  px-sized word labels. The single / animation / comparison plots go through
-  `tabs._render_true_scale_chart`, which embeds the figure's HTML at its exact
-  pixel size and CSS-scales it to the column. plotly.js loads from the app's own
-  server (`html_embed.plotlyjs_script`), never a CDN; HTML *downloads* take
-  `export.html_plotlyjs(...)`.
-- **The replay player owns the clock.** Plotly's own frame queue rounds every
-  frame up to whole display ticks, so `make_scanpath_animation` stamps each
-  frame's reading time on `fig.layout.meta` and every HTML surface passes
-  `plots.animation_player_post_script(fig)`. Pages carry the frames packed
-  (`plots.replay_page`: frame 0 whole, then per-frame deltas); the figure itself
-  keeps its frames. Both are pinned by tests that run the JS under node.
-- **Animation transport controls must not shrink the plot**: the figure keeps
-  Plotly's own controls in a top band it grows by (`plots._CONTROLS_MARGIN_PX`,
-  for `fig.show()`; the GIF/MP4 export strips it). Every HTML page
-  (`plots.replay_page`) hides them, takes the band back — its figure is the
-  static one's size (`plots.replay_page_box`) — and the player draws a
-  `REPLAY_TOOLBAR_PX` row above the figure instead (in the true-scale embed,
-  in a slot outside the scaled box). A legend above the plot grows the figure
-  past the band, never into it.
-- **Layout shapes go on a figure in one assignment** (`fig.layout.shapes =
-  …`): Plotly re-validates every existing shape on each `add_shape`.
-  `tests/test_smoke.py` counts the constructions.
-- **A new top-level trace** in `make_scanpath_figure` whose name isn't a
-  fixation variant must be added to `plots._trace_layer`, or separable-layer
-  export files it under fixations.
-- **Every exported file carries the citation in its metadata.** Static images
-  get it in `export._figure_renderer`, HTML pages through
-  `file_citation.stamp_html`, GIF / MP4 in `animation_export`, `save_figure`
-  files through `file_citation.stamp_file`, and the browser-saved PNG / SVG
-  from the bytes `tabs._render_save_plot_button` hands its component. A new
-  writer stamps its output too. The one exception is the plot toolbar's camera:
-  Plotly saves that PNG itself, and its config is JSON, so it takes no script.
-- Static image export (PNG/SVG/PDF) and the GIF/MP4 replay go through Kaleido,
-  which needs Chrome (`plotly_get_chrome -y` locally; `packages.txt` installs
-  `chromium` on Streamlit Cloud). The current figure's PNG/SVG is saved in the
-  browser from the plot on screen; HTML is the browser-free fallback. Kaleido's
-  warm server is a process-wide singleton: hold `animation_export.KALEIDO_LOCK`
-  around any use of it.
-- Bulk export iterates *all* filtered trials — narrow the filter first on a
-  large corpus.
-
-**Loading and performance**
-
-- **A new slow step gets a loading card, not `st.spinner`.** Wrap it in
-  `loading.card(slot, …)` and report counts through `progress.report()` from
-  inside its loop. A build under a *gated* card (the dataset pipeline,
-  Compare's B, the Corpus measures) must report at the start of its work on a
-  miss, or the card shows late or never. Never create a Streamlit element inside
-  a cached function.
-- **Keep the plot stage's order**: notes that come before the figure go to
-  `plot_notes_slot`, never into `tour_grp_plot` ahead of the figure.
-
-**Compare**
-
-- Scanpath B can come from a second dataset (`compare_source.py`). Two corpora
-  can hold the same `(participant_id, trial_id)`, so B's `participant_id` is
-  namespaced with the dataset name **only in the throwaway compare frames**
-  (`utils.qualify_for_compare`); everything user-facing carries the corpus' own
-  id (`utils.unqualify_for_export`).
-- An overlay or co-animation across datasets needs equal canvases
-  (`experimental_setup.setups_comparable`); the app resolves to side by side,
-  the API raises `IncomparableScreensError`, the CLI exits.
-- Filter helpers are prefix-scoped: B's filters use the `cmp` prefix, and
-  `controls.FILTER_PREFIXES` keeps a clear-sweep of A's from wiping B's.
+[`REVIEW.md`](REVIEW.md) holds the checklist form — the diff that triggers each
+rule, the check, and the bug it came from — and a test named in a rule fails
+when it is broken.
 
 ## Which viz settings apply in which render path
 
-The scanpath rail (`controls.render_plot_controls`) is **one** control set
-feeding **three** figure builders, picked by the rail's Animate / Compare
-toggles (`single_animate` / `single_compare_toggle`, rendered in `tabs.py`
-before `render_plot_controls`):
-
-| mode | builder | thread |
-| --- | --- | --- |
-| neither toggle | `plots.make_scanpath_figure` | `tabs._build_figure_settings` → `_cached_scanpath_figure` |
-| **Animate** | `plots.make_scanpath_animation` | `tabs._build_and_render_animation` |
-| **Compare** | `plots.make_comparison_figure` (split layouts: `_make_split_comparison_figure`) | `tabs._render_comparison_figure` |
-| **Animate + Compare** | `make_scanpath_animation(fixations_b=…)` — the co-animation | same as Animate |
-
-A setting is honoured (✅) only where the builder takes the parameter **and**
-`tabs.py` passes it; everything else renders disabled with a reason via
-`controls._mode_gate`. Keep this table in sync when a builder gains or loses a
-parameter.
-
-| setting (`viz_settings` name) | static | animation | compare | notes |
-| --- | :---: | :---: | :---: | --- |
-| `show_words`, `show_labels`, `show_saccades`, `show_order`, `order_font_size` | ✅ | ✅ | ✅ | |
-| `word_box_*` (colour, line / fill opacity) | ✅ | ✅ | fill only | Compare outlines each reading's boxes in its own `cmp{idx}_box_color` (its scanpath colour by default) |
-| `show_fix` | ✅ | ❌ | ✅ | The replay *is* the fixation trail |
-| `show_saccade_arrows`, `saccade_arrow_size`, `saccade_opacity` | ✅ | ✅ | ✅ | One figure-wide value in Compare |
-| `legend_layout` | ✅ | ✅ (not saccades) | ✅ (not saccades) | `plots.apply_legend_layout`; one `legend_<kind>=SPOT[,ARR][,SIZE]` link param per moved legend, `render --legend` |
-| `order_font_color`, `fixation_color`, `marker_size_range`, `fixation_opacity`, `hollow_fixations`, `saccade_color` / `_style` / `_width` | ✅ | ✅ (single only) | ❌ | Compare and the co-animation use the per-scanpath `cmp{idx}_*` styles |
-| `color_by`, `fixation_colorscale`, `fixation_color_range` | ✅ | ✅ | ✅ | Compare colours the fill and makes the scanpath colour the outline; a range is present only when explicit (absent = scale to the data, A+B together) |
-| `fixation_symbol` | ✅ | ✅ | ✅ | Glyph shapes (♥) are drawn as text by `plots._glyph_scatter_traces` in every builder |
-| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | One duration scale; the size key draws in Compare only while A and B share a px range |
-| `fix_index_range` | ✅ | ✅ | ✅ | Sliced in `tabs._slice_fix_range`; Compare's B has its own window (`single_compare_fix_range`) |
-| `fixation_flags` (short / long / out-of-bounds) | ✅ | ✅ | ✅ | Compare applies each scanpath's own (B: `cmp1_fixclass_*`) |
-| `illustration_label` / `illustration_text` | ✅ | ✅ | ❌ | `compare_scanpaths` takes no label; the app stamps it itself |
-| drift correction (`align_algorithm`) | ✅ | ✅ | ✅ | Experimental; `tabs._drift_corrected` runs once above the mode split; "Off" returns the same frame object |
-| drift connectors (`align_connectors`) | ✅ | ❌ | ❌ | Only the static figure has the original→corrected layer |
-| `fixation_snap_to_line` / `_position`, Arc saccades | ✅ | ❌ | ❌ | The linear-reading schematic |
-| saccade colour by type, `saccade_classes` | ✅ | ❌ | classes only | Reading-class colouring is static-only; Compare filters classes per scanpath |
-| heatmap (`show_heatmap`, metric / norm / colour scale / range / opacity) | ✅ | ❌ | ✅ | Compare is always word boxes (`heatmap_style` static-only), on a scale shared by A and B |
-| raw gaze (`show_raw_gaze`, size / opacity) | ✅ | ❌ | ✅ | Compare draws each reading's samples in its scanpath's colour |
-| stimulus image (`background_image*`, opacity / offset / scale) | ✅ | ✅ | ✅ | Split layouts get one image per panel |
-| `highlight_column`, `highlight_text_color`, `text_color` | ✅ | ✅ | ✅ | Only *Mark text* reaches all three; *Mark border* (`span_border_color`) is static-only |
-| `redact_text` | ✅ | ✅ | ✅ | `plots.redact_word_text` masks the words at each builder's entry; the blocks take the text / highlight colour |
-| `word_hover_measure` | ✅ | ✅ | ❌ | |
-| colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |
-| `x_field` / `y_field` | ✅ | ❌ | ❌ | Animation and comparison always plot spatial `x` / `y` |
-| `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `show_credit`, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |
-| `fixation_outline_width` / `_color` | ✅ | ✅ | ✅ | |
-| `show_compare_legend`, `compare_stimulus` | ❌ | ✅ (co-animation) | ✅ | Widgets in `tabs.py` (⚙ Compare options) |
-| `anim_autoplay`, replay grid step / max frames, `playback_speed` | ❌ | ✅ | ❌ | Widgets in `tabs.py` (⚙ Playback) |
-| `canvas_b`, `background_image_b*` | ❌ | ❌ | ✅ (split only) | B's own screen and page; `None` = same as A |
-
-The canvas / font controls (`app.render_canvas_controls`: line spacing,
-scale-to-boxes, base font, canvas size, text colour) reach all three builders.
-`app.seed_canvas_state` seeds their keys before any view renders, so the
-rail-less Corpus view resolves the same geometry.
-
-## Where the work is tracked
-
-[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues), arranged on
-the [Scanpath Studio board](https://github.com/orgs/lacclab/projects/5). The
-conventions — `#N` citations, when an issue is needed, the board's Status and
-Priority, the approval gate — are in `CLAUDE.md` → *Tracking work*.
+The rail is one control set feeding three builders (static, Animate, Compare,
+and the co-animation). Which setting each one honours — and so which controls
+`controls._mode_gate` greys out — is the table in
+[`RENDER_PATHS.md`](RENDER_PATHS.md). Read it before adding or changing a figure
+option, and update it in the same PR.
 
 ## Releasing
 
-1. `python scripts/changelog_fragments.py release <version>` writes the
-   `changelog.d/` fragments into a `CHANGELOG.md` section and deletes them.
-2. Bump `__release__` in `scanpath_studio/__init__.py` — the single source of
-   truth for the release number; `pyproject.toml` reads it dynamically.
-3. Bump `version` + `date-released` in `CITATION.cff` to match
-   (`tests/test_citation.py` enforces version parity). On the first release of
-   a new year, bump `constants.CITATION["year"]` too — the in-app and docs
-   citation's year, which the same test holds to `date-released`.
-4. Commit on a branch and land it through a PR — `main` is protected. Once it
-   has merged, tag the merge commit on `main` with `v<version>` and push the
-   tag (`publish.yml` refuses a tag that does not match `__release__`).
-5. The `Publish to PyPI` workflow builds the wheel + sdist and publishes via
-   PyPI Trusted Publishing.
-6. The `Desktop builds` workflow (`.github/workflows/desktop.yml`) builds the
-   per-OS desktop bundles (`desktop/`) and attaches them to the GitHub release.
-   The macOS leg also signs, notarizes and staples a `.app` + `.dmg` when the
-   Apple secrets are configured (`desktop/SIGNING.md`); without them it still
-   builds, unsigned.
+Run `/release`: it rolls the `changelog.d/` fragments into `CHANGELOG.md`,
+re-captures the app's media when the UI changed, bumps `__release__` in
+`scanpath_studio/__init__.py` and `version` + `date-released` in `CITATION.cff`
+together (`tests/test_citation.py` enforces parity), lands the bump through a
+PR, and tags the merge commit `v<version>`, which publishes to PyPI and builds
+the desktop bundles.

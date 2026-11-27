@@ -14,7 +14,7 @@ See CONTRIBUTING.md for the full pre-PR checklist.
 
 ## Checklist
 
-- [ ] `pytest` passes
+- [ ] The tests for what changed pass locally (CI runs the whole suite)
 - [ ] Added/updated tests for any new behavior
 - [ ] `ruff check .` and `ruff format --check .` are clean
 - [ ] Added a changelog fragment in [`changelog.d/`](https://github.com/lacclab/scanpath-studio/blob/main/changelog.d/README.md) (every feature/bugfix/notable change) — not an edit to `CHANGELOG.md`

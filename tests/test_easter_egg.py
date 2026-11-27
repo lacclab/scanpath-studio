@@ -36,16 +36,25 @@ def test_script_is_inert_and_self_cleaning() -> None:
 def test_the_about_dialog_draws_the_script_the_selector_finds() -> None:
     """The selector finds the About dialog by the container the script is drawn
     in, so the dialog must draw it — and only About: every dialog has an ``h2``."""
-    import inspect
+    from streamlit.testing.v1 import AppTest
 
-    from scanpath_studio import app
+    from tests.conftest import find_keyed, iframe_sources
 
-    assert "render_easter_egg()" in inspect.getsource(app._about_dialog)
     assert f".st-key-{easter_egg.EGG_KEY}" in easter_egg.TITLE_SELECTOR
     assert easter_egg.TITLE_SELECTOR.startswith('[data-testid="stDialog"]')
     assert easter_egg.TITLE_SELECTOR.endswith(" h2")
-    source = inspect.getsource(easter_egg.render_easter_egg)
-    assert "st.container(key=EGG_KEY)" in source
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception, at.exception
+    egg, around = find_keyed(at, easter_egg.EGG_KEY)
+    assert [block.type for block in around if block.type == "dialog"] == ["dialog"]
+    (script,) = iframe_sources(egg)
+    assert easter_egg.egg_script() in script
+
+
+def _about_script():
+    from scanpath_studio import app
+
+    app._about_dialog()
 
 
 def test_the_eyes_sit_above_the_dialog() -> None:

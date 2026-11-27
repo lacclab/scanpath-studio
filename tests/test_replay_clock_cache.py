@@ -133,12 +133,22 @@ class TestRetimingIsByteIdentical:
         assert texted.to_json() == plain.to_json()
 
     def test_the_app_keys_the_frames_without_the_text(self):
-        import inspect
+        frames = (_words(), _fixations(), None, None, "p1", "t1", None, None)
 
-        from scanpath_studio import tabs
+        def plan(text: str):
+            return tabs._plan_replay(
+                *frames,
+                settings=plots.FigureSettings.from_mapping(
+                    {"illustration_text": text}, **_CANVAS
+                ),
+                viz_settings={"critical_span_style": "None"},
+                playback_speed=1.0,
+            )
 
-        source = inspect.getsource(tabs._plan_replay)
-        assert 'illustration_text=""' in source
+        texted, plain = plan("Schematic"), plan("")
+        assert texted.key == plain.key
+        # The text is still the one the finished figure is stamped with.
+        assert texted.settings.illustration_text == "Schematic"
 
     def test_a_replay_with_no_frames_stays_without_controls(self):
         empty = _fixations().iloc[0:0]
@@ -226,5 +236,11 @@ class TestTheAppReusesItsFrames:
                 ),
             )
             # (The app adds the Illustration label's keys to the meta on top.)
-            assert {key: fig.layout.meta[key] for key in _CLOCK} == direct.layout.meta
+            assert all(
+                fig.layout.meta[key] == direct.layout.meta[key] for key in _CLOCK
+            )
+            assert (
+                fig.layout.meta["scanpath_fixation_steps"]
+                == direct.layout.meta["scanpath_fixation_steps"]
+            )
             assert fig.layout.updatemenus == direct.layout.updatemenus

@@ -8,6 +8,9 @@ You review the current working diff (`git diff` + `git diff --staged`; if
 clean, the last commit) of the scanpath-studio repo for its project-specific
 invariants. You do NOT review general code quality — only these rules.
 
+Read the `.claude/rules/*.md` files whose `paths:` header names a file the
+diff touches: they hold the area's gotchas, and you are judged against them.
+
 ## 1. Four-surface parity (the big one)
 
 If the diff adds or changes a user-facing option (toggle, parameter, style,
@@ -26,8 +29,8 @@ present/missing:
    `CANONICAL_FIGURE_DEFAULTS`.
 
 A missing surface is a finding unless the diff/commit message explicitly
-scopes it out. Also check: new viz settings appear in the "Which viz settings
-apply in which render path" table in `AGENTS.md`, mode gating
+scopes it out. Also check: new viz settings appear in the table in
+`RENDER_PATHS.md`, mode gating
 (`controls._mode_gate`) covers builders that ignore the setting, and a new
 figure option has a `code_snippet` emitter (`tests/test_render_every_option.py`).
 

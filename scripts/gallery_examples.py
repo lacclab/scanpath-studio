@@ -25,19 +25,20 @@ class Example:
 
 def _scanpath() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
+    fig = sps.plot_scanpath(words, fixations, pid, tid, screen="Paragraph")
     return locals()
 
 
 def _heatmap() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
     fig = sps.plot_scanpath(
         words,
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         show_heatmap=True,
         heatmap_style="Smoothed",
         show_fixations=False,
@@ -48,19 +49,22 @@ def _heatmap() -> dict:
 
 def _text_lines() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
-    fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, screen="Paragraph", color_by_line=True
+    )
     return locals()
 
 
 def _saccade_types() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
     fig = sps.plot_scanpath(
         words,
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         saccade_color_mode="By type",
         saccade_type_legend=False,
     )
@@ -135,12 +139,14 @@ def _hearts_arrows() -> dict:
 
 def _comparison() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_2_4_Ele"
+    pid, tid = "l37_273", "l37_273_2_2_4_Ele"
     fig = sps.compare_scanpaths(
         words,
         fixations,
         (pid, tid),
-        ("l7_1090", "l7_1090_2_2_4_Ele"),
+        ("l7_183", "l7_183_2_2_4_Ele"),
+        screen="Paragraph",
+        screen_b="Paragraph",
         labels=("Participant A", "Participant B"),
         fit_to_monitor=False,
         crop_margin=50,
@@ -159,13 +165,14 @@ def _comparison() -> dict:
 
 def _raw_gaze() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_2_2_Adv"
     raw_gaze = sps.load_sample_raw_gaze()
     fig = sps.plot_scanpath(
         words,
         fixations,
-        "l37_1129",
-        "l37_1129_2_2_2_Adv",
+        pid,
+        tid,
+        screen="Paragraph",
         raw_gaze=raw_gaze,
         fixation_opacity=0.35,
         show_saccades=False,
@@ -175,12 +182,13 @@ def _raw_gaze() -> dict:
 
 def _replay() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
     fig = sps.animate_scanpath(
         words,
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         fix_index_range=(1, 40),
         playback_speed=2.0,
     )
@@ -189,12 +197,13 @@ def _replay() -> dict:
 
 def _word_boxes() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
     fig = sps.plot_scanpath(
         words,
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         show_heatmap=True,
         heatmap_style="Word boxes",
         show_fixations=False,
@@ -205,12 +214,13 @@ def _word_boxes() -> dict:
 
 def _highlighted_text() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
     fig = sps.plot_scanpath(
         words,
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         highlight_column="is_in_aspan",
         critical_span_style="Mark text",
         show_saccades=False,
@@ -220,24 +230,28 @@ def _highlighted_text() -> dict:
 
 def _redacted_text() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
-    fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, screen="Paragraph", redact_text=True
+    )
     return locals()
 
 
 def _title_caption_legend() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+    pid, tid = "l37_273", "l37_273_2_1_1_Ele"
     fig = sps.plot_scanpath(
         words,
         fixations,
         pid,
         tid,
+        screen="Paragraph",
         saccade_color_mode="By type",
         title="One participant, one article",
         title_font_size=34,
         caption="Marker size: fixation duration. Line color: saccade type.",
         caption_font_size=20,
+        duration_size_legend=True,
         legend_layout={
             "saccades": {"position": "right-outside", "size": 18},
             "size_key": {"position": "bottom-right-outside", "size": 18},
@@ -254,7 +268,9 @@ def _across_experiment() -> dict:
     from scanpath_studio.plots import make_trend_figure
 
     words, fixations = sps.load_sample_data(names="canonical")
-    reader = words[words["participant_id"] == "l37_1129"].copy()
+    reader = words[
+        (words["participant_id"] == "l37_273") & (words["screen_id"] == "Paragraph")
+    ].copy()
     reader["trial_index"] = derive_trial_index(reader)
     trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
     fig = make_trend_figure(
@@ -302,7 +318,7 @@ EXAMPLES = (
     Example(
         "raw-gaze",
         "Raw gaze",
-        "Gaze samples under translucent fixations. The bundled demo's gaze samples are synthetic.",
+        "EyeLink gaze samples recorded at 1,000 Hz under translucent fixation markers.",
         _raw_gaze,
     ),
     Example(

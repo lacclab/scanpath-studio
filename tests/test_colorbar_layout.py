@@ -150,11 +150,23 @@ def test_the_word_heatmap_bar_names_dwell_not_fixation_duration():
     }
     fig = plots.make_scanpath_figure(words, fixations, **options)
     titles = sorted(bar.title.text for bar in _bars(fig))
-    assert titles == ["Duration (ms)", "Dwell time per word (ms)"]
+    assert titles == [
+        "Duration (ms)",
+        "Dwell time per word (ms)<br>0–600 ms · this trial",
+    ]
     log = plots.make_scanpath_figure(
         words, fixations, **{**options, "heatmap_norm": "Log"}
     )
-    assert "Dwell time per word (ms) (log)" in [b.title.text for b in _bars(log)]
+    assert "Dwell time per word (ms) (log)<br>0–600 ms · this trial" in [
+        b.title.text for b in _bars(log)
+    ]
+    fourfold = fixations.assign(duration_ms=4 * fixations["duration_ms"])
+    other = plots.make_scanpath_figure(words, fourfold, **options)
+    assert any("0–2400 ms · this trial" in bar.title.text for bar in _bars(other))
+    shared = plots.make_scanpath_figure(
+        words, fourfold, **{**options, "heatmap_range": (0, 600)}
+    )
+    assert any("0–600 ms · fixed range" in bar.title.text for bar in _bars(shared))
 
 
 class TestEachBarIsItsOwn:

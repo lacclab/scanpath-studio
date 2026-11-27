@@ -5,17 +5,18 @@ description: "Visualize eye movements over the text: fixations, saccades, word b
 # Scanpath visualization
 
 <figure class="sps-screenshot" markdown>
-![The Scanpath view, its regions numbered](../../assets/screenshots/scanpath-view.webp)
+![The Scanpath View, its regions numbered](../../assets/screenshots/scanpath-view.webp)
 </figure>
 
 1. Views and :material/help: Help.
-2. The trial control bar: dataset, trial, screen, sort (⇅) and filter (:material/filter_alt:).
-3. The trial's summary.
-4. The figure.
-5. Plot controls.
-6. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
+2. The **Essentials | Full** switch ([below](#essentials-and-full)).
+3. The trial control bar: dataset, trial, screen, sort (⇅) and filter (:material/filter_alt:).
+4. The trial's summary.
+5. The figure.
+6. Plot controls.
+7. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
 
-The :material/route: **Scanpath** view draws one reading at a time, at the size of
+The :material/route: **Scanpath View** draws one reading at a time, at the size of
 the screen it was recorded on.
 
 !!! tip "Looking for a specific button?"
@@ -26,28 +27,28 @@ the screen it was recorded on.
 
 ## Essentials and Full
 
-The view opens in **Essentials**, a trimmed version of the same view for a first
-look. The **Essentials | Full** switch is in the top bar, on the
-:material/route: **Scanpath** view only. The mode you choose is remembered in
-this browser. Adding `ui=full` (or `ui=essentials`) to the app's address, as
-`?ui=full` or `&ui=full`, uses that mode for the visit without
-changing the saved choice, and a link made with **Share** does not carry the
-mode.
+The Scanpath View opens in **Essentials**, with the main controls for exploring
+a reading. Switch to **Full** in the top bar whenever you want more options.
+The app remembers your choice in this browser.
 
 Essentials shows:
 
 - the dataset and trial pickers with **◀ ▶**;
-- the plot, which on a new visit opens on a playing replay;
-- four view tiles (**Animation**, **Scanpath**, **Heatmap** and
-  **Illustration**) and the **Palette**;
+- the plot, which starts with a replay on a new visit;
+- the **Animation** tile, five static views and the **Palette** tiles;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-Where Full has more, a :material/add: **More** button lists what it adds
-there and ends in **Switch to Full**. A setting made in Full, such as a
-trial filter, still shapes the figure in Essentials, and Essentials says so in a short
-note. Starting a tutorial from :material/help: **Help** switches that visit to
-Full. :material/bar_chart: **Corpus Analysis** and
+The :material/add: **More** buttons show which additional controls are available
+in Full and offer **Switch to Full**. Both modes keep the selected view and palette.
+An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial
+filters, remain active in Essentials; a short note tells you when they apply.
+Starting a tutorial from :material/help: **Help** switches to Full for the
+current visit. :material/bar_chart: **Corpus Analysis** and
 :material/database: **Data Management** are the same in both modes.
+
+To open a mode for one visit, add `?ui=full` or `?ui=essentials` to the app's
+address (use `&` if the address already has a `?`). This leaves your saved
+choice unchanged. Links created with **Share** use the recipient's own mode.
 
 The numbered regions above and the rest of this guide describe Full.
 
@@ -63,19 +64,42 @@ participant in brackets, such as `3 [p2]`.
 [All controls → Trial control bar](controls.md#trial-control-bar) describes
 each control.
 
+### Keyboard shortcuts
+
+| With focus on | Keys | Action |
+| --- | --- | --- |
+| The page, plot background or trial arrow buttons | ++left++ / ++right++ | Previous or next trial in the current list (A in Compare) |
+| The page, plot background or trial arrow buttons | ++shift+left++ / ++shift+right++ | Previous or next trial for B in Compare |
+| The page or plot background | ++space++ | Play or pause the replay |
+| The **Replay time** slider | ++left++ / ++right++ | Pause and step one frame |
+| The **Replay time** slider | ++home++ / ++end++ | Jump to the first or last frame |
+| The **Replay time** slider | ++space++ | Play or pause from the current frame |
+
+With **A and B together** on, either pair of trial shortcuts steps both
+readings. Use ++tab++ and ++shift+tab++ to reach the replay controls. The slider keys
+also work in downloaded HTML replays.
+
 ## Control the layers
 
-The :material/tune: **Plot controls** column, on the right of the plot, holds
-the figure's settings. Each layer has a row with a switch that turns it on or
-off and a **▾** that opens its settings.
+Both modes start with the same **Presets** tiles and **Palette**. In Full, use
+**Find a setting** to jump to a control by name, or open **Layers** to change what appears in the plot. Click a layer’s name to edit
+its settings or its switch to show or hide it. Choose **Axes** to chart the
+reading by fixation order or time. **Figure** holds the settings for the whole
+plot, including framing, titles and legends.
+
+**Gaze over time** plots elapsed seconds along the horizontal axis and horizontal
+screen position in pixels on the vertical axis. The length of each horizontal
+bar shows how long the fixation lasted. Turn **Animation** on to replay the
+reading on the text, then off to return to the same chart. **Custom** brings
+back your last hand-edited figure.
 
 | Section | What it controls |
 | --- | --- |
-| :material/movie: **Animate** | replay the fixations in the order they happened, at a speed you choose |
-| :material/compare: **Compare** | draw a second reading over this one, beside it or below it |
-| **Design presets** | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings |
-| :material/palette: **My designs** | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
-| **Palette** | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast** |
+| **Presets** | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
+| :material/palette: **My presets** | save a named preset, apply it to another reading, or share it |
+| **Palette** | choose **Colorblind-safe**, **Grayscale**, or **High contrast** |
+| :material/compare: **Compare readings** | add a second reading over this one, beside it, or below it |
+| :material/movie: **Playback settings** | set playback speed, autoplay, and frame quality |
 | :material/blur_on: **Fixations** | the fixation markers: color, shape and size, and the fixation index |
 | :material/arrow_outward: **Saccades** | the saccade lines and arrows, in one color, by direction or by saccade type |
 | :material/article: **Stimulus** | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |
@@ -83,7 +107,8 @@ off and a **▾** that opens its settings.
 | :material/local_fire_department: **Heatmap** | where fixations concentrate, by fixation count or duration |
 | :material/grain: **Raw gaze** | the gaze samples as recorded |
 | :material/filter_list: **Filters & highlights** | which fixations and saccades are drawn, and which stand out |
-| :material/aspect_ratio: **Figure & canvas** | screen framing, axes and grid, title and labels, hover fields and legends |
+| **Axes** | chart presets, X and Y fields, and the coordinate grid |
+| **Figure** | screen framing, title and labels, hover fields and legends |
 
 [All controls → Plot controls](controls.md#plot-controls) describes every
 setting in each menu.
@@ -129,7 +154,9 @@ file paths with your own.
         import scanpath_studio as sps
 
         words, fixations = sps.load_sample_data()
-        fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
+        fig = sps.plot_scanpath(
+            words, fixations, "l37_273", "l37_273_2_1_1_Ele", screen="Paragraph"
+        )
         sps.save_figure(fig, "scanpath.html")
         ```
 
@@ -137,7 +164,7 @@ file paths with your own.
 
         ```bash
         scanpath-studio render --sample \
-          -p l37_1129 -t l37_1129_2_1_1_Ele -o scanpath.html
+          -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph -o scanpath.html
         ```
 
     For your own files, use the [data loaders](../loading-data/index.md#load-and-inspect-in-code).
@@ -156,11 +183,11 @@ You can save each of these to a file and load it again:
 | What | Where |
 | --- | --- |
 | figure settings | :material/share: **Share** → **Settings file** |
-| favorites, tags and notes | :material/database: **Data Management** → **Annotations** → **Export** |
+| favorites, tags and notes | :material/database: **Data Management** → **Current dataset** → **Annotations** → **Export** |
 | column mapping and recording setup | :material/edit: **Edit dataset** → **Download setup file** |
-| saved figure designs | :material/palette: **My designs** → **Export** |
+| saved figure designs | :material/palette: **My presets** → **Export** |
 
-None of these files holds your data, so load the same data before you restore
-one. In the desktop app or a local install, the app also keeps your datasets,
+Keep your source data alongside these files, and load the same dataset before
+restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See :material/database: **Data
-Management** → :material/history: **Saved on this computer**.
+Management** → **Saved work → Your session**.

@@ -7,6 +7,7 @@ lifecycle callbacks (``app._edit_open_dataset`` / ``_close_dataset_editor`` /
 
 from __future__ import annotations
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 
@@ -101,6 +102,17 @@ def _close_and_reopen(at: AppTest) -> AppTest:
     at.button[1].click().run()
     assert not at.exception
     return at
+
+
+def test_saving_a_changed_mapping_requests_a_trial_identity_check():
+    from scanpath_studio.constants import TRIAL_IDENTITY_CHECK_KEY
+
+    at = AppTest.from_function(_editor_app).run()
+    at.multiselect(key="remap_Probe_fixations_trial").set_value(["item"]).run()
+    assert TRIAL_IDENTITY_CHECK_KEY not in at.session_state
+    next(button for button in at.button if button.label == "Save").click().run()
+    assert not at.exception
+    assert at.session_state[TRIAL_IDENTITY_CHECK_KEY] == "edit"
 
 
 class TestCancelledMappingDoesNotReturn:
@@ -624,6 +636,35 @@ class TestNameDescriptionAndMetadataWaitForSave:
         app.apply_editor_restore()
         assert state[md.SESSION_KEY] is table
 
+    def test_a_dataset_credit_can_be_committed_cleared_or_cancelled(
+        self, monkeypatch, tmp_path
+    ):
+        from scanpath_studio import app, dataset_credit, persistence
+
+        state = self._session(monkeypatch)
+        state["_datasets"] = {"Probe": {}}
+        app.hold_editor_staging("Probe")
+        prefix = app._credit_prefix("Probe")
+        state[f"{prefix}_title"] = "Pilot"
+        state[f"{prefix}_credit"] = "Credit the Canal Lab."
+        assert app.editor_staging_dirty() and dataset_credit.STORE_KEY not in state
+        app.commit_editor_staging("Probe")
+        assert persistence.save_state(state, tmp_path)
+        restored = {}
+        assert persistence.restore_state(restored, tmp_path)
+        assert restored[dataset_credit.STORE_KEY]["Probe"] == {
+            "title": "Pilot",
+            "credit": "Credit the Canal Lab.",
+        }
+        app.hold_editor_staging("Probe")
+        state[f"{prefix}_title"] = "Changed"
+        app._discard_editor_staging()
+        assert state[dataset_credit.STORE_KEY]["Probe"]["title"] == "Pilot"
+        app.hold_editor_staging("Probe")
+        state[f"{prefix}_title"] = ""
+        app.commit_editor_staging("Probe")
+        assert "Probe" not in state[dataset_credit.STORE_KEY]
+
     def test_a_description_is_a_draft_until_save(self, monkeypatch):
         from scanpath_studio import app
         from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY
@@ -714,3 +755,61 @@ class TestAStoredWordBoxCannotBeMappedAsEdges:
         assert radios, [r.key for r in at.radio]
         assert not radios[0].disabled
         assert radios[0].value == "Edges"
+
+
+def _metadata_upload_app(live, grain="trial"):
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import metadata_editor as editor
+
+    readings = pd.DataFrame(
+        {"participant_id": ["p"], "trial_id": ["t"], "text_id": ["a"]}
+    )
+    renderer, ids = {
+        "participant": (editor.render_participant_metadata_section, ["p"]),
+        "trial": (editor.render_trial_metadata_section, readings),
+        "text": (editor.render_text_metadata_section, {"a"}),
+    }[grain]
+    renderer(ids if live else None, live_join=live)
+    st.button(
+        "Save", on_click=editor.commit_deferred_metadata, args=({"words": readings},)
+    )
+
+
+@pytest.mark.parametrize("grain", ["participant", "trial", "text"])
+def test_removing_a_wizard_upload_excludes_it_from_the_saved_dataset(grain):
+    from scanpath_studio import metadata as md
+
+    at = AppTest.from_function(_metadata_upload_app, args=(False, grain)).run()
+    contents = f"{grain}_id,genre\nt,fiction\n".encode()
+    at.file_uploader[0].upload("metadata.csv", contents).run()
+    attached, raw, _ = md.grain_keys(grain)
+    assert raw in at.session_state
+    assert at.get("popover")[0].proto.popover.label == "Preview the first rows"
+    at.file_uploader[0].clear().run()
+    at.button[0].click().run()
+    assert not at.exception
+    assert raw not in at.session_state
+    assert attached not in at.session_state
+
+
+def test_replacing_a_metadata_upload_drops_the_previous_mapping():
+    from scanpath_studio import metadata as md
+
+    at = AppTest.from_function(_metadata_upload_app, args=(True,)).run()
+    at.file_uploader[0].upload("first.csv", b"trial_id,previous\nt,old\n").run()
+    assert at.session_state[md.TRIAL_SESSION_KEY].names == ("previous",)
+    at.file_uploader[0].set_value(
+        [("second.csv", b"custom,current\nt,new\n", "text/csv")]
+    ).run()
+    assert not at.exception
+    assert md.TRIAL_SESSION_KEY not in at.session_state
+    at.multiselect(key="trial_metadata_id_column").set_value(["custom"]).run()
+    assert at.session_state[md.TRIAL_SESSION_KEY].names == ("current",)
+    at.file_uploader[0].set_value(
+        [("broken.parquet", b"invalid", "application/octet-stream")]
+    ).run()
+    assert not at.exception
+    assert md.TRIAL_SESSION_KEY not in at.session_state
+    assert md.TRIAL_RAW_SESSION_KEY not in at.session_state

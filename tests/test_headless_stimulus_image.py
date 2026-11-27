@@ -26,8 +26,8 @@ from scanpath_studio.plots import _image_to_data_uri, _png_pixel_size
 from tests.conftest import APP_SCRIPT
 
 #: Two demo readings of different texts — so of different pages.
-TRIAL = ("l37_1129", "l37_1129_2_2_1_Adv")
-OTHER = ("l37_1129", "l37_1129_2_2_2_Adv")
+TRIAL = ("l37_273", "l37_273_2_2_1_Adv")
+OTHER = ("l37_273", "l37_273_2_2_2_Adv")
 #: Where the demo's pages sat on OneStop's screen.
 DEMO_ORIGIN = (368.0, 186.0)
 
@@ -37,10 +37,14 @@ def demo():
     return api.load_sample_data(names="canonical")
 
 
-def _page(words: pd.DataFrame, reading: tuple[str, str]) -> str:
+def _page(
+    words: pd.DataFrame, reading: tuple[str, str], screen: str | None = None
+) -> str:
     rows = words[
         (words["participant_id"] == reading[0]) & (words["trial_id"] == reading[1])
     ]
+    if screen is not None:
+        rows = rows[rows["screen_id"].astype(str) == screen]
     return str(rows["image_path"].dropna().iloc[0])
 
 
@@ -118,7 +122,7 @@ class TestPlotScanpath:
 
     def test_a_trial_without_a_page_warns_and_draws_none(self, demo):
         words, fixations = (_no_pages(frame) for frame in demo)
-        with pytest.warns(UserWarning, match=r"show_stimulus_image: .*l37_1129"):
+        with pytest.warns(UserWarning, match=r"show_stimulus_image: .*l37_273"):
             fig = api.plot_scanpath(words, fixations, *TRIAL, show_stimulus_image=True)
         assert len(fig.layout.images) == 0
 
@@ -570,8 +574,12 @@ class TestBsTextGetsBsPage:
     def test_the_overlay(self, demo):
         state = _compare_on_another_text()
         assert (state.kind, state.compare.compare_stimulus) == ("comparison", "b")
-        page_b = _page(demo[0], (state.compare.participant, state.compare.trial))
-        assert page_b != _page(demo[0], (state.participant, state.trial))
+        page_b = _page(
+            demo[0],
+            (state.compare.participant, state.compare.trial),
+            state.compare.screen,
+        )
+        assert page_b != _page(demo[0], (state.participant, state.trial), state.screen)
         assert state.settings["background_image"] == page_b
         code = cs.python_snippet(cs.SnippetSource(kind=cs.SOURCE_DEMO), state)
         assert "show_stimulus_image=True" in code
@@ -581,7 +589,11 @@ class TestBsTextGetsBsPage:
     def test_the_co_animation(self, demo):
         state = _compare_on_another_text(single_animate=True)
         assert state.kind == "animation"
-        page_b = _page(demo[0], (state.compare.participant, state.compare.trial))
+        page_b = _page(
+            demo[0],
+            (state.compare.participant, state.compare.trial),
+            state.compare.screen,
+        )
         assert state.settings["background_image"] == page_b
 
     def test_an_upload_stays_the_users_choice(self):

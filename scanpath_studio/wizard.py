@@ -1,9 +1,9 @@
 """The Upload / Add-dataset wizard (the main-area guided data-setup flow).
 
 Everything from the upload-table reading UI through the wizard's parts (name →
-upload and map each table → recording setup → stimulus images → add).
-``app.py`` drives this from ``resolve_data_source`` /
-``main`` and re-exports a few helpers for tests.
+upload and map each table → recording setup → stimulus images → add) and the
+MultiplEYE format, which reads a session set from a folder or from uploaded
+files. The app opens the wizard from Data Management.
 
 A handful of data-IO / normalization helpers (``_read_uploaded_frame``,
 ``_normalize_pair``, ``_stash_active_mapping``, ``_render_unmapped_view``) stay in
@@ -15,17 +15,27 @@ avoids an app⇄wizard import cycle.
 from __future__ import annotations
 
 import json
+import math
+import os
 import re
+from pathlib import Path
 from typing import NamedTuple
 
 import pandas as pd
 import streamlit as st
 
-from . import app, wizard_shell
-from .column_names import ColumnNames, for_tables, stored_source_recipe
+from . import app, dataset_credit, wizard_shell
+from .build_info import build_info
+from .column_names import (
+    ColumnNames,
+    for_tables,
+    is_multipleye_entry,
+    stored_source_recipe,
+)
 from .constants import (
     _VIEW_DATA,
     CITATION,
+    DATA_RUN_SHEETS_KEY,
     DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_NAME_MAX_CHARS,
@@ -34,10 +44,12 @@ from .constants import (
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
-    SETUP_OVERRIDE_FOR_KEY,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
+    WORD_KEY,
+    multipleye_format_enabled,
     plural,
+    spoken,
     upload_identity,
     upload_limit_label,
     upload_limit_mb,
@@ -65,7 +77,10 @@ from .data import (
     PARTICIPANT_CANDIDATES,
     READING_MEASURE_KEYS,
     SOURCE_FILE_COLUMN,
+    TEXT_ID_CANDIDATES,
+    TRIAL_CANDIDATES,
     WORD_OPTIONAL_FIELDS,
+    adopt_source,
     aggregate_char_boxes,
     assign_derived,
     canvas_geometry_frames,
@@ -79,6 +94,7 @@ from .data import (
     frame_cache,
     frame_fingerprint,
     looks_like_condition,
+    mapping_blockers,
     normalization_issues,
     normalize_raw_gaze,
     pick_column,
@@ -86,13 +102,19 @@ from .data import (
     propose_raw_gaze_schema,
     propose_word_schema,
     source_file_regex_collisions,
-    split_source_file,
+    split_named_columns,
+    stamp_source,
+    text_word_id_issues,
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
-    validate_fix_schema,
-    validate_raw_gaze_schema,
-    validate_word_schema,
+    word_ids_set_aside,
+    words_with_several_boxes,
+)
+from .dataset_identity import (
+    dataset_share_id,
+    forget_dataset_identity,
+    unique_name,
 )
 from .experimental_setup import (
     FONT_CHOICES,
@@ -111,14 +133,19 @@ from .experimental_setup import (
     font_other_text,
     font_size_px,
 )
-from .fields import switch, tooltip
+from .fields import row_label, switch, tooltip
 from .menu import view_label
-from .persistence import is_loopback_url, persistence_enabled, rename_cached_dataset
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .metadata_editor import (
+    commit_deferred_metadata,
+    render_participant_metadata_section,
+    render_text_metadata_section,
+    render_trial_metadata_section,
+)
+from .persistence import is_loopback_url, persistence_enabled
+from .reruns import rerun
 from .styles import mapping_menu_css
-from .tabs import _collect_column_mapping
 from .tour import (
-    maybe_show_wizard_guide,
+    WIZARD_HELP_KEY,
     render_spotlight_wizard_guide,
     render_wizard_guide_button,
 )
@@ -154,6 +181,14 @@ WIZARD_IMAGES_PATTERN_KEY = "wizard_stimulus_pattern"
 _WIZARD_MAPPING_PREFIXES = ("col_map_words", "col_map_fix", "col_map_raw_gaze")
 
 
+def upload_types_note() -> str:
+    """The formats a table upload takes and the per-file limit, as one sentence."""
+    return (
+        ", ".join(t.upper() for t in app._UPLOAD_TYPES)
+        + f". Up to {upload_limit_label()} per file."
+    )
+
+
 def _reset_wizard_widgets() -> None:
     """Clear the wizard's per-table mapping + keep-field widgets so 'Add data'
     starts a fresh dataset."""
@@ -169,7 +204,8 @@ def _reset_wizard_widgets() -> None:
         # plus their Select-all/None button keys) share the "col_map_" table
         # names as a *suffix*, not a prefix — sweep "wizard_keep_" too, or a
         # new dataset would inherit the previous one's keep choices.
-        if isinstance(k, str) and k.startswith(("col_map_", "wizard_keep_"))
+        if isinstance(k, str)
+        and k.startswith(("col_map_", "wizard_keep_", "wizard_credit_"))
     ]:
         del st.session_state[key]
     for key in (
@@ -177,6 +213,7 @@ def _reset_wizard_widgets() -> None:
         "wizard_dataset_description",
         WIZARD_IMAGES_FOLDER_KEY,
         WIZARD_IMAGES_PATTERN_KEY,
+        "wizard_dataset_format",
         "wizard_config_restore",
         "_wizard_config_last",
         "_wizard_restored_meta",
@@ -185,12 +222,23 @@ def _reset_wizard_widgets() -> None:
         _COPY_FROM_KEY,
         "_composite_trial_columns",
         "wizard_filter_fields",
-        # Generic filename-derivation / aggregation.
+        # The MultiplEYE format's own fields, then generic filename-derivation /
+        # aggregation.
+        "mpe_fix_upload",
+        "mpe_aoi_upload",
+        "mpe_questions_upload",
+        "mpe_participant_upload",
+        "mpe_config_upload",
+        "wizard_multipleye_from",
+        "wizard_multipleye_dir",
+        "_wizard_multipleye_setup_applied",
         "wizard_filename_split",
         "wizard_filename_mode",
         "wizard_filename_regex",
         "wizard_filename_regex_lower",
         _FILENAME_DERIVE_LINE_COUNT_KEY,
+        _DERIVED_ID_PROPOSALS_KEY,
+        _DERIVED_IDS_FILLED_KEY,
         "wizard_aggregate_char_boxes",
         # A new dataset starts unattempted, so its required fields are
         # blank rather than red until this one is asked to be added — and
@@ -229,79 +277,57 @@ def _default_dataset_name() -> str:
     return f"Dataset {n}"
 
 
+def _occupied_dataset_tokens() -> set[str]:
+    """Include held-back cache entries and owners of detached annotations or metadata."""
+    import scanpath_studio.annotations as annotations_mod
+
+    from . import metadata
+    from .dataset_identity import DATASET_IDS_KEY
+    from .persistence import failed_datasets
+
+    session = st.session_state
+    tokens = set(session.get("_datasets") or {}) | set(failed_datasets(session))
+    tokens.update(session.get(app.DATASET_ALIASES_KEY) or {})
+    tokens.update(session.get(DATASET_IDS_KEY) or {})
+    tokens.update(annotations_mod.dataset_names(session))
+    tokens.update(session.get(metadata.DATASET_STORE_KEY) or {})
+    if owner := session.get(metadata.OWNER_KEY):
+        tokens.add(owner)
+    return tokens
+
+
 def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
-    """A non-empty dataset name that collides with neither a built-in source label
-    nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
-    overwriting an existing entry's frames).
-
-    Built-in labels are every token the picker can list
-    (``app.reserved_source_names`` — the demo, the samples, the server bundle
-    and every public corpus): a user dataset shadowing one gets a duplicate
-    option and hijacks the built-in's load branch. A name that still
-    holds another dataset's annotation store counts as taken too, so a new or
-    renamed dataset never inherits annotations that are not its own.
-
-    ``exclude`` drops one stored name from the collision check — a rename
-    must not read the dataset being renamed as a clash with itself and turn
-    "My corpus" into "My corpus (2)" on a capitalisation fix."""
-    import scanpath_studio.annotations as _annotations
-
+    """Choose a unique display name, including labels held by unavailable datasets."""
     # The fields stop typing at the limit; a name from a setup file is cut to it.
     name = (name or "").strip()[:DATASET_NAME_MAX_CHARS].rstrip()
     name = name or _default_dataset_name()
     if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
-    existing = {
-        key: value
-        for key, value in st.session_state.get("_datasets", {}).items()
-        if key != exclude
+    aliases = st.session_state.get(app.DATASET_ALIASES_KEY) or {}
+    return unique_name(
+        name,
+        (
+            str(aliases.get(key) or key)
+            for key in _occupied_dataset_tokens()
+            if key != exclude and key is not None
+        ),
+        max_chars=DATASET_NAME_MAX_CHARS,
+    )
+
+
+def _new_dataset_token(label: str) -> str:
+    """Allocate an immutable store key, including when a rename freed this label."""
+    from uuid import uuid4
+
+    used = _occupied_dataset_tokens()
+    if label not in used:
+        return label
+    token = f"upload-{uuid4().hex}"
+    st.session_state[app.DATASET_ALIASES_KEY] = {
+        **(st.session_state.get(app.DATASET_ALIASES_KEY) or {}),
+        token: label,
     }
-    existing.update(
-        dict.fromkeys(_annotations.dataset_names(st.session_state) - {exclude} - {None})
-    )
-    if name in existing:
-        base, n = name, 2
-        while f"{base} ({n})" in existing:
-            n += 1
-        name = f"{base} ({n})"
-    return name
-
-
-def _wizard_finalize_metadata_pools(payload: dict) -> tuple:
-    """The just-finalized dataset's own participant/trial/text pools.
-
-    Unlike ``_wizard_reader_ids``/``_wizard_trial_combos``/
-    ``_wizard_text_ids`` (which read the *raw*, pre-normalization frames,
-    because those run live while mapping is still being worked out), this
-    reads the *normalized* ``words``/``fixations`` already in ``payload`` —
-    the canonical ``participant_id``/``trial_id``/``text_id`` columns are
-    exactly what the real dataset will carry, so there is no re-deriving to
-    do. Called once, from ``_finalize_wizard_dataset``.
-    """
-    words = payload.get("words")
-    fixations = payload.get("fixations")
-    combo_frames = [
-        frame[["participant_id", "trial_id"]]
-        for frame in (fixations, words)
-        if frame is not None and not frame.empty and "participant_id" in frame.columns
-    ]
-    combos = (
-        pd.concat(combo_frames, ignore_index=True).drop_duplicates()
-        if combo_frames
-        else pd.DataFrame(columns=["participant_id", "trial_id"])
-    )
-    participants = sorted(combos["participant_id"].dropna().astype(str).unique())
-    text_series = [
-        frame["text_id"]
-        for frame in (fixations, words)
-        if frame is not None and not frame.empty and "text_id" in frame.columns
-    ]
-    texts = (
-        sorted(pd.concat(text_series).dropna().astype(str).unique())
-        if text_series
-        else []
-    )
-    return participants, combos, texts
+    return token
 
 
 def _source_recipe(
@@ -369,11 +395,10 @@ def _finalize_wizard_dataset() -> None:
     # this dataset is being assembled — do it now, against the
     # pools this dataset actually ends up with. No UI here: a callback runs
     # before the widgets that would host it exist for this run.
-    from scanpath_studio.tabs import commit_deferred_metadata
-
-    participants, combos, texts = _wizard_finalize_metadata_pools(payload)
-    commit_deferred_metadata(participants, combos, texts)
-    ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    commit_deferred_metadata(payload)
+    ds_name = _new_dataset_token(
+        _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    )
     # The sentence the 🗂️ Data page shows under its name. Kept
     # beside the store, not in its entry (see `DATASET_DESCRIPTIONS_KEY`).
     if description := str(
@@ -391,7 +416,13 @@ def _finalize_wizard_dataset() -> None:
             str(st.session_state.get(WIZARD_IMAGES_PATTERN_KEY) or ""),
         )
     store = st.session_state.setdefault("_datasets", {})
+    dataset_credit.save_credit(
+        st.session_state,
+        ds_name,
+        dataset_credit.form_credit(st.session_state, "wizard_credit"),
+    )
     store[ds_name] = payload
+    dataset_share_id(st.session_state, ds_name)
     # Its recording setup is applied when it opens, on the next run, as every
     # added dataset's is (`app.seed_canvas_state`), and leaving it puts back
     # what the figure held before. What that is excludes the answers this
@@ -453,6 +484,14 @@ def _remove_dataset(name: str) -> None:
     switches back to the bundled demo via ``_pending_source_choice`` (applied
     before the radio re-instantiates, like the wizard finalize/cancel switch).
 
+    **Everything the session keeps for it goes too**, through each owning
+    module's ``forget_*``: the next upload can take the same token ("Dataset
+    1"), and anything left behind would open it filtered, on another
+    dataset's reading, or marked Loaded. `tests/test_dataset_lifecycle.py`
+    opens, filters, compares and edits a dataset, removes it through the real
+    confirmation, and fails on any key that still names it — so a per-dataset
+    key those steps create is caught there when it is added.
+
     **Deleting a dataset drops the computations derived from it.** Every
     figure, table and normalization the app cached for this dataset is dead the
     moment its frames leave the session — keeping them only holds memory and
@@ -467,8 +506,11 @@ def _remove_dataset(name: str) -> None:
     import scanpath_studio.annotations as annotations_mod
 
     annotations_mod.forget_dataset(st.session_state, name)
+    st.session_state.get(DATA_RUN_SHEETS_KEY, {}).pop(name, None)
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
+    forget_dataset_identity(st.session_state, name)
+    dataset_credit.save_credit(st.session_state, name, {})
     # And its description, so a new dataset of that name starts without one.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if descriptions.pop(name, None) is not None:
@@ -481,71 +523,37 @@ def _remove_dataset(name: str) -> None:
     from scanpath_studio import metadata as _metadata
 
     _metadata.forget_dataset(st.session_state, name)
+    # Its filters, Loaded status, remembered readings, design baseline and
+    # place as scanpath B.
+    from scanpath_studio import compare_source, controls, utils
+
+    app.forget_source_state(st.session_state, name)
+    utils.forget_trial_memory(st.session_state, name)
+    controls.forget_quick_view_dataset(st.session_state, name)
+    compare_source.forget_compare_dataset(st.session_state, name)
     if st.session_state.get("data_source_choice") == name:
+        # ✏️ Edit dataset, open on it, closes with it, drafts unsaved: left
+        # open it would sit on the next dataset holding this one's name and
+        # mapping, and ✅ Save changes would apply them there. Nothing of the
+        # removed dataset is restored on the way out.
+        st.session_state.pop(app._EDITOR_SNAPSHOT_KEY, None)
+        app._close_dataset_editor()
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
     app.clear_computation_cache()
 
 
-def rename_dataset(old: str, new: str) -> str | None:
-    """Rename a stored dataset. Returns the name it actually took.
-
-    The name is the **key** into the ``_datasets`` store, so a rename is a re-key,
-    and every other holder of that string has to move with it: the canonical
-    ``data_source_choice`` (through the pre-widget ``_pending_source_choice`` seam,
-    like `_remove_dataset`'s fallback — assigning the widget key inline is
-    unreliable in a browser), the wizard's ``_prev_source`` return address, and
-    ``cmp_dataset`` when the comparison draws scanpath B from it. The recovery
-    cache follows in :func:`persistence.rename_cached_dataset`, which re-keys its
-    manifest rather than re-encoding the Parquet files.
-
-    Returns ``None`` when there is nothing to rename (unknown dataset, or the new
-    name resolves to the one it already has). The store is rebuilt in order rather
-    than re-inserted, so the renamed dataset keeps its place in the source picker.
-    """
-    store = st.session_state.get("_datasets", {})
-    if old not in store:
+def rename_dataset(token: str, requested: str) -> str | None:
+    """Change an upload's display name. Its store key stays valid across restarts."""
+    if token not in (st.session_state.get("_datasets") or {}):
         return None
-    name = _safe_dataset_name(new, exclude=old)
-    if name == old:
+    label = _safe_dataset_name(requested, exclude=token)
+    if label == app._dataset_display_name(token):
         return None
-    # The annotations move first, and refuse a name that already
-    # holds a store. `_safe_dataset_name` never picks one, so this is a guard:
-    # if it ever did, renaming the frames without the annotations would strand
-    # them under the old name.
-    import scanpath_studio.annotations as _annotations
-
-    if not _annotations.rename_dataset(st.session_state, old, name):
-        return None
-    st.session_state["_datasets"] = {
-        (name if key == old else key): value for key, value in store.items()
+    st.session_state[app.DATASET_ALIASES_KEY] = {
+        **(st.session_state.get(app.DATASET_ALIASES_KEY) or {}),
+        token: label,
     }
-    if st.session_state.get("data_source_choice") == old:
-        st.session_state["_pending_source_choice"] = name
-    if st.session_state.get("_prev_source") == old:
-        st.session_state["_prev_source"] = name
-    if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
-        st.session_state[COMPARE_SOURCE_STATE_KEY] = name
-    # The figure holds its setup under its name: renamed, it is still the
-    # same visit, so a value tuned on the rail is not reset.
-    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == old:
-        st.session_state[SETUP_OVERRIDE_FOR_KEY] = name
-    # And its description.
-    descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
-    if old in descriptions:
-        descriptions[name] = descriptions.pop(old)
-        st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
-    # And its stimulus-image folder.
-    images = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
-    if old in images:
-        images[name] = images.pop(old)
-        st.session_state[DATASET_STIMULUS_IMAGES_KEY] = images
-    # And its metadata tables, which are keyed by the name too (the
-    # annotations moved above).
-    from scanpath_studio import metadata as _metadata
-
-    _metadata.rename_dataset(st.session_state, old, name)
-    rename_cached_dataset(st.session_state, old, name)
-    return name
+    return label
 
 
 def _render_leave_prompt(host) -> None:
@@ -596,9 +604,22 @@ def _leave_prompt_dialog(destination: str) -> None:
     `st.rerun(scope="app")` both closes the modal and renders the page
     underneath (as in `tour.py`'s `_tutorial_library_dialog`).
     """
+    # The header each read stashes (an empty one for raw gaze), and the
+    # uploader's own value: the dialog can open on a run before the uploaders
+    # render, when that value is not readable yet.
+    ss = st.session_state
+    uploaded = any(
+        f"{prefix}_header" in ss or ss.get(f"{prefix}_upload")
+        for prefix in _WIZARD_MAPPING_PREFIXES
+    )
+    lost = (
+        "the files you uploaded won't be kept"
+        if uploaded
+        else "what you filled in won't be kept"
+    )
     st.warning(
         f"**Leave setup and go to {view_label(destination)}?** This dataset isn't "
-        "added yet, so the files you uploaded won't be kept.",
+        f"added yet, so {lost}.",
         icon=ICONS["warning"],
     )
     stay_col, leave_col = st.columns(2)
@@ -609,14 +630,14 @@ def _leave_prompt_dialog(destination: str) -> None:
         type="primary",
     ):
         app.stay_in_wizard()
-        st.rerun(scope="app")
+        rerun(scope="app")
     if leave_col.button(
         f"{ICONS['delete']} Discard and leave",
         key="wizard_leave_discard",
         width="stretch",
     ):
         app.discard_and_leave_wizard()
-        st.rerun(scope="app")
+        rerun(scope="app")
 
 
 def _enter_add_data_wizard() -> None:
@@ -756,19 +777,78 @@ def _trial_id_values(raw, schema) -> set | None:
     """Set of distinct trial-id strings for a raw frame + its trial mapping
     (composite mappings are joined, mirroring ``data.trial_id_series``). ``None``
     when the trial isn't mapped or its columns are absent."""
-    if raw is None or getattr(raw, "empty", True) or not schema.get("trial"):
+    return _id_values(raw, schema.get("trial"))
+
+
+def _id_values(raw, mapping) -> set | None:
+    """Distinct values of one identifier mapping (one column or several,
+    joined like ``data.trial_id_series``) on a raw frame; ``None`` when it is
+    not mapped or its columns are absent."""
+    if raw is None or getattr(raw, "empty", True) or not mapping:
         return None
-    cols = trial_mapping_columns(schema["trial"])
+    cols = trial_mapping_columns(mapping)
     if not cols or not all(c in raw.columns for c in cols):
         return None
     return set(
         _trial_id_values_cached(
-            raw,
-            schema["trial"],
-            frame_fingerprint(raw),
-            _mapping_key(schema["trial"]),
+            raw, mapping, frame_fingerprint(raw), _mapping_key(mapping)
         )
     )
+
+
+def case_only_matches(
+    fixation_ids: set, word_ids: set
+) -> tuple[int, tuple[str, str] | None]:
+    """How many of the fixations' ids name a Words-table id only when upper
+    and lower case are ignored, with one such pair.
+
+    The tables are joined on exact ids, so these find no word boxes; an id
+    either table spells the same is not counted."""
+    by_fold: dict[str, str] = {}
+    for value in word_ids:
+        by_fold.setdefault(str(value).casefold(), str(value))
+    exact = {str(value) for value in word_ids}
+    count, example = 0, None
+    for value in sorted(map(str, fixation_ids)):
+        if value in exact:
+            continue
+        match = by_fold.get(value.casefold())
+        if match is not None:
+            count += 1
+            example = example or (value, match)
+    return count, example
+
+
+def case_only_hint(
+    raw_words, word_schema, raw_fix, fix_schema, *, lowercase_offered: bool
+) -> str | None:
+    """The note above ✅ Add dataset when the two tables' Trial IDs (else their
+    Text IDs) differ only in upper and lower case (`case_only_matches`).
+
+    ``lowercase_offered`` is whether *Derive columns from text* has a regex
+    line applied, whose **Lowercase** is then the fix to name."""
+    for field, label in (("trial", "Trial ID"), ("text_id", "Text ID")):
+        fixation_ids = _id_values(raw_fix, fix_schema.get(field))
+        word_ids = _id_values(raw_words, word_schema.get(field))
+        if not fixation_ids or not word_ids:
+            continue
+        count, example = case_only_matches(fixation_ids, word_ids)
+        if not count:
+            continue
+        fix = (
+            "Turn on **Lowercase** on each *Derive columns from text* line that "
+            "makes them, then click **Apply**."
+            if lowercase_offered
+            else "Make both tables spell them the same way, for example with "
+            "*Derive columns from text* and its **Lowercase**."
+        )
+        verb = "matches" if count == 1 else "match"
+        return (
+            f"{ICONS['warning']} {plural(count, label)} in Fixations {verb} one in the "
+            f"Words table only when case is ignored ({example[0]!r} and "
+            f"{example[1]!r}). IDs must match exactly. {fix}"
+        )
+    return None
 
 
 @st.cache_data(show_spinner="Detecting columns…")
@@ -798,6 +878,27 @@ def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
 
 
+@st.cache_data(show_spinner=False)
+def _c_words_with_several_boxes(_raw, _schema, fingerprint: tuple, key: tuple) -> int:
+    return words_with_several_boxes(_raw, _schema)
+
+
+def merge_boxes_hint(several: int, *, screen_mapped: bool) -> str:
+    """The note under *Merge character boxes into word boxes* when ``several``
+    words of the Words table have rows at different positions
+    (`data.words_with_several_boxes`). Without a Screen ID, trials over several
+    screens look the same, so the note names that cause too."""
+    lead = (
+        f"{ICONS['tip']} {plural(several, 'word')} "
+        f"{'has' if several == 1 else 'have'} rows at different positions, as a "
+        "table with one row per character does. Turn this on to merge them into "
+        "one box per word."
+    )
+    if screen_mapped:
+        return lead
+    return f"{lead} If your trials span several screens, map **Screen ID** instead."
+
+
 def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> bool:
     """Whether the normalized tables share trial ids but no (participant, trial)
     pair — the reader half of the join is what failed."""
@@ -811,6 +912,23 @@ def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> boo
 
     key = (frame_fingerprint(words), frame_fingerprint(fixations))
     return frame_cache("wizard_readers_line_up", key, check)
+
+
+def _text_word_id_issues(words: pd.DataFrame, fixations: pd.DataFrame) -> list[str]:
+    """`data.text_word_id_issues` for the normalized pair, read once per pair.
+
+    Whether the load set numeric fixation ids aside comes from its own rewrites
+    (`app.HARMONIZE_REWRITES_KEY`), so the wizard warns on exactly what the
+    load did. Free on numeric Word IDs, which no frame holds as keys."""
+    if WORD_KEY not in words.columns and WORD_KEY not in fixations.columns:
+        return []
+    set_aside = word_ids_set_aside(st.session_state.get(app.HARMONIZE_REWRITES_KEY))
+    key = (frame_fingerprint(words), frame_fingerprint(fixations), set_aside)
+    return frame_cache(
+        "wizard_text_word_id_issues",
+        key,
+        lambda: text_word_id_issues(words, fixations, set_aside=set_aside),
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -921,6 +1039,7 @@ def _render_identity_field(
         tables.append(("words", WORDS_TABLE_LABEL, raw_words, word_schema))
 
     tinted: dict[str, list[str]] = {}
+    derived = st.session_state.get(_DERIVED_ID_PROPOSALS_KEY) or {}
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
         key = f"col_map_{slug}_{field_key}"
         # The file's real header, not `raw.columns`: the upload parses
@@ -933,7 +1052,13 @@ def _render_identity_field(
         # dataset's already-normalized frames, which have no header to ask).
         full_header = st.session_state.get(f"col_map_{slug}_header")
         options = list(full_header) if full_header else list(raw.columns)
-        _seed(key, options, default_cols)
+        # What detection proposes for this table: the shared proposal, else
+        # the column derived from text that is detected as this field
+        # (`_derived_id_proposals`), which only this table may have.
+        detected = [c for c in default_cols if c in options] or [
+            c for c in (derived.get(key),) if c in options
+        ]
+        _seed(key, options, detected)
         # Title on the cell's first line, control on its second, so the row
         # reads as a line of names over a line of pickers. The title carries no
         # table name: the rows are grouped *by* table and each is labelled once
@@ -966,7 +1091,7 @@ def _render_identity_field(
             state_key=key,
             cell_key=cell_key,
             chosen=list(chosen),
-            default=[c for c in default_cols if c in options],
+            default=detected,
             required=required,
             preview=value_preview_tip(raw, field_key, list(chosen)),
         )
@@ -1063,27 +1188,6 @@ def _row_note(block, table: str, prefix: str):
 _DERIVE_LINE_W = (0.14, 0.16, 0.15, 0.24, 0.09, 0.11, 0.11)
 
 
-def _next_available_names(existing: set, base: str, count: int) -> list:
-    """The next ``count`` names ``<base>_<n>`` not already in ``existing``,
-    marking each as claimed as it is picked.
-
-    Splitting the same column a second time then continues past whatever the
-    first split already claimed (``source_file_7``, not another
-    ``source_file_1``) instead of colliding with — and silently
-    overwriting — it. ``existing`` is mutated in place so a caller reusing it
-    across several lines against the same table keeps accumulating names.
-    """
-    names = []
-    n = 1
-    while len(names) < count:
-        candidate = f"{base}_{n}"
-        if candidate not in existing:
-            names.append(candidate)
-            existing.add(candidate)
-        n += 1
-    return names
-
-
 #: The last derivation each Apply line made, per table: what it was made from
 #: and the frame it gave. A derivation is a pure function of its input frame and
 #: its settings, and the add screen reruns on every click — so without this a
@@ -1119,7 +1223,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     upload, not one shared value), so a line derives from exactly the one
     table named, never all three at once. Two modes per line: split into positional
     ``<column>_1``/``<column>_2``/… columns on a delimiter (collision-safe —
-    see :func:`_next_available_names`), or extract *named groups* with a
+    see :func:`split_named_columns`), or extract *named groups* with a
     regex (robust to variable-length parts, e.g. a stimulus name whose length
     varies). ➕ **Another** (beside Apply, on the first line) adds another
     mapping line — the same Table/Column/How/pattern/Lowercase controls, no
@@ -1141,15 +1245,15 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         "Derive columns from text",
         key="wizard_filename_split",
         help=(
-            "Use this when an id, such as a session or stimulus, appears only "
-            "inside a text value like the filename. Pick a table and one of its "
-            "columns (by default the uploaded filename, `source_file`). Then "
-            "split the text on a delimiter, or pull parts out with named regex "
-            "groups. The new columns can be mapped as ids below. "
-            f"{ICONS['add']} Add line derives from a second column."
+            "Extract IDs from filenames or another text column. Choose a table "
+            "and column, then split the values using a delimiter or a regular "
+            "expression with named groups. Click Apply to create the columns, "
+            "then select them in the mappings below. "
+            f"Use {ICONS['add']} Add line to extract from another column."
         ),
     )
     if not enabled:
+        st.session_state.pop(_DERIVED_ID_PROPOSALS_KEY, None)
         return raw_words, raw_fix, raw_gaze
 
     # Every table, always — including empty ones — so a line whose
@@ -1198,7 +1302,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_options,
             key=table_key,
             label_visibility="collapsed",
-            help="The uploaded table to derive from. Its columns are offered next.",
+            help="Choose the table containing the text you want to extract from.",
         )
         table_frame = frames[selected_table]
         table_columns = (
@@ -1217,15 +1321,15 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_columns,
             key=column_key,
             label_visibility="collapsed",
-            help="The column to derive from. Defaults to the filename "
-            "(`source_file`); pick another column if it holds the id as text.",
+            help="Choose the column containing the IDs. The default, "
+            "source_file, contains the uploaded filename.",
         )
         mode = mode_col.selectbox(
             "How",
             ["Split on a delimiter", "Extract with a regex"],
             key=mode_key,
             label_visibility="collapsed",
-            help="How to pull columns out of the chosen column's text.",
+            help="Choose how to extract values from the text.",
         )
         pattern = ""
         lower = False
@@ -1282,16 +1386,16 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         f"{ICONS['add']} Add line",
         key="wizard_filename_another",
         width="stretch",
-        help="Add another line, to derive from a second column or table, or "
-        "from the same column a second way.",
+        help="Extract values from another column or table, or use another "
+        "pattern on the same column.",
     ):
         # `line_count` was already read (and the lines above already drawn
         # with it) before this button was evaluated, so raising it here alone
         # would only take effect on the *next* interaction — a click that
-        # visibly does nothing. `st.rerun()` restarts the script now, so
+        # visibly does nothing. `rerun()` restarts the script now, so
         # the new line appears immediately, same run.
         st.session_state[_FILENAME_DERIVE_LINE_COUNT_KEY] = line_count + 1
-        st.rerun()
+        rerun()
     apply_clicked = apply_col.button(
         "Apply",
         key="wizard_filename_apply",
@@ -1299,13 +1403,15 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         disabled=any(
             d["mode"] == "Extract with a regex" and not d["pattern"] for d in drafts
         ),
-        help="Derive the columns above and make them available to map below.",
+        help="Create the columns from these patterns, then choose them in the "
+        "column mappings below.",
     )
     if apply_clicked:
         st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = drafts
 
     applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
     if not applied:
+        st.session_state.pop(_DERIVED_ID_PROPOSALS_KEY, None)
         return raw_words, raw_fix, raw_gaze
     # An older saved setup commits one dict with no "table" key; Apply always
     # writes a list where every entry has one. Normalize so both process
@@ -1317,6 +1423,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     # what makes a second split of the same column continue numbering rather
     # than reusing (and silently overwriting) the first split's own columns.
     existing_by_table = {label: set(fr.columns) for label, fr in frames.items()}
+    derived_by_table: dict[str, list] = {}
 
     for line, config in enumerate(applied_configs):
         # An older saved setup names no column — `source_file` was the only
@@ -1348,15 +1455,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 delimiter=config["delimiter"],
                 column=applied_column,
             ):
-                split = split_source_file(parent, delimiter=delimiter, column=column)
-                # `split_source_file` always names positionally
-                # (`file_part_N`) — rename to `<source column>_<n>` here, using
-                # the next names not already claimed in this table, rather than
-                # letting a second split of the same (or another) column
-                # collide with the first's `file_part_1`/`_2`/….
-                temp_cols = [c for c in split.columns if c not in parent.columns]
-                new_names = _next_available_names(set(existing), column, len(temp_cols))
-                derived = split.rename(columns=dict(zip(temp_cols, new_names)))
+                derived, new_names = split_named_columns(
+                    parent, column, delimiter, existing
+                )
                 # Named by what made it, so it is not re-hashed each rerun.
                 assign_derived(
                     derived,
@@ -1430,6 +1531,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
 
         frames[target_table] = target
         if new_cols:
+            derived_by_table.setdefault(target_table, []).extend(new_cols)
             # Publish the derived columns into the table's own header stash.
             # `column_mapping_ui` offers `col_map_<slug>_header` over the live
             # frame's own columns (an upload parses only the columns it needs),
@@ -1451,10 +1553,116 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 hide_index=True,
             )
 
+    proposals = _derived_id_proposals(derived_by_table)
+    st.session_state[_DERIVED_ID_PROPOSALS_KEY] = {
+        f"{prefix}_{field}": column
+        for prefix, fields in proposals.items()
+        for field, column in fields.items()
+    }
+    if apply_clicked:
+        _map_derived_ids(proposals)
+
     raw_fix = frames["Fixations"]
     raw_words = frames["Words table"]
     raw_gaze = frames["Raw gaze"]
     return raw_words, raw_fix, raw_gaze
+
+
+#: The identity fields a derived column can fill, in the order they claim one.
+#: A column named like a stimulus fits both the Trial ID and the Text ID
+#: (`data.TRIAL_CANDIDATES` and `TEXT_ID_CANDIDATES`), and the Trial ID takes it:
+#: an empty Text ID already reads as the Trial ID.
+_DERIVED_ID_FIELDS = (
+    ("trial", TRIAL_CANDIDATES),
+    ("participant", PARTICIPANT_CANDIDATES),
+    ("text_id", TEXT_ID_CANDIDATES),
+)
+
+#: ``{col_map key: column}``: the identity fields the applied derivation's own
+#: columns are detected as, by the same candidate names as a file's columns.
+#: `_render_identity_field` reads it as the field's detected value, so a picker
+#: Apply filled shows the ✨ mark of an auto-detected one, not a choice made by
+#: hand.
+_DERIVED_ID_PROPOSALS_KEY = "_wizard_derived_id_proposals"
+
+
+def _regex_derive_applied() -> bool:
+    """Whether *Derive columns from text* is on with a regex line applied —
+    the lines that carry a **Lowercase** switch."""
+    if not st.session_state.get("wizard_filename_split"):
+        return False
+    applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
+    configs = applied if isinstance(applied, list) else [applied]
+    return any(
+        isinstance(config, dict) and config.get("mode") == "Extract with a regex"
+        for config in configs
+    )
+
+
+def _derived_id_proposals(
+    derived_by_table: dict[str, list],
+) -> dict[str, dict[str, str]]:
+    """``{col_map prefix: {field: column}}``: the identity fields each table's
+    derived columns are detected as.
+
+    Detection looks at the derived columns alone, so only a column the
+    derivation made is proposed, and one column fills one field per table.
+    """
+    proposals: dict[str, dict[str, str]] = {}
+    for table, columns in derived_by_table.items():
+        header = pd.DataFrame(columns=list(dict.fromkeys(columns)))
+        fields: dict[str, str] = {}
+        for field, candidates in _DERIVED_ID_FIELDS:
+            column = pick_column(header, candidates)
+            if column is not None and column not in fields.values():
+                fields[field] = column
+        if fields:
+            proposals[_DERIVE_TABLE_PREFIX[table]] = fields
+    return proposals
+
+
+#: ``{col_map key: column}`` Apply has filled each identity field with
+#: (`_map_derived_ids`).
+_DERIVED_IDS_FILLED_KEY = "_wizard_derived_ids_filled"
+
+
+def _map_derived_ids(proposals: dict[str, dict[str, str]]) -> None:
+    """Fill each empty identity field Apply's derived columns are detected as.
+
+    Runs on Apply's own run, before the identity pickers are drawn, so writing
+    their keys is safe. A field that names a column stays as it is, and a
+    column another identity field of the same table already names is not used
+    twice. A field cleared after Apply filled it stays clear on the next Apply
+    while the same column is proposed: emptying it was the answer.
+
+    Whether a person touched a field (`TOUCHED_FIELDS_KEY`) is no guide here:
+    the browser re-sends an identity picker's empty value after a change of
+    columns re-checks the mapping, which marks the field touched by itself. A
+    field filled here is unmarked, so it shows as detected until confirmed.
+    """
+    touched = st.session_state.get(TOUCHED_FIELDS_KEY, set())
+    filled = st.session_state.setdefault(_DERIVED_IDS_FILLED_KEY, {})
+    for prefix, fields in proposals.items():
+        in_use = {
+            mapped
+            for field, _candidates in _DERIVED_ID_FIELDS
+            for mapped in trial_mapping_columns(
+                st.session_state.get(f"{prefix}_{field}") or []
+            )
+        }
+        for field, column in fields.items():
+            key = f"{prefix}_{field}"
+            if st.session_state.get(key) or column in in_use:
+                continue
+            if filled.get(key) == column:
+                continue
+            in_use.add(column)
+            filled[key] = column
+            touched.discard(key)
+            # The Fixations and Words identity pickers are multiselects; Raw
+            # gaze maps its Participant and Text ID with one select each.
+            single = prefix == "col_map_raw_gaze" and field != "trial"
+            st.session_state[key] = column if single else [column]
 
 
 def _wizard_trial_step(
@@ -1630,125 +1838,6 @@ def wide_frame_warning(n_extra_fields: int, n_rows: int) -> str | None:
         "can slow the app noticeably. Keep only the measures and metadata you "
         "plan to use."
     )
-
-
-def _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
-    """The reader ids the finished dataset will have, read from the raw tables.
-
-    The participant metadata table attaches in the wizard, **before** the
-    frames are normalized (normalization needs the keep-columns chosen there),
-    so the join report can't be built from `metadata.participant_ids`. The mapped
-    participant column is only *renamed* by `normalize_*` — its values are
-    untouched — so reading it off the raw frame gives the same id set the join
-    will see, which is what makes "no row for reader p7" trustworthy here.
-
-    Cached and **gated**, following `app._cached_participant_ids`: this is a
-    `.unique()` over the *raw* (unfiltered, un-normalized) frames, the largest
-    version there is, and the wizard reruns on every keystroke. Only the join
-    report consumes the list, so nothing is scanned until a
-    table is actually being attached.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    if st.session_state.get(metadata_mod.RAW_SESSION_KEY) is None:
-        return []
-    found: set = set()
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        column = (schema or {}).get("participant")
-        if not column or frame is None or frame.empty or column not in frame.columns:
-            continue
-        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
-    return sorted(found)
-
-
-def _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema):
-    """The ``(participant_id, trial_id)`` pairs the finished dataset will have.
-
-    The trial metadata table attaches in the wizard, **before** the frames are
-    normalized — so, exactly as :func:`_wizard_reader_ids` does one grain up,
-    the keys are read off the raw tables through the mapping the user has just
-    made. ``trial_id_series`` is what `normalize_*` itself uses to compose a
-    trial id, including the multi-column case, so the pairs here are the pairs
-    the join will really see.
-
-    An unmapped participant column yields an empty reader half rather than no
-    rows: the dataset has no reader identity, so a trial-keyed table still joins
-    and a reader-keyed one correctly matches nothing.
-
-    Gated on a table actually being attached, and cached per frame — this
-    walks the whole raw frame, and the wizard reruns on every keystroke.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    empty = pd.DataFrame(columns=["participant_id", "trial_id"])
-    if st.session_state.get(metadata_mod.TRIAL_RAW_SESSION_KEY) is None:
-        return empty
-    parts = []
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        trial_mapping = (schema or {}).get("trial")
-        if not trial_mapping or frame is None or frame.empty:
-            continue
-        columns = trial_mapping_columns(trial_mapping)
-        if any(column not in frame.columns for column in columns):
-            continue
-        participant = (schema or {}).get("participant")
-        if participant and participant not in frame.columns:
-            participant = None
-        parts.append(
-            _wizard_trial_combos_cached(
-                frame,
-                tuple(columns),
-                participant,
-                frame_fingerprint(frame),
-            )
-        )
-    if not parts:
-        return empty
-    return pd.concat(parts, ignore_index=True).drop_duplicates()
-
-
-@st.cache_data(show_spinner=False)
-def _wizard_trial_combos_cached(_frame, columns: tuple, participant, fingerprint: str):
-    """Distinct ``(participant_id, trial_id)`` pairs in one raw frame."""
-    trial = trial_id_series(_frame, list(columns)).astype(str)
-    reader = (
-        _frame[participant].astype(str)
-        if participant
-        else pd.Series([""] * len(_frame), index=_frame.index)
-    )
-    out = pd.DataFrame({"participant_id": reader, "trial_id": trial})
-    return out.drop_duplicates().reset_index(drop=True)
-
-
-@st.cache_data(show_spinner=False)
-def _wizard_reader_ids_cached(_frame, column: str, fingerprint: str) -> list:
-    """Distinct reader ids in one raw frame's mapped participant column.
-
-    Underscore-prefixed frame + an explicit `frame_fingerprint` key, the house
-    convention — see `app._cached_participant_ids`.
-    """
-    return sorted({str(value) for value in _frame[column].dropna().unique()})
-
-
-def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
-    """The text ids the finished dataset will have, read from the raw tables.
-
-    The third-grain sibling of :func:`_wizard_reader_ids` — same reasoning:
-    runs before normalization, so the join report is built off the raw
-    frames through the mapping the user has just made, gated on a text table
-    actually being attached, and cached per frame.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    if st.session_state.get(metadata_mod.TEXT_RAW_SESSION_KEY) is None:
-        return []
-    found: set = set()
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        column = (schema or {}).get("text_id")
-        if not column or frame is None or frame.empty or column not in frame.columns:
-            continue
-        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
-    return sorted(found)
 
 
 def _row_body(host):
@@ -1929,7 +2018,7 @@ def _dataset_setup_config(name: str) -> dict | None:
     choices = choices if isinstance(choices, dict) else {}
     setup = entry.get("setup")
     return {
-        "data_source": name,
+        "data_source": app._dataset_display_name(name),
         # An older stored upload with no `source_recipe` gets one rebuilt
         # from its stored mapping (`column_names.stored_source_recipe`).
         "column_mapping": _mapping_keys_from_schemas(
@@ -1938,6 +2027,7 @@ def _dataset_setup_config(name: str) -> dict | None:
         "experimental_setup": setup if isinstance(setup, dict) else None,
         "filename_derive": choices.get("filename_derive"),
         "keep_and_filter": choices.get("keep_and_filter"),
+        "steps": list(stored_source_recipe(entry).get("steps") or []),
     }
 
 
@@ -1957,6 +2047,8 @@ def _clean_setup_config(config: dict) -> dict:
     for section in _SETUP_CONFIG_SECTIONS:
         if section in clean and not isinstance(clean[section], dict):
             clean.pop(section)
+    if "steps" in clean and not isinstance(clean["steps"], list):
+        clean.pop("steps")
     for section, field in (
         ("keep_and_filter", "wizard_keep_by_table"),
         ("filename_derive", "widgets"),
@@ -1991,6 +2083,8 @@ def _setup_config_writes(config: dict) -> set:
     widgets = (config.get("filename_derive") or {}).get("widgets")
     if isinstance(widgets, dict):
         keys.update(widgets)
+    if "steps" in config:
+        keys.add("wizard_aggregate_char_boxes")
     by_table = (config.get("keep_and_filter") or {}).get("wizard_keep_by_table")
     keys.update(
         f"wizard_keep_{prefix}" for prefix in (by_table or _WIZARD_MAPPING_PREFIXES)
@@ -2027,6 +2121,8 @@ def _applied_summary(config: dict) -> str:
                 len(applied) if isinstance(applied, list) else 1, "column derivation"
             )
         )
+    if "aggregate_char_boxes" in (config.get("steps") or ()):
+        parts.append("character-box merge")
     if isinstance(config.get("experimental_setup"), dict):
         parts.append("recording setup")
     return ", ".join(parts) if parts else "nothing this screen uses"
@@ -2081,6 +2177,12 @@ def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
                 st.session_state[f"wizard_keep_{prefix}"] = list(
                     kf["wizard_keep_extra"]
                 )
+    # The steps run on the uploaded tables (a list, possibly empty). A file
+    # without the section predates it and leaves the switch as it is.
+    if isinstance(config.get("steps"), list):
+        st.session_state["wizard_aggregate_char_boxes"] = (
+            "aggregate_char_boxes" in config["steps"]
+        )
     if isinstance(config.get("experimental_setup"), dict):
         # A plot config keeps the canvas in a sibling `canvas_px` section; merge
         # it in, or `_restored_setup_snapshot` would fall back to the class
@@ -2094,6 +2196,7 @@ def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
         st.session_state["_wizard_restored_setup"] = restored
         st.session_state.pop("_wizard_setup_restored_applied", None)
     st.session_state["_wizard_restored_meta"] = {
+        "column_mapping": config.get("column_mapping") or {},
         "data_source": config.get("data_source") or source,
         "exported_at": config.get("exported_at"),
         "kind": kind,
@@ -2133,7 +2236,9 @@ def _copy_dataset_setup() -> None:
     name = st.session_state.get(_COPY_FROM_KEY)
     config = _dataset_setup_config(name) if name else None
     if config is not None:
-        _apply_setup_config(config, source=str(name), kind="dataset")
+        _apply_setup_config(
+            config, source=app._dataset_display_name(name), kind="dataset"
+        )
 
 
 def _wizard_restore_config(host) -> None:
@@ -2159,9 +2264,12 @@ def _wizard_restore_config(host) -> None:
         return
     st.session_state["_wizard_config_last"] = signature
     try:
-        config = json.loads(uploaded.getvalue().decode("utf-8"))
+        config = json.loads(uploaded.getvalue())
     except (ValueError, UnicodeDecodeError):
-        host.warning("That file isn't a saved setup (not valid JSON).")
+        host.warning(
+            "This file could not be read as a setup file. Choose a JSON file saved "
+            "with Download setup file."
+        )
         return
     _setup_sections = (
         "data_source",
@@ -2169,19 +2277,27 @@ def _wizard_restore_config(host) -> None:
         "experimental_setup",
         "filename_derive",
         "keep_and_filter",
+        "steps",
     )
     if not isinstance(config, dict) or not any(k in config for k in _setup_sections):
         # An unrelated JSON must not report "Restored" with nothing restored.
-        host.warning("That file holds no saved setup, so nothing was restored.")
+        host.warning(
+            "No saved setup was found in this file. Choose a file saved with Download"
+            " setup file."
+        )
         return
     _apply_setup_config(config, source=uploaded.name, kind="file")
-    st.rerun()
+    rerun()
 
 
 def _render_start_from(host) -> None:
     """Part 2's first line: start from an empty form, or from a setup that
     exists."""
-    uploads = list(st.session_state.get("_datasets") or {})
+    uploads = [
+        name
+        for name, entry in (st.session_state.get("_datasets") or {}).items()
+        if not is_multipleye_entry(entry)
+    ]
     options = [_START_SCRATCH, *([_START_DATASET] if uploads else []), _START_FILE]
     if st.session_state.get(_START_FROM_KEY) not in options:
         st.session_state[_START_FROM_KEY] = _START_SCRATCH
@@ -2218,6 +2334,7 @@ def _render_start_from(host) -> None:
         row.selectbox(
             "Dataset to copy from",
             uploads,
+            format_func=app._dataset_display_name,
             key=_COPY_FROM_KEY,
             label_visibility="collapsed",
             width=260,
@@ -2226,8 +2343,9 @@ def _render_start_from(host) -> None:
             "Copy its setup",
             key="wizard_copy_setup",
             on_click=_copy_dataset_setup,
-            help="Copies its column mapping, kept fields, column derivation and "
-            "recording setup to this screen. You still upload your files below.",
+            help="Copies its column mapping, kept fields, column derivation, "
+            "character-box merge and recording setup to this screen. You still "
+            "upload your files below.",
         )
     elif choice == _START_FILE:
         box = host.container(key="wiz_start_from_file")
@@ -2340,6 +2458,21 @@ def _keep_and_filter_section() -> dict | None:
     }
 
 
+def _collect_column_mapping() -> dict:
+    """The column-mapping selections from session_state, for a setup file.
+
+    The upload boxes share the ``col_map_*`` prefix (``state_prefix="col_map_fix"``
+    etc.), so their ``file_uploader`` widgets land in this sweep too. Their value
+    is an ``UploadedFile`` (or list of them), which isn't JSON serializable and
+    isn't part of the column mapping — so the ``_upload`` widget keys are
+    excluded."""
+    return {
+        k: st.session_state[k]
+        for k in sorted(st.session_state.keys())
+        if isinstance(k, str) and k.startswith("col_map_") and not k.endswith("_upload")
+    }
+
+
 def _wizard_setup_config() -> dict:
     """The current wizard setup as a JSON-able dict: the column mapping plus
     provenance, in the schema the restore step (``_wizard_restore_config``) reads
@@ -2365,6 +2498,13 @@ def _wizard_setup_config() -> dict:
         "experimental_setup": current_setup_section(),
         "filename_derive": _filename_derive_section(),
         "keep_and_filter": _keep_and_filter_section(),
+        # What runs on the uploaded tables before they are mapped, in
+        # `source_recipe["steps"]`'s codes.
+        "steps": (
+            ["aggregate_char_boxes"]
+            if st.session_state.get("wizard_aggregate_char_boxes")
+            else []
+        ),
     }
 
 
@@ -2405,8 +2545,14 @@ def _render_setup_download(host) -> None:
 _FOOTER_ROW_W = (1.4, 1.4, 8.0)
 
 
-def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> None:
+def _wizard_footer(
+    host, *, disabled: bool, help_text: str, on_click=None, setup_file: bool = True
+) -> None:
     """⬇️ Download setup file · ✅ Add dataset, one line, matched widths.
+
+    ``setup_file=False`` leaves the download out, for the MultiplEYE format:
+    its tables are read the way the corpus lays them out, so there is no
+    mapping of the user's files to save.
 
     One place for all three endings — blocked on required fields, blocked on a
     mapping the pipeline rejected, and finished — which is what keeps them the
@@ -2430,7 +2576,10 @@ def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> No
     save_col, add_col, _rest = row.columns(
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
-    _render_setup_download(save_col)
+    if setup_file:
+        _render_setup_download(save_col)
+    else:
+        add_col = save_col
     add_col.button(
         f"{ICONS['confirm']} Add dataset",
         type="primary",
@@ -2753,7 +2902,9 @@ def _wizard_setup_step(
         )
         if not has_data:
             line.caption(
-                "Estimated from your data once a Fixations or Words table is in.",
+                (
+                    "An estimate will appear after you upload a Fixations or Words table."
+                ),
                 width="content",
             )
         else:
@@ -3056,6 +3207,13 @@ def _wizard_setup_step(
         canvas_height=int(canvas_h),
         monitor_width_mm=float(mon_mm),
         viewing_distance_mm=float(dist_mm),
+        viewing_distance_provenance=(
+            initial.viewing_distance_provenance
+            if initial is not None
+            else (
+                _restored_setup_snapshot() or SetupSnapshot()
+            ).viewing_distance_provenance
+        ),
         base_font_size=int(base_font),
         font_family=font_family,
         line_spacing=float(line_spacing),
@@ -3075,10 +3233,10 @@ def _wizard_setup_step(
     if guessed:
         nudge.caption(
             f"{ICONS['warning']} **{' and '.join(guessed)}** "
-            + ("is" if len(guessed) == 1 else "are")
-            + " an estimate or a default. If you know the real "
+            + ("uses" if len(guessed) == 1 else "use")
+            + " an estimated or default value. If you know the recorded "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it*. Every figure is drawn with these values."
+            + ", choose *I know it*. These settings determine how figures are drawn."
             + (
                 " You can also add the dataset now and change them later."
                 if initial is None
@@ -3172,6 +3330,15 @@ def _restored_setup_answerable_groups() -> set:
     groups = set(SETUP_GROUPS)
     if payload.get("canvas_width") is None or payload.get("canvas_height") is None:
         groups.discard("screen")
+    width = payload.get("monitor_width_mm")
+    provenance = payload.get("provenance")
+    if isinstance(provenance, dict) and provenance.get("geometry") == "measured":
+        try:
+            width = float(width)
+        except (TypeError, ValueError):
+            width = 0.0
+        if not math.isfinite(width) or width <= 0:
+            groups.discard("geometry")
     return groups
 
 
@@ -3234,6 +3401,587 @@ def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
     _remember_setup(remembered)
 
 
+# -----------------------------------------------------------------------------
+# The MultiplEYE format
+#
+# A MultiplEYE session set has no identity columns: participant, session, trial
+# and stimulus live in its folder and file names. So it is read the way the
+# corpus lays it out (`datasets.multipleye_raw_frames` for a folder,
+# `datasets.multipleye_frames_from_uploads` for files) instead of being mapped
+# column by column. Its own config describes the screen it was shown on, which
+# pre-answers Recording setup; a value the config does not give is left to the
+# same answers a dataset of your own tables starts from.
+
+#: Part 2's *Dataset format*: your own tables, or a MultiplEYE session set.
+_FORMAT_KEY = "wizard_dataset_format"
+FORMAT_GENERIC = "Generic"
+FORMAT_MULTIPLEYE = "MultiplEYE"
+_FORMAT_LABELS = {
+    FORMAT_GENERIC: "Your own tables",
+    FORMAT_MULTIPLEYE: "MultiplEYE session set",
+}
+#: Where a session set comes from: a folder (a local install only) or uploads.
+MULTIPLEYE_FROM_KEY = "wizard_multipleye_from"
+MULTIPLEYE_FROM_FOLDER = "folder"
+MULTIPLEYE_FROM_UPLOAD = "upload"
+_FROM_LABELS = {
+    MULTIPLEYE_FROM_FOLDER: "Folder on this computer",
+    MULTIPLEYE_FROM_UPLOAD: "Upload files",
+}
+#: The typed session-set folder.
+MULTIPLEYE_DIR_KEY = "wizard_multipleye_dir"
+_MULTIPLEYE_CONFIG_UPLOAD_KEY = "mpe_config_upload"
+#: The screen whose values Recording setup was last pre-answered with.
+_MULTIPLEYE_SETUP_APPLIED_KEY = "_wizard_multipleye_setup_applied"
+#: What part 2 says before anything is chosen: a prompt, not an error.
+_MULTIPLEYE_FOLDER_PROMPT = "Choose the MultiplEYE session set's folder to begin."
+_MULTIPLEYE_UPLOAD_PROMPT = "Upload MultiplEYE scanpath or fixation CSVs to begin."
+
+_MULTIPLEYE_STRUCTURE_MD = """\
+**Expected layout**: a MultiplEYE session set. Participants, trials and screens
+are read from the folder and file names, so there are no columns to map.
+```
+<folder>/
+├─ scanpaths/                  # or fixations/
+│  └─ <session>/               # one folder per reader session
+│     └─ *.csv                 # one file per trial
+├─ stimuli_<…>/
+│  ├─ aoi_stimuli_<…>/         # character AOIs: <stimulus>_aoi.csv
+│  ├─ config/config_*.py       # the screen and the font
+│  ├─ config/*_lab_configuration.json
+│  ├─ stimuli_images_<…>/      # page images (optional)
+│  └─ …_comprehension_questions_*.xlsx   (optional)
+├─ reading_measures/           # optional
+└─ participant_data.csv        # optional
+```
+"""
+
+
+def _multipleye_folder_signature(root: str) -> tuple:
+    """What the folder read is cached on besides its path.
+
+    The folders it reads (a session's folder changes when a trial file is
+    added, removed or renamed into it) and, by size and time, the small files
+    it reads whole: the configs, the answer-layout versions, the participants
+    and the questions workbook. A trial or AOI file rewritten in place under
+    the same name is not seen until the server restarts."""
+    base = Path(root)
+    exports = [base / "scanpaths", base / "fixations", base / "reading_measures"]
+    folders = [base, *exports, *base.glob("stimuli_*")]
+    folders += [*base.glob("stimuli_*/aoi_stimuli_*"), *base.glob("stimuli_*/config")]
+    for top in exports:
+        try:
+            folders += [Path(e.path) for e in os.scandir(top) if e.is_dir()]
+        except OSError:
+            continue
+    files = [base / "participant_data.csv"]
+    files += [
+        *base.glob("stimuli_*/config/*.py"),
+        *base.glob("stimuli_*/config/*.json"),
+    ]
+    files += [*base.glob("stimuli_*/config/stimulus_order_versions_*.csv")]
+    files += [*base.glob("stimuli_*/multipleye_comprehension_questions_*.xlsx")]
+    stamps = []
+    for path, sized in [(f, False) for f in folders] + [(f, True) for f in files]:
+        try:
+            stat = path.stat()
+        except OSError:
+            stamps.append((str(path), None))
+            continue
+        stamps.append((str(path), stat.st_mtime_ns, stat.st_size if sized else None))
+    return tuple(sorted(stamps, key=lambda s: s[0]))
+
+
+@st.cache_data(show_spinner="Reading the MultiplEYE session set…", max_entries=4)
+def _c_multipleye_folder(root: str, signature: tuple):
+    from scanpath_studio.datasets import multipleye_raw_frames, multipleye_screen
+
+    # Read once, and handed to the loader, so the frames are placed with the
+    # same screen Recording setup is pre-answered from.
+    screen = multipleye_screen(root)
+    words, fixations = multipleye_raw_frames(root, screen=screen)
+    return (*stamp_source((words, fixations)), screen)
+
+
+@st.cache_data(show_spinner="Reading the MultiplEYE files…", max_entries=4)
+def _c_multipleye_uploads(
+    _fixations, _aoi, _questions, _participants, fingerprints: tuple, screen
+):
+    from scanpath_studio.datasets import multipleye_frames_from_uploads
+
+    return stamp_source(
+        multipleye_frames_from_uploads(
+            _fixations,
+            _aoi,
+            questions_df=_questions,
+            participant_meta_df=_participants,
+            screen=screen,
+        )
+    )
+
+
+def _multipleye_screen_from_uploads(files) -> object:
+    """The `datasets.MultiplEYEScreen` the uploaded config files describe."""
+    from scanpath_studio.datasets import multipleye_screen_from_texts
+
+    config = lab = None
+    for file in files or ():
+        name = str(getattr(file, "name", "")).lower()
+        text = file.getvalue().decode("utf-8", errors="replace")
+        if name.endswith(".json"):
+            lab = lab or text
+        elif name.endswith(".py"):
+            config = config or text
+    return multipleye_screen_from_texts(config, lab)
+
+
+def _multipleye_folder_field(host, active: bool) -> str:
+    """*Session set folder*: the path box and the folder picker on one line.
+
+    Titled like the add screen's other fields, with its help on the title's
+    hover, and the picker beside the box rather than in a column of its own
+    (which wraps under the box on a narrow screen). Returns the resolved folder,
+    or ``""`` before one is typed."""
+    # A pick from the folder dialog lands before the box is drawn: a widget's
+    # key can't be written once it is.
+    if picked := st.session_state.pop(f"{MULTIPLEYE_DIR_KEY}_picked", None):
+        st.session_state[MULTIPLEYE_DIR_KEY] = picked
+    help_text = (
+        "The session set's folder: the one that holds scanpaths/ (or "
+        "fixations/) and stimuli_*/."
+    )
+    row_label(host, "Session set folder", help_text)
+    row = host.container(horizontal=True, vertical_alignment="center", gap="small")
+    typed = row.text_input(
+        "Session set folder",
+        key=MULTIPLEYE_DIR_KEY,
+        placeholder="/path/to/MultiplEYE_ZH_CH_Zurich_1_2025",
+        help=help_text,
+        label_visibility="collapsed",
+        disabled=not active,
+        width="stretch",
+        # Kept while Upload files is chosen, which doesn't draw it.
+        persist_state="session",
+    )
+    if row.button(
+        f"{ICONS['folder']} {spoken('Choose the folder')}",
+        key=f"{MULTIPLEYE_DIR_KEY}_browse",
+        help="Choose the folder",
+        disabled=not active,
+        width="content",
+    ):
+        if chosen := app._pick_directory_dialog():
+            st.session_state[f"{MULTIPLEYE_DIR_KEY}_picked"] = chosen
+            rerun()
+        host.caption("Enter or paste the folder path.")
+    resolved = app._resolve_data_dir(str(typed or ""))
+    if resolved and resolved != str(typed).strip():
+        host.caption(f"Full path: `{resolved}`")
+    if active:
+        with host.expander("Expected files", expanded=False):
+            st.markdown(_MULTIPLEYE_STRUCTURE_MD)
+    return resolved
+
+
+def _multipleye_from_folder(host, active: bool):
+    """The folder field, and what it reads: ``(words, fixations, screen,
+    recipe, problem)``. The loader reads ``scanpaths/``, where each fixation is
+    mapped to its word, falling back to ``fixations/``; question screens come
+    along whenever the session set has what they need."""
+    from scanpath_studio.datasets import MultiplEYEScreen
+
+    root = _multipleye_folder_field(host, active)
+    recipe = {"root": root}
+    empty = (pd.DataFrame(), pd.DataFrame(), MultiplEYEScreen(), recipe)
+    if not root:
+        return (*empty, _MULTIPLEYE_FOLDER_PROMPT)
+    if not Path(root).is_dir():
+        return (*empty, f"There is no folder at `{root}`.")
+    try:
+        words, fixations, screen = _c_multipleye_folder(
+            root, _multipleye_folder_signature(root)
+        )
+    except (OSError, ValueError, KeyError) as exc:
+        return (*empty, f"Couldn't read a MultiplEYE session set from `{root}`: {exc}")
+    # The loader's own ID for these tables, so normalization is keyed on the
+    # read they came from rather than hashing them on every rerun.
+    adopt_source(words, fixations)
+    if fixations.empty:
+        return (
+            *empty,
+            f"No MultiplEYE trial files under `{root}`. Open *Expected files* "
+            "for the layout it looks for.",
+        )
+    return words, fixations, screen, recipe, None
+
+
+def _multipleye_from_uploads(host, active: bool):
+    """The upload boxes, and what they read: ``(words, fixations, screen,
+    recipe, problem)``."""
+
+    fix_df = app._read_uploaded_frame(
+        uploader_label="Scanpath or fixation CSVs",
+        upload_help="The per-trial *_scanpath.csv files (they map each "
+        "fixation to its word) or *_fixation.csv files. Add as many as you like.",
+        state_prefix="mpe_fix",
+        multi=True,
+        container=host,
+    )
+    aoi_df = app._read_uploaded_frame(
+        uploader_label="Word AOI CSVs (optional)",
+        upload_help="The per-stimulus *_aoi.csv files (character areas of "
+        "interest). Without them there are fixations but no word boxes. For the "
+        "comprehension-question screens, add the *_aoi_questions.csv files and "
+        "stimulus_order_versions_*.csv here, and upload the *_fixation.csv "
+        "files: the scanpath export has no question screens.",
+        state_prefix="mpe_aoi",
+        multi=True,
+        container=host,
+    )
+    questions_df = app._read_uploaded_frame(
+        uploader_label="Comprehension questions (optional)",
+        upload_help="The multipleye_comprehension_questions_*.xlsx workbook, "
+        "shown under the stimulus text.",
+        state_prefix="mpe_questions",
+        multi=False,
+        container=host,
+    )
+    participant_df = app._read_uploaded_frame(
+        uploader_label="participant_data.csv (optional)",
+        upload_help="Participant metadata (age, gender, languages, …), shown "
+        "beside each trial and usable as a filter.",
+        state_prefix="mpe_participant",
+        multi=False,
+        container=host,
+    )
+    configs = host.file_uploader(
+        "Configuration files (optional)",
+        type=["py", "json"],
+        accept_multiple_files=True,
+        key=_MULTIPLEYE_CONFIG_UPLOAD_KEY,
+        disabled=not active,
+        max_upload_size=upload_limit_mb(),
+        help="The session set's config_*.py and *_lab_configuration.json, "
+        "both in stimuli_*/config/. They give the screen and the font. Without "
+        "them the coordinates stay relative to the stimulus image.",
+    )
+    screen = _multipleye_screen_from_uploads(configs)
+    empty = (pd.DataFrame(), pd.DataFrame(), screen)
+    if fix_df.empty:
+        return (*empty, {"root": None}, _MULTIPLEYE_UPLOAD_PROMPT)
+
+    def optional(frame):
+        return frame if not frame.empty else None
+
+    try:
+        words, fixations = _c_multipleye_uploads(
+            fix_df,
+            optional(aoi_df),
+            optional(questions_df),
+            optional(participant_df),
+            tuple(
+                frame_fingerprint(f)
+                for f in (fix_df, aoi_df, questions_df, participant_df)
+            ),
+            screen,
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        return (*empty, {"root": None}, f"Couldn't read these MultiplEYE files: {exc}")
+    adopt_source(words, fixations)
+    recipe = {"root": None}
+    if fixations.empty:
+        return (
+            *empty,
+            recipe,
+            "No MultiplEYE file names recognized. Each should read "
+            "`<session>_trial_<n>_<stimulus>_<scanpath|fixation>.csv`, e.g. "
+            "`001_ZH_CH_1_ET1_trial_1_Lit_Alchemist_4_scanpath.csv`.",
+        )
+    return words, fixations, screen, recipe, None
+
+
+def _apply_multipleye_screen(screen) -> None:
+    """Pre-answer Recording setup from a session set's config, once per screen.
+
+    Each value the config gives becomes the answer *I know it* holds: the
+    monitor (only when the image size is known too, since the coordinates are
+    placed on it then), the monitor's width and viewing distance, the font size
+    in px and its typeface. A new session set first puts every line back on the
+    answers that invent nothing, so a value the previous one gave does not
+    outlive it."""
+    marker = repr(screen)
+    if st.session_state.get(_MULTIPLEYE_SETUP_APPLIED_KEY) == marker:
+        return
+    ss = st.session_state
+    ss[_MULTIPLEYE_SETUP_APPLIED_KEY] = marker
+    auto = dict(ss.get(_SETUP_AUTO_KEY) or {})
+    for key in (
+        *_SETUP_MODE_KEYS.values(),
+        "wizard_setup_font_mode",
+        "wizard_setup_font_name",
+        "wizard_setup_font_other",
+        "wizard_setup_screen_w",
+        "wizard_setup_screen_h",
+        "wizard_setup_monitor_mm",
+        "wizard_setup_font_unit",
+        "wizard_setup_font_px",
+        "wizard_setup_font_pt",
+    ):
+        ss.pop(key, None)
+        auto.pop(key, None)
+    remembered: dict = {}
+    # The values reach the number boxes as their starting values
+    # (`_recalled`), as a restored setup's do; only the answers are written.
+    if screen.placed:
+        ss[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
+        remembered["canvas_width"] = int(screen.monitor_px[0])
+        remembered["canvas_height"] = int(screen.monitor_px[1])
+    if screen.screen_size_cm is not None:
+        ss[_SETUP_MODE_KEYS["geometry"]] = _GEOM_KNOW
+        remembered["monitor_width_mm"] = float(screen.screen_size_cm[0]) * 10
+    if screen.distance_cm is not None:
+        remembered["viewing_distance_mm"] = float(screen.distance_cm) * 10
+    if screen.font_px is not None:
+        ss[_SETUP_MODE_KEYS["text"]] = _TEXT_FONT
+        ss["wizard_setup_font_unit"] = "px"
+        remembered["base_font_size"] = round(screen.font_px)
+    if screen.font_family:
+        choice = font_choice(screen.font_family)
+        if choice != GENERIC_FONT:
+            ss["wizard_setup_font_mode"] = _FONT_KNOW
+            ss["wizard_setup_font_name"] = choice
+            if choice == OTHER_FONT:
+                ss["wizard_setup_font_other"] = font_other_text(screen.font_family)
+        remembered["font_family"] = screen.font_family
+    ss[_SETUP_AUTO_KEY] = auto
+    _remember_setup(remembered)
+
+
+def _render_multipleye_setup(body, s1, active: bool, part) -> _UploadResult:
+    """Parts 2 and 3 and the footer for the MultiplEYE format.
+
+    Part 2 reads the session set from a folder (a local install only) or from
+    uploaded files; Recording setup comes after it, pre-answered from the
+    session set's config (`_apply_multipleye_screen`). The frames normalize like
+    any dataset's and finalize through `_finalize_wizard_dataset`, so a
+    MultiplEYE dataset is stored, listed, edited and removed like any other.
+    Its ``source_recipe["multipleye"]`` records where it came from, which is
+    what Share → Code reproduces (`code_snippet.multipleye_source`)."""
+    from scanpath_studio.datasets import multipleye_fix_schema, multipleye_word_schema
+
+    local = app.local_filesystem_enabled()
+    if not local:
+        # A folder path means nothing to a visitor of a shared server.
+        st.session_state[MULTIPLEYE_FROM_KEY] = MULTIPLEYE_FROM_UPLOAD
+    st.session_state.setdefault(MULTIPLEYE_FROM_KEY, MULTIPLEYE_FROM_FOLDER)
+    if local:
+        files_help = (
+            "Folder on this computer reads the whole session set, with its "
+            "reading measures, page images and config. Upload files takes the "
+            "CSVs one by one."
+        )
+        row_label(s1, "Files", files_help)
+        s1.segmented_control(
+            "Files",
+            list(_FROM_LABELS),
+            key=MULTIPLEYE_FROM_KEY,
+            required=True,
+            format_func=_FROM_LABELS.get,
+            disabled=not active,
+            help=files_help,
+            label_visibility="collapsed",
+        )
+    if st.session_state.get(MULTIPLEYE_FROM_KEY) == MULTIPLEYE_FROM_FOLDER:
+        words_raw, fix_raw, screen, recipe, problem = _multipleye_from_folder(
+            s1, active
+        )
+    else:
+        words_raw, fix_raw, screen, recipe, problem = _multipleye_from_uploads(
+            s1, active
+        )
+
+    words_norm, fixations_norm = empty_words_frame(), empty_fixations_frame()
+    has_words = not words_raw.empty
+    word_schema = multipleye_word_schema(words_raw) if has_words else None
+    fix_schema = multipleye_fix_schema(fix_raw)
+    keep_fix = keep_words = None
+    if problem is None:
+        # Normalization keeps only named columns, so the corpus' facets and
+        # side data are named here to survive it.
+        keep_fix = compute_keep_columns(
+            fix_schema,
+            keep_columns={
+                "genre",
+                "session",
+                "participant",
+                "is_practice",
+                "trial_num",
+                "image_path",
+                "image_x",
+                "image_y",
+                "stimulus_font_px",
+                "stimulus_font_family",
+                "pp_age",
+                "pp_gender",
+                "pp_native_language",
+                "pp_years_education",
+                "pp_education_level",
+                # A trial mixes reading pages and question screens, so what
+                # tells them apart must survive too.
+                "screen_kind",
+            },
+        )
+        keep_words = (
+            compute_keep_columns(
+                word_schema,
+                keep_columns={
+                    "genre",
+                    "comprehension_questions",
+                    "image_path",
+                    "image_x",
+                    "image_y",
+                    "stimulus_font_px",
+                    "stimulus_font_family",
+                    "screen_kind",
+                    "aoi_block",
+                    # The session set's own reading measures (`reading_measures/`,
+                    # a folder read), as EyeLink-named `IA_*` columns, for
+                    # Corpus Analysis.
+                    *(c for c in words_raw.columns if str(c).startswith("IA_")),
+                },
+            )
+            if has_words
+            else None
+        )
+        try:
+            words_norm, fixations_norm = app._normalize_pair(
+                words_raw if has_words else empty_words_frame(),
+                word_schema,
+                fix_raw,
+                fix_schema,
+                keep_words=keep_words,
+                keep_fix=keep_fix,
+            )
+        except Exception as exc:
+            # A rejected set is a blocked part, not a dead app: the fields above
+            # stay on screen to fix it.
+            problem = app.mapping_failure_problem(exc)
+
+    if active and problem is not None:
+        prompt = problem in (_MULTIPLEYE_FOLDER_PROMPT, _MULTIPLEYE_UPLOAD_PROMPT)
+        (s1.caption if prompt else s1.error)(problem)
+    elif active:
+        boxes = (
+            f" · **{len(words_norm):,}** word boxes"
+            if has_words
+            else " · no word boxes (add the *_aoi.csv files for them)"
+        )
+        s1.success(
+            f"**{fixations_norm['participant_id'].nunique()}** sessions · "
+            f"**{fixations_norm['trial_id'].nunique()}** readings of "
+            f"**{fixations_norm['text_id'].nunique()}** stimuli · "
+            f"**{len(fixations_norm):,}** fixations" + boxes
+        )
+        if missing := screen.missing():
+            s1.caption(
+                f"{ICONS['info']} The session set's config doesn't give "
+                + ", ".join(missing)
+                + ". "
+                + (
+                    "The coordinates stay relative to the stimulus image. "
+                    if not screen.placed
+                    else ""
+                )
+                + "Fill in what you know under Recording setup."
+            )
+
+    s_setup = part("setup")
+    _apply_multipleye_screen(screen)
+    if active and problem is None and not screen.missing():
+        s_setup.caption(
+            f"{ICONS['success']} Filled in from the session set's config. Check "
+            "it below."
+        )
+    setup_snapshot = _wizard_setup_step(
+        s_setup,
+        words_norm,
+        fixations_norm,
+        has_boxes=has_words,
+        has_data=problem is None,
+    )
+    setup_blockers = [
+        SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None
+    ]
+
+    s6 = body.container()
+    if problem is not None:
+        if active:
+            _wizard_footer(
+                s6,
+                disabled=True,
+                setup_file=False,
+                help_text=problem,
+            )
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            words_raw,
+            fix_raw,
+            [problem],
+        )
+
+    filter_fields = ["genre", "session", "is_practice"]
+    st.session_state["wizard_filter_fields"] = filter_fields
+    schemas = {"words": word_schema, "fixations": fix_schema, "raw_gaze": None}
+    app._stash_active_mapping(
+        "words", word_schema, words_raw.columns, keep_columns=keep_words
+    )
+    app._stash_active_mapping(
+        "fixations", fix_schema, fix_raw.columns, keep_columns=keep_fix
+    )
+    if active:
+        st.session_state["_wizard_finalize_payload"] = {
+            "words": words_norm,
+            "fixations": fixations_norm,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": filter_fields,
+            "composite_trial_columns": [],
+            "schemas": schemas,
+            # Share → Code reads the session set's folder from here, and loads
+            # it with `load_multipleye` (`code_snippet.multipleye_source`).
+            "source_recipe": {"schemas": {}, "steps": [], "multipleye": recipe},
+            # The loader-built frames' names: MultiplEYE's own files carry no
+            # identity columns.
+            "column_names": for_tables(
+                schemas,
+                {"words": words_raw, "fixations": fix_raw},
+                {"words": keep_words, "fixations": keep_fix},
+                rewrites=st.session_state.get(app.HARMONIZE_REWRITES_KEY),
+            ),
+            "dropped_columns": {
+                "words": dropped_columns(words_raw, keep=keep_words)
+                if has_words
+                else [],
+                "fixations": dropped_columns(fix_raw, keep=keep_fix),
+                "raw_gaze": [],
+            },
+            "setup": setup_snapshot.to_dict(),
+        }
+        _wizard_footer(
+            s6,
+            disabled=bool(setup_blockers),
+            setup_file=False,
+            on_click=_finalize_wizard_dataset,
+            help_text="Answer Recording setup first: " + ", ".join(setup_blockers)
+            if setup_blockers
+            else "Store this dataset and switch to it.",
+        )
+    return _UploadResult(
+        words_norm, fixations_norm, pd.DataFrame(), words_raw, fix_raw, []
+    )
+
+
 #: Every mapping line is one grid: the table's name column, then four equal
 #: picker cells. A table maps on three short lines rather than two long ones —
 #: six pickers to a line would leave each one too narrow to read the column
@@ -3262,6 +4010,8 @@ MAP_LINES = {
         ("trial", "participant", "text_id", "screen_id"),
         ("x", "y", "timestamp"),
         ("word_id", "text"),
+        ("eye", "pupil_area", "pupil_diameter"),
+        ("screen_index", "canvas_width", "canvas_height"),
     ),
 }
 
@@ -3295,6 +4045,60 @@ def _map_cells(block, first_row, lines) -> dict:
         )
         cells.update(zip(keys, row[1:]))
     return cells
+
+
+def _mapping_blocker_links(groups: list) -> tuple[list[str], dict]:
+    """Markdown links in each error and their ordered, available control targets."""
+    lines, targets = [], {}
+    for label, prefix, issues in groups:
+        links = []
+        for issue in issues:
+            anchor = f"sps-map-{prefix}-{issue.fields[0]}"
+            targets[anchor] = [f"{prefix}_{field}" for field in issue.fields]
+            links.append(f"[{issue.message}](#{anchor})")
+            if (
+                prefix == "col_map_fix"
+                and len(issue.fields) > 1
+                and "word_id" in issue.fields
+            ):
+                word = "sps-map-col_map_fix-word-id"
+                targets[word] = ["col_map_fix_word_id"]
+                links.append(f"[Map Word ID](#{word})")
+        if links:
+            lines.append(f"{label}: " + " · ".join(links))
+    return lines, targets
+
+
+def _mapping_focus_script(targets: dict) -> str:
+    """Keyboard or pointer activation opens a collapsed section and focuses its field."""
+    return """<script>
+    (() => {
+      const doc = window.parent.document;
+      const targets = TARGETS;
+      doc._spsMappingLinks?.abort();
+      const handler = new doc.defaultView.AbortController();
+      doc._spsMappingLinks = handler;
+      doc.addEventListener("click", event => {
+        const anchor = event.target.closest?.("a");
+        const keys = anchor && targets[anchor.hash.slice(1)];
+        if (!keys) return;
+        const inputs = keys.map(key => doc.querySelector(
+          ".st-key-" + key + " input:not([type=hidden])"
+        )).filter(Boolean);
+        const input = inputs.find(node => node.getClientRects().length) || inputs[0];
+        if (!input) return;
+        event.preventDefault();
+        for (let node = input.parentElement; node; node = node.parentElement) {
+          if (node.tagName === "DETAILS") node.open = true;
+        }
+        doc.defaultView.requestAnimationFrame(() => {
+          input.scrollIntoView({block: "center"});
+          input.focus({preventScroll: true});
+        });
+      }, {capture: true, signal: handler.signal});
+      window.addEventListener("pagehide", () => handler.abort(), {once: true});
+    })();
+    </script>""".replace("TARGETS", json.dumps(targets))
 
 
 def _mark_add_attempted() -> None:
@@ -3349,6 +4153,8 @@ def _wizard_name_header(host, active: bool) -> None:
         # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
         on_change="ignore",
     )
+
+    dataset_credit.credit_fields(box, st.session_state, "wizard_credit")
 
 
 def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
@@ -3454,12 +4260,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             '<div class="sps-wiz-title">Set up your dataset</div>',
             unsafe_allow_html=True,
         )
-        # Step-by-step guide: a floating card that auto-opens once per session
-        # and is replayable via the popover below. Arm it (auto/first-visit)
-        # then render the card early so it streams before the heavy
-        # upload/normalize work. Drawn outside the sticky bar: a sticky parent
-        # can become the containing block of a fixed child.
-        maybe_show_wizard_guide()
+        # A requested guide draws outside the sticky bar so it can float beside the form.
         render_spotlight_wizard_guide()
         # One ❓ popover for the setup guide and the docs — a popover, not a
         # dialog, since it is a two-item chooser with no modal weight to it.
@@ -3469,21 +4270,25 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # — and the same kind of control as each other: a content-width
         # button stacked over a stretched link button would read as two
         # unrelated widgets of two different widths.
-        with help_col.popover(f"{ICONS['help']} Setup help", width="content"):
+        with help_col.popover(
+            f"{ICONS['help']} Setup help",
+            key=WIZARD_HELP_KEY,
+            on_change="rerun",
+            width="content",
+        ):
             render_wizard_guide_button(st)
             # A real `link_button`, not an in-app navigation: it opens in a new
             # tab and so cannot lose an in-progress upload the way switching
             # views would — the same reason the leave prompt exists.
             st.link_button(
-                # Named for what it *is* rather than for the page it opens — a
-                # page name ("Data guide") would read like one more wizard step
-                # on a row of wizard controls, which is the one thing it is not.
-                "More documentation ↗",
-                "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                "Read the import guide ↗",
+                f"{build_info().docs_url}guides/loading-data/",
                 icon=ICONS["docs"],
                 type="tertiary",
-                help="What your export needs, how this wizard maps it, and the "
-                "recording setup it asks for.",
+                help=(
+                    "Learn which tables you can import, how to map their columns, and how to "
+                    "enter the recording setup."
+                ),
             )
         # The way out, on the row that stays on screen.
         #
@@ -3522,7 +4327,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             help="Re-open the setup wizard.",
         ):
             st.session_state["setup_complete"] = False
-            st.rerun()
+            rerun()
 
     # The linear parts. `part()` while the wizard is active — a one-line
     # numbered headline, no expander — and `step_panel`'s bold heading in the
@@ -3543,6 +4348,34 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _wizard_name_header(s_name, active)
 
     s1 = _part("data")
+    # Your own tables are mapped column by column; a MultiplEYE session set is
+    # read the way the corpus lays it out, and branches off here. Drawn on every
+    # run, collapsed review panel included, so the choice survives it. The
+    # choice is experimental: without it there is one format, and no row.
+    if not multipleye_format_enabled():
+        st.session_state[_FORMAT_KEY] = FORMAT_GENERIC
+    st.session_state.setdefault(_FORMAT_KEY, FORMAT_GENERIC)
+    if multipleye_format_enabled():
+        format_help = (
+            "Your own tables: upload your words, fixations or raw gaze and map "
+            "their columns. MultiplEYE session set: a session set exported by the "
+            "MultiplEYE project, read from its folder or its files. Participants, "
+            "trials and screens come from the file names, so there is nothing to "
+            "map."
+        )
+        row_label(s1, "Dataset format", format_help)
+        s1.segmented_control(
+            "Dataset format",
+            list(_FORMAT_LABELS),
+            key=_FORMAT_KEY,
+            required=True,
+            format_func=_FORMAT_LABELS.get,
+            disabled=not active,
+            help=format_help,
+            label_visibility="collapsed",
+        )
+    if st.session_state.get(_FORMAT_KEY) == FORMAT_MULTIPLEYE:
+        return _render_multipleye_setup(body, s1, active, _part)
     if active:
         _render_start_from(s1)
     # Uploading and mapping share the "data" part: the identity/geometry
@@ -3579,6 +4412,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "**Raw gaze** below to get started.",
             width="content",
         )
+        # Before the first upload, not only in the hover help: a file in another
+        # format is refused by the browser without a word.
+        intro.caption(
+            f"{ICONS['info']} Accepted: {upload_types_note()}", width="content"
+        )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             # Said from this server's own state, as the About line and the FAQ
@@ -3605,10 +4443,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # `styles.py` hides it there, so it needs to survive somewhere:
     # appended to `help_text`, which already reaches both the title's hover
     # tooltip and the uploader's own accessible help.
-    _upload_types_note = (
-        ", ".join(t.upper() for t in app._UPLOAD_TYPES)
-        + f". Up to {upload_limit_label()} per file."
-    )
+    _upload_types_note = upload_types_note()
 
     def upload_box(
         host,
@@ -3696,24 +4531,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # only the intro note.
     raw_fix, raw_words, raw_gaze = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    def _render_metadata_uploads(word_schema, fix_schema) -> None:
+    def _render_metadata_uploads() -> None:
         """The participant, trial and text metadata tables: three more rows of
         the same "left = upload, right = mapping" format Fixations/AOI/Raw gaze
-        use above, under a small **Metadata** heading. `word_schema` /
-        `fix_schema` are `{}` pre-upload — there is nothing to derive a join
-        report from yet, which is also the correct answer — and the real
-        mapping once the identity pickers have resolved it. Only while
+        use above, under a small **Metadata** heading. Only while
         `active`: the collapsed *Data & mapping* review panel would otherwise
         build the same widget keys as the 🗂️ Data page's section.
         """
         if not active:
             return
-        from scanpath_studio.tabs import (
-            render_participant_metadata_section,
-            render_text_metadata_section,
-            render_trial_metadata_section,
-        )
-
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
@@ -3743,46 +4569,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         from scanpath_studio import metadata as metadata_mod
 
-        def _meta_row(slug, renderer, ids):
+        def _meta_row(slug, renderer):
             block = meta_host.container(key=f"wiz_map_block_meta_{slug}")
             row = block.columns(_META_ROW_W, gap="small")
             # What the table is for, until one is attached.
             if not st.session_state.get(metadata_mod.upload_key(slug)):
                 row[1].caption(META_ROW_CAPTIONS[slug])
-            # `live_join=False` — there is no finished dataset to join
-            # against yet (the pools below are provisional, still shifting as
-            # identity mapping is worked out), so the wizard only collects the
-            # upload + id-column + keep-fields choices here. The real join
-            # runs once, in `_finalize_wizard_dataset`, against the dataset's
-            # own settled pools — see `tabs.commit_deferred_metadata`.
+            # The wizard matches metadata once, after normalization has settled
+            # composite IDs and the readings contributed by all three tables.
             renderer(
-                ids,
+                None,
                 host=row[1],
                 live_join=False,
                 upload_host=row[0].container(key=f"wiz_map_upload_meta_{slug}"),
             )
 
-        _meta_row(
-            "participant",
-            render_participant_metadata_section,
-            _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("participant", render_participant_metadata_section)
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
-        _meta_row(
-            "trial",
-            render_trial_metadata_section,
-            _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("trial", render_trial_metadata_section)
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
-        _meta_row(
-            "text",
-            render_text_metadata_section,
-            _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("text", render_text_metadata_section)
 
     # === Data tables & column mapping: per-table upload + mapping rows ================
 
@@ -4179,6 +4989,21 @@ def _render_data_setup(active: bool) -> _UploadResult:
                         ["block"],
                     )
                 )
+            else:
+                # Rows of one word at different positions are what the switch
+                # is for, so it says so when the table has them.
+                several = _c_words_with_several_boxes(
+                    raw_words,
+                    word_schema,
+                    frame_fingerprint(raw_words),
+                    _schema_key(word_schema),
+                )
+                if several:
+                    aoi_extra.caption(
+                        merge_boxes_hint(
+                            several, screen_mapped=bool(word_schema.get("screen_id"))
+                        )
+                    )
 
     # The raw-gaze pickers and everything after render even with nothing
     # uploaded — the guards below tolerate all three tables being empty.
@@ -4221,29 +5046,26 @@ def _render_data_setup(active: bool) -> _UploadResult:
         raw_gaze_schema = {}
         rg_kept, rg_meta = set(), []
 
-    words_problems = validate_word_schema(word_schema) if has_words else []
-    fix_problems = validate_fix_schema(fix_schema) if has_fix else []
-    raw_gaze_problems = (
-        validate_raw_gaze_schema(raw_gaze_schema) if not raw_gaze.empty else []
+    groups = []
+    if has_words:
+        groups.append(
+            ("Words table", "col_map_words", mapping_blockers("words", word_schema))
+        )
+    if has_fix:
+        groups.append(
+            ("Fixations", "col_map_fix", mapping_blockers("fixations", fix_schema))
+        )
+    raw_issues = (
+        mapping_blockers("raw_gaze", raw_gaze_schema) if not raw_gaze.empty else []
     )
-    problems: list = []
-    if words_problems:
-        line = "Words table: " + "; ".join(words_problems) + "."
-        if any(p.startswith("need either") for p in words_problems):
-            # Say what to do, not only what is missing.
-            line += (
-                " The text can't be drawn without word boxes. Map the box "
-                "columns, re-export the Interest Area Report with IA_LEFT, "
-                "IA_RIGHT, IA_TOP and IA_BOTTOM, or remove this table to see "
-                "the fixations alone."
-            )
-        problems.append(line)
-    if fix_problems:
-        problems.append("Fixations: " + "; ".join(fix_problems))
-    # A raw-gaze-ONLY upload: an incomplete raw-gaze mapping is the only thing
-    # blocking a usable dataset — fold it into `problems` so finalize is gated.
-    if not has_words and not has_fix and raw_gaze_problems:
-        problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
+    raw_gaze_problems = [issue.message for issue in raw_issues]
+    if not has_words and not has_fix and raw_issues:
+        groups.append(("Raw gaze", "col_map_raw_gaze", raw_issues))
+    problems = [
+        f"{label}: " + "; ".join(issue.message for issue in issues)
+        for label, _, issues in groups
+        if issues
+    ]
     st.session_state["_wizard_problems_last"] = list(problems)
 
     # No auto-detect summary card: every field shows its own state in place —
@@ -4291,7 +5113,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # others. Called down here, after the identity pickers have resolved the
     # real mapping, so the join report reads the up-to-date
     # schema rather than the `{}` an earlier call would have had to use.
-    _render_metadata_uploads(word_schema, fix_schema)
+    _render_metadata_uploads()
 
     # "Recording setup" is its own numbered part.
     s_setup = _part("setup")
@@ -4360,6 +5182,19 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # nothing uploaded, which must still block — there is nothing to add.
     blocked = nothing_uploaded or bool(problems) or bool(setup_blockers)
 
+    if active and has_words and has_fix:
+        # Ids that differ only in case attach nothing, and neither the join's
+        # own line below nor the error that refuses it can say why.
+        hint = case_only_hint(
+            raw_words,
+            word_schema,
+            raw_fix,
+            fix_schema,
+            lowercase_offered=_regex_derive_applied(),
+        )
+        if hint:
+            s6.warning(hint)
+
     # No review table: every figure is stated where it is decided — row counts
     # beside each upload, the trial count under the trial picker
     # (`_wizard_trial_step`), the mapped column beside its own field, and each
@@ -4383,8 +5218,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # So the problems are stated: red, and only once the user has
             # actually tried. Before that the page stays quiet.
             if st.session_state.get(ADD_ATTEMPTED_KEY):
-                for line in problems:
+                from .html_embed import embed_html_iframe
+
+                links, targets = _mapping_blocker_links(groups)
+                for line in links:
                     s6.error(line)
+                embed_html_iframe(_mapping_focus_script(targets), height=0)
             # Enabled, not disabled. A disabled button cannot be *tried*,
             # and "red when you try to add with it empty" needs the attempt: the
             # click sets ADD_ATTEMPTED_KEY, which is what turns every unmapped
@@ -4510,6 +5349,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             for line in _c_normalization_issues(
                 raw, schema, frame_fingerprint(raw), _schema_key(schema), table
             ):
+                s6.warning(f"{ICONS['warning']} {line}")
+        # Text Word IDs are matched across the two tables, so what the match
+        # left on no word is said here too; the load's own warning reaches only
+        # the terminal.
+        if has_words and has_fix:
+            for line in _text_word_id_issues(words_norm, fixations_norm):
                 s6.warning(f"{ICONS['warning']} {line}")
 
     # A Words table with no Participant ID is shared by the readings

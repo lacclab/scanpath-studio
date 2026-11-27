@@ -6,8 +6,8 @@ browser. This module bridges that gap: a :class:`logging.Handler` captures log
 records into a capped buffer in ``st.session_state`` so they can be rendered
 inside the app, behind a debug toggle.
 
-Activation is a single toggle, in the 🐛 **Debug** drawer that a button at the
-foot of ❓ Help → About opens. Switching it on adds the log panel under it: a
+Activation is a single toggle in the 🐛 **Debug** drawer under
+❓ Help → About & citation → App details. Switching it on adds the log panel under it: a
 level filter, an app/session-state snapshot, and a JSON export. A ``?debug=1``
 URL param is honoured as a *seed* of the toggle, so old links keep working.
 """
@@ -27,6 +27,7 @@ from streamlit.runtime.scriptrunner import StopException
 
 from .constants import ICONS
 from .crash_report import guarded
+from .reruns import rerun
 
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
@@ -292,7 +293,7 @@ def _mirror_debug_toggle() -> None:
 
 
 def render_debug_toggle(host=None) -> None:
-    """Render the "🐛 Debug mode" toggle into the ❓ Help → About → Debug dialog.
+    """Render the "🐛 Debug mode" toggle into the Debug drawer.
 
     The single gate. Flipping it on shows the log panel under it
     in the same dialog run (:func:`_debug_dialog`).
@@ -366,7 +367,7 @@ def render_debug_panel(host=None) -> None:
                 _buffer().clear()
                 # The dialog body is a fragment: an app-scoped rerun would close
                 # the modal on the empty log it just asked for.
-                st.rerun(scope="fragment")
+                rerun(scope="fragment")
 
         threshold = _LEVELS.index(min_level)
         shown = [
@@ -440,9 +441,8 @@ def render_debug_panel(host=None) -> None:
         )
 
 
-#: The Debug drawer's request flag. Its way in is a button at the foot of About:
-#: one dialog cannot open another, so the button sets this and reruns, and
-#: ``app.main`` serves it early, beside FAQ and About.
+#: About → App details sets this flag and reruns so the Debug drawer
+#: can open after About closes.
 _DEBUG_DIALOG_KEY = "_debug_dialog_requested"
 
 

@@ -17,7 +17,7 @@ import argparse
 import pandas as pd
 import pytest
 
-from scanpath_studio import api, constants, controls, tabs, tour
+from scanpath_studio import api, constants, controls, feedback, tabs
 from tests.conftest import APP_SCRIPT, SUBTAB_KEY, pin_view
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -194,13 +194,13 @@ class TestTheUiSurfacesAreAbsent:
 
 
 class TestTheGuidanceMatchesTheBuild:
-    def test_the_faq_drops_the_drift_correction_entry(self):
-        questions = [q for q, _ in tour.faq_items()]
+    def test_troubleshooting_hides_the_drift_correction_entry(self):
+        questions = [q for q, _ in feedback.troubleshooting_items()]
         assert not any("drift correction" in q.lower() for q in questions)
 
     def test_it_comes_back_with_the_flag_on(self, monkeypatch):
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
-        questions = [q for q, _ in tour.faq_items()]
+        questions = [q for q, _ in feedback.troubleshooting_items()]
         assert any("drift correction" in q.lower() for q in questions)
 
 
@@ -337,6 +337,7 @@ class TestDerivedAnalysisTablesGate:
 
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
 
         def _must_not_run(*_a, **_k):
@@ -358,11 +359,38 @@ class TestDerivedAnalysisTablesGate:
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, at.exception
         labels = [e.label for e in at.expander]
         assert any("Derived analysis" in label for label in labels), labels
+
+    def test_the_stimuli_table_shows_each_version_readers_saw(self, monkeypatch):
+        from scanpath_studio import constants
+        from tests.conftest import pin_data_view
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_inspection_panel"] = "Tables"
+        at.session_state["data_derived_tables"] = True
+        pin_data_view(at)
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        # The Texts table carries the column too, beside its participant count.
+        stimuli = [
+            frame.value
+            for frame in at.dataframe
+            if tabs.STIMULUS_VERSIONS_COLUMN in frame.value.columns
+            and "# Participants" not in frame.value.columns
+        ]
+        assert len(stimuli) == 1, [list(f.value.columns) for f in at.dataframe]
+        stimuli = stimuli[0]
+        # The bundled demo's two readers saw their own Answers and Feedback.
+        row = stimuli.set_index("Text ID").loc["2_1_3_Adv"]
+        assert "[Feedback · seen by l37_273] INCORRECT" in row["Text"]
+        assert "[Feedback · seen by l7_183] CORRECT" in row["Text"]
+        assert tabs.STIMULUS_VERSIONS_NOTE in [c.value for c in at.caption]
 
 
 class TestPerSentenceGate:
@@ -372,13 +400,18 @@ class TestPerSentenceGate:
     def test_it_is_hidden_by_default(self):
         assert not constants.sentence_analysis_enabled()
         assert "Per sentence" not in tabs.corpus_subtabs()
-        assert tabs.corpus_subtabs() == ("Per text", "Per participant", "Groups")
+        assert tabs.corpus_subtabs() == (
+            "Overview",
+            "Per text",
+            "Per participant",
+            "Groups",
+        )
 
     def test_the_experimental_flag_brings_it_back(self, monkeypatch):
         monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
         assert tabs.corpus_subtabs() == tabs.CORPUS_SUBTABS
 
-    def test_the_corpus_view_draws_three_subtabs_and_no_sentence_table(
+    def test_the_corpus_view_draws_the_public_subtabs_and_no_sentence_table(
         self, monkeypatch
     ):
         from streamlit.testing.v1 import AppTest
@@ -392,11 +425,9 @@ class TestPerSentenceGate:
         at.session_state["corpus_subtab"] = "Per sentence"
         at.run()
         assert not at.exception, at.exception
-        assert [t.label for t in at.tabs][-3:] == [
-            "Per text",
-            "Per participant",
-            "Groups",
-        ]
+        destination = at.segmented_control(key="corpus_destination")
+        assert destination.options == ["Texts", "Participants", "Groups"]
+        assert destination.value == "Texts"
         assert calls == []
 
 
@@ -445,15 +476,19 @@ class TestComputedMeasuresGate:
         cli.main(["--help"])
         assert "analyze" in capsys.readouterr().out
 
-    def test_the_export_bundle_offers_no_measure_family(self):
-        import inspect
-
-        from scanpath_studio import export
-
-        source = inspect.getsource(export.render_export_options)
-        assert '*(["Computed measures"] if computed_measures_enabled() else [])' in (
-            source
-        )
+    @pytest.mark.timeout(180)
+    @pytest.mark.parametrize("enabled", [False, True], ids=["default", "flag"])
+    def test_the_export_bundle_offers_no_measure_family(self, monkeypatch, enabled):
+        if enabled:
+            monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+        at.session_state["tour_seen"] = True
+        at.session_state[SUBTAB_KEY] = tabs.SUBTAB_EXPORT
+        at.run()
+        assert not at.exception, at.exception
+        offered = at.pills(key="bulk_export_tabular").options
+        assert "Word measures" in offered
+        assert ("Computed measures" in offered) is enabled
 
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
@@ -463,6 +498,8 @@ class TestComputedMeasuresGate:
         at = AppTest.from_file(APP_SCRIPT)
         pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = subtab
+        if subtab == "Groups":
+            at.session_state["groups_compare"] = False
         at.run(timeout=60)
         assert not at.exception, at.exception
         views = set(at.selectbox(key=view_key).options)
@@ -490,3 +527,64 @@ class TestComputedMeasuresGate:
             "fixation" in o.lower() or "saccade" in o.lower() for o in picker.options
         )
         assert not any("per-fixation measure" in i.value for i in at.info)
+
+
+class TestMultiplEYEFormatGate:
+    """Adding a MultiplEYE session set as one is experimental. Its files still
+    load as your own tables, and the reader stays in ``datasets.py``."""
+
+    def test_it_is_hidden_by_default(self):
+        assert constants.multipleye_format_enabled() is False
+
+    def test_the_experimental_flag_brings_it_back(self, monkeypatch):
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert constants.multipleye_format_enabled() is True
+
+    def test_the_loader_refuses_naming_the_env_var(self, tmp_path):
+        from scanpath_studio.datasets import load_multipleye
+
+        with pytest.raises(ValueError, match=constants.EXPERIMENTAL_ENV_VAR):
+            load_multipleye(tmp_path)
+
+    def test_the_package_resolves_it_but_does_not_list_it(self):
+        import scanpath_studio as sps
+
+        assert "load_multipleye" not in sps.__all__
+        assert callable(sps.load_multipleye)
+
+    def test_render_help_does_not_mention_it(self, capsys):
+        from scanpath_studio import cli
+
+        with pytest.raises(SystemExit):
+            cli.main(["render", "--help"])
+        assert "multipleye" not in capsys.readouterr().out.lower()
+
+    def test_passing_the_flag_is_an_argparse_error(self, capsys):
+        from scanpath_studio import cli
+
+        with pytest.raises(SystemExit):
+            cli.main(["render", "--multipleye", "somewhere", "-o", "x.html"])
+        assert "multipleye" in capsys.readouterr().err
+
+    def test_the_parser_still_carries_the_attribute(self):
+        from scanpath_studio import cli
+
+        args = cli._render_parser().parse_args(["--sample", "-o", "x.html"])
+        assert args.multipleye is None
+
+    def test_the_wizard_offers_no_format_choice(self):
+        from scanpath_studio import app
+        from tests.conftest import pin_data_view
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        # Even a format left over in the session falls back to your own tables.
+        at.session_state["wizard_dataset_format"] = "MultiplEYE"
+        pin_data_view(at)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["wizard_dataset_format"] == "Generic"
+        labels = [element.label for element in at.get("button_group")]
+        assert "Dataset format" not in labels

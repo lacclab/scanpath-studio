@@ -484,6 +484,34 @@ def test_the_boot_is_confirmed_once_the_server_answers(monkeypatch):
     assert noted == [True]
 
 
+@pytest.mark.parametrize("ready", [True, False])
+def test_desktop_confirms_only_a_ready_health_body(monkeypatch, ready):
+    from io import BytesIO
+
+    from scanpath_studio import desktop_update
+
+    now = 0
+    seen = []
+    noted = []
+
+    def poll(url, timeout):
+        nonlocal now
+        now += launcher.HEALTH_TIMEOUT_S / 3
+        body = b"ok" if ready and seen else b"starting, not ok"
+        seen.append(body)
+        response = BytesIO(body)
+        response.status = 200
+        return response
+
+    monkeypatch.setattr(launcher.time, "monotonic", lambda: now)
+    monkeypatch.setattr(launcher.time, "sleep", lambda delay: None)
+    monkeypatch.setattr(launcher.urllib.request, "urlopen", poll)
+    monkeypatch.setattr(desktop_update, "note_boot", lambda: noted.append(seen[-1]))
+    launcher._confirm_boot_when_ready(1234)
+    assert seen[0] == b"starting, not ok"
+    assert noted == ([b"ok"] if ready else [])
+
+
 def test_the_launcher_stays_stdlib_only_at_import():
     source = Path(launcher.__file__).read_text(encoding="utf-8")
     header = source.split("\ndef ", 1)[0]
@@ -592,9 +620,21 @@ def test_an_http_answer_is_a_successful_handshake(monkeypatch):
     assert launcher._tls_handshake_failure("https://github.com/") is None
 
 
-def test_the_smoke_test_asks_for_the_handshake():
-    import inspect
+def test_the_smoke_test_asks_for_the_handshake(monkeypatch, tmp_path):
+    """The bundle's selfcheck makes a real TLS handshake only when asked, and
+    the smoke test asks it to, with an https address."""
+    seen = {}
 
-    assert "SCANPATH_SELFCHECK_TLS_URL=TLS_URL" in inspect.getsource(
-        smoke_test._run_selfcheck
-    )
+    class Result:
+        returncode = 0
+        stdout = "selfcheck ok"
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen.update(kwargs)
+        return Result()
+
+    monkeypatch.setattr(smoke_test.subprocess, "run", fake_run)
+    smoke_test._run_selfcheck(tmp_path / "ScanpathStudio")
+    assert seen["env"]["SCANPATH_SELFCHECK_TLS_URL"] == smoke_test.TLS_URL
+    assert smoke_test.TLS_URL.startswith("https://")

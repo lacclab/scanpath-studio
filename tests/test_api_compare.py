@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scanpath_studio import api
+from scanpath_studio import api, plots
 from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
 
 
@@ -67,6 +67,35 @@ def _pair():
 
 
 class TestSameDataset:
+    @pytest.mark.parametrize("saccades", [False, True])
+    def test_print_marks_distinguish_overlapping_readings_without_colour(
+        self, saccades
+    ):
+        words, fixations = _pair()
+        fixations["y"] = [70, 120, 70, 120, 70, 120]
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            palette="print",
+            show_saccades=saccades,
+            show_order=False,
+            show_saccade_arrows=False,
+            show_legend=False,
+        )
+        marks = [
+            trace.marker
+            for trace in fig.data
+            if trace.type == "scatter"
+            and trace.mode == "markers"
+            and trace.hovertemplate
+        ]
+        assert (marks[0].color, marks[1].color) == ("#242424", "rgba(0,0,0,0)")
+        assert marks[1].line.color == "#666666"
+        lines = [trace.line.dash for trace in fig.data if trace.mode == "lines"]
+        assert lines == (["solid", "dash"] if saccades else [])
+
     def test_overlay_builds(self):
         words, fixations = _pair()
         fig = api.compare_scanpaths(
@@ -125,6 +154,92 @@ class TestSameDataset:
         titles = [a for a in fig.layout.annotations if a.name != "duration_size_key"]
         assert [t.text.split(" · ")[0] for t in titles] == ["A", "B"]
         assert fig.layout.margin.t > 0
+
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    def test_the_legend_sits_between_the_title_and_the_panel_names(self, layout):
+        """The legend has a row of its own in the split figure's top band,
+        pinned in px above the panels' names. A paper fraction would rise with
+        a tall (stacked, large-screen) figure, out of the band and under the
+        title `annotate_figure` adds above it."""
+        words, fixations = _pair()
+
+        def build(title):
+            return api.compare_scanpaths(
+                words,
+                fixations,
+                ("p1", "t1"),
+                ("p2", "t2"),
+                layout=layout,
+                labels=("Reader one", "Reader two"),
+                canvas_size=(2560, 1440),
+                title=title,
+            )
+
+        plain, titled = build(""), build("Some title")
+        band = plain.layout.margin.t
+        names_px = max(
+            a.font.size or 16
+            for a in plain.layout.annotations
+            if a.text.startswith(("A · ", "B · "))
+        )
+        for fig in (plain, titled):
+            layout_ = fig.layout
+            plot_h = layout_.height - layout_.margin.t - layout_.margin.b
+            legend_bottom = (layout_.legend.y - 1.0) * plot_h
+            legend_top = legend_bottom + plots._default_legend_height(fig)
+            assert legend_bottom >= names_px
+            assert legend_top <= band + 1e-6
+        # The title's band is added above the legend's, never over it.
+        assert titled.layout.margin.t > band
+        assert titled.layout.legend.y == pytest.approx(plain.layout.legend.y)
+
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    @pytest.mark.parametrize(
+        "legend_layout",
+        [
+            {"compare": {"position": "top-center-outside"}},
+            {"size_key": {"position": "top-right-outside"}},
+            {
+                "compare": {"position": "top-left-outside"},
+                "size_key": {"position": "top-center-outside"},
+            },
+        ],
+        ids=["legend", "size-key", "both"],
+    )
+    def test_whatever_is_moved_above_the_panels_clears_their_names(
+        self, layout, legend_layout
+    ):
+        """A legend or the size key moved to a spot above the panels stacks
+        beyond their "A · …" / "B · …" names and the default legend, inside
+        the top band the figure grows by."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            labels=("Reader one", "Reader two"),
+            canvas_size=(2560, 1440),
+            duration_size_legend=True,
+            legend_layout=legend_layout,
+        )
+        _plot_w, plot_h, margin = plots._plot_px(fig)
+        floor = plots._panel_names_px(fig) + plots._default_legend_height(fig)
+        assert plots._panel_names_px(fig) > 0
+        bottoms = []
+        if "compare" in legend_layout:
+            moved = fig.layout.to_plotly_json()["legend2"]
+            assert moved["yanchor"] == "bottom"
+            bottoms.append((moved["y"] - 1.0) * plot_h)
+        if "size_key" in legend_layout:
+            labels = [
+                a for a in fig.layout.annotations if a.name == "duration_size_key"
+            ]
+            assert labels
+            bottoms += [a.yshift - a.font.size / 2 for a in labels]
+        assert min(bottoms) >= floor
+        assert max(bottoms) < margin["t"]
 
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""
@@ -375,13 +490,13 @@ class TestCoAnimationDrawsOneSecondReading:
 
     `compare_scanpaths` takes B's *corpus* plus a `trial_b` pair, so frames
     passed the same way to the co-animation would otherwise draw every fixation
-    in them — 3,209 on the demo, where B's trial has 89. `trial_b` picks the
+    in them. The selected reading uses only a subset. `trial_b` picks the
     reading, as it does there, and B frames holding several trials refuse
     rather than guess.
     """
 
-    _A = ("l37_1129", "l37_1129_2_1_1_Ele")
-    _B = ("l37_1129", "l37_1129_2_1_2_Ele")
+    _A = ("l37_273", "l37_273_2_1_1_Ele")
+    _B = ("l37_273", "l37_273_2_1_2_Ele")
 
     @staticmethod
     def _trace_b(fig):
@@ -392,8 +507,17 @@ class TestCoAnimationDrawsOneSecondReading:
         from scanpath_studio.utils import extract_trial
 
         words, fixations = api.load_sample_data(names="canonical")
-        expected = len(extract_trial(fixations, *self._B))
-        fig = api.animate_scanpath(words, fixations, *self._A, trial_b=self._B)
+        reading_b = extract_trial(fixations, *self._B)
+        # Each demo reading spans several screens; both sides draw the paragraph.
+        expected = int((reading_b["screen_id"] == "Paragraph").sum())
+        fig = api.animate_scanpath(
+            words,
+            fixations,
+            *self._A,
+            screen="Paragraph",
+            trial_b=self._B,
+            screen_b="Paragraph",
+        )
         assert len(self._trace_b(fig).x) == expected
 
     def test_trial_b_is_looked_up_in_bs_own_frames(self):
@@ -422,14 +546,18 @@ class TestCoAnimationDrawsOneSecondReading:
     def test_an_in_place_edit_between_calls_still_finds_bs_reading(self):
         """B must be sliced fresh, as A is. Through `utils.extract_trial`'s
         position cache — keyed by the frame's identity, which an in-place edit
-        keeps — a second call after `sort_values(inplace=True)` would return
-        the same *positions*: as many rows, from somebody else's trials."""
+        keeps — a second call after the rows are reordered in place would
+        return the same *positions*: as many rows, from somebody else's
+        trials."""
         words, fixations = api.load_sample_data(names="canonical")
         fixations = fixations.copy()
         api._second_reading(words, fixations, None, None, self._B)
-        fixations.sort_values(
-            ["participant_id", "trial_id"], ascending=False, inplace=True
+        reordered = fixations.sort_values(
+            ["participant_id", "trial_id"], ascending=False
         )
+        # Column by column, so `fixations` stays the same object.
+        for column in fixations.columns:
+            fixations[column] = reordered[column].to_numpy()
         _, fix_b = api._second_reading(words, fixations, None, None, self._B)
         assert set(zip(fix_b["participant_id"], fix_b["trial_id"])) == {self._B}
 
@@ -815,3 +943,75 @@ class TestHeatmapColorscale:
         assert len(bars) == 2
         assert bars[0].colorscale != bars[1].colorscale
         assert (bars[0].cmin, bars[0].cmax) == (bars[1].cmin, bars[1].cmax)
+
+
+class TestReadingChartOverlay:
+    """On reading-chart axes an overlay draws both readings in one panel, and
+    Saccades joins each reading's fixations in reading order."""
+
+    @staticmethod
+    def _compare(fields=("word_id", "order_in_trial"), **kwargs):
+        fix_b = _fixations("p9", "t9", y=300.0).assign(word_id=[0, 2, 1])
+        return api.compare_scanpaths(
+            _words("p1", "t1"),
+            _fixations("p1", "t1"),
+            ("p1", "t1"),
+            ("p9", "t9"),
+            words_b=_words("p9", "t9"),
+            fixations_b=fix_b,
+            dataset_b="PoTeC",
+            x_field=fields[0],
+            y_field=fields[1],
+            labels=("First", "Second"),
+            **kwargs,
+        )
+
+    def test_an_overlay_puts_both_readings_on_one_pair_of_axes(self):
+        fig = self._compare(layout="overlay")
+        assert {t.xaxis for t in fig.data} == {"x"}
+        assert "xaxis2" not in fig.layout
+        named = {t.name for t in fig.data if t.mode == "markers"}
+        assert {"First", "Second"} <= named
+        assert [a.text for a in fig.layout.annotations if "<br>B · " in str(a.text)]
+
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+    def test_saccades_join_each_reading_in_fixation_order(self, layout):
+        fig = self._compare(layout=layout)
+        lines = [t for t in fig.data if t.name == "Fixation sequence"]
+        assert [list(t.x) for t in lines] == [[0, 1, 2], [0, 2, 1]]
+        assert [list(t.y) for t in lines] == [[1, 2, 3], [1, 2, 3]]
+        quiet = self._compare(layout=layout, show_saccades=False)
+        assert not [t for t in quiet.data if t.name == "Fixation sequence"]
+
+    def test_only_a_screen_position_axis_needs_one_screen_size(self):
+        from scanpath_studio.experimental_setup import IncomparableScreensError
+
+        screens = dict(setup=_measured(1920, 1080), setup_b=_measured(1680, 1050))
+        fig = self._compare(layout="overlay", **screens)
+        assert {t.xaxis for t in fig.data} == {"x"}
+        with pytest.raises(IncomparableScreensError):
+            self._compare(("order_in_trial", "x"), layout="overlay", **screens)
+
+
+def test_the_sequence_line_joins_the_fixations_either_side_of_an_unplaced_one():
+    """A fixation off every word has no word id: the line skips it rather than
+    breaking there."""
+    fixations = _fixations("p1", "t1").assign(word_id=[0.0, float("nan"), 2.0])
+    fig = api.plot_scanpath(
+        _words("p1", "t1"),
+        fixations,
+        "p1",
+        "t1",
+        x_field="word_id",
+        y_field="order_in_trial",
+    )
+    (line,) = [t for t in fig.data if t.name == "Fixation sequence"]
+    assert (list(line.x), list(line.y)) == ([0, 2], [1, 3])
+
+
+def test_a_word_axis_overlay_of_two_texts_says_what_it_lines_up():
+    from scanpath_studio.tabs import _different_texts_note
+
+    note = _different_texts_note("t1", "t2", word_axis=True)
+    assert "word *n* of one text sits on word *n* of the other" in note
+    assert _different_texts_note("t1", "t1", word_axis=True) is None

@@ -71,8 +71,8 @@ cross-cutting files. The load-bearing ones:
   CLI surfaces (the four-surface rule's non-UI half).
 - `test_export.py`, `test_export_naming.py`, `test_animation_export.py` —
   bulk export, path patterns, separable layers, GIF/MP4.
-- `test_dataset_support.py`, `test_onestop_shard.py` — the public-corpus
-  loaders.
+- `test_dataset_support.py`, `test_multipleye_enrichment.py`,
+  `test_onestop_shard.py` — the public-corpus loaders.
 - **Contract tests that gate CI on a rename**:
   `test_session_key_contract.py` pins the share-link / saved-config session
   keys against a frozen list — a renamed key fails the test instead
@@ -85,5 +85,9 @@ cross-cutting files. The load-bearing ones:
   `pytest-timeout` (declared test dep) registers the `timeout` marker the
   AppTest files rely on — collection fails without it.
 - Prefer `AppTest` over mocking Streamlit for new tests of app behavior.
+- Test what the app draws, not its source text. Where something sits — which
+  keyed container, column or dialog holds it, and in what order — is read off
+  the running page with `conftest.page_nodes`, `find_keyed`, `keys_around`,
+  `keys_in_screen_order` and `iframe_sources`.
 - The AppTest files are integration-weight; keep pure logic in the
   per-module unit files so the fast core stays fast.

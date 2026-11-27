@@ -141,7 +141,7 @@ def test_canvas_add_move_reorder_and_delete_use_stable_identity():
     )
     added_id = selected
     assert added_id == 3
-    assert events.loc[2, "word_id"] is None
+    assert pd.isna(events.loc[2, "word_id"])
 
     events, selected = apply_authoring_event(
         events,
@@ -200,3 +200,32 @@ def test_an_authoring_file_with_a_malformed_event_list_is_refused_cleanly():
             parse_authoring_document(payload)
     with pytest.raises(ValueError, match="isn't a draft file"):
         parse_authoring_document("[1, 2]")
+
+
+def test_authored_origin_and_canvas_follow_the_drawing_through_the_public_api():
+    words, fixations = sps.build_authored_scanpath(
+        "one two", canvas_width=900, right_to_left=True
+    )
+    assert words.x.iloc[0] > words.x.iloc[1]
+    trial = ("author", "authored-1")
+    for fig in (
+        sps.plot_scanpath(words, fixations),
+        sps.animate_scanpath(words, fixations),
+        sps.compare_scanpaths(words, fixations, trial, trial),
+    ):
+        assert "synthetic data" in fig.layout.meta["illustration_reasons"]
+        assert list(fig.layout.xaxis.range) == [0, 900]
+    hidden = sps.compare_scanpaths(
+        words, fixations, trial, trial, illustration_label="hide"
+    )
+    assert "illustration_reasons" not in (hidden.layout.meta or {})
+
+
+def test_integer_coordinates_accept_a_fractional_drag_from_the_canvas():
+    document = parse_authoring_document(
+        '{"schema":2,"text":"a","fixations":[{"x":20,"y":30}]}'
+    )
+    updated, _ = apply_authoring_event(
+        document.events, {"type": "move", "fixation_id": 1, "x": 20.2, "y": 30.7}
+    )
+    assert updated.loc[0, ["x", "y"]].tolist() == [20.2, 30.7]

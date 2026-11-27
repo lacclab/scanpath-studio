@@ -359,12 +359,14 @@ def clip_frame_count(
     or ``_GIF_MIN_FRAME_MS`` for a GIF — would be held that long anyway and
     stretch the clip, so a fast replay keeps only as many frames as fit its
     runtime, each held a little longer. ``max_frames`` caps it further.
-    Never fewer than two, so the clip still ends on the whole scanpath.
+    Keep two display intervals where possible to show movement.
     """
     shortest = _GIF_MIN_FRAME_MS if fmt.lower() == "gif" else 1000.0 / _MP4_FPS
     fits = int(n_frames * frame_duration_ms / shortest + 1e-9)
     count = min(n_frames, max(2, fits))
-    return min(count, max_frames) if max_frames else count
+    return (
+        min(count, max_frames) if max_frames is not None and max_frames > 0 else count
+    )
 
 
 def _select_frames(n: int, max_frames: int | None) -> list[int]:
@@ -644,9 +646,11 @@ def export_animation(
         scale: Kaleido render scale (1.0 = on-screen px; <1 is faster/smaller,
             >1 is crisper/larger).
         show_elapsed: draw the "Elapsed: X.Xs" readout in the top margin.
-        max_frames: cap the number of rendered frames by even downsampling; the
-            frame duration is scaled up to keep the total runtime unchanged. The
-            UI uses this to bound render time on very long trials.
+        max_frames: cap the number of rendered images while preserving clip duration.
+            Each image shows the latest replay state at the start of its display
+            interval, and the last image shows the complete scanpath. With a
+            coarse cap, a fixation that begins between two images first shows
+            in the later one.
         progress_callback: ``(done, total)`` after each rendered frame.
 
     Raises:
@@ -674,13 +678,35 @@ def export_animation(
             )
 
     n_total = len(fig.frames or ())
-    indices = _select_frames(
-        n_total, clip_frame_count(n_total, frame_duration_ms, fmt, max_frames)
+    if frame_duration_ms <= 0 or not np.isfinite(frame_duration_ms):
+        raise ValueError("Frame duration must be a positive finite time in ms.")
+    count = clip_frame_count(n_total, frame_duration_ms, fmt, max_frames)
+    effective_duration = (
+        frame_duration_ms * n_total / count if count else frame_duration_ms
     )
-    # Preserve total runtime when downsampling: fewer frames, each held longer.
-    effective_duration = frame_duration_ms
-    if indices and len(indices) < n_total:
-        effective_duration = frame_duration_ms * n_total / len(indices)
+    meta = fig.layout.meta if isinstance(fig.layout.meta, dict) else {}
+    times = meta.get("scanpath_frame_times_ms")
+    if times and len(times) == n_total and times[-1] > 0 and count:
+        # Each image holds until the next output slot. Pick the state that was
+        # already visible at its start, using the encoder's actual timebase.
+        # The last slot ends where the replay does, so its image is the final
+        # frame: the clip always ends on the complete scanpath.
+        tick = 10.0 if fmt == "gif" else 1000.0 / _MP4_FPS
+        hold = (
+            max(effective_duration, _GIF_MIN_FRAME_MS)
+            if fmt == "gif"
+            else effective_duration
+        )
+        slot_ms = np.rint(np.arange(count) * hold / tick) * tick
+        reading_times = slot_ms * times[-1] / (frame_duration_ms * n_total)
+        indices = (
+            (np.searchsorted(times, reading_times, side="right") - 1)
+            .clip(0, n_total - 1)
+            .tolist()
+        )
+        indices[-1] = n_total - 1
+    else:
+        indices = _select_frames(n_total, count)
 
     emit_status(
         status_callback,

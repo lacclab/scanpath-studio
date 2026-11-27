@@ -43,6 +43,18 @@ Bring your own data, or start with the bundled demo.
 
 <div class="sps-home-workflows" markdown>
 
+=== "First look"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/essentials_poster.webp" data-autoplay
+           aria-label="Start in Essentials">
+      <source src="assets/workflows/essentials.mp4" type="video/mp4">
+    </video>
+
+    **Start in Essentials.** Watch a reading replay, try four ready-made views, pick a palette and step through the trials. Switch to Full whenever you want more control.
+
+    [Essentials and Full :material-arrow-right:](guides/scanpath-visualization/index.md#essentials-and-full){ .md-button }
+
 === "Bring your data"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
@@ -71,11 +83,11 @@ Bring your own data, or start with the bundled demo.
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
            poster="assets/workflows/home-customize_poster.webp" data-autoplay
-           aria-label="Design presets, palettes and plot controls">
+           aria-label="Preset tiles, palettes and plot controls">
       <source src="assets/workflows/home-customize.mp4" type="video/mp4">
     </video>
 
-    **Make the view your own.** Start from a design preset, pick a palette, then adjust each layer in Plot controls, in Full mode.
+    **Make the view your own.** In Full mode, start with a design preset, pick a palette, then adjust each layer in Plot controls.
 
     [Explore plot controls :material-arrow-right:](guides/scanpath-visualization/controls.md){ .md-button }
 
@@ -133,7 +145,7 @@ More examples in the [plot gallery](gallery.md).
 
 <div class="sps-home-links" markdown>
 
-[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](about.md#cite-scanpath-studio) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
+[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](about.md#cite-scanpath-studio) · [Questions and feedback](about.md#questions-and-feedback)
 
 </div>
 
@@ -141,7 +153,7 @@ More examples in the [plot gallery](gallery.md).
 
 Scanpath Studio was developed with AI assistance. As with any research
 software, cross-check its results before you rely on them in published work.
-Found a bug, or have a feature request?
-[Open an issue](https://github.com/lacclab/scanpath-studio/issues).
+[Report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md)
+or [suggest an improvement](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas).
 
 </div>

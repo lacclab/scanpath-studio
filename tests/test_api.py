@@ -18,10 +18,20 @@ from tests.synthetic_data import (
 )
 
 
+def _paragraph(frame: pd.DataFrame) -> pd.DataFrame:
+    """The Paragraph screen's rows of the demo's multi-screen readings."""
+    return frame[frame["screen_id"] == "Paragraph"]
+
+
 @pytest.fixture(scope="module")
 def sample():
-    """Normalized bundled demo data, loaded once per module."""
-    return sps.load_sample_data(names="canonical")
+    """The bundled demo's Paragraph screens, normalized, loaded once per module.
+
+    Each demo reading spans several screens and an unnamed screen draws the
+    first; these tests are about the paragraph, so it is the only screen left.
+    """
+    words, fixations = sps.load_sample_data(names="canonical")
+    return _paragraph(words), _paragraph(fixations)
 
 
 def test_load_sample_data_is_normalized(sample):
@@ -201,7 +211,10 @@ def test_words_schema_rejects_a_column_the_table_does_not_have():
     assert "Words schema maps 1 column name the words table doesn't have" in message
     assert "word_schema['trial'] = 'TRIAL_LABEL': no such column" in message
     assert "closest: 'IA_LABEL'" in message
-    assert "Columns present in the words table (60): participant_id" in message
+    assert (
+        f"Columns present in the words table ({len(words_raw.columns)}): participant_id"
+        in message
+    )
     assert "api.propose_schema(table, 'words')" in message
 
 
@@ -225,10 +238,18 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     words_raw, fix_raw = data_module.load_sample_data()
     schema = api.propose_schema(words_raw, "words")
     schema["trial"] = ["participant_id", "TRIAL_INDEX"]
+    # Both tables take the same composite, so each screen's words and fixations
+    # name one reading.
+    fix_schema = api.propose_schema(fix_raw, "fixations")
+    fix_schema["trial"] = ["participant_id", "TRIAL_INDEX"]
     words, _fixations = sps.load_scanpath_data(
-        words=words_raw, fixations=fix_raw, word_schema=schema, names="canonical"
+        words=words_raw,
+        fixations=fix_raw,
+        word_schema=schema,
+        fix_schema=fix_schema,
+        names="canonical",
     )
-    # The demo's reader ids hold a `_` ("l37_1129"), escaped inside the
+    # The demo's reader ids hold a `_` ("l37_273"), escaped inside the
     # composite so it cannot be mistaken for the separator (`data.compose_id`).
     first = str(words_raw["participant_id"].iloc[0])
     assert words["trial_id"].iloc[0].startswith(first.replace("_", "\\_") + "_")
@@ -449,6 +470,8 @@ def test_plot_scanpath_filters_raw_gaze(sample):
         {
             "participant_id": [pid, pid, other_pid],
             "trial_id": [tid, tid, other_tid],
+            # A multi-screen reading draws only the samples of its screen.
+            "screen_id": ["Paragraph"] * 3,
             "x": [100.0, 110.0, 5000.0],
             "y": [100.0, 105.0, 5000.0],
             "timestamp_ms": [0, 1, 0],
@@ -459,6 +482,15 @@ def test_plot_scanpath_filters_raw_gaze(sample):
     assert raw_traces and len(raw_traces[0].x) == 2
 
 
+def _fifth_to_twelfth(trial_fixations: pd.DataFrame) -> tuple[int, int]:
+    """The ``fix_index_range`` of a screen's 5th to 12th fixation.
+
+    ``order_in_trial`` counts across the reading's screens, so the paragraph's
+    first fixation follows those of the screens before it."""
+    first = int(trial_fixations["order_in_trial"].min())
+    return first + 4, first + 11
+
+
 def test_plot_scanpath_fix_index_range_windows_the_trial(sample):
     """Headless: draw only fixations start..end (1-based, inclusive)."""
     words, fixations = sample
@@ -466,11 +498,12 @@ def test_plot_scanpath_fix_index_range_windows_the_trial(sample):
     _, trial_fixations = data_module.filter_data(
         words, fixations, {"participants": [pid], "trials": [tid]}
     )
+    window_range = _fifth_to_twelfth(trial_fixations)
     fig = sps.plot_scanpath(
-        words, fixations, pid, tid, show_heatmap=False, fix_index_range=(5, 12)
+        words, fixations, pid, tid, show_heatmap=False, fix_index_range=window_range
     )
     (markers,) = [t for t in fig.data if t.mode and "markers" in t.mode]
-    window = trial_fixations[trial_fixations["order_in_trial"].between(5, 12)]
+    window = trial_fixations[trial_fixations["order_in_trial"].between(*window_range)]
     assert len(window) == 8  # both bounds inclusive
     assert list(markers.x) == list(window["x"])
     assert list(markers.y) == list(window["y"])
@@ -479,7 +512,11 @@ def test_plot_scanpath_fix_index_range_windows_the_trial(sample):
 def test_animate_scanpath_fix_index_range_windows_the_replay(sample):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
-    fig = sps.animate_scanpath(words, fixations, pid, tid, fix_index_range=(5, 12))
+    _, trial_fixations = data_module.filter_data(
+        words, fixations, {"participants": [pid], "trials": [tid]}
+    )
+    window_range = _fifth_to_twelfth(trial_fixations)
+    fig = sps.animate_scanpath(words, fixations, pid, tid, fix_index_range=window_range)
     assert len(fig.frames[-1].data[0].x) == 8
 
 
@@ -502,9 +539,13 @@ def test_fix_index_range_rejects_a_window_that_selects_nothing(sample):
         words, fixations, {"participants": [pid], "trials": [tid]}
     )
     n = len(trial_fixations)
+    first = int(trial_fixations["order_in_trial"].min())
+    last = int(trial_fixations["order_in_trial"].max())
     with pytest.raises(ValueError) as excinfo:
-        sps.plot_scanpath(words, fixations, pid, tid, fix_index_range=(n + 1, n + 10))
-    assert f"has {n} fixations (order_in_trial 1–{n})" in str(excinfo.value)
+        sps.plot_scanpath(
+            words, fixations, pid, tid, fix_index_range=(last + 1, last + 10)
+        )
+    assert f"has {n} fixations (order_in_trial {first}–{last})" in str(excinfo.value)
     with pytest.raises(ValueError, match="start 12 is after end 5"):
         sps.plot_scanpath(words, fixations, pid, tid, fix_index_range=(12, 5))
     with pytest.raises(ValueError, match=r"must be a \(start, end\) pair"):
@@ -519,6 +560,24 @@ def test_plot_scanpath_rejects_unnormalized_raw_gaze(sample):
         sps.plot_scanpath(words, fixations, pid, tid, raw_gaze=raw)
 
 
+def test_an_unset_fixation_opacity_draws_the_default_in_both_builders(sample):
+    """``fixation_opacity=None`` is the option's default in the static figure
+    and in the replay alike."""
+    from scanpath_studio.constants import FIXATION_OPACITY
+
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    static = sps.plot_scanpath(words, fixations, pid, tid, fixation_opacity=None)
+    replay = sps.animate_scanpath(words, fixations, pid, tid, fixation_opacity=None)
+    drawn = [
+        trace.marker.opacity
+        for figure in (static, replay)
+        for trace in figure.data
+        if trace.name in ("Fixations", "Scanpath A")
+    ]
+    assert drawn == [FIXATION_OPACITY.default] * 2
+
+
 def test_animate_scanpath_rejects_static_only_options(sample):
     # Static-only keys raise a clear ValueError, not an opaque TypeError.
     # (color_by is not one — the replay honours it like the static figure;
@@ -527,6 +586,33 @@ def test_animate_scanpath_rejects_static_only_options(sample):
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     with pytest.raises(ValueError, match="does not support"):
         sps.animate_scanpath(words, fixations, pid, tid, show_heatmap=True)
+
+
+#: The replay draws neither raw gaze nor a heatmap, so it styles neither.
+_REPLAY_DRAWS_NOT = {
+    "raw_gaze_color": "#ff0000",
+    "raw_gaze_marker_size": 6.0,
+    "raw_gaze_opacity": 0.5,
+    "show_heatmap_colorbar": False,
+    "heatmap_colorbar_length": 0.5,
+    "heatmap_colorbar_orientation": "Horizontal",
+    "heatmap_colorbar_thickness": 10,
+    "heatmap_colorbar_tickangle": 45,
+    "heatmap_colorbar_tickfont_size": 9,
+}
+
+
+@pytest.mark.parametrize("option", sorted(_REPLAY_DRAWS_NOT))
+def test_animate_scanpath_rejects_the_style_of_layers_it_does_not_draw(sample, option):
+    """An option that would change nothing in the replay is refused by name,
+    and is not listed among the replay's options."""
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    assert option not in sps.figure_options("animation")
+    with pytest.raises(ValueError, match=f"does not support: {option}"):
+        sps.animate_scanpath(
+            words, fixations, pid, tid, **{option: _REPLAY_DRAWS_NOT[option]}
+        )
 
 
 def test_resolve_trial_default_first(sample):
@@ -975,9 +1061,43 @@ def test_save_figure_forwards_size(tmp_path, monkeypatch):
     """width/height/scale reach Kaleido for raster output (no Chrome needed)."""
     captured = {}
     fig = go.Figure()
-    monkeypatch.setattr(fig, "write_image", lambda path, **kw: captured.update(kw))
+
+    def raster(_figure, *, fmt, **kwargs):
+        assert fmt == "png"
+        captured.update(kwargs)
+        return b"raster"
+
+    monkeypatch.setattr("scanpath_studio.export.render_static_figure_bytes", raster)
     sps.save_figure(fig, tmp_path / "fig.png", scale=1, width=900, height=600)
     assert captured == {"scale": 1, "width": 900, "height": 600}
+
+
+def test_save_figure_reports_installed_renderer_readiness_separately(
+    tmp_path, monkeypatch
+):
+    import kaleido
+    import plotly.graph_objects as go
+
+    from scanpath_studio import animation_export
+
+    destination = tmp_path / "figure.svg"
+    monkeypatch.setattr(animation_export, "chrome_available", lambda: False)
+    with pytest.raises(RuntimeError) as missing:
+        sps.save_figure(go.Figure(), destination)
+    assert animation_export.CHROME_INSTALL_HINT in str(missing.value)
+    monkeypatch.setattr(animation_export, "chrome_available", lambda: True)
+    monkeypatch.setattr(animation_export, "chromium_browser_path", lambda: "installed")
+    monkeypatch.setattr(kaleido, "start_sync_server", lambda **_: None)
+    monkeypatch.setattr(kaleido, "stop_sync_server", lambda **_: None)
+
+    def not_ready(*_):
+        raise RuntimeError("ReferenceError: kaleido_scopes is not defined")
+
+    monkeypatch.setattr(animation_export, "warm_calc_fig", not_ready)
+    with pytest.raises(RuntimeError, match="scripts were ready") as installed:
+        sps.save_figure(go.Figure(), destination)
+    assert "install Chrome" not in str(installed.value)
+    assert not list(tmp_path.iterdir())
 
 
 def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
@@ -1007,7 +1127,7 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # An option naming a column that isn't there raises
 # ---------------------------------------------------------------------------
-_DEMO_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele")
+_DEMO_TRIAL = ("l37_273", "l37_273_2_1_1_Ele")
 
 
 @pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
@@ -1033,7 +1153,7 @@ def test_a_comparison_checks_the_column_across_both_readings():
             words,
             fixations,
             _DEMO_TRIAL,
-            ("l7_1090", "l7_1090_2_1_1_Ele"),
+            ("l7_183", "l7_183_2_1_1_Ele"),
             color_by="nosuch",
         )
 
@@ -1098,7 +1218,7 @@ def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
     """With no Chrome, Kaleido fails on the first layer — and the folder the
     call had just created must not stay behind, empty."""
     words, fixations = api.load_sample_data(names="canonical")
-    fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
+    fig = api.plot_scanpath(words, fixations, "l37_273", "l37_273_2_1_1_Ele")
 
     def no_chrome(*_args, **_kwargs):
         raise RuntimeError("Static .png export failed: no Chrome")

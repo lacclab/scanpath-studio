@@ -207,6 +207,28 @@ def _share(corpus_label: str):
 
 
 class TestShareEmitsTheCorpus:
+    def test_a_colliding_corpus_b_is_declared_and_omitted(
+        self, public_corpora, monkeypatch
+    ):
+        import streamlit as st
+
+        from scanpath_studio.constants import DEMO_CHOICE
+        from scanpath_studio.url_state import _build_share_query
+
+        label = _add_builtin(monkeypatch, "PoTeC!")
+        monkeypatch.setattr(
+            st,
+            "session_state",
+            {
+                "_share_selection": {
+                    "compare": {"source": label, "participant_id": "p", "trial_id": "t"}
+                }
+            },
+        )
+        query, caveats = _build_share_query(DEMO_CHOICE)
+        assert not {"cmp_source", "cmp_corpus", "compare"} & parse_qs(query).keys()
+        assert any("PoTeC" in note and "leaves it out" in note for note in caveats)
+
     def test_a_builtin_corpus_is_shared_without_a_cannot_rebuild_caveat(
         self, public_corpora
     ):
@@ -321,6 +343,93 @@ def st_value_of(at, key: str, default=True):
 class TestRoundTripThroughTheApp:
     """Select a corpus → copy the link → open it in a fresh app."""
 
+    def test_link_reopens_b_from_local_potec_files(
+        self, public_corpora, tmp_path, monkeypatch
+    ):
+        from scanpath_studio import datasets
+        from tests.test_cli import _write_tiny_potec
+
+        monkeypatch.setattr(datasets, "_POTEC_TEXTS", ("b0",))
+        monkeypatch.setattr(
+            datasets,
+            "download_potec",
+            lambda *a, **kw: pytest.fail("Unexpected download"),
+        )
+        label = _native_potec_label()
+        sender_dir = tmp_path / "sender"
+        _write_tiny_potec(sender_dir)
+        sender = AppTest.from_file(APP_SCRIPT)
+        sender.session_state["potec_dir"] = str(sender_dir)
+        sender.session_state["single_compare_toggle"] = True
+        sender.session_state["cmp_dataset"] = label
+        sender.run(timeout=60)
+        assert not sender.exception, sender.exception
+        query, _ = sender.session_state["_share_query_current"]
+        params = {key: values[0] for key, values in parse_qs(query).items()}
+        assert params["cmp_source"] == "corpus"
+        assert params["cmp_corpus"] == "potec"
+        assert params["compare"] == "0:0_b0"
+        assert str(sender_dir) not in query
+
+        recipient_dir = tmp_path / "recipient"
+
+        def open_link():
+            recipient = AppTest.from_file(APP_SCRIPT)
+            recipient.session_state["potec_dir"] = str(recipient_dir)
+            recipient.session_state["single_compare_toggle"] = True
+            recipient.session_state["cmp_dataset"] = "Synthetic test trial"
+            recipient.query_params.update(params)
+            recipient.run(timeout=60)
+            assert not recipient.exception, recipient.exception
+            assert not recipient.error, recipient.error
+            assert (
+                recipient.session_state["_share_selection"]["trial_id"]
+                == params["trial_id"]
+            )
+            return recipient
+
+        missing = open_link()
+        assert not missing.session_state["single_compare_toggle"]
+        assert "compare" not in missing.session_state["_share_selection"]
+        assert any(
+            "Open PoTeC as the main dataset" in w.value and "Reopen the link" in w.value
+            for w in missing.warning
+        )
+
+        _write_tiny_potec(recipient_dir)
+        available = open_link()
+        selected = available.session_state["_share_selection"]["compare"]
+        assert selected["source"] == label
+        assert (selected["participant_id"], selected["trial_id"]) == ("0", "0_b0")
+        (recipient_dir / "stimuli/aoi_texts/b0.ias").unlink()
+        assert "compare" not in open_link().session_state["_share_selection"]
+
+    @pytest.mark.parametrize(
+        "case", ["unknown", "ambiguous", "disabled", "missing slug"]
+    )
+    def test_unavailable_public_b_keeps_the_linked_a(
+        self, public_corpora, monkeypatch, case
+    ):
+        if case == "ambiguous":
+            _add_builtin(monkeypatch, "PoTeC!")
+        if case == "disabled":
+            monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "0")
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params.update(
+            {"source": "synthetic", "compare": "0:0_b0", "cmp_source": "corpus"}
+        )
+        if case != "missing slug":
+            at.query_params["cmp_corpus"] = "unlisted" if case == "unknown" else "potec"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert at.session_state["data_source_choice"] == "Synthetic test trial"
+        assert "compare" not in at.session_state["_share_selection"]
+        recovery = "new link" if case == "missing slug" else "installation"
+        assert any(
+            "Only scanpath A is open" in w.value and recovery in w.value
+            for w in at.warning
+        )
+
     def test_a_registry_corpus_round_trips_to_itself(self, public_corpora):
         """The link reopens the entry it was copied from.
 
@@ -349,6 +458,29 @@ class TestRoundTripThroughTheApp:
         )
         picker = [s for s in recipient.selectbox if s.key == "data_source_picker"]
         assert picker and picker[0].value == label
+
+    def test_existing_onestop_b_token_still_names_its_regime(
+        self, public_corpora, monkeypatch
+    ):
+        from scanpath_studio import compare_source
+        from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
+
+        checked = []
+
+        def missing(label, *, refresh=False):
+            checked.append((label, refresh))
+            return False, "Open OneStop as the main dataset to locate its files."
+
+        monkeypatch.setattr(compare_source, "public_dataset_readiness", missing)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params.update(
+            {"source": "synthetic", "compare": "p:t", "cmp_source": "onestop_repeated"}
+        )
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert (ONESTOP_REGIME_CHOICES["repeated"], True) in checked
+        assert not at.session_state["single_compare_toggle"]
+        assert any("Open OneStop" in w.value for w in at.warning)
 
     def test_an_unresolvable_slug_leaves_the_picker_where_it_was(self, public_corpora):
         """A slug naming a corpus this app does not offer.

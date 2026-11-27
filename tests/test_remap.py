@@ -6,6 +6,7 @@ normalization) and ``data.dropped_columns`` (the columns discarded at import,
 surfaced as a note in the Data Inspection remap editor)."""
 
 import pandas as pd
+import pytest
 
 from scanpath_studio.data import (
     compute_keep_columns,
@@ -50,6 +51,76 @@ def _normalized_fixations():
 
 
 class TestRemapNormalizedFrame:
+    def test_an_edit_away_from_a_composite_trial_id_adds_no_unique_trial_id(self):
+        """A composite Trial ID derives its own `unique_trial_id`. Edited to
+        one column, the dataset holds what adding the files with that column
+        gives: no `unique_trial_id`."""
+        raw = _raw_fixations()
+        composite = _FIX_SCHEMA | {"trial": ["subj", "block"]}
+        keep = compute_keep_columns(composite, keep_columns={"dwell", "block"})
+        stored = normalize_fixations(raw, composite, keep_columns=keep)
+        assert "unique_trial_id" in stored.columns
+        single = _FIX_SCHEMA | {"trial": "block"}
+        added = normalize_fixations(
+            raw,
+            single,
+            keep_columns=compute_keep_columns(single, keep_columns={"dwell", "block"}),
+        )
+        assert "unique_trial_id" not in added.columns
+        stored_names = {
+            "participant": "participant_id",
+            "trial": "block",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        edited = remap_normalized_frame(
+            stored, stored_names, kind="fixations", stored_schema=composite
+        )
+        assert list(edited["trial_id"]) == ["b1", "b1", "b2", "b2"]
+        assert "unique_trial_id" not in edited.columns
+        # Without the stored mapping, the composite's id is taken for the files'.
+        kept = remap_normalized_frame(stored, stored_names, kind="fixations")
+        assert "unique_trial_id" in kept.columns
+
+    def test_a_composites_participant_copy_goes_after_an_edit_saved_before(self):
+        """A dataset saved once in the editor stores the editor's mapping, in
+        the stored frame's names (`participant_id`, the kept `subj`), not the
+        files'. Edited away from the composite then, the Participant column's
+        copy still goes; cleared, the field leaves its copy as the only one."""
+        raw = _raw_fixations()
+        composite = _FIX_SCHEMA | {"trial": ["subj", "block"]}
+        keep = compute_keep_columns(composite, keep_columns={"dwell", "block"})
+        stored = normalize_fixations(raw, composite, keep_columns=keep)
+        assert "subj" in stored.columns
+        saved_schema = {
+            "participant": "participant_id",
+            "trial": ["subj", "block"],
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        saved = remap_normalized_frame(
+            stored, saved_schema, kind="fixations", stored_schema=composite
+        )
+        edited = remap_normalized_frame(
+            saved,
+            saved_schema | {"trial": "block"},
+            kind="fixations",
+            stored_schema=saved_schema,
+        )
+        assert "subj" not in edited.columns
+        assert list(edited["participant_id"]) == list(saved["participant_id"])
+        # Participant cleared: `subj` is the only copy of the readers' ids.
+        cleared = {k: v for k, v in saved_schema.items() if k != "participant"}
+        unmapped = remap_normalized_frame(
+            saved,
+            cleared | {"trial": "block"},
+            kind="fixations",
+            stored_schema=saved_schema,
+        )
+        assert "subj" in unmapped.columns
+
     def test_identity_roundtrip(self):
         """Re-mapping with the canonical schema leaves the frame unchanged."""
         _, norm = _normalized_fixations()
@@ -99,8 +170,13 @@ class TestRemapNormalizedFrame:
         }
         out = remap_normalized_frame(norm, schema, kind="fixations")
         assert list(out["trial_id"]) == ["b1", "b1", "b2", "b2"]
-        # unique_trial_id is restored and consistent with trial_id.
-        assert list(out["unique_trial_id"]) == ["b1", "b1", "b2", "b2"]
+        # The stored frame held no unique_trial_id, as adding these files
+        # gives none, so the edit adds none either.
+        assert "unique_trial_id" not in out.columns
+        stored = norm.assign(unique_trial_id=norm["trial_id"])
+        restored = remap_normalized_frame(stored, schema, kind="fixations")
+        # One the stored frame held follows the new Trial ID, never the stale one.
+        assert list(restored["unique_trial_id"]) == ["b1", "b1", "b2", "b2"]
 
     def test_remap_trial_to_composite(self):
         """A multi-column Trial mapping builds a composite trial_id on the fly."""
@@ -532,9 +608,9 @@ class TestStimulusLevelWordsRemap:
         st.session_state[tabs.EDITOR_PENDING_NAME_KEY] = "Pilot study"
         tabs._apply_remap()
         assert not st.session_state.get("_remap_problems")
-        assert set(st.session_state["_datasets"]) == {"Pilot study"}
-        assert st.session_state["_pending_source_choice"] == "Pilot study"
-        assert st.session_state["_remap_applied"] == "Pilot study"
+        assert set(st.session_state["_datasets"]) == {"study"}
+        assert tabs._dataset_label("study") == "Pilot study"
+        assert st.session_state["_remap_applied"] == "study"
         # The edit is over: the staged name goes with the rest of it.
         assert tabs.EDITOR_PENDING_NAME_KEY not in st.session_state
 
@@ -913,6 +989,17 @@ def _setup_file_editor_app():
     st.session_state["config"] = _editor_setup_config("Lab")
 
 
+def _setup_file_footer_app():
+    """That editor with its footer under it, as the ✏️ Edit dataset screen ends."""
+    import streamlit as st
+
+    from scanpath_studio.tabs import render_dataset_editor_footer
+    from tests.test_remap import _setup_file_editor_app
+
+    _setup_file_editor_app()
+    render_dataset_editor_footer(st.container())
+
+
 def _setup_file_restore_app():
     """A fresh add screen restoring that file over the *original* files: the
     real ``column_mapping_ui`` for each table, its mapping in ``restored``."""
@@ -1097,26 +1184,51 @@ class TestEditorSetupExport:
         at = AppTest.from_function(_setup_file_editor_app, default_timeout=30).run()
         assert not at.exception
         said = " ".join(c.value for c in at.caption)
-        assert "Only columns kept when the dataset was added are available." in said
+        assert "Only columns kept during import are available." in said
         assert (
-            "To use a column that isn't listed, remove this dataset and add it "
+            "To use a column that is missing, remove the dataset and add it "
             "again from its files." in said
         )
 
     def test_the_footer_offers_both_halves_of_the_add_screens_pair(self):
-        """Source-level: AppTest reports no download_button, and what must not
-        silently regress is that the editor's last row is the *pair*."""
-        import inspect
+        """The editor's last row is the add screen's pair — ⬇️ Download setup
+        file · ✅ Save changes — in the add screen's column widths, so the two
+        rows line up; what a restore cannot reproduce is said beside it."""
+        from streamlit.testing.v1 import AppTest
 
-        from scanpath_studio.tabs import render_dataset_editor_footer
+        from scanpath_studio.wizard import _FOOTER_ROW_W
+        from tests.conftest import find_keyed, page_nodes
 
-        source = inspect.getsource(render_dataset_editor_footer)
-        assert "f\"{ICONS['download']} Download setup file\"" in source
-        assert "f\"{ICONS['confirm']} Save changes\"" in source
-        assert "_editor_setup_config" in source
-        assert "column_mapping_notes" in source
-        # It borrows the wizard's own column widths so the two rows line up.
-        assert "_FOOTER_ROW_W" in source
+        at = AppTest.from_function(_setup_file_footer_app, default_timeout=30).run()
+        assert not at.exception, at.exception
+        row, _ = find_keyed(at, "wizard_footer_row_edit")
+        columns = [node for node, _ in page_nodes(row) if node.type == "column"]
+        assert [c.weight for c in columns] == pytest.approx(
+            [w / sum(_FOOTER_ROW_W) for w in _FOOTER_ROW_W]
+        )
+        (download,) = [
+            n for n, _ in page_nodes(columns[0]) if n.type == "download_button"
+        ]
+        assert download.key == "remap_setup_download_Lab"
+        assert download.label.endswith(" Download setup file")
+        (save,) = [n for n, _ in page_nodes(columns[1]) if n.type == "button"]
+        assert save.key == "remap_apply_Lab"
+        assert save.label.endswith(" Save changes")
+        assert not [c for c in at.caption if "needs fixing" in c.value]
+
+        # A dataset stored before the app recorded its column names: the
+        # file it saves needs fixing after a restore, and the footer says so.
+        datasets = at.session_state["_datasets"]
+        datasets["Lab"] = {
+            k: v for k, v in datasets["Lab"].items() if k != "column_names"
+        }
+        at.session_state["_datasets"] = datasets
+        at.run()
+        assert not at.exception, at.exception
+        notes = at.session_state["config"]["column_mapping_notes"]
+        assert notes
+        (said,) = [c.value for c in at.caption if "needs fixing" in c.value]
+        assert all(note in said for note in notes)
 
 
 class TestStimulusProvenanceOnRemap:

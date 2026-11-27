@@ -19,7 +19,32 @@ import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from .constants import SAMPLE_INDEX
+from .constants import SAMPLE_INDEX, WORD_KEY
+
+
+def split_field_list(value: str) -> list[str]:
+    """Column names in a comma-separated CLI argument or share link."""
+    return [name.strip() for name in value.split(",") if name.strip()]
+
+
+def json_field_list(value: str) -> list[str]:
+    """An ordered JSON array of exact column names, including an empty selection."""
+    fields = json.loads(value)
+    if not isinstance(fields, list) or not all(
+        isinstance(name, str) for name in fields
+    ):
+        raise ValueError("Expected a JSON array of column names.")
+    return fields
+
+
+def encode_field_list(fields: Iterable[str]) -> tuple[str, bool]:
+    """The shortest lossless CLI or URL form and whether it uses JSON."""
+    names = list(fields)
+    joined = ",".join(names)
+    if joined and split_field_list(joined) == names:
+        return joined, False
+    return json.dumps(names, ensure_ascii=False, separators=(",", ":")), True
+
 
 #: How a canonical column came to be.
 MAPPED = "mapped"  # read from one source column, unchanged
@@ -104,6 +129,7 @@ _CANONICAL_LABELS: dict[str, str] = {
     "line_idx": "Line",
     "text": "Word",
     "word_id": "Word #",
+    WORD_KEY: "Word ID",
     "x": "X",
     "y": "Y",
     "saccade_amplitude": "Saccade amplitude (px)",
@@ -147,6 +173,7 @@ ROLE_LABELS: dict[str, str] = {
     "unique_text_id": "Text",
     "screen_id": "Screen",
     "word_id": "Word #",
+    WORD_KEY: "Word ID",
     "text": "Word",
     "line_idx": "Line",
     "x": "X",
@@ -205,8 +232,21 @@ IDENTITY_COLUMNS = frozenset(
         "unique_text_id",
         "screen_id",
         "word_id",
+        WORD_KEY,
     }
 )
+
+
+def _text_word_id_entries(entry: SourceName | None, how: str) -> dict:
+    """The entries for a Word ID read as text (:meth:`ColumnNames.with_rewrites`),
+    from the ``word_id`` entry the schema implied; none unless that names the
+    file's column."""
+    if entry is None or entry.kind != MAPPED or len(entry.sources) != 1:
+        return {}
+    return {
+        WORD_KEY: SourceName(entry.sources, MAPPED),
+        "word_id": SourceName((), GENERATED, entry.display + how),
+    }
 
 
 def canonical_label(column) -> str:
@@ -446,9 +486,17 @@ class ColumnNames:
         ``table``) marked converted: a padded id, a shifted word id, positions
         filled from word boxes are no longer what the file held under its name,
         so the column is labelled "<source><how>" and exported under its
-        internal name."""
+        internal name.
+
+        A rewrite of :data:`~scanpath_studio.constants.WORD_KEY` is a Word ID
+        read as text: the text is the file's column, so ``word_key`` takes
+        the Word ID's source name, and ``word_id`` — the number the app gave
+        each text id — becomes generated, "<source><how>" its note."""
         changed = dict(self.entries)
         for rewritten_table, column, how in rewrites or ():
+            if rewritten_table == table and column == WORD_KEY:
+                changed.update(_text_word_id_entries(changed.get("word_id"), how))
+                continue
             entry = changed.get(column)
             if rewritten_table != table or entry is None or entry.kind != MAPPED:
                 continue
@@ -597,11 +645,12 @@ def table_figure_labels(
     out = across_tables(drawn).figure_labels(
         [column for cols in columns.values() for column in cols]
     )
-    words = maps.get("words")
-    if words is not None and "words" in columns:
-        for column, label in words.figure_labels(columns["words"]).items():
+    for table in ("words", "raw_gaze"):
+        if table not in drawn:
+            continue
+        for column, label in drawn[table].figure_labels(columns[table]).items():
             if out.get(column) != label:
-                out[f"words:{column}"] = label
+                out[f"{table}:{column}"] = label
     return out
 
 
@@ -709,7 +758,8 @@ def from_schema(
     if text_id := _id_entry(schema.get("text_id")):
         # The mapped Text ID wins over a literal `unique_paragraph_id`,
         # which `normalize_*` then fill `unique_text_id` from. A remap fills
-        # it from the mapped Text ID too (`data.remap_normalized_frame`); a
+        # it from the mapped Text ID when the stored frame held one
+        # (`data.remap_normalized_frame`); a
         # first load with neither has no such column, and an entry for an
         # absent column names nothing. A `unique_text_id` the file itself has
         # is the user's own column, under its own name.
@@ -768,7 +818,7 @@ def from_schema(
         )
         _registry(out, data.FIX_OPTIONAL_FIELDS, present, keep)
     else:  # raw gaze
-        for key in ("x", "y", "text", "word_id"):
+        for key in ("x", "y", "text", "word_id", "eye", "pupil_area", "pupil_diameter"):
             if schema.get(key):
                 out[key] = SourceName((str(schema[key]),))
         if schema.get("timestamp"):
@@ -987,6 +1037,14 @@ def stored_source_recipe(stored: Mapping) -> dict:
         if missing:
             unresolved[table] = list(missing)
     return {"schemas": schemas, "unresolved": unresolved}
+
+
+def is_multipleye_entry(stored) -> bool:
+    """Whether a stored dataset was added as a MultiplEYE session set: its
+    ``source_recipe`` records the session set (``"multipleye"``), not a
+    mapping of the user's files."""
+    recipe = stored.get("source_recipe") if isinstance(stored, Mapping) else None
+    return isinstance(recipe, Mapping) and isinstance(recipe.get("multipleye"), Mapping)
 
 
 # --- A frame that carries its own names ---------------------------------------

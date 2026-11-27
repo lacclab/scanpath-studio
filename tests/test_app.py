@@ -10,16 +10,19 @@ from scanpath_studio import app as app_module
 from scanpath_studio.app import (
     DEMO_CHOICE,
     UPLOAD_CHOICE,
-    _apply_url_preset,
-    _apply_url_trial_selection,
-    _build_comparison_options,
-    _build_share_query,
-    build_combo_options,
 )
 from scanpath_studio.data import compute_canvas_size
-
-# Imported from its real home (utils); app.py does not re-export it.
-from scanpath_studio.utils import compute_trial_stats, reading_key
+from scanpath_studio.url_state import (
+    _apply_url_preset,
+    _apply_url_trial_selection,
+    _build_share_query,
+)
+from scanpath_studio.utils import (
+    build_combo_options,
+    build_comparison_options,
+    compute_trial_stats,
+    reading_key,
+)
 
 
 class TestBuildComboOptions:
@@ -126,7 +129,7 @@ class TestComputeTrialStats:
 
 
 class TestBuildComparisonOptions:
-    """Tests for _build_comparison_options function."""
+    """Tests for build_comparison_options function."""
 
     def test_build_comparison_options_text_mode(self):
         combos = pd.DataFrame(
@@ -136,7 +139,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para1"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "Text", "p1", "t1", "para1", include_primary=False
         )
         # (participant, trial, label, markers). p1/t2 is same participant AND same
@@ -154,7 +157,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para2"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "Participant", "p1", "t1", "para1", include_primary=False
         )
         # Same-text (📄) trial leads, then the different-text one (no marker).
@@ -170,7 +173,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para2"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "None", "p1", "t1", None, include_primary=False
         )
         assert len(options) > 0
@@ -185,7 +188,7 @@ class TestBuildComparisonOptions:
                 "unique_text_id": ["up1", "up1"],
             }
         )
-        options = _build_comparison_options(combos, "Text", "p1", "t1", "up1")
+        options = build_comparison_options(combos, "Text", "p1", "t1", "up1")
         assert len(options) > 0
 
 
@@ -219,8 +222,121 @@ def fake_st(monkeypatch):
     return fake
 
 
+@pytest.mark.parametrize("width, expected_height", [(1920, 480), (1200, 750)])
+def test_named_drawing_keeps_gaze_and_respects_screen_edits(
+    fake_st, width, expected_height
+):
+    from scanpath_studio.authoring import authoring_json, layout_text, sample_draft
+
+    text, layout, events = sample_draft()
+    original_gaze = pd.DataFrame({"x": [17]})
+    setup = {"canvas_width": width, "canvas_height": 480, "monitor_width_mm": 470}
+    updated = pd.DataFrame({"duration_ms": [430]})
+    fake_st.session_state.update(
+        {
+            "data_source_choice": "Class example",
+            "_datasets": {
+                "Class example": {
+                    "words": layout_text(text, **layout),
+                    "authoring": authoring_json(text, events, layout=layout),
+                    "raw_gaze": original_gaze,
+                    "setup": setup,
+                }
+            },
+            "_author_save_payload": {
+                "words": pd.DataFrame(),
+                "fixations": updated,
+                "authoring": "new",
+                "setup": {**setup, "canvas_width": 1200, "canvas_height": 750},
+            },
+        }
+    )
+    app_module._save_authored_dataset("unused_copy_name")
+    saved = fake_st.session_state["_datasets"]["Class example"]
+    assert saved["raw_gaze"] is original_gaze
+    assert saved["setup"] == {**setup, "canvas_height": expected_height}
+    assert saved["fixations"] is updated and saved["authoring"] == "new"
+
+
 class TestBuildShareQuery:
     """The Share button's deep-link builder (inverse of the URL preset parser)."""
+
+    @pytest.mark.parametrize("use_palette_styles", [True, False])
+    def test_print_comparison_round_trips_both_readers_styles(
+        self, fake_st, use_palette_styles
+    ):
+        from scanpath_studio.controls import compare_style_defaults, palette_state
+
+        palette = "Print / grayscale"
+        styles = palette_state(palette, include_compare=True)
+        fake_st.session_state.update(styles, global_palette=palette)
+        if not use_palette_styles:
+            fake_st.session_state.update(compare_style_defaults())
+        fake_st.session_state["_share_selection"] = {
+            "participant_id": "a",
+            "trial_id": "1",
+            "compare": {"participant_id": "b", "trial_id": "2"},
+        }
+        expected = {k: fake_st.session_state[k] for k in styles if k.startswith("cmp")}
+        query, _ = _build_share_query(DEMO_CHOICE)
+        fake_st.query_params = {k: v[0] for k, v in parse_qs(query).items()}
+        fake_st.session_state.clear()
+        _apply_url_preset()
+        for key, value in expected.items():
+            assert fake_st.session_state[key] == value
+
+    def test_renamed_drawing_shares_its_display_name_and_portable_draft(self, fake_st):
+        from scanpath_studio.authoring import authoring_json, sample_draft
+        from scanpath_studio.constants import DATASET_ALIASES_KEY
+        from scanpath_studio.url_state import _snippet_source
+
+        text, layout, events = sample_draft()
+        key = "original-name"
+        fake_st.session_state.update(
+            {
+                "_datasets": {
+                    key: {"authoring": authoring_json(text, events, layout=layout)}
+                },
+                DATASET_ALIASES_KEY: {key: "Class example"},
+            }
+        )
+        query, notes = _build_share_query(key)
+        params = parse_qs(query)
+        assert params["dataset"] == ["Class example"]
+        assert params["dataset_id"] and params["dataset_digest"]
+        assert "**Class example**" in notes[0]
+        assert _snippet_source(key).options["path"] == "Class-example.json"
+
+    def test_manual_sample_link_is_scoped_to_the_sample(self, fake_st):
+        from scanpath_studio.authoring import (
+            DEFAULT_LAYOUT,
+            default_events,
+            layout_text,
+        )
+        from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
+
+        private = default_events(layout_text("Private draft"))
+        fake_st.session_state.update(
+            author_text="Private draft", _authored_events_frame=private
+        )
+        query, _ = _build_share_query(MANUAL_SAMPLE_CHOICE)
+        params = parse_qs(query)
+        assert params["source"] == ["manual_sample"]
+        assert "author_text" not in params and "author_events" not in params
+        sample = default_events(layout_text("Sample"))
+        layout = {**DEFAULT_LAYOUT, "right_to_left": 1}
+        fake_st.session_state["_manual_scanpath_drafts"] = {
+            MANUAL_SAMPLE_CHOICE: ("Sample", layout, sample)
+        }
+        query, _ = _build_share_query(MANUAL_SAMPLE_CHOICE)
+        fake_st.query_params = {k: v[0] for k, v in parse_qs(query).items()}
+        fake_st.session_state.clear()
+        assert _apply_url_preset() == "manual_sample"
+        text, restored_layout, events = fake_st.session_state[
+            "_manual_scanpath_drafts"
+        ][MANUAL_SAMPLE_CHOICE]
+        assert (text, restored_layout) == ("Sample", layout)
+        assert events.to_dict("records") == sample.to_dict("records")
 
     def test_demo_source_selection_and_toggles(self, fake_st):
         fake_st.session_state = {
@@ -327,6 +443,7 @@ class TestBuildShareQuery:
             "global_heatmap_norm": "Log",
             "global_marker_size_range": (10, 30),
             "global_order_font_size": 18,
+            "global_order_label_position": "inside",
             "global_line_spacing": 2.5,
             "global_scale_text_to_boxes": False,
         }
@@ -351,6 +468,7 @@ class TestBuildShareQuery:
         assert parsed["heatmap_norm"] == ["Log"]
         assert parsed["marker_size_range"] == ["10,30"]
         assert parsed["order_font_size"] == ["18"]
+        assert parsed["order_label_position"] == ["inside"]
         assert parsed["line_spacing"] == ["2.5"]
         assert parsed["scale_text_to_boxes"] == ["0"]
 
@@ -379,6 +497,7 @@ class TestBuildShareQuery:
         assert ss["global_heatmap_norm"] == "Log"
         assert ss["global_marker_size_range"] == (10, 30)
         assert ss["global_order_font_size"] == 18
+        assert ss["global_order_label_position"] == "inside"
         assert ss["global_line_spacing"] == 2.5
         assert ss["global_scale_text_to_boxes"] is False
 
@@ -484,7 +603,7 @@ class TestBuildShareQuery:
         assert "onestop_regime" not in ss  # bad regime dropped
         assert ss["onestop_parts"] == ["Paragraph"]  # only the valid part kept
 
-    def test_authored_link_seeds_event_text_guard(self, fake_st):
+    def test_authored_link_restores_the_text_and_events_together(self, fake_st):
         events = [{"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}]
         fake_st.query_params = {
             "source": "author",
@@ -493,9 +612,8 @@ class TestBuildShareQuery:
         }
         assert _apply_url_preset() == "author"
         ss = fake_st.session_state
-        assert ss["author_text"] == "alpha beta"
-        assert ss["_author_text_for_events"] == "alpha beta"
-        restored = ss["_authored_events_frame"]
+        text, _, restored = ss["_manual_scanpath_drafts"][app_module.AUTHOR_CHOICE]
+        assert text == "alpha beta"
         assert restored[list(events[0])].to_dict("records") == events
         # Normalized on the way in: the stable id/order a link may omit.
         assert restored[["fixation_id", "order_in_trial"]].to_dict("records") == [
@@ -523,9 +641,9 @@ class TestBuildShareQuery:
         }
         assert _apply_url_preset() == "author"
         ss = fake_st.session_state
-        assert ss["author_text"] == "alpha beta"
-        assert "_authored_events_frame" not in ss
-        assert "_author_text_for_events" not in ss
+        assert (
+            ss["_manual_scanpath_drafts"][app_module.AUTHOR_CHOICE][0] == "alpha beta"
+        )
         assert any("unreadable authored scanpath" in str(w) for w in fake_st.warnings)
 
 
@@ -836,11 +954,40 @@ class TestForceLtrLocaleScript:
         script = app_module._FORCE_LTR_LOCALE_SCRIPT
         assert 'window.parent.dispatchEvent(new Event("languagechange"))' in script
 
-    def test_configure_page_embeds_the_script(self):
-        import inspect
 
-        source = inspect.getsource(app_module.configure_page)
-        assert "embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)" in source
+@pytest.mark.timeout(180)
+@pytest.mark.parametrize("view", ["Scanpath", "Corpus Analysis", "Data"])
+def test_every_view_installs_each_page_script_once(view):
+    """The scripts that reach into the parent page — the LTR locale, the
+    tooltip owner, the trial-change loading card and the rest — are drawn on
+    every view, each once, and take no room."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import constants, keyboard, loading
+    from tests.conftest import APP_SCRIPT, iframe_sources, pin_view
+
+    views = {
+        "Scanpath": constants._VIEW_SCANPATH,
+        "Corpus Analysis": constants._VIEW_CORPUS,
+        "Data": constants._VIEW_DATA,
+    }
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=150)
+    pin_view(at, views[view])
+    at.run()
+    assert not at.exception, at.exception
+    frames = iframe_sources(at._tree)
+    for script in (
+        app_module._FORCE_LTR_LOCALE_SCRIPT,
+        app_module._TOOLTIP_OWNER_SCRIPT,
+        app_module._IFRAME_CLICK_CLOSES_POPOVER_SCRIPT,
+        app_module._A11Y_NAMES_SCRIPT,
+        app_module._FIELD_TIP_PLACEMENT_SCRIPT,
+        loading.trial_loading_script(),
+        keyboard.SCANPATH_SHORTCUTS,
+    ):
+        carriers = [frame for frame in frames if script in frame]
+        assert len(carriers) == 1, script[:80]
+        assert 'body style="margin:0;overflow:hidden"' in carriers[0]
 
 
 class TestNormalizePairUncachedReportsItsParts:
@@ -880,3 +1027,12 @@ class TestNormalizePairUncachedReportsItsParts:
                 app_module._normalize_pair_uncached(
                     words, word_schema, fixations, fix_schema, ("k", 2)
                 )
+
+
+def test_a_commercial_font_is_named_without_a_link():
+    """Google Fonts does not carry OneStop's Lucida Sans Typewriter."""
+    name, url = app_module._stimulus_font_install_hint(
+        "'Lucida Sans Typewriter', monospace"
+    )
+    assert name == "Lucida Sans Typewriter"
+    assert url is None

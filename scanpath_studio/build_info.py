@@ -10,8 +10,8 @@ knows:
 1. a git checkout of this repository (``git describe``);
 2. a ``_build.json`` stamp beside the package, which the desktop spec writes;
 3. the commit pip recorded for a ``pip install git+…`` (PEP 610);
-4. otherwise the release itself — also the answer whenever one of the above
-   fails, so a missing ``git`` or a clone without tags breaks nothing.
+4. otherwise the release itself. A checkout without tags can still identify
+   its branch and commit.
 
 The result is a PEP 440 version, so builds sort between releases:
 ``0.35.0 < 0.35.0.post3+g8f18219 < 0.35.1``. Standard library and
@@ -27,11 +27,23 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from functools import cache
 from pathlib import Path
+from typing import Literal
 
 from packaging.version import InvalidVersion, Version
+
+DOCS_ROOT = "https://lacclab.github.io/scanpath-studio/"
+STABLE_APP_URL = "https://scanpath-studio.streamlit.app"
+DEV_APP_URL = "https://scanpath-studio-dev.streamlit.app"
+Channel = Literal["stable", "dev"]
+
+
+def docs_site(channel: Channel) -> str:
+    """The published documentation root for an app channel."""
+    return DOCS_ROOT if channel == "stable" else DOCS_ROOT + "dev/"
+
 
 DIST_NAME = "scanpath-studio"
 STAMP_NAME = "_build.json"
@@ -62,7 +74,10 @@ class BuildInfo:
     (``None`` when unknown), ``commit`` the abbreviated hash, ``dirty`` whether
     tracked files had uncommitted changes, and ``source`` one of
     ``"checkout"``, ``"stamp"``, ``"vcs"`` or ``"release"``. ``vcs_url`` is the
-    repository a ``pip install git+…`` came from.
+    repository a ``pip install git+…`` came from. ``ref`` is the checkout branch
+    or the revision requested from pip when available. For VCS installs,
+    ``subdirectory`` locates the package inside that repository and
+    ``commit_pinned`` records a revision that names the installed commit itself.
     """
 
     version: str
@@ -72,11 +87,42 @@ class BuildInfo:
     dirty: bool = False
     source: str = "release"
     vcs_url: str = ""
+    ref: str = ""
+    subdirectory: str = ""
+    commit_pinned: bool = False
+
+    @property
+    def channel(self) -> Channel:
+        """The release channel used for Help and documentation links."""
+        if self.dirty or Version(self.release).is_prerelease:
+            return "dev"
+        if self.ref in {"stable", f"v{self.release}"}:
+            return "stable"
+        if self.ref in {"dev", "main"} or self.distance != 0:
+            return "dev"
+        return "stable"
+
+    @property
+    def docs_url(self) -> str:
+        return docs_site(self.channel)
 
     def describe(self) -> str:
         """The build in a sentence, relative to its release."""
         if self.source == "vcs":
-            return f"Installed from git at {self.commit}, based on v{self.release}"
+            build = f"Installed from git at {self.commit}, based on v{self.release}"
+            if self.ref:
+                build += (
+                    f" (pinned commit {self.ref})"
+                    if self.commit_pinned
+                    else f" (ref {self.ref})"
+                )
+            if self.subdirectory:
+                build += f", package in {self.subdirectory}"
+            return build
+        if self.distance is None:
+            return f"Git build at {self.commit}, based on v{self.release}"
+        if self.channel == "stable" and self.distance:
+            return f"Stable deployment of v{self.release}, at {self.commit}"
         if self.distance:
             commits = "commit" if self.distance == 1 else "commits"
             text = (
@@ -137,7 +183,10 @@ def _git_env() -> dict[str, str]:
 
 
 def read_checkout(
-    root: Path = _PACKAGE_DIR.parent, *, run: Callable = subprocess.run
+    root: Path = _PACKAGE_DIR.parent,
+    *,
+    run: Callable = subprocess.run,
+    release: str | None = None,
 ) -> BuildInfo | None:
     """``git describe`` the checkout at ``root``, when it is this project's.
 
@@ -171,12 +220,48 @@ def read_checkout(
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    if done.returncode != 0:
-        return None
+    # `describe --dirty` would refresh and rewrite .git/index, which can make
+    # a concurrent `git commit` fail; `status` with optional locks off does
+    # not.
+    try:
+        status = run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "status",
+                "--porcelain",
+                "--branch",
+                "--untracked-files=no",
+            ],
+            **options,
+        )
+        changes = status.stdout.splitlines() if status.returncode == 0 else []
+        branch = (
+            changes.pop(0)[3:].split("...")[0]
+            if changes and changes[0].startswith("## ")
+            else ""
+        )
+        dirty = bool(changes)
+    except (OSError, subprocess.SubprocessError):
+        branch, dirty = "", False
     line = done.stdout.strip()
     match = _DESCRIBE.match(line)
-    if not match:
-        return None
+    if done.returncode != 0 or not match:
+        # Community Cloud can clone only the branch tip, without release tags.
+        if not release:
+            return None
+        try:
+            head = run(
+                ["git", "-C", str(root), "rev-parse", "--short", "HEAD"], **options
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        commit = head.stdout.strip()
+        if head.returncode or not re.fullmatch("[a-f0-9]+", commit):
+            return None
+        version = f"{release}+g{commit}" + (".dirty" if dirty else "")
+        return BuildInfo(version, release, None, commit, dirty, "checkout", ref=branch)
     # describe counts every commit the tag lacks, merges included. The demo's
     # `stable` branch takes each release as a merge commit, so there that
     # count grows by one per release ever merged; count only the commits that
@@ -192,18 +277,8 @@ def read_checkout(
         distance = None
     if distance is not None:
         line = f"v{match['release']}-{distance}-g{match['commit']}"
-    # `describe --dirty` would refresh and rewrite .git/index, which can make
-    # a concurrent `git commit` fail; `status` with optional locks off does
-    # not.
-    try:
-        status = run(
-            ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
-            **options,
-        )
-        dirty = status.returncode == 0 and bool(status.stdout.strip())
-    except (OSError, subprocess.SubprocessError):
-        dirty = False
-    return from_describe(line + "-dirty" if dirty else line)
+    info = from_describe(line + "-dirty" if dirty else line)
+    return replace(info, ref=branch) if info else None
 
 
 def write_stamp(info: BuildInfo, path: Path) -> None:
@@ -217,6 +292,9 @@ def read_stamp(path: Path = _PACKAGE_DIR / STAMP_NAME) -> BuildInfo | None:
         data = json.loads(path.read_text(encoding="utf-8"))
         info = BuildInfo(**{**data, "source": "stamp"})
         Version(info.version)
+        Version(info.release)
+        if not isinstance(info.ref, str):
+            return None
     except (OSError, ValueError, TypeError):
         return None
     return info
@@ -243,7 +321,9 @@ def read_vcs_install(
     vcs = data.get("vcs_info") if isinstance(data, dict) else None
     if not isinstance(vcs, dict) or vcs.get("vcs") != "git" or not vcs.get("commit_id"):
         return None
-    commit = str(vcs["commit_id"])[:7]
+    commit_id = str(vcs["commit_id"])
+    commit = commit_id[:7]
+    ref = str(vcs.get("requested_revision") or "")
     version = f"{release}+g{commit}"
     try:
         Version(version)
@@ -257,6 +337,12 @@ def read_vcs_install(
         False,
         "vcs",
         str(data.get("url") or ""),
+        ref=ref,
+        subdirectory=str(data.get("subdirectory") or ""),
+        commit_pinned=bool(
+            re.fullmatch("[0-9a-fA-F]{4,}", ref)
+            and commit_id.lower().startswith(ref.lower())
+        ),
     )
 
 
@@ -270,7 +356,7 @@ def resolve(
 ) -> BuildInfo:
     """The first source that knows this build; the release itself otherwise."""
     return (
-        read_checkout(root, run=run)
+        read_checkout(root, run=run, release=release)
         or read_stamp(stamp)
         or read_vcs_install(release, read_text=read_text)
         or BuildInfo(release, release)

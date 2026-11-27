@@ -1,13 +1,11 @@
 """Manuscript screenshots of the running application.
 
-The other scripts here render figures headlessly through the public API. This
-one is the exception: the interface figures can only come from the app itself,
-so it drives a real browser over a running server and saves what a user would
-see.
+The screenshot driver opens the running app in headless Chromium and saves
+the interface as a reader sees it.
 
-Run the app first (its port is the one this script talks to)::
+Run the app first on the port the driver uses::
 
-    uv run streamlit run streamlit_app.py --server.port 8599
+    uv run streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8599
 
 then, from the same directory::
 
@@ -211,13 +209,13 @@ def deep_link(page: Page, params: dict) -> None:
 
 
 def reset_viz(page: Page) -> None:
-    """Press ♻️ Reset visualization, so a run never inherits the last one's view.
+    """Press ♻️ Reset at the foot of the rail, so a run never inherits the last one's view.
 
     The fixation-index window in particular is not named in this script's
     links, so a window left behind by an earlier run would silently subset
     every figure.
     """
-    btns = visible(page.locator('button:has-text("Reset visualization")'))
+    btns = visible(page.locator(".st-key-reset_viz_settings_btn button"))
     if not btns:
         print("  ! no reset button", flush=True)
         return
@@ -230,39 +228,27 @@ def reset_viz(page: Page) -> None:
 
 
 def set_fix_window(page: Page, lo: int, hi: int) -> None:
-    """Drive the 🧹 Filter panel's *Fixation index range* to ``lo``–``hi``.
-
-    Keyboard rather than a drag: the range is two native ``input[type=range]``
-    elements, and PageUp/Down move in one stride, so converging on a value takes
-    a handful of presses instead of a pixel calculation that has to be right.
-    """
-    for attempt in range(5):
-        if page.locator('.st-key-single_fix_range input[aria-label*="start"]').count():
-            break
-        btns = visible(page.locator(".st-key-split_mode_rail_filter button"))
-        if btns:
-            btns[0].click()
-        settle(page, quiet=1.0)
-    else:
-        raise RuntimeError("the 🧹 Filter panel never opened")
-
-    for aria, target in (("start", lo), ("end", hi)):
-        thumb = page.locator(f'.st-key-single_fix_range input[aria-label*="{aria}"]')
-        thumb.focus()
-        for _ in range(300):
-            current = int(thumb.input_value())
-            if current == target:
-                break
-            delta = target - current
-            if abs(delta) >= 15:
-                page.keyboard.press("PageUp" if delta > 0 else "PageDown")
-            else:
-                page.keyboard.press("ArrowRight" if delta > 0 else "ArrowLeft")
-        else:
-            raise RuntimeError(f"fixation window {aria} never reached {target}")
-    settle(page, quiet=1.5)
+    """Set the reading's fixation window using the two exact index fields."""
+    editor = page.locator(".st-key-plot_editor_tabs")
+    editor.get_by_role("tab", name="Layers", exact=True).click()
+    editor.get_by_role("button", name="Filters & highlights").click()
+    menu = page.locator('[data-testid="stPopoverBody"]')
+    lower = menu.get_by_role("spinbutton", name="Fixation index range (min)")
+    upper = menu.get_by_role("spinbutton", name="Fixation index range (max)")
+    # When both ends move beyond the old maximum, move the upper end first
+    # so the editor never has to reorder the pair.
+    bounds = [(lower, lo), (upper, hi)]
+    if lo > int(upper.input_value()):
+        bounds.reverse()
+    for field, target in bounds:
+        if int(field.input_value()) != target:
+            field.fill(str(target))
+            field.press("Enter")
+            settle(page)
+    if (int(lower.input_value()), int(upper.input_value())) != (lo, hi):
+        raise RuntimeError(f"The fixation window did not reach {lo}–{hi}.")
     page.keyboard.press("Escape")
-    settle(page, quiet=1.5)
+    settle(page)
 
 
 def shot_zoomed_plot(page: Page, name: str, key: str, w0: int, w1: int) -> None:
@@ -336,15 +322,14 @@ SUBTABS = {
 #: The bundled demo trial every OneStop figure is taken from.
 DEMO_TRIAL = {
     "source": "demo",
-    "participant": "l37_1129",
-    "trial_id": "l37_1129_2_1_1_Ele",
+    "participant": "l37_273",
+    "trial_id": "l37_273_2_1_1_Ele",
 }
 
-#: Words 92–105 of that trial — “Our clients want to know how well their stores
-#: are delivering on that experience.” — read by fixations 124–139. The whole
-#: sentence sits inside the trial's answer span, so it renders highlighted.
+#: Zero-based positions of “Our clients want to know how well their stores are
+#: delivering on that experience.” and the reader's fixations on that sentence.
 SENTENCE_WORDS = (92, 105)
-SENTENCE_FIXATIONS = (124, 139)
+SENTENCE_FIXATIONS = (58, 67)
 
 
 def capture(page: Page) -> None:

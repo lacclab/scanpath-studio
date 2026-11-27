@@ -347,3 +347,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+.sps-docs-channel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .4rem 1rem;
+}
+
+.sps-docs-channel a {
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}

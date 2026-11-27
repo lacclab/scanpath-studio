@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 __all__ = [
+    "AnnotationsWriteResult",
     "CompareScanpath",
     "ScanpathData",
     "__version__",
+    "add_dataset",
     "animate_scanpath",
+    "app_link",
     "attach_stimulus_images",
     "build_authored_scanpath",
     "cache_status",
@@ -33,17 +36,24 @@ __all__ = [
     "plot_corpus_figure",
     "plot_scanpath",
     "propose_schema",
+    "publication_figure",
+    "read_annotations",
+    "remove_dataset",
     "render_parent_trial",
+    "run_analysis_recipe",
     "save_figure",
     "save_figure_layers",
+    "save_panel_proof",
+    "save_publication",
     "version_info",
+    "write_annotations",
 ]
 # The release this tree descends from: the number `/release` bumps (with
 # CITATION.cff), `pyproject.toml` builds with, and publish.yml checks a tag
 # against. `__version__` is the exact build, worked out from it lazily
 # (build_info.py) — "0.35.0" at the release itself,
 # "0.35.0.post3+g8f18219" three commits after it.
-__release__ = "0.43.0"
+__release__ = "0.50.0"
 
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
@@ -61,7 +71,13 @@ _HELD_BACK_EXPORTS = frozenset(
         "trial_summary",
     }
 )
-_DATASET_EXPORTS = frozenset({"load_potec", "load_onestop"})
+# The EyeLink import is experimental too (`constants.eyelink_import_enabled`):
+# its entries resolve, and raise without SCANPATH_EXPERIMENTAL=1, but are not
+# listed.
+_HELD_BACK_EXPORTS |= {"add_eyelink_dataset", "import_eyelink", "load_eyelink"}
+# `load_multipleye` is experimental too (`constants.multipleye_format_enabled`):
+# it resolves, and raises without SCANPATH_EXPERIMENTAL=1, but is not listed.
+_DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
 _API_EXPORTS = (
     (frozenset(__all__) | _HELD_BACK_EXPORTS)
     - {"__version__", "main"}

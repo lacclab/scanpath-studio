@@ -9,16 +9,16 @@ description: "Answers to common questions about Scanpath Studio: fixations that 
 ### The fixations don't line up with the text
 
 Words and fixations must use the same pixel coordinates and share trial IDs.
-If the fixations are shifted, mirrored or scaled against the words, the two
-tables use different coordinates: a different origin, unit or offset. No
-setting in the app fixes that, so convert one of the tables
+If the fixations are shifted, mirrored or scaled relative to the words, check
+that both tables use the same origin, units and offsets. Correct any coordinate
+differences before importing the tables
 ([What your data needs → Files and units](guides/loading-data/index.md#tables)).
 
 If the fixations sit on the words but the figure is framed or sized wrongly,
 set the screen resolution of the monitor used in the experiment. Open
-:material/database: **Data Management** → :material/edit: **Edit dataset** →
-**Recording setup** and choose **Screen** → **I know it**. *Estimate from my
-data* gives only a lower bound.
+:material/database: **Data Management** → **Current dataset** → :material/edit:
+**Edit dataset** → **Recording setup** and choose **Screen** → **I know it**.
+*Estimate from my data* gives only a lower bound.
 
 ### The text is too big or too small
 
@@ -32,8 +32,8 @@ font sizes.
 ### A column was detected wrongly
 
 The app guesses columns from their names. Pick the right one under
-:material/database: **Data Management** → :material/edit: **Edit dataset**, or
-pass `word_schema` / `fix_schema` to
+:material/database: **Data Management** → **Current dataset** → :material/edit:
+**Edit dataset**, or pass `word_schema` / `fix_schema` to
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data].
 
 ### Can I load only one table?
@@ -41,8 +41,8 @@ pass `word_schema` / `fix_schema` to
 Yes. A Words table alone shows the text and any reading measures it carries. A
 Fixations table alone shows the fixations without the text. A Raw gaze table
 can also be the only table. Most features need both words and fixations. When
-your tables cover different trials, every trial that any of them has is listed
-and drawn with the layers it has.
+your tables cover different trials, the app lists every trial found in any
+table and draws the layers available for it.
 
 ### Can I open PoTeC or OneStop in the online demo?
 
@@ -108,12 +108,10 @@ data tables and exported tables still hold the words.
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install. When the app listens only on this computer,
-as `scanpath-studio` and the desktop app do, it saves your datasets and
-settings there. :material/database: **Data Management** → :material/history:
-**Saved on this computer** shows what it holds. The online demo keeps nothing
-and says so after your first upload, so export your annotations and settings
-before you leave ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
+Local and desktop installs normally save your datasets and settings between visits.
+Open :material/database: **Data Management** → **Saved work → Your session** to
+check whether saving is on. The online demo keeps uploads only for the current
+session. Before refreshing, [export your annotations and settings](guides/scanpath-visualization/index.md#back-up-your-work).
 
 If the files of one saved dataset go missing or are damaged, the rest of the
 session still comes back. The app names the dataset it could not restore,
@@ -122,38 +120,38 @@ copy**. Saved metadata tables that can't be read are kept the same way. If the
 whole saved copy can't be read, the app opens without it and stops saving over
 it until you retry or clear it.
 
+If two tabs use the same local recovery folder, edits to different trial
+annotations can be saved together. When a save would overwrite newer work,
+the older tab shows a warning and keeps your edits open. Copy or export them
+before reloading that tab. To save your notes, open **Data Management →
+Current dataset → Annotations** for the dataset and download the JSON file.
+
 ### How do I stop saving, or delete what is saved?
 
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
-delete what is saved and start over, use **Clear what is saved…** under
-**Saved on this computer**, or close the app and run
+delete your saved session, open :material/database: **Data Management** →
+**Saved work → Your session → Saved session details → Clear saved session…**,
+or close the app and run
 `scanpath-studio cache --clear`. That leaves the public datasets you
-downloaded: delete one with its :material/delete: button in the same section.
+downloaded: delete one with its :material/delete: button under **Dataset downloads**.
 See [Your data](about.md#your-data) and [Recovery cache](cli.md#cache).
 
 ## Help and versions
 
 ### Where do I ask a question, report a bug or send feedback?
 
-:material/help: **Help** → :material/feedback: **Send feedback** links each
-kind of feedback to its page on GitHub: **Report a bug**, **Suggest a
-feature**, **Share an idea** and **Ask a question**. It also shows the version
-and system details a bug report needs, ready to copy. The app sends nothing.
-You submit each one on GitHub yourself.
-
-Ask questions in
-[Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a).
-Report a bug as a
-[GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
-with the version, your operating system and how you run the app (pip, the
-desktop app or the online demo). :material/help: **Help** → :material/info:
-**About** shows the version and links to both. On the command line, run
-`scanpath-studio --version`.
+:material/help: **Help** → **Troubleshooting & feedback** has short answers
+in the app. To contact the project, [ask a question in Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a),
+[report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
+or [suggest an improvement in Ideas](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas).
+**Report a bug** gives you the version and system details to copy. In a
+terminal, `scanpath-studio --version` prints the version.
 
 ### How do I update Scanpath Studio? { #updating }
 
-Open :material/help: **Help** → :material/info: **About** →
-:material/update: **Check for updates**. In the desktop app, choose
+In a local install or the desktop app, open :material/help: **Help** →
+:material/info: **About & citation** → **App details** → :material/update: **Check for updates**.
+In the desktop app, choose
 **Update & restart**. For a Python install, run:
 
 ```bash

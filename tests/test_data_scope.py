@@ -1,10 +1,4 @@
-"""The Data Management page says which counts follow the trial filters.
-
-📊 Stats and the raw tables count the filtered pool while 📂 Available datasets
-and *Available with this dataset* count the whole dataset, and the page says
-which is which. One ``AppTest`` flow on the bundled demo (2 readers × 12
-trials) pins both states.
-"""
+"""Data Management distinguishes filtered recordings from whole-dataset checks."""
 
 from __future__ import annotations
 
@@ -28,30 +22,144 @@ def test_the_data_page_names_the_scope_of_its_counts():
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    # Unfiltered: Stats and the three trial tables say "whole dataset", and
-    # nothing else on the page needs to.
-    whole = _captions(at, "24 trials · 2 participants · whole dataset")
-    # Stats + Fixations + Words + Raw gaze, and Participants / Trials / Texts,
-    # which list the data's own ids while no table is attached to them.
-    assert len(whole) == 7, whole
+    assert not _captions(at, "whole dataset")
     assert not _captions(at, "before the trial filters")
 
     # Set on the Scanpath view, where the filter panel publishes the result
     # `app.main` filters with on the following run.
     pin_view(at, "Scanpath")
     at.run(timeout=90)
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run(timeout=90)
     pin_data_view(at)
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    scoped = _captions(at, "12 of 24 trials · 1 of 2 participants · filtered")
-    assert len(scoped) == 7, scoped
-    assert all(md_literal("Participant: l7_1090") in c for c in scoped)
-    # The table and the capabilities block say they did not follow.
+    scope = "Scanpath filters include 12 of 24 trials."
+    assert _captions(at, scope)
+    assert "12 of 12" in at.button(key="data_inspect_fixations").label
+    at.button(key="data_inspect_fixations").click()
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    captions = _captions(at, scope)
+    assert len(captions) == 1 and md_literal("Participant: l7_183") in captions[0]
+    assert {
+        "Fixations",
+        "Words",
+        "Raw gaze samples",
+        "Participants",
+        "Trials",
+        "Texts",
+    } <= {h.value for h in at.subheader}
+
+    pin_data_view(at, section="Dataset library")
+    at.run(timeout=90)
     assert _captions(at, "Whole datasets, before the trial filters")
-    assert _captions(at, "Available with this dataset** · whole dataset")
+
+
+@pytest.mark.timeout(180)
+def test_a_star_added_under_favorites_only_joins_the_pool():
+    """The pool under an annotation filter is kept between reruns; a new star
+    changes what the filter keeps, so the pool follows it."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data(names="canonical")
+    readings = [
+        tuple(map(str, row))
+        for row in api.list_trials(words, fixations)
+        .iloc[:2, :2]
+        .itertuples(index=False)
+    ]
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    at.session_state["filter_favorites"] = True
+    at.run(timeout=90)
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert _captions(at, "0 of 24 trials")
+    for count, reading in enumerate(readings, start=1):
+        stars = dict(at.session_state["trial_annotations"])
+        stars[reading] = {"star": True, "tags": [], "note": ""}
+        at.session_state["trial_annotations"] = stars
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert _captions(at, f"{count} of 24 trials"), [c.value for c in at.caption]
+
+
+@pytest.mark.timeout(180)
+def test_the_annotation_filter_keeps_its_copies_of_the_pool_only_while_on():
+    from scanpath_studio import api, app, data
+
+    words, fixations = api.load_sample_data(names="canonical")
+    starred = tuple(map(str, api.list_trials(words, fixations).iloc[0, :2]))
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.session_state["trial_annotations"] = {
+        starred: {"star": True, "tags": [], "note": ""}
+    }
+    at.run(timeout=90)
+
+    def kept_after(favorites_only: bool) -> set[str]:
+        # A filter set from outside its widget applies from the next run.
+        at.session_state["filter_favorites"] = favorites_only
+        at.run(timeout=90)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        store = at.session_state[data._FRAME_CACHE_KEY]
+        return {slot for slot in app.ANNOTATION_FILTER_SLOTS if slot in store}
+
+    assert kept_after(True) == set(app.ANNOTATION_FILTER_SLOTS)
+    assert kept_after(False) == set()
+
+
+@pytest.mark.timeout(180)
+def test_compare_keeps_its_copies_of_b_pool_only_while_on():
+    from scanpath_studio import api, data, tabs
+
+    words, fixations = api.load_sample_data(names="canonical")
+    readings = api.list_trials(words, fixations).iloc[:2, :2]
+    stars = {
+        tuple(map(str, row)): {"star": True, "tags": [], "note": ""}
+        for row in readings.itertuples(index=False)
+    }
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.session_state["trial_annotations"] = stars
+    at.session_state["single_compare_toggle"] = True
+    at.run(timeout=90)
+
+    def kept() -> set[str]:
+        store = at.session_state[data._FRAME_CACHE_KEY]
+        return {slot for slot in tabs.COMPARE_NARROWING_SLOTS if slot in store}
+
+    at.session_state["cmpfilter_favorites"] = True
+    at.run(timeout=90)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert {"cmp_annotation_filter", "cmp_annotation_filter_readings"} <= kept()
+    at.session_state["single_compare_toggle"] = False
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert kept() == set()
+
+
+@pytest.mark.timeout(180)
+def test_empty_trial_filters_leave_the_dataset_open_for_inspection():
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    at.session_state["filter_favorites"] = True
+    at.run(timeout=90)
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert _captions(at, "0 of 24 trials")
+    assert {m.label: m.value for m in at.metric}["Trials"] == "0"
+    at.segmented_control(key="data_inspection_panel").set_value("Data checks")
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert any("Compare with planned trials" in e.label for e in at.expander)
+    assert not at.button(key="data_edit_current").disabled
 
 
 class TestDatasetTableScopeNote:
@@ -71,7 +179,7 @@ class TestDatasetTableScopeNote:
 
         bare = dataset_table_scope_note(filtered=False, stand_in_for="PoTeC")
         assert bare == (
-            "Rows count whole datasets. PoTeC isn't loaded, so Stats below "
+            "Rows count whole datasets. PoTeC isn't loaded, so Overview "
             "counts the bundled demo shown in its place."
         )
         both = dataset_table_scope_note(filtered=True, stand_in_for="PoTeC")
@@ -88,7 +196,7 @@ def test_the_table_says_when_stats_counts_the_demo_standing_in(monkeypatch):
     monkeypatch.setattr(datasets, "potec_present", lambda root: False)
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.session_state["data_source_choice"] = "PoTeC — Potsdam Textbook Corpus"
-    pin_data_view(at)
+    pin_data_view(at, section="Dataset library")
     at.run(timeout=90)
     assert not at.exception, at.exception
     notes = _captions(at, "counts the bundled demo shown in its place.")

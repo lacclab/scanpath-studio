@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
+from streamlit.testing.v1 import AppTest
+from streamlit.util import calc_hash
 
-from scanpath_studio import tabs
+from scanpath_studio import api, tabs
 from scanpath_studio.aggregation import (
     MEASURES,
     READING_KEY,
@@ -22,6 +24,7 @@ from scanpath_studio.aggregation import (
     paired_group_summary,
     resolve_group_spec,
 )
+from tests.conftest import APP_SCRIPT
 
 ADV = {"difficulty_level": ["Adv"]}
 ELE = {"difficulty_level": ["Ele"]}
@@ -188,8 +191,6 @@ def _groups_app():
 
 @pytest.mark.parametrize("owner", ["words", "fixations"])
 def test_the_groups_view_compares_the_two_readings(owner):
-    from streamlit.testing.v1 import AppTest
-
     at = AppTest.from_function(_groups_app)
     at.session_state["_owner"] = owner
     at.session_state["cmp_mode"] = "Independent filter sets"
@@ -209,3 +210,231 @@ def test_the_groups_view_compares_the_two_readings(owner):
     bars = at.session_state["_bars"]
     by_group = {row["group"]: row["value"] for row in bars}
     assert by_group == {"Group A": 100.0, "Group B": 300.0}
+
+
+def _bookmarked_groups():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at._page_hash = calc_hash("corpus-analysis")
+    at.query_params["corpus_subtab"] = "Groups"
+    return at
+
+
+def test_groups_opens_on_named_means_with_the_editor_and_chart_options_collapsed(
+    experimental_off,
+):
+    at = _bookmarked_groups().run()
+    assert not at.exception
+    assert at.toggle(key="groups_compare").value is True
+    assert at.selectbox(key="cmp_view").value == "Group means & difference"
+    assert at.selectbox(key="cmp_measure").value == "Total fixation duration — TFD"
+    popovers = {p.proto.popover.label: p for p in at.get("popover")}
+    assert popovers["Edit groups"].multiselect(key="cmp_a").value == ["Adv"]
+    assert popovers["Edit groups"].multiselect(key="cmp_b").value == ["Ele"]
+    settings = popovers["Chart settings"]
+    assert {s.key for s in settings.selectbox} == {"cmp_view"}
+    assert [m.label for m in settings.metric] == ["Standardized difference"]
+    means = {m.label: m.value for m in at.metric if m.label.endswith(" mean")}
+    assert any("Adv" in name for name in means) and any("Ele" in name for name in means)
+    assert len(means) == 2 and all(value.endswith(" ms") for value in means.values())
+    assert at.metric[-1].label == "Difference (A − B)"
+    at.toggle(key="groups_compare").set_value(False).run()
+    assert not at.exception
+    assert at.selectbox(key="pgrp_view").value == "Distributions"
+    assert at.multiselect(key="pgrp_g").value == ["Adv"]
+
+
+@pytest.mark.parametrize("owner", ["words", "fixations"])
+def test_a_field_on_one_table_can_split_both_groups(owner):
+    at = AppTest.from_function(_groups_app)
+    at.session_state["_owner"] = owner
+    at.session_state["cmp_view"] = "Side-by-side summary bars"
+    at.run(timeout=60)
+    assert not at.exception
+    assert at.selectbox(key="cmp_field").value == "difficulty_level"
+    assert [r["value"] for r in at.session_state["_bars"]] == [100.0, 300.0]
+
+
+def test_group_field_keeps_values_with_different_filter_spellings():
+    words = pd.DataFrame({"difficulty_level": [1, True, None]})
+    assert tabs._both_frame_values(words, pd.DataFrame(), "difficulty_level") == [
+        "1",
+        "True",
+    ]
+
+
+def test_group_means_select_only_the_reader_and_measure(monkeypatch):
+    tabs._c_group_means.clear()
+    mean = tabs.reader_means
+    selected = []
+
+    def record(frame, measure):
+        selected.append((set(frame), frame["participant_id"].unique().tolist()))
+        return mean(frame, measure)
+
+    monkeypatch.setattr(tabs, "reader_means", record)
+    at = AppTest.from_function(_groups_app)
+    at.session_state["cmp_mode"] = "Independent filter sets"
+    at.session_state["cmp_setA_difficulty_level"] = ["Adv"]
+    at.session_state["cmp_setB_difficulty_level"] = ["Ele"]
+    at.run()
+    assert not at.exception
+    expected = [
+        ({"participant_id", "duration_ms"}, ["p_adv"]),
+        ({"participant_id", "duration_ms"}, ["p_ele"]),
+    ]
+    assert selected == expected
+
+    def difference():
+        return next(m.value for m in at.metric if m.label == "Difference (A − B)")
+
+    assert difference() == "-200.00 ms"
+    # A rerun with the same groups reads the cached means.
+    at.run()
+    assert selected == expected
+    assert difference() == "-200.00 ms"
+    # Swapping the groups selects their readings again.
+    at.session_state["cmp_setA_difficulty_level"] = ["Ele"]
+    at.session_state["cmp_setB_difficulty_level"] = ["Adv"]
+    at.run()
+    assert selected[2:] == expected[::-1]
+    assert difference() == "200.00 ms"
+
+
+def test_a_participants_cohort_distribution_is_reused_until_the_choice_changes(
+    monkeypatch,
+):
+    tabs._c_reader_vs_cohort.clear()
+    split = tabs.reader_vs_cohort_values
+    calls = []
+
+    def record(frame, participant_id, measure, *, normalize=False):
+        calls.append((participant_id, normalize))
+        return split(frame, participant_id, measure, normalize=normalize)
+
+    monkeypatch.setattr(tabs, "reader_vs_cohort_values", record)
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
+    at._page_hash = calc_hash("corpus-analysis")
+    at.query_params["corpus_subtab"] = "Per participant"
+    at.session_state["prdr_view"] = "Distribution vs cohort"
+    at.run()
+    assert not at.exception
+    first = at.selectbox(key="prdr_pid").value
+    assert calls == [(first, False)]
+    at.run()
+    assert calls == [(first, False)]
+    at.toggle(key="prdr7_norm").set_value(True).run()
+    other = next(p for p in at.selectbox(key="prdr_pid").options if p != first)
+    at.selectbox(key="prdr_pid").select(other).run()
+    assert not at.exception
+    assert calls == [(first, False), (first, True), (other, True)]
+
+
+def test_group_means_without_reader_ids_pool_recorded_values():
+    at = AppTest.from_string(
+        """
+import pandas as pd
+from scanpath_studio import tabs
+
+tabs.render_group_comparison_tab(
+    pd.DataFrame({"first_fixation_ms": [100.0, None, 300.0]}),
+    pd.DataFrame(),
+    viz_settings={}, canvas_width=700, canvas_height=460,
+    base_font_size=14, font_family="Arial",
+)
+"""
+    )
+    at.session_state["cmp_mode"] = "Independent filter sets"
+    at.run()
+    assert not at.exception
+    a = next(m for m in at.metric if m.label == "Group A mean")
+    assert (a.value, a.delta) == ("200.00 ms", "2 observations")
+    assert any("Participant IDs are missing" in note.value for note in at.caption)
+
+
+def test_profile_becomes_group_a_and_an_unfinished_split_has_no_result(
+    experimental_off,
+):
+    at = _bookmarked_groups()
+    at.session_state["groups_compare"] = False
+    at.run()
+    at.multiselect(key="pgrp_g").set_value(["Ele"]).run()
+    at.toggle(key="groups_compare").set_value(True).run()
+    assert at.multiselect(key="cmp_a").value == ["Ele"]
+    assert at.multiselect(key="cmp_b").value == ["Adv"]
+    at.selectbox(key="cmp_view").select("Group means & difference").run()
+    downloads = {"dl_cmp21", "dl_cmp21_recipe"}
+    assert downloads <= {button.key for button in at.download_button}
+
+    # Either empty side or both together must hold back the result and its files.
+    for key, values in (("cmp_a", []), ("cmp_b", []), ("cmp_a", ["Adv"])):
+        at.multiselect(key=key).set_value(values).run()
+        assert not at.exception
+        assert any(
+            "at least one value for each group" in info.value for info in at.info
+        )
+        assert "Difference (A − B)" not in {metric.label for metric in at.metric}
+        assert downloads.isdisjoint(button.key for button in at.download_button)
+
+    at.multiselect(key="cmp_b").set_value(["Ele"]).run()
+    assert downloads <= {button.key for button in at.download_button}
+    at.toggle(key="groups_compare").set_value(False).run()
+    assert at.multiselect(key="pgrp_g").value == ["Adv"]
+
+
+def test_independent_filters_keep_the_named_group_and_allow_the_whole_pool(
+    experimental_off,
+):
+    at = _bookmarked_groups()
+    at.session_state["groups_compare"] = False
+    at.run()
+    at.radio(key="pgrp_mode").set_value("Independent filter sets").run()
+    at.text_input(key="pgrp_set0_label").set_value("Elementary readings")
+    at.multiselect(key="pgrp_set0_difficulty_level").set_value(["Ele"]).run()
+    at.toggle(key="groups_compare").set_value(True).run()
+    assert at.radio(key="cmp_mode").value == "Independent filter sets"
+    assert at.multiselect(key="cmp_setA_difficulty_level").value == ["Ele"]
+    assert at.text_input(key="cmp_setA_label").value == "Elementary readings"
+    assert at.multiselect(key="cmp_setB_difficulty_level").value == []
+    at.selectbox(key="cmp_view").select("Group means & difference").run()
+    assert not at.exception
+    words = api.load_sample_data(names="canonical").words
+    for label, rows in (
+        ("Elementary readings mean", words[words["difficulty_level"] == "Ele"]),
+        ("Group B mean", words),
+    ):
+        mean = (
+            rows.groupby("participant_id")["total_fixation_duration_ms"].mean().mean()
+        )
+        assert next(m.value for m in at.metric if m.label == label) == f"{mean:.2f} ms"
+    assert any("all words with a value" in caption.value for caption in at.caption)
+    assert any("no filters includes all selected trials" in c.value for c in at.caption)
+
+
+def test_pool_without_a_split_field_shows_how_to_continue(experimental_off):
+    words, fix = api.load_sample_data(names="canonical")
+    reading = words.iloc[0]
+    selection = {"participant_id": reading.participant_id, "trial_id": reading.trial_id}
+    at = _bookmarked_groups()
+    at.session_state["data_source_choice"] = "One reading"
+    at.session_state["_datasets"] = {
+        "One reading": {
+            "words": words[words[list(selection)].eq(selection).all(axis=1)],
+            "fixations": fix[fix[list(selection)].eq(selection).all(axis=1)],
+            "raw_gaze": pd.DataFrame(),
+        }
+    }
+    at.run()
+    assert any("No field is available to split" in info.value for info in at.info)
+    assert not at.get("plotly_chart")
+    at.toggle(key="groups_compare").set_value(True).run()
+    at.selectbox(key="cmp_view").select("Group means & difference").run()
+    assert not at.exception
+    assert "dl_cmp21" not in {button.key for button in at.download_button}
+    at.radio(key="cmp_mode").set_value("Independent filter sets").run()
+    assert not at.exception
+    assert any(
+        "Both groups contain the same readings" in note.value for note in at.info
+    )
+    assert (
+        next(m.value for m in at.metric if m.label == "Difference (A − B)") == "0.00 ms"
+    )

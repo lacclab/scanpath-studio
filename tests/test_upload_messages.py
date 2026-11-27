@@ -8,12 +8,16 @@ sentence ends in two periods.
 
 from __future__ import annotations
 
+import csv
 import io
 import zipfile
 
 import pandas as pd
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
+from scanpath_studio import data as data_module
 from scanpath_studio.data import (
     READ_NOTES_ATTR,
     ReadPlan,
@@ -34,6 +38,34 @@ def _upload(name: str, body: bytes) -> io.BytesIO:
     buf = io.BytesIO(body)
     buf.name = name
     return buf
+
+
+def test_workbook_header_and_read_name_the_same_first_sheet(tmp_path):
+    path = tmp_path / "pilot.xlsx"
+    with pd.ExcelWriter(path) as book:
+        pd.DataFrame({"reader": ["01"], "note": ["pilot"]}).to_excel(
+            book, sheet_name="Initial pilot", index=False
+        )
+        pd.DataFrame({"later": [1]}).to_excel(book, sheet_name="Analysis", index=False)
+    assert read_table_columns(path) == ["reader", "note"]
+    table = read_table(path, plan=ReadPlan(identity=("reader",)))
+    assert table.attrs["source_worksheet"] == "Initial pilot"
+    assert table.reader.tolist() == ["01"]
+    text = _upload("EyeLink.xls", b"reader\tnote\n01\tpilot\n")
+    assert read_table_columns(text) == ["reader", "note"]
+    assert "source_worksheet" not in read_table(text).attrs
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_feather_header_and_data_accept_both_versions(tmp_path, version):
+    from pyarrow import feather
+
+    path = tmp_path / "trial.feather"
+    feather.write_feather(
+        pd.DataFrame({"reader": ["01"], "word": ["The"]}), path, version=version
+    )
+    assert read_table_columns(path) == ["reader", "word"]
+    assert read_table(path).reader.tolist() == ["01"]
 
 
 def _semicolon_table(bad_line: str | None = None, at: int = 8) -> bytes:
@@ -198,6 +230,24 @@ class TestRowsWithMoreFieldsThanTheHeader:
         assert frame["trial"].tolist() == ["t;1", "t2"]
         assert pop_read_notes(frame) == []
 
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    def test_mixed_record_widths_and_multiline_quoted_fields(self, tmp_path, route):
+        body = b'participant;trial;x;y;duration\n"reader;one";"multi\nline";1;2;30\np;phantom;2;130;140;160\np;t;220;225\n'
+        path = tmp_path / "fix.csv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "recordings.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("fix.csv", body)
+        source = _upload("fix.csv", body) if route == "upload" else path
+        frame = read_table(source, plan=_plan())
+        assert frame["trial"].tolist() == ["multi\nline", "t"]
+        assert "line 4" in pop_read_notes(frame)[0]
+        whole = ReadPlan(identity=("participant", "trial"))
+        with pytest.raises(TableReadError, match="line 4") as raised:
+            read_table(source, plan=whole)
+        assert raised.value.name == "fix.csv"
+
     def test_several_files_name_the_one_the_note_is_about(self):
         files = [
             _upload("a.csv", _semicolon_table()),
@@ -218,6 +268,248 @@ class TestRowsWithMoreFieldsThanTheHeader:
             read_table(_upload("bad.csv", _semicolon_table("p1;t1;1;2;3;4")))
         error = explain_read_error("bad.csv", raised.value)
         assert "line 9 has 6, the header 5" in str(error)
+
+
+def _no_scan(monkeypatch):
+    def scan(*args, **kwargs):
+        raise AssertionError("a clean file was scanned record by record")
+
+    monkeypatch.setattr(data_module, "_scan_records", scan)
+
+
+class TestOverlongRowsAreFoundByTheReadItself:
+    """A file whose records all fit its header is read once, by the parser;
+    only one with a field too many is scanned for the lines to name."""
+
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    @pytest.mark.parametrize("projected", [True, False])
+    def test_a_clean_file_is_never_scanned(
+        self, tmp_path, monkeypatch, route, projected
+    ):
+        body = _semicolon_table().replace(b"p1;t0", b'"p1";"t0"')
+        path = tmp_path / "ok.csv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "ok.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("ok.csv", body)
+        source = _upload("ok.csv", body) if route == "upload" else path
+        plan = _plan() if projected else ReadPlan(identity=("participant", "trial"))
+        _no_scan(monkeypatch)
+        frame = read_table(source, plan=plan)
+        assert len(frame) == 12
+        assert list(frame.columns) == HEADER
+        assert pop_read_notes(frame) == []
+
+    @pytest.mark.parametrize(
+        "encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-16-be", "utf-32", "cp1252"]
+    )
+    @pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+    def test_every_encoding_and_line_end(self, encoding, newline):
+        rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;ü;1;2;3;4", "p1;t2;1;2;3"]
+        text = newline.join(rows) + newline
+        body = text.encode(encoding)
+        if encoding == "utf-16-be":
+            body = b"\xfe\xff" + body  # Data Viewer writes the mark
+        frame = read_table(_upload("ia.txt", body), plan=_plan())
+        assert frame["trial"].tolist() == ["t1", "t2"]
+        assert "(line 3)" in pop_read_notes(frame)[0]
+
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    @pytest.mark.parametrize("projected", [True, False])
+    @pytest.mark.parametrize("newline", ["\n", "\r\n"])
+    def test_a_line_break_inside_a_quoted_header_cell(
+        self, tmp_path, route, projected, newline
+    ):
+        """Excel writes a header cell with a manual line break in quotes."""
+        rows = [
+            ";".join(HEADER) + ';"Notes' + newline + '(free text)"',
+            "p1;t1;1;2;3;a",
+            "p1;t2;1;2;3;b",
+        ]
+        body = newline.join(rows).encode() + newline.encode()
+        path = tmp_path / "notes.csv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "notes.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("notes.csv", body)
+        source = _upload("notes.csv", body) if route == "upload" else path
+        plan = _plan() if projected else ReadPlan(identity=("participant", "trial"))
+        frame = read_table(source, plan=plan)
+        assert frame["trial"].tolist() == ["t1", "t2"]
+        assert pop_read_notes(frame) == []
+        if not projected:
+            assert frame.columns[-1] == "Notes" + newline + "(free text)"
+
+    def test_an_extra_field_spelled_like_a_missing_value_still_counts(self):
+        rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;t1;1;2;3;NA", "p1;t2;1;2;3"]
+        frame = read_table(_upload("na.csv", "\n".join(rows).encode()), plan=_plan())
+        assert frame["trial"].tolist() == ["t1", "t2"]
+        assert "(line 3)" in pop_read_notes(frame)[0]
+
+    def test_missing_values_in_the_planned_columns_are_unchanged(self):
+        rows = [";".join(HEADER), "NA;t1;NA;2;3", "p1;null;1;;3"]
+        frame = read_table(_upload("na.csv", "\n".join(rows).encode()), plan=_plan())
+        assert frame["participant"].isna().tolist() == [True, False]
+        assert frame["trial"].isna().tolist() == [False, True]
+        assert frame["x"].isna().tolist() == [True, False]
+        assert frame["y"].isna().tolist() == [False, True]
+
+    def test_a_header_with_no_line_end_reads_as_no_rows(self, monkeypatch):
+        _no_scan(monkeypatch)
+        frame = read_table(_upload("h.csv", ";".join(HEADER).encode()), plan=_plan())
+        assert frame.empty
+        assert list(frame.columns) == HEADER
+
+    def test_a_text_stream(self):
+        rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;t1;1;2;3;4", "p1;t2;1;2;3"]
+        source = io.StringIO("\n".join(rows))
+        frame = data_module._read_delimited(source, ";", _plan())
+        assert frame["trial"].tolist() == ["t1", "t2"]
+
+    def test_the_scan_is_a_checkpoint_a_cancel_stops(self):
+        from scanpath_studio import progress
+
+        body = _semicolon_table("p1;t1;1;2;3;4")
+        with progress.task(("scan-test", id(body)), title="Reading") as task:
+            task.cancel()
+            with pytest.raises(progress.Cancelled):
+                read_table(_upload("bad.csv", body), plan=_plan())
+
+
+_CSV_PIECES = st.sampled_from(["a", "b", "1", " ", ",", '"', "\n", "\r\n", ";"])
+
+
+@st.composite
+def _csv_text(draw):
+    """Records of fields, each quoted when it holds a delimiter, quote or
+    newline (and sometimes when it doesn't), joined as a CSV writer would."""
+    records = []
+    for _ in range(draw(st.integers(1, 5))):
+        fields = []
+        for _ in range(draw(st.integers(0, 5))):
+            value = "".join(draw(st.lists(_CSV_PIECES, max_size=4)))
+            if any(c in value for c in ',"\r\n') or draw(st.booleans()):
+                value = '"' + value.replace('"', '""') + '"'
+            fields.append(value)
+        records.append(",".join(fields))
+    return draw(st.sampled_from(["\n", "\r\n"])).join(records) + "\n"
+
+
+@settings(max_examples=400, deadline=None)
+@given(_csv_text())
+def test_record_widths_agree_with_the_csv_module(text):
+    """`_record_widths` reads quoting as Python's csv module does: the same
+    records, each's last occupied field, and the physical line it starts on."""
+    reader = csv.reader(io.StringIO(text, newline=""), strict=False)
+    expected, line = [], 0
+    for fields in reader:
+        occupied = [i + 1 for i, value in enumerate(fields) if value != ""]
+        expected.append((line, occupied[-1] if occupied else 0, len(fields)))
+        line = reader.line_num
+    got = list(data_module._record_widths(io.StringIO(text, newline=""), ","))
+    assert got == expected
+
+
+class TestRowLabelsTheHeaderLeavesUnnamed:
+    """R's `write.table()` writes row names under no header: every row has one
+    field more than the header. pandas reads that first field as the index;
+    so does every planned read, and the labels are left out."""
+
+    ROWS = [
+        ("p1", "t1", 100, 50, 200),
+        ("p1", "t1", 200, 50, 210),
+        ("p1", "t2", 300, 60, 220),
+    ]
+    HEADER = ["participant_id", "trial_id", "x", "y", "duration_ms"]
+
+    def _r_table(self, sep: str = "\t", quote: bool = False) -> bytes:
+        def cell(value):
+            return f'"{value}"' if quote and isinstance(value, str) else str(value)
+
+        lines = [sep.join(cell(name) for name in self.HEADER)]
+        lines += [
+            sep.join(cell(value) for value in (str(i), *row))
+            for i, row in enumerate(self.ROWS, 1)
+        ]
+        return ("\n".join(lines) + "\n").encode()
+
+    def _assert_rows(self, frame: pd.DataFrame, columns=HEADER) -> None:
+        assert list(frame.columns) == list(columns)
+        expected = pd.DataFrame(self.ROWS, columns=self.HEADER)[list(columns)]
+        assert frame.astype(str).values.tolist() == expected.astype(str).values.tolist()
+        assert pop_read_notes(frame) == []
+
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    def test_planned_reads_drop_the_labels(self, tmp_path, route):
+        body = self._r_table()
+        path = tmp_path / "fix.tsv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "fix.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("fix.tsv", body)
+        source = _upload("fix.tsv", body) if route == "upload" else path
+        whole = ReadPlan(identity=("participant_id", "trial_id"))
+        self._assert_rows(read_table(source, plan=whole))
+        projected = ReadPlan(columns=("trial_id", "x"), identity=("trial_id",))
+        self._assert_rows(read_table(source, plan=projected), ["trial_id", "x"])
+
+    def test_the_headless_api_loads_them(self, tmp_path):
+        from scanpath_studio import api
+
+        path = tmp_path / "fix.tsv"
+        path.write_bytes(self._r_table())
+        fixations = api.load_scanpath_data(fixations=path, names="canonical").fixations
+        assert fixations["x"].tolist() == [100, 200, 300]
+        assert fixations["duration_ms"].tolist() == [200, 210, 220]
+        assert set(fixations["participant_id"]) == {"p1"}
+
+    def test_r_defaults_read_as_pandas_reads_them(self):
+        """R's own separator (a space, read once the delimiter is known),
+        strings and row names quoted, and an empty last value."""
+        body = self._r_table(sep=" ", quote=True) + b'"4" "p2" "t3" 1 2 ""\n'
+        expected = pd.read_csv(io.BytesIO(body), sep=" ").reset_index(drop=True)
+        frame = data_module._read_delimited(_upload("fix.txt", body), " ", ReadPlan())
+        pd.testing.assert_frame_equal(frame, expected)
+
+    def test_a_trailing_delimiter_on_every_row_is_not_a_label(self):
+        rows = [";".join(HEADER)] + [f"p1;t{i};{i};{i};{i};" for i in range(3)]
+        body = ("\n".join(rows) + "\n").encode()
+        frame = read_table(_upload("trailing.csv", body), plan=ReadPlan())
+        assert list(frame.columns) == HEADER
+        assert frame["trial"].tolist() == ["t0", "t1", "t2"]
+
+    def test_one_row_more_still_refuses_the_table(self):
+        body = self._r_table().replace(b"\t300\t", b"\t300\textra\t")
+        with pytest.raises(TableReadError) as raised:
+            read_table(_upload("fix.tsv", body), plan=ReadPlan())
+        message = raised.value.sentence()
+        assert "has 3 rows with more fields than its header: line 2, the first, " in (
+            message
+        )
+        assert "Every row has more fields than the header" in message
+        _plain(message)
+
+    def test_a_ragged_table_names_its_first_long_row(self):
+        body = _semicolon_table("p1;t1;1;2;3;4", at=3)
+        body = body.replace(b"p1;t2;111;211;161\n", b"p1;t2;111;211;161;9\n")
+        with pytest.raises(TableReadError) as raised:
+            read_table(_upload("bad.csv", body), plan=ReadPlan())
+        message = raised.value.sentence()
+        assert (
+            "has 2 rows with more fields than its header: line 4, the first, has "
+            "6, the header 5" in message
+        )
+        assert "A delimiter inside a value that isn't quoted does this." in message
+        _plain(message)
+        one = _semicolon_table("p1;t1;1;2;3;4", at=3)
+        with pytest.raises(TableReadError) as raised:
+            read_table(_upload("bad.csv", one), plan=ReadPlan())
+        assert "has a row with more fields than its header: line 4 has 6, " in str(
+            raised.value
+        )
 
 
 class TestTheUploadBoxSaysIt:
@@ -303,7 +595,10 @@ class TestTheUploadBoxSaysIt:
 
 class TestMetadataSlotsSayItTheSameWay:
     def test_an_unreadable_file(self):
-        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _MetadataReadError,
+            _read_metadata_uploads,
+        )
 
         with pytest.raises(_MetadataReadError) as raised:
             _read_metadata_uploads([_upload("broken.parquet", b"not parquet")])
@@ -312,7 +607,10 @@ class TestMetadataSlotsSayItTheSameWay:
         )
 
     def test_a_header_only_file(self):
-        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _MetadataReadError,
+            _read_metadata_uploads,
+        )
 
         with pytest.raises(_MetadataReadError) as raised:
             _read_metadata_uploads([_upload("p.csv", b"participant_id,age\n")])
@@ -378,34 +676,37 @@ class TestWizardWording:
         assert "**Name**" in bodies
         assert "**Extra fields to keep**" in bodies
         assert "*I know it*" in bodies
-        assert "**Skip guide**" in bodies
+        assert "at least one table" in bodies
 
     def test_the_guide_and_the_start_from_line_say_it_literally(self):
-        """Read by people with intermediate English: no idioms."""
-        import inspect
-
-        from scanpath_studio import app, wizard
+        """Read by people with intermediate English: no idioms. The backup
+        reminder's link text is checked where it is drawn, in
+        test_backup_reminder.py."""
+        from scanpath_studio import wizard
         from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
 
         bodies = " ".join(step["body"] for step in _WIZARD_GUIDE_STEPS)
         for idiom in ("dive in", "Follow along", "Say how you know", "drawn to"):
             assert idiom not in bodies
         assert wizard._START_SCRATCH == "An empty form"
-        reminder = inspect.getsource(app._render_backup_reminder)
-        assert "What to back up" not in reminder
-        assert "How to keep copies of your work" in reminder
 
     def test_the_guide_button_is_not_the_skip_field(self):
         """The Words mapping has a field called *Skip* (``IA_SKIP``)."""
-        import inspect
-
         from scanpath_studio import tour
         from scanpath_studio.data import READING_MEASURE_FIELDS
 
         assert any(label == "Skip" for _k, _c, label, *_ in READING_MEASURE_FIELDS)
-        source = inspect.getsource(tour._wizard_guide_buttons)
-        assert '"Skip guide"' in source
-        assert '"Skip",' not in source
+        labels: list[str] = []
+
+        class _Column:
+            def button(self, label, **kwargs):
+                labels.append(label)
+
+        n = len(tour._WIZARD_GUIDE_STEPS)
+        for step_idx in range(n):
+            tour._wizard_guide_buttons(_Column(), _Column(), _Column(), step_idx, n)
+        assert "Close guide" in labels
+        assert not [label for label in labels if "Skip" in label]
 
     def test_the_add_screen_titles_the_name_field(self):
         from streamlit.testing.v1 import AppTest

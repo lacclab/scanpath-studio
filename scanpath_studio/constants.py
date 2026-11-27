@@ -4,6 +4,17 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
+from typing import Literal
+
+from .build_info import DOCS_ROOT
+from .session_keys import (
+    GLOBAL_FIXATION_OPACITY,
+    GLOBAL_ORDER_FONT_COLOR,
+    GLOBAL_ORDER_FONT_SIZE,
+    GLOBAL_ORDER_LABEL_POSITION,
+    GLOBAL_SACCADE_OPACITY,
+)
 
 PACKAGE_NAME = "scanpath_studio"
 
@@ -12,6 +23,14 @@ PACKAGE_NAME = "scanpath_studio"
 #: (`data.normalize_raw_gaze`). A column the user sees and exports, the sample
 #: number, so the plot can colour by order without calling it time.
 SAMPLE_INDEX = "sample_index"
+
+#: A Word ID the data spells as text (``w1``, ``Hello_3``) rather than as a
+#: number, as the file spells it. The numeric ``word_id`` every consumer joins
+#: on is then the word's position in its text, one number for every reader
+#: (`data.normalize_words`), and a fixation's is looked up through this key
+#: (`data.match_text_word_ids`). A
+#: column the user sees and exports, under the Word ID column's own name.
+WORD_KEY = "word_key"
 
 
 # --- Experimental features ----------------------------------------------------
@@ -124,6 +143,30 @@ def derived_analysis_tables_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def multipleye_format_enabled() -> bool:
+    """Whether a MultiplEYE session set can be added as one: the Add-dataset
+    wizard's *Dataset format* choice, ``datasets.load_multipleye`` and
+    ``render --multipleye``.
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set. Off, a session set's files
+    still load as your own tables; the reader in ``datasets.py`` stays
+    importable, and a dataset already added this way still opens.
+    """
+    return experimental_features_enabled()
+
+
+def eyelink_import_enabled() -> bool:
+    """Whether EyeLink EDF recordings can be imported: ``eyelink.py``'s public
+    entries, their ``api`` re-exports (``import_eyelink``, ``load_eyelink``)
+    and ``api.add_eyelink_dataset``, and the CLI's ``import-eyelink`` command
+    and ``render --eyelink-study``.
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set. Off, the entries raise and the
+    CLI hides its command and flag; the code and its tests stay.
+    """
+    return experimental_features_enabled()
+
+
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the font field accepts any CSS
 # font name or stack if you want the exact experiment font.
@@ -188,6 +231,7 @@ MARKER_SIZE_SCALES = {
     "relative": "Relative to this figure",
 }
 DEFAULT_MARKER_SIZE_SCALE = "sqrt"
+DEFAULT_DURATION_SIZE_LEGEND = False
 #: What a figure saved before the fixed scale existed was drawn with — the
 #: migration target for old saved configs and Share links.
 LEGACY_MARKER_SIZE_SCALE = "relative"
@@ -198,7 +242,141 @@ LEGACY_MARKER_SIZE_SCALE = "relative"
 DEFAULT_MARKER_DURATION_RANGE = (50, 600)
 #: The duration-bounds widget's own limits (ms).
 MARKER_DURATION_BOUNDS = (10, 3000)
+DEFAULT_ORDER_FONT_SIZE = 10
 DEFAULT_ORDER_FONT_COLOR = "#111111"
+#: Where each fixation's index number sits relative to its marker → the
+#: Plotly ``textposition`` that puts it there. "inside" centres it on the
+#: marker, which reads best with a light label colour on large markers.
+ORDER_LABEL_POSITIONS = {
+    "above": "top center",
+    "inside": "middle center",
+    "below": "bottom center",
+}
+DEFAULT_ORDER_LABEL_POSITION = "above"
+
+
+@dataclass(frozen=True)
+class FigureOption:
+    """One figure option shared by the rail, links, saved settings and the CLI."""
+
+    state_key: str
+    default: int | float | str
+    kind: Literal["int", "float", "color", "choice"]
+    description: str
+    metavar: str | None = None
+    bounds: tuple[float, float] | None = None
+    choices: tuple[str, ...] = ()
+
+    @property
+    def name(self) -> str:
+        return self.state_key.removeprefix("global_")
+
+    @property
+    def flag(self) -> str:
+        return "--" + self.name.replace("_", "-")
+
+
+# Both opacity sliders include fully transparent marks. Existing headless calls
+# can use any value in this interval, including those between slider steps.
+OPACITY_BOUNDS = (0.0, 1.0)
+FIXATION_OPACITY = FigureOption(
+    GLOBAL_FIXATION_OPACITY,
+    0.7,
+    "float",
+    "Opacity of fixation markers",
+    metavar="O",
+    bounds=OPACITY_BOUNDS,
+)
+SACCADE_OPACITY = FigureOption(
+    GLOBAL_SACCADE_OPACITY,
+    1.0,
+    "float",
+    "Opacity of saccade lines and arrows",
+    metavar="O",
+    bounds=OPACITY_BOUNDS,
+)
+OPACITY_OPTIONS = {
+    option.name: option for option in (FIXATION_OPACITY, SACCADE_OPACITY)
+}
+
+
+def parse_opacity(value: object) -> float:
+    """A finite opacity in the range shared by the slider and the figure."""
+    lo, hi = OPACITY_BOUNDS
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        number = float("nan")
+    if not lo <= number <= hi:
+        raise ValueError(f"expected an opacity from {lo:g} to {hi:g}, got {value!r}")
+    return number
+
+
+INDEX_SIZE = FigureOption(
+    GLOBAL_ORDER_FONT_SIZE,
+    DEFAULT_ORDER_FONT_SIZE,
+    "int",
+    "Size of the fixation index numbers",
+    metavar="PX",
+    bounds=(6, 72),
+)
+INDEX_COLOR = FigureOption(
+    GLOBAL_ORDER_FONT_COLOR,
+    DEFAULT_ORDER_FONT_COLOR,
+    "color",
+    "Color of the fixation index numbers for a single scanpath",
+    metavar="COLOR",
+)
+INDEX_POSITION = FigureOption(
+    GLOBAL_ORDER_LABEL_POSITION,
+    DEFAULT_ORDER_LABEL_POSITION,
+    "choice",
+    "Where each fixation index number sits on its fixation",
+    choices=tuple(ORDER_LABEL_POSITIONS),
+)
+FIXATION_LABEL_OPTIONS = {
+    option.name: option for option in (INDEX_SIZE, INDEX_COLOR, INDEX_POSITION)
+}
+
+
+@dataclass(frozen=True)
+class FixationFlagCategory:
+    label: str
+    help: str
+    has_threshold: bool = False
+
+
+FIXATION_FLAG_CATEGORIES = {
+    "short": FixationFlagCategory(
+        "Short", "Fixations shorter than the ms threshold.", has_threshold=True
+    ),
+    "long": FixationFlagCategory(
+        "Long", "Fixations longer than the ms threshold.", has_threshold=True
+    ),
+    "oob": FixationFlagCategory(
+        "Outside the text", "Fixations in no word box (gaps between lines count)."
+    ),
+    "blink": FixationFlagCategory(
+        "Near a blink", "Fixations at or next to a blink; needs a blink column."
+    ),
+}
+FIXATION_DURATION_FLAGS = frozenset(
+    k for k, category in FIXATION_FLAG_CATEGORIES.items() if category.has_threshold
+)
+#: A duration flag's threshold, in ms, on the rail and in a link or settings
+#: file: at most a minute, past which no fixation reaches.
+FIXATION_FLAG_THRESHOLD_BOUNDS = (1, 60_000)
+FIXATION_FLAG_MODES = ("Off", "Highlight", "Hide")
+FIXATION_FLAG_MARKERS = {
+    "x": "✕ Cross",
+    "circle-open": "○ Circle",
+    "diamond-open": "◇ Diamond",
+    "square-open": "□ Square",
+    "star": "★ Star",
+    "triangle-up-open": "△ Triangle",
+    "triangle-down-open": "▽ Triangle (down)",
+}
+
 
 WORD_BOX_COLOR = "#6c757d"
 #: The outline's opacity; 1 draws it solid.
@@ -235,6 +413,18 @@ def compare_palette_color(idx: int) -> str:
     (``plots._comparison_scanpath_style``), so the swatch shown in the controls can
     never drift from what's drawn."""
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+
+
+def comparison_palette_style(name: str, idx: int) -> dict:
+    """Comparison mark defaults for a named palette, shared by UI and API."""
+    printing = name == "Print / grayscale"
+    color = ("#242424", "#666666")[idx] if printing else compare_palette_color(idx)
+    return {
+        "fix_color": color,
+        "saccade_color": color,
+        "saccade_style": "dash" if printing and idx == 1 else "solid",
+        "hollow": printing and idx == 1,
+    }
 
 
 #: Each comparison scanpath's default marker alpha, shared the same way: the
@@ -392,6 +582,9 @@ CANVAS_PAD_FRACTION = 0.05
 #: *Auto* is unticked, and the range a link or settings file is held to.
 DEFAULT_CROP_MARGIN_PX = 50.0
 CROP_MARGIN_BOUNDS = (0.0, 2000.0)
+#: The stimulus image's nudge from its place, in screen px, on the rail and in a
+#: link or settings file.
+STIMULUS_IMAGE_OFFSET_BOUNDS = (-5000.0, 5000.0)
 
 # --- Figure design settings ----------------------------------------------------
 # Each `*_BOUNDS` is the range the rail, a link, a settings file and `render`
@@ -410,6 +603,12 @@ DEFAULT_CAPTION_COLOR = "#555555"
 DEFAULT_PLOT_FRAME_COLOR = "#000000"
 #: The saccades' direction arrowheads, in px.
 DEFAULT_SACCADE_ARROW_SIZE = 12.0
+# The replay's growing fixation starts at this share of its full size, and a
+# faded one keeps this share of its opacity.
+DEFAULT_GROW_START = 0.15
+GROW_START_BOUNDS = (0.05, 1.0)
+DEFAULT_FADE_OPACITY = 0.3
+FADE_OPACITY_BOUNDS = (0.0, 1.0)
 SACCADE_ARROW_SIZE_BOUNDS = (4.0, 40.0)
 #: The outline round a filled fixation marker; a width of 0 draws none. The
 #: colour is `FIX_MARKER_OUTLINE`, spelt out for a colour picker.
@@ -475,8 +674,7 @@ PALETTES: dict[str, dict] = {
     # Lightness-only encoding: everything survives a black & white print or
     # photocopy, because nothing depends on hue at all.
     "Print / grayscale": {
-        "description": "Grays only, so it still reads in a black-and-white "
-        "print. Pair with marker shape.",
+        "description": "Grays for a black-and-white print. In Compare, A uses filled marks and solid lines. B uses hollow marks and dashed lines.",
         "fixation_color": "#1a1a1a",
         "fixation_colorscale": "Greys",
         "heatmap_colorscale": "Greys",
@@ -526,6 +724,10 @@ DEFAULT_PALETTE = "Default (colorblind-safe)"
 # set of things that can actually be applied: `--palette` choices, the API's
 # expansion, and the deep link all iterate `PALETTES` and must not offer this.
 CUSTOM_PALETTE = "Custom"
+
+
+def palette_tile_key(name: str) -> str:
+    return "viz_palette_" + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
 def palette_settings(name: str) -> dict:
@@ -659,20 +861,17 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
     return getattr(uploaded, "file_id", None), digest
 
 
-#: The privacy policy of Streamlit Community Cloud, which hosts the online demo
-#: and runs its own analytics in the page around the app.
-STREAMLIT_PRIVACY_URL = "https://streamlit.io/privacy-policy"
-
 #: The software's authors as ``(given names, family names)``, in citation order.
 #: The package ships without ``CITATION.cff``, so the app's citation is built
 #: from these; ``tests/test_citation.py`` keeps them equal to the file's
 #: ``authors``.
 CITATION_AUTHORS = (
     ("Omer", "Shubi"),
-    ("Keren", "Gruteke Klein"),
     ("Maya", "Grossman"),
-    ("Ella", "Lion"),
+    ("Keren", "Gruteke Klein"),
     ("Deborah N.", "Jakobi"),
+    ("Ella", "Lion"),
+    ("Carlson", "Büth"),
     ("David R.", "Reich"),
     ("Lena", "Jäger"),
     ("Yevgeni", "Berzak"),
@@ -688,13 +887,10 @@ CITATION = {
     "license": "MIT",
     "year": 2026,
     "url": "https://github.com/lacclab/scanpath-studio",
-    "docs_url": "https://lacclab.github.io/scanpath-studio/",
+    "docs_url": DOCS_ROOT,
     # Where a user asks, reports, and gets the desktop app.
     "questions_url": "https://github.com/lacclab/scanpath-studio/discussions/categories/q-a",
     "bug_report_url": "https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md",
-    "feature_request_url": (
-        "https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md"
-    ),
     "ideas_url": "https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas",
     "desktop_url": "https://github.com/lacclab/scanpath-studio/releases/latest",
     "lab_url": "https://lacclab.github.io/",
@@ -713,6 +909,14 @@ PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_CHOICE = "PoTeC — Potsdam Textbook Corpus"
 POTEC_DEFAULT_DIR = "data/PoTeC"
 ONESTOP_CHOICE = "OneStop (local export)"
+# OneStop's typeface, as its experiment drew every screen: Lucida Sans
+# Typewriter in a 19 px letter cell (Berzak et al. 2025, Methods), and the
+# experiment's own screen images show exactly that font. The size is the cell
+# over the font's advance (1234 / 2048 em), so a label drawn in the font steps
+# 19 px per letter as the images do. The font is not free to ship: where it is
+# not installed the label falls back to the browser's monospace.
+ONESTOP_FONT_FAMILY = "'Lucida Sans Typewriter', monospace"
+ONESTOP_FONT_PX = 19 / (1234 / 2048)
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
 # flat data-source picker, holding every part of that regime; these are their
@@ -744,6 +948,24 @@ ONESTOP_REGIME_SOURCE_TOKENS = {
     regime: f"onestop_{regime}" for regime in ONESTOP_REGIME_LABELS
 }
 ONESTOP_LEGACY_SOURCE_TOKEN = "onestop_public"
+
+#: Every built-in data-source label, which no added dataset may take: the
+#: fixed sources and every public corpus. ``app.reserved_source_names`` reads
+#: the same set from the live registry; this copy is for callers that must not
+#: import the app (`api.add_dataset`), and a test holds the two equal.
+RESERVED_SOURCE_NAMES = frozenset(
+    {
+        UPLOAD_CHOICE,
+        AUTHOR_CHOICE,
+        MANUAL_SAMPLE_CHOICE,
+        DEMO_CHOICE,
+        SYNTHETIC_CHOICE,
+        PUBLIC_DATASETS_CHOICE,
+        POTEC_CHOICE,
+        ONESTOP_CHOICE,
+        *ONESTOP_REGIME_CHOICES.values(),
+    }
+)
 
 
 def onestop_regime_for_choice(choice: str | None) -> str | None:
@@ -782,6 +1004,9 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 #: and `persistence` cannot import `app` (that is the cycle `app` already
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
+
+#: Display labels can change without moving a dataset or any of its attached tables.
+DATASET_ALIASES_KEY = "_dataset_display_aliases"
 
 #: ``{dataset token: description}``, every description the user
 #: wrote (on the add wizard or ✏️ Edit dataset), for any kind of dataset. One
@@ -848,15 +1073,19 @@ RAW_GAZE_SNAP_RESTORE_KEY = "_raw_gaze_snap_restore"
 #: one decided while the link was on the URL. Session-only: a link is a visit.
 RAW_GAZE_LINK_FOR_KEY = "_raw_gaze_link_for"
 
-#: "The ✏️ Edit dataset screen is open". The Data page is two screens: the
-#: **overview** (the dataset table + what's in the open dataset) and the
-#: **editor** (everything that configures it — source options and location,
-#: column mapping, recording setup, trial identity, stimulus images, the two
-#: metadata tables, preprocessing). Both are built every run and switched by key,
-#: for exactly the reason the page itself is (see below): the editor is nothing
-#: but widgets that drive `prepare_data`, and Streamlit drops the key of a widget
-#: that did not render.
+#: Session navigation within Data Management. The editor occupies Current dataset.
+DATA_WORKSPACE_KEY = "data_workspace"
+DATA_WORKSPACE_REQUEST = "_requested_data_workspace"
+#: The native Help menu visits another page, which clears the Data tab widget.
+DATA_WORKSPACE_LAST = "_last_data_workspace"
+DATA_CURRENT = "Current dataset"
+DATA_LIBRARY = "Dataset library"
+DATA_STORAGE = "Saved work"
+DATA_INSPECTION_KEY = "data_inspection_panel"
+DATA_RUN_SHEETS_KEY = "_data_run_sheets"
 DATASET_EDITOR_OPEN_KEY = "_dataset_editor_open"
+#: The settings to restore when an in-app guide ends or the session reopens.
+GUIDE_RETURN_KEY = "_guide_return"
 DATA_OVERVIEW_KEY = "data_overview"
 DATA_EDITOR_KEY = "data_dataset_editor"
 DATA_EDITOR_OFFSCREEN_KEY = "data_dataset_editor_offscreen"
@@ -865,8 +1094,8 @@ DATA_EDITOR_OFFSCREEN_KEY = "data_dataset_editor_offscreen"
 # that view is active, off-screen otherwise.
 #
 # The setup widgets (the loaders' directory input and ⬇ Download button, the
-# source options, the column-mapping selectboxes) *drive* `prepare_data` on
-# every rerun, and Streamlit drops the key of a widget that did not render. A
+# source options) *drive* the load on every rerun, and Streamlit drops the key
+# of a widget that did not render. A
 # page body would only execute while its view is selected, so the page is
 # rendered every run either way and simply hidden — `styles.py` gives the
 # off-screen key `display: none` — rather than splitting every loader into a
@@ -1011,12 +1240,13 @@ DATASET_ADDED_KEY = "_dataset_added_name"
 # Plotly text is baked into every export (▶ Play, the marker-shape previews).
 # The typographic glyphs on buttons (◀ ▶ ⇅ ✕ ⬇ ↗) are kept too.
 ICONS: dict[str, str] = {
-    # Navigation and dialogs. `app` is the welcome tour's; the favicon itself
-    # is 👀 — see `app.set_page_config`'s call site.
+    # Navigation and dialogs. The favicon is set separately in
+    # `app.set_page_config`.
     "app": ":material/visibility:",
     "view_scanpath": ":material/route:",
     "view_corpus": ":material/bar_chart:",
     "view_data": ":material/database:",
+    "data_tables": ":material/table_view:",
     "help": ":material/help:",
     "tutorials": ":material/explore:",
     "faq": ":material/quiz:",
@@ -1030,6 +1260,7 @@ ICONS: dict[str, str] = {
     "desktop": ":material/computer:",
     # Plot rail: design presets, layer sections and figure groups.
     "preset_scanpath": ":material/timeline:",
+    "gaze_over_time": ":material/show_chart:",
     "preset_custom": ":material/build:",
     "illustration": ":material/draw:",
     "fixations": ":material/blur_on:",
@@ -1049,7 +1280,7 @@ ICONS: dict[str, str] = {
     "plot_controls": ":material/tune:",
     "animate": ":material/movie:",
     "compare": ":material/compare:",
-    # Scanpath subtabs, the trial row and the welcome tour's stops.
+    # Scanpath subtabs and the trial row.
     "annotations": ":material/edit_note:",
     "comparisons": ":material/difference:",
     "line_assignment": ":material/format_line_spacing:",
@@ -1061,8 +1292,9 @@ ICONS: dict[str, str] = {
     "chips": ":material/label:",
     "panels": ":material/tab:",
     # The chevron Streamlit draws on every popover button, for prose that names
-    # an icon-only button the way it looks (the welcome tour).
+    # an icon-only button by its appearance.
     "menu_arrow": ":material/expand_more:",
+    "menu_arrow_up": ":material/expand_less:",
     "views": ":material/dashboard:",
     "nav": ":material/explore:",
     "preview": ":material/visibility:",
@@ -1075,6 +1307,7 @@ ICONS: dict[str, str] = {
     "delete": ":material/delete:",
     "reset": ":material/restart_alt:",
     "undo": ":material/undo:",
+    "redo": ":material/redo:",
     "edit": ":material/edit:",
     "add": ":material/add:",
     "confirm": ":material/check:",
@@ -1085,7 +1318,7 @@ ICONS: dict[str, str] = {
     "close": ":material/close:",
     "open": ":material/open_in_new:",
     "mute": ":material/notifications_off:",
-    # Data → Saved on this computer, and ❓ Help → About → Debug.
+    # Data Management → Saved work, and the Debug drawer.
     "recovery": ":material/history:",
     "debug": ":material/bug_report:",
     # Data page and the add-dataset wizard.
@@ -1245,7 +1478,7 @@ SUBTAB_MORE = f"{ICONS['add']} More"
 
 
 # --- Legend layout ------------------------------------------------------------
-# Where each legend sits (📐 Figure & canvas → Legends; `plots.apply_legend_layout`).
+# Where each legend sits (Figure → Legends; `plots.apply_legend_layout`).
 # The values are wire format — share links, saved configs, `render --legend` —
 # so never rename one.
 

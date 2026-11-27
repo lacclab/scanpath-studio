@@ -3,8 +3,9 @@
 `prepare_data` has a recovery path for a mapping that is merely
 **incomplete** (a required field unmapped → `problems` → the raw tables plus the
 still-editable Column mapping panels). A mapping that is complete but
-**impossible** — the one-sided `screen_id` below, which `multipart` rejects
-because two coordinate spaces must not be joined — must take it too: escaping
+**impossible** — the fixations' `screen_id` below, naming screens the words
+report does not have, which `multipart` rejects because two coordinate spaces
+must not be joined — must take it too: escaping
 as a raw `ValueError` out of `main()` would kill the run *before* it rendered
 the mapping panels, the source picker or the signpost to them, leaving
 everything the user could click to undo it on the far side of the exception.
@@ -16,15 +17,21 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from scanpath_studio.constants import ICONS
+from scanpath_studio.constants import _VIEW_SCANPATH, ICONS
 from tests.conftest import (
     APP_SCRIPT,
+    edit_builtin_mapping,
     open_data_view,
+    open_dataset_editor,
     pin_data_view,
+    pin_view,
 )
 
-#: Any real fixation column: mapping it as `screen_id` on one report only is
-#: what `multipart.validate_matching_parts` refuses.
+#: The column both of the demo's reports map as `screen_id`.
+DEMO_SCREEN_COLUMN = "part"
+#: Any other real fixation column: as the fixations' `screen_id` it names
+#: screens the words report does not have, which
+#: `multipart.validate_matching_parts` refuses.
 BOGUS_SCREEN_COLUMN = "TRIAL_INDEX"
 
 
@@ -35,10 +42,16 @@ def _boot() -> AppTest:
     return at
 
 
+def _remap(at: AppTest, picks: dict) -> AppTest:
+    """Save ``picks`` in ✏️ Edit dataset, then go back to the Scanpath view."""
+    edit_builtin_mapping(at, picks, timeout=180)
+    pin_view(at, _VIEW_SCANPATH)
+    return at.run(timeout=180)
+
+
 def _break_the_mapping(at: AppTest) -> AppTest:
-    """Map `screen_id` on the fixations report and nowhere else."""
-    at.selectbox(key="col_map_fix_screen_id").select(BOGUS_SCREEN_COLUMN).run()
-    return at
+    """Map the fixations' `screen_id` to a column the words' screens don't match."""
+    return _remap(at, {"col_map_fix_screen_id": BOGUS_SCREEN_COLUMN})
 
 
 def test_a_rejected_mapping_does_not_crash_the_app():
@@ -62,10 +75,12 @@ def test_a_rejected_mapping_says_what_is_wrong_and_where_to_fix_it():
 def test_the_rejected_mapping_stays_editable_so_it_can_be_undone():
     at = _break_the_mapping(_boot())
 
-    # The panel that made the mistake is still on the page, still holding it.
+    # The panel that made the mistake is still in ✏️ Edit dataset, still
+    # holding it.
+    open_dataset_editor(at, timeout=180)
     assert at.selectbox(key="col_map_fix_screen_id").value == BOGUS_SCREEN_COLUMN
 
-    at.selectbox(key="col_map_fix_screen_id").set_value(None).run()
+    _remap(at, {"col_map_fix_screen_id": DEMO_SCREEN_COLUMN})
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
@@ -81,7 +96,7 @@ def test_resetting_the_column_mapping_recovers_a_wedged_dataset():
     reset[0].click().run(timeout=180)
 
     assert not at.exception
-    assert at.selectbox(key="col_map_fix_screen_id").value is None
+    assert at.session_state["col_map_fix_screen_id"] == DEMO_SCREEN_COLUMN
 
 
 # --- the escape hatches that don't go through the 🗂️ Data page -----------------
@@ -98,7 +113,7 @@ def test_a_wedged_dataset_can_be_abandoned_without_visiting_the_data_page():
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
-    assert at.selectbox(key="col_map_fix_screen_id").value is None
+    assert at.session_state["col_map_fix_screen_id"] == DEMO_SCREEN_COLUMN
 
 
 def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
@@ -118,10 +133,10 @@ def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
 
     at = _boot()
     at = _break_the_mapping(at)
-    at = open_data_view(at, timeout=180)
+    pin_data_view(at, section="Saved work")
+    at.run(timeout=180)
 
-    body = " ".join(str(m.value) for m in at.markdown)
-    assert f"**Session folder:** `{tmp_path}`" in body
+    assert any(f"Session folder · `{tmp_path}`" in c.value for c in at.caption)
 
 
 # --- the upload wizard, which reaches the same pipeline -----------------------
@@ -188,16 +203,18 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
     assert finalize and finalize[0].disabled
 
 
-def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
-    """Fixations with no X/Y are placed by their Word ID, which is read as a
-    number — so text ids place none of them, and the add is blocked, saying
-    why, directly above ✅ Add dataset."""
+def _upload_text_word_ids(
+    monkeypatch, *, word_ids, fixation_ids, keep_xy: bool = False
+) -> AppTest:
+    """The wizard over an AOI-sequence pair: fixations with no X/Y (unless
+    ``keep_xy``), placed by their Word ID alone."""
     from scanpath_studio import app
 
-    words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=["w0", "w1", "w2"])
-    fixations = _WIZARD_FIXATIONS.drop(columns=["x", "y"]).assign(
-        word_id=["w0", "w1", "w2"]
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=list(word_ids))
+    fixations = (
+        _WIZARD_FIXATIONS if keep_xy else _WIZARD_FIXATIONS.drop(columns=["x", "y"])
     )
+    fixations = fixations.assign(word_id=list(fixation_ids))
     monkeypatch.setattr(
         app,
         "_read_uploaded_frame",
@@ -206,14 +223,75 @@ def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
         ),
     )
     at = _upload_apptest(wizard_active=True)
-
     assert not at.exception
-    said = [e.value for e in at.error if "holds no numbers" in e.value]
-    assert said, "text Word IDs loaded without a word"
-    assert "`word_id`" in said[0] and "Map the fixations' X and Y" in said[0]
+    return at
+
+
+def test_text_word_ids_with_no_xy_place_the_fixations(monkeypatch):
+    """Text Word IDs are keys: each fixation is placed at the box of the word
+    with the same id, and the add goes ahead with nothing to warn about."""
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=("w0", "w1", "w2"), fixation_ids=("w2", "w0", "w1")
+    )
+
+    assert not [e.value for e in at.error]
+    assert not [w.value for w in at.warning if "Word ID" in w.value]
+    payload = at.session_state["_wizard_finalize_payload"]
+    fixations = payload["fixations"]
+    assert fixations["word_id"].tolist() == [3.0, 1.0, 2.0]
+    assert fixations["x"].tolist() == [130.0, 30.0, 80.0]  # the boxes' centers
+    # The ids themselves are kept, under the file's own column name.
+    names = payload["column_names"]["fixations"]
+    assert names["word_key"]["sources"] == ["word_id"]
+
+
+def test_the_wizard_says_which_text_word_ids_name_no_word(monkeypatch):
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=("w0", "w1", "w2"), fixation_ids=("w0", "w1", "nope")
+    )
+
+    said = [w.value for w in at.warning if "no word of" in w.value]
+    assert said, "a fixation whose text id names no word was dropped silently"
+    assert "1 of 3 Word IDs names no word of its trial" in said[0]
+    assert "'nope'" in said[0]
+
+
+def test_text_word_ids_against_numeric_ones_block_the_add(monkeypatch):
+    """A text id never names a numbered word, so with no X/Y nothing can be
+    placed, and the add is blocked, saying why, directly above ✅ Add dataset."""
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=(0, 1, 2), fixation_ids=("w0", "w1", "w2")
+    )
+
+    said = [e.value for e in at.error if "Word IDs are text" in e.value]
+    assert said, "text Word IDs loaded against numeric ones without a word"
+    assert "Map the fixations' X and Y" in said[0]
     finalize = [b for b in at.button if b.key == "wizard_finalize"]
     assert finalize and finalize[0].disabled
     assert "_wizard_finalize_payload" not in at.session_state
+
+
+def test_numeric_word_ids_against_text_ones_are_said_to_be_set_aside(monkeypatch):
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=("w0", "w1", "w2"), fixation_ids=(2, 0, 1), keep_xy=True
+    )
+
+    said = [w.value for w in at.warning if "Word IDs are numbers" in w.value]
+    assert said and "matched to the word box it falls in" in said[0]
+
+
+def test_a_blank_fixation_word_id_beside_text_ones_is_not_warned_about(monkeypatch):
+    """The wizard warns on what the load did: a mapped fixations Word ID with
+    no value in it set nothing aside, so there is nothing to say."""
+    at = _upload_text_word_ids(
+        monkeypatch,
+        word_ids=("w0", "w1", "w2"),
+        fixation_ids=(None, None, None),
+        keep_xy=True,
+    )
+
+    assert at.selectbox(key="col_map_fix_word_id").value == "word_id"
+    assert not [w.value for w in at.warning if "Word IDs are numbers" in w.value]
 
 
 def test_a_collapsed_wizard_upload_recovers_like_any_other_bad_mapping(
@@ -223,6 +301,44 @@ def test_a_collapsed_wizard_upload_recovers_like_any_other_bad_mapping(
 
     assert not at.exception
     assert any("Screen ID" in e.value for e in at.error)
+
+
+def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypatch):
+    """The format preset skips the mapping steps but runs the same pipeline.
+
+    Fault-injected rather than contrived from files: which MultiplEYE upload
+    combinations `multipart` still rejects is a moving target (the loader drops
+    screens without boxes precisely to avoid one), and what is under test here
+    is the guard, not today's list of rejections.
+    """
+    from scanpath_studio import app
+    from tests.multipleye_fixtures import mpe_upload_frames
+
+    scan, aoi = mpe_upload_frames()
+    frames = {"mpe_fix": scan, "mpe_aoi": aoi}
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
+    )
+
+    def _rejected(*_args, **_kwargs):
+        raise ValueError("Multipart reports contain orphan screens: no words for x")
+
+    monkeypatch.setattr(app, "_normalize_pair", _rejected)
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.session_state["_show_upload_wizard"] = True
+    at.session_state["setup_complete"] = False
+    at.session_state["wizard_dataset_format"] = "MultiplEYE"
+    at.session_state["wizard_multipleye_from"] = "upload"
+    pin_data_view(at)
+    at.run(timeout=180)
+
+    assert not at.exception
+    assert any("orphan screens" in e.value for e in at.error)
+    assert "_wizard_finalize_payload" not in at.session_state
 
 
 # --- a complete mapping whose numbers don't parse -----------------------------
@@ -366,18 +482,45 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
     """Duration mapped to the word labels: every fixation reads as 0 ms and
     the figure still draws. The Scanpath view says so and links the checks."""
     at = _boot()
-    assert not any("fails the data checks" in w.value for w in at.warning)
+    assert not any("Data checks found problems" in w.value for w in at.warning)
 
-    at.selectbox(key="col_map_fix_duration").select(
-        "CURRENT_FIX_INTEREST_AREA_LABEL"
-    ).run(timeout=180)
+    at = _remap(at, {"col_map_fix_duration": "CURRENT_FIX_INTEREST_AREA_LABEL"})
 
     assert not at.exception
-    (notice,) = [w.value for w in at.warning if "fails the data checks" in w.value]
-    assert "**Fixations lasting 0 ms or less**: 3,199 of 3,209 fixation rows." in (
+    (notice,) = [w.value for w in at.warning if "Data checks found problems" in w.value]
+    assert "**Fixations lasting 0 ms or less**: 3,009 of 3,020 fixation rows." in (
         notice
     )
     (open_checks,) = [b for b in at.button if b.key == "data_health_notice_open"]
     open_checks.click().run(timeout=180)
     assert not at.exception
-    assert any("Data checks" in c.value for c in at.caption)
+    assert "Recording quality checks" in [h.value for h in at.subheader]
+
+
+def _positionless_notice_app(positions_drawn: bool) -> None:
+    import streamlit as st
+
+    from scanpath_studio import tabs
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    fixations = fixations.assign(x=float("nan"), y=float("nan"))
+    tabs.render_data_health_notice(
+        st.container(), words, fixations, None, positions_drawn=positions_drawn
+    )
+
+
+@pytest.mark.parametrize("positions_drawn", [True, False])
+def test_missing_positions_are_said_only_where_the_figure_draws_them(
+    positions_drawn,
+):
+    """A chart of word by fixation order draws no screen position, so fixations
+    without one don't affect it; the screen view does draw them."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(
+        _positionless_notice_app, kwargs={"positions_drawn": positions_drawn}
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    said = " ".join(w.value for w in at.warning)
+    assert ("Fixations with no usable position" in said) == positions_drawn

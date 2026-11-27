@@ -10,10 +10,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [
     { name = "Omer Shubi", email = "lacclab.technion@gmail.com" },
-    { name = "Keren Gruteke Klein" },
     { name = "Maya Grossman" },
-    { name = "Ella Lion" },
+    { name = "Keren Gruteke Klein" },
     { name = "Deborah N. Jakobi" },
+    { name = "Ella Lion" },
+    { name = "Carlson Büth" },
     { name = "David R. Reich" },
     { name = "Lena Jäger" },
     { name = "Yevgeni Berzak" },
@@ -34,74 +35,89 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "streamlit[performance]>=1.66.0",
+    "streamlit[performance]>=1.67.0",
     # Build versions sort and compare as PEP 440 (`build_info.py`, `updates.py`).
     "packaging>=26.3",
-    "pandas>=3.0",
+    "pandas>=3.1",
     "plotly>=7.1",
     "numpy>=2.4",
     # The drift-correction port (`alignment.py`); BSD-3, MIT-compatible.
     "scipy>=1.17",
-    "pyarrow>=25.0",
-    "kaleido>=1.4",
+    "pyarrow>=26.0",
+    "kaleido>=1.5.2",
+    "choreographer>=1.3.0",
+    # Run Kaleido's async browser throughout a synchronous bulk export.
+    "anyio>=4",
     # Optional Streamlit runtime dep: enables fast event-based file-watching
     # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
     # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
     # absent.
-    "watchdog>=6.0.0",
+    "watchdog>=7.1.1",
     # Drag-to-reorder the trial chip fields (the chips popover).
     "streamlit-sortables>=0.3.1",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
-    "pillow>=12.3",
-    "imageio[ffmpeg]>=2.37",
-    # pandas' .xlsx engine. Not optional in practice: the upload path reads
-    # spreadsheets (`data._read_one`).
-    "openpyxl>=3.1.5",
+    "pillow>=13.0",
+    "imageio[ffmpeg]>=2.38.2",
     # Dataset downloads verify HTTPS against the OS certificate store, so a
     # python.org Python without its CA bundle, or a TLS-inspecting network,
     # can still fetch OneStop / PoTeC (`datasets._open_url`).
-    "truststore>=0.10",
-    # The Excel 97–2003 (.xls) engine, for the same readers.
-    "xlrd>=2.0.2",
+    "truststore>=0.10.5",
+    # The workbook engine (`data.EXCEL_ENGINE`), for .xlsx and legacy .xls
+    # alike. Not optional in practice: the upload path reads spreadsheets, and
+    # MultiplEYE's comprehension questions come as a workbook.
+    "python-calamine>=0.9.1",
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.0.0",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
     # Parallelize the AppTest-heavy suite (`pytest -n auto`).
-    "pytest-xdist>=3.0.0",
+    "pytest-xdist>=3.8.0",
     # Registers the `@pytest.mark.timeout` marker the AppTest tests rely on;
     # required for collection under `--strict-markers`.
-    "pytest-timeout>=2.1.0",
+    "pytest-timeout>=2.4.0",
+    # Property tests (`tests/test_properties.py`): invariants checked against
+    # generated inputs rather than hand-picked examples.
+    "hypothesis>=6.170.0",
+    # Writes the .xlsx fixtures the readers are tested on; the app itself
+    # reads workbooks with calamine and writes none.
+    "openpyxl>=3.1.5",
+    # Reads the EyeLink ASC files the EDF-import tests write.
+    "pymovements>=0.28.0",
+]
+# EyeLink EDF import (experimental): pymovements reads the converted ASC.
+edf = [
+    "pymovements>=0.28.0",
 ]
 # The linter, pinned to exactly what CI runs (.github/workflows/ci.yml). An
 # unpinned ruff means a local run and CI can disagree — a new release lands new
 # rules and reds a branch that changed nothing. Bump both together.
 lint = [
-    "ruff==0.16.8",
+    "ruff==0.17.6",
 ]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
 # Material caps MkDocs below 2.0, which has no plugin system; every plugin here
 # except git-revision-date and llmstxt is one Zensical also runs.
 docs = [
     # `imaging` is the social-card renderer, switched on in CI only (mkdocs.yml).
-    "mkdocs-material[imaging]>=9.7.7",
-    "mkdocstrings[python]>=1.0.6",
+    "mkdocs-material[imaging]>=9.8.2",
+    "mkdocstrings[python]>=1.0.8",
     # Executes the pages' `exec="true"` fences: the gallery, the printed
     # outputs, the generated references.
-    "markdown-exec>=1.12.3",
+    "markdown-exec>=1.14.0",
     "mkdocs-redirects>=1.2.3",
-    "mkdocs-git-revision-date-localized-plugin>=1.6.0",
-    "mkdocs-llmstxt>=0.5.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.7.0",
+    "mkdocs-llmstxt>=0.5.1",
     # mkdocstrings wraps the API reference's signatures with it. Pinned with
     # the `lint` extra's, so the two extras resolve together.
-    "ruff==0.16.8",
+    "ruff==0.17.6",
 ]
 
 [project.urls]
@@ -135,10 +151,19 @@ include = ["scanpath_studio", "scanpath_studio.*"]
     # because only this list ships — a logo outside it would leave every
     # pip-installed copy with an empty header.
     "assets/*.png",
+    "publication_assets/*.html",
+    "publication_assets/*.css",
+    "publication_assets/*.js",
+    "assets/bundle_download/*.html",
+    "assets/bundle_download/*.js",
     "sample_data/*.csv",
     "sample_data/*.parquet",
     "sample_data/images/*.png",
     "sample_data/images/*.csv",
+    "sample_data/coauthor/*.csv",
+    "sample_data/coauthor/*.json",
+    "sample_data/coauthor/*.md",
+    "sample_data/coauthor/*.sha256",
 ]
 
 [tool.ruff.lint]
@@ -237,12 +262,12 @@ omit = [
     "scanpath_studio/update_sample_data.py",
 ]
 # Measure with `sys.monitoring` (PEP 669) rather than `sys.settrace`. Coverage.py
-# only makes it the default from Python 3.14, and on the 3.12 the Coverage job
-# and the docs deploy run, the settrace core made the suite 2.7x slower than the
-# plain test legs: 25 min against 9. Line coverage is identical. Needs
+# only makes it the default from Python 3.14, and on the 3.12 that CI's test
+# shares and the docs deploy run, the settrace core made the suite 2.7x slower
+# than without coverage: 25 min against 9. Line coverage is identical. Needs
 # coverage ≥ 7.9 for the setting. On 3.11, which has no `sys.monitoring`, it
 # warns once and falls back to the old core. Branch coverage under sysmon needs
-# 3.14, so switching `branch` on means moving the Coverage job to 3.14 too.
+# 3.14, so switching `branch` on means moving CI's test shares to 3.14 too.
 core = "sysmon"
 
 [tool.coverage.report]

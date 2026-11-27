@@ -31,13 +31,13 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 - :material-cloud-outline:{ .lg .middle } **Try online**
 
-    Explore the bundled demo. No installation.
+    Explore the bundled demo without installing anything.
 
     [Launch demo :material-arrow-right:](https://scanpath-studio.streamlit.app){ .md-button }
 
 - :fontawesome-brands-python:{ .lg .middle } **Install with Python**
 
-    Python 3.11–3.14. Opens in your browser.
+    Requires Python 3.11–3.15. Runs on your computer and opens in your browser.
 
     ```bash
     pip install scanpath-studio
@@ -46,10 +46,38 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 </div>
 
+## Try the Dev build
+
+Stable is the published release on PyPI and the desktop downloads above.
+Dev follows the changes merged into `main`. You can [open the Dev app](https://scanpath-studio-dev.streamlit.app)
+or run it locally. In a separate Python environment with Git installed, run:
+
+```bash
+python -m pip install "git+https://github.com/lacclab/scanpath-studio.git@dev"
+scanpath-studio
+```
+
+**Help** shows which channel you are running. Its release notes are in
+**About & citation → App details**.
+
+For a Git installation, the update command keeps your repository, requested
+ref and package subdirectory. An install from an official release tag follows
+the Stable channel for updates. If you selected a commit hash, choose the new
+revision in your original install command when you are ready to move.
+
+## Replay a sample reading { #replay-a-sample-reading }
+
+On your first visit, the app opens a reading from the [OneStop demo](guides/loading-data/index.md#onestop).
+Choose **Replay this reading** to follow the reader’s fixations over the text.
+Press **Pause**, then **Next fixation** to step through the recording. You can
+return to the sample walkthrough from **Help → Task guides**.
+
+To work with your own recording, choose **Import my data** or follow
+[Add your own data](guides/loading-data/index.md#add-your-own-data).
+
 ## Your first figure { #explore }
 
-Start with the bundled demo, a subset of the [OneStop corpus](guides/loading-data/index.md#onestop).
-You don't need to prepare any files. Choose a look, then save an interactive figure.
+Choose a reading in the demo to explore and save as an interactive figure.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/design-presets_poster.webp" data-autoplay
@@ -61,13 +89,14 @@ You don't need to prepare any files. Choose a look, then save an interactive fig
 
 - **1 · Open a reading**
 
-    In the :material/route: **Scanpath** view, choose **Bundled demo** in **Select dataset**.
+    In the :material/route: **Scanpath View**, choose **Bundled demo** in **Select dataset**.
     Then choose a reading in **Select trial**.
 
 - **2 · Choose a view**
 
-    In **Design presets**, click :material/local_fire_department: **Heatmap** to see where fixation time concentrates.
-    Click :material/timeline: **Scanpath** to follow the order of fixations.
+    Choose :material/local_fire_department: **Heatmap** to see where fixation time concentrates,
+    or :material/timeline: **Scanpath** to follow the order of fixations.
+    Both tiles sit under **Presets** in Essentials and Full.
 
 - **3 · Save your figure**
 

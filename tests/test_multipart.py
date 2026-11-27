@@ -11,6 +11,7 @@ import pytest
 
 from scanpath_studio import api
 from scanpath_studio.annotations import deserialize, serialize
+from scanpath_studio.data import frame_fingerprint
 from scanpath_studio.export import (
     ExportOptions,
     bulk_export,
@@ -20,15 +21,21 @@ from scanpath_studio.export import (
 from scanpath_studio.measures import compute_per_word_measures, enrich_fixations
 from scanpath_studio.multipart import (
     SCREEN_ID,
+    SCREEN_INDEX,
     apply_trial_parts_manifest,
     extract_part,
     part_catalog,
 )
+from scanpath_studio.preprocessing import sentence_measures
 from scanpath_studio.synthetic import (
     MULTIPART_EXPECTED,
     make_multipart_synthetic_data,
 )
-from scanpath_studio.tabs import _build_compare_meta
+from scanpath_studio.tabs import (
+    _build_compare_meta,
+    _c_derived_tables,
+    _part_catalog_for_display,
+)
 
 
 def _multipart_navigator_app():
@@ -63,6 +70,18 @@ def test_catalog_and_part_selection_preserve_order_geometry_and_clocks():
     assert fixations.groupby(SCREEN_ID)["screen_fixation_id"].min().eq(1).all()
 
 
+def test_multipleye_display_prefers_fixation_order_over_stale_word_order():
+    words, fixations = make_multipart_synthetic_data()
+    words = words.copy()
+    fixations = fixations.assign(screen_kind="reading")
+    words["screen_index"] = words["screen_index"].map({1: 2, 2: 1})
+
+    catalog = _part_catalog_for_display(words, fixations)
+
+    assert catalog[SCREEN_ID].tolist() == MULTIPART_EXPECTED["screens"]
+    assert catalog["screen_index"].tolist() == MULTIPART_EXPECTED["screen_indexes"]
+
+
 def test_scientific_enrichment_and_measures_never_cross_screen_boundary():
     words, fixations = make_multipart_synthetic_data()
     enriched = enrich_fixations(fixations, words)
@@ -75,6 +94,78 @@ def test_scientific_enrichment_and_measures_never_cross_screen_boundary():
     word_zero = measured[measured["word_id"] == 0].set_index(SCREEN_ID)
     assert word_zero.loc["intro", "total_fixation_duration_ms"] == 100
     assert word_zero.loc["question", "total_fixation_duration_ms"] == 120
+
+
+@pytest.mark.parametrize(
+    ("renames", "names"),
+    [
+        ({}, "canonical"),
+        # The dataset's own names: the screen columns come back under them.
+        ({SCREEN_ID: "page", SCREEN_INDEX: "page_index"}, "source"),
+    ],
+)
+def test_word_metrics_merge_back_onto_each_screens_words(renames, names):
+    raw_words, raw_fixations = make_multipart_synthetic_data()
+    words, fixations = api.load_scanpath_data(
+        raw_words.rename(columns=renames),
+        raw_fixations.rename(columns=renames),
+        names=names,
+    )
+    screen = renames.get(SCREEN_ID, SCREEN_ID)
+    number = renames.get(SCREEN_INDEX, SCREEN_INDEX)
+    # Each screen numbers its words from 0, so without the screen a word id
+    # names two rows of the trial.
+    assert words.duplicated(["participant_id", "trial_id", "word_id"]).any()
+
+    metrics = api.compute_word_metrics(words, fixations)
+
+    assert {screen, number} <= set(metrics.columns)
+    merged = words.merge(
+        metrics,
+        on=["participant_id", "trial_id", screen, "word_id"],
+        how="outer",
+        validate="one_to_one",
+        suffixes=("", "_metrics"),
+        indicator=True,
+    )
+    assert len(merged) == len(words)
+    assert merged["_merge"].eq("both").all()
+    assert merged[number].equals(merged[f"{number}_metrics"])
+    totals = merged.set_index([screen, "word_id"])["total_fixation_duration_ms"]
+    assert totals[("intro", 0)] == 100
+    assert totals[("question", 0)] == 120
+
+
+def test_data_page_tables_count_each_screens_words():
+    """The derived tables are built from the word metrics, so they see
+    every screen's words exactly as they see the words table's."""
+    words, fixations = api.load_scanpath_data(
+        *make_multipart_synthetic_data(), names="canonical"
+    )
+    built = _c_derived_tables(
+        words,
+        fixations,
+        pd.DataFrame(),
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        None,
+        None,
+    )
+
+    trials = built["Trial summary"].set_index(SCREEN_ID)
+    assert trials["n_words"].to_dict() == {"intro": 3, "question": 2}
+    assert trials["skip_rate"].notna().all()
+    # Five words read in 600 ms, not the three ids the two screens share.
+    assert built["Participant summary"]["wpm"].tolist() == [500.0]
+    assert len(built["Sentences"]) == len(sentence_measures(words, fixations)) == 2
+
+
+def test_single_screen_word_metrics_carry_no_screen_columns(
+    synthetic_words_df, synthetic_fixations_df
+):
+    metrics = api.compute_word_metrics(synthetic_words_df, synthetic_fixations_df)
+    assert not {SCREEN_ID, SCREEN_INDEX} & set(metrics.columns)
+    assert len(metrics) == len(synthetic_words_df)
 
 
 def test_explicit_columns_auto_normalize_and_headless_api_selects_one_screen():
@@ -473,23 +564,24 @@ def test_screen_steps_live_in_a_railbtn_cluster():
     That key is the whole mechanism behind the alignment: styles.py lays every
     ``[class*="st-key-railbtn_"]`` out as a right-packed flex row with a shared
     pill shape, so the screen row lands on the same edge as the trial picker's
-    ◀ ▶ ⇅ and the Filter-by **More**. No DOM exists under AppTest, so this is
-    pinned structurally — the same approach test_tour.py takes for its CSS hooks.
+    ◀ ▶ ⇅ and the Filter-by **More**. A's navigator and B's each keep their
+    pair together in their own cluster.
     """
-    import inspect
+    from streamlit.testing.v1 import AppTest
 
     from scanpath_studio.styles import get_app_css
-    from scanpath_studio.tabs import _render_screen_navigator
+    from tests.conftest import find_keyed
 
-    source = inspect.getsource(_render_screen_navigator)
-    # The key is prefix-parameterized (A's own "single" default, B's
-    # own "single_compare") rather than the literal "single_screen_trail" —
-    # still a `railbtn_*` name, which is the part the shared CSS rule below
-    # actually matches on.
-    assert 'key=f"railbtn_{key_prefix}_screen_trail"' in source
-    # The steps must be children of that container, not of the columns.
-    assert 'trail.button(\n        f"◀ {spoken(' in source
-    assert 'trail.button(\n        f"▶ {spoken(' in source
+    at = AppTest.from_function(_two_screen_navigators_app).run()
+    assert not at.exception, at.exception
+    for prefix in ("single", "single_compare"):
+        clusters = []
+        for step in ("previous", "next"):
+            _button, around = find_keyed(at, f"{prefix}_screen_{step}")
+            # The steps are the cluster's own children, not a column's.
+            clusters.append(around[-1])
+        assert clusters[0] is clusters[1]
+        assert clusters[0].key.startswith("railbtn_"), clusters[0].key
     # ...and the shared rule must actually match that key.
     assert '[class*="st-key-railbtn_"] {' in get_app_css()
 
@@ -514,6 +606,107 @@ def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
     out = normalize_words(stamped, schema)
     order = out.drop_duplicates(SCREEN_ID).set_index(SCREEN_ID)["screen_index"]
     assert order.to_dict() == {"intro": 1, "question": 2}
+
+
+def _paged_pair(word_pages, fixation_pages, *, word_index=None, fix_index=None):
+    """A stimulus-level Words table (one box per page, pages listed in
+    ``word_pages`` order) and one reading that fixates ``fixation_pages`` in
+    that order. ``*_index`` maps a page to the screen number its table maps."""
+    words = pd.DataFrame(
+        {
+            "text_id": "story",
+            "page": word_pages,
+            "word_id": 0,
+            "word": [f"w_{page}" for page in word_pages],
+            "x": 0.0,
+            "y": 0.0,
+            "width": 50.0,
+            "height": 20.0,
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": "p1",
+            "trial_id": "story",
+            "text_id": "story",
+            "page": fixation_pages,
+            "x": 10.0,
+            "y": 10.0,
+            "duration_ms": 200,
+            "onset": range(0, 300 * len(fixation_pages), 300),
+        }
+    )
+    word_schema = {
+        "trial": "text_id",
+        "text_id": "text_id",
+        "screen_id": "page",
+        "word_id": "word_id",
+        "text": "word",
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    fix_schema = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "text_id": "text_id",
+        "screen_id": "page",
+        "x": "x",
+        "y": "y",
+        "duration": "duration_ms",
+        "timestamp": "onset",
+    }
+    if word_index:
+        words["page_no"] = words["page"].map(word_index)
+        word_schema["screen_index"] = "page_no"
+    if fix_index:
+        fixations["page_no"] = fixations["page"].map(fix_index)
+        fix_schema["screen_index"] = "page_no"
+    return api.load_scanpath_data(
+        words,
+        fixations,
+        word_schema=word_schema,
+        fix_schema=fix_schema,
+        names="canonical",
+    )
+
+
+def test_an_unmapped_screen_order_follows_the_reading_not_the_word_file():
+    """With no screen number mapped, each table numbers its screens in the order
+    it first lists them, and a word file that lists ``page_10`` before
+    ``page_2`` disagrees with the reading. The Words table takes the reading's
+    order, and every screen plots."""
+    words, fixations = _paged_pair(
+        ["page_1", "page_10", "page_2"], ["page_1", "page_2", "page_10"]
+    )
+    parts = api.list_parts(words, fixations)
+    assert parts[SCREEN_ID].tolist() == ["page_1", "page_2", "page_10"]
+    order = words.drop_duplicates(SCREEN_ID).set_index(SCREEN_ID)["screen_index"]
+    assert order.to_dict() == {"page_1": 1, "page_2": 2, "page_10": 3}
+    for screen in parts[SCREEN_ID]:
+        api.plot_scanpath(words, fixations, "p1", "story", screen=screen)
+
+
+def test_a_mapped_screen_order_wins_over_a_derived_one():
+    words, fixations = _paged_pair(
+        ["page_1", "page_2", "page_3"],
+        ["page_3", "page_1", "page_2"],
+        word_index={"page_1": 1, "page_2": 2, "page_3": 3},
+    )
+    parts = api.list_parts(words, fixations)
+    assert parts[SCREEN_ID].tolist() == ["page_1", "page_2", "page_3"]
+
+
+def test_two_mapped_screen_orders_that_disagree_are_still_refused():
+    words, fixations = _paged_pair(
+        ["page_1", "page_2"],
+        ["page_1", "page_2"],
+        word_index={"page_1": 1, "page_2": 2},
+        fix_index={"page_1": 2, "page_2": 1},
+    )
+    with pytest.raises(ValueError, match="conflicts across tables"):
+        api.list_parts(words, fixations)
 
 
 def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():

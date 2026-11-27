@@ -9,6 +9,9 @@
 // its frame count, and `steps` a list of [op, arg] run in order. A page's
 // layout (`plots.replay_page`) also passes `updatemenus` and `sliders`, and
 // `slot: true` gives the page a `gd-transport` element for the toolbar.
+// `parent` is the page around the replay's frame: absent for a page of its own,
+// `{scheme}` for an app whose `.stApp` has that computed `color-scheme`, or
+// `"cross-origin"` for a parent document the frame may not read.
 //   ["run_until", ms]   advance the clock, firing display ticks and timers
 //   ["click", name]     press the play / pause / restart button
 //   ["slider", k]       drag the time slider to frame k
@@ -16,10 +19,20 @@
 //   ["detach"]          the plot leaves the page (the docs' instant navigation)
 //   ["toolbar", name]   press the player's own toolbar button
 //   ["seek", k]         grab the toolbar's time slider and drag it to frame k
-// Prints {shown, relayouts, native, listeners, toolbar} as JSON: every frame
-// put on screen with the time it happened, every Plotly.relayout, every button
-// whose own Plotly command ran, how many visibilitychange listeners remain, and
-// the toolbar the player drew (null without one).
+//   ["key", props]      send a keydown event to the focused replay slider
+//   ["seek_burst", ks]  send the toolbar's time slider one input event per frame
+//                       in ks, all from one script, as a page script can
+//   ["fail_next", how]  the next Plotly.animate rejects: "missing" without a
+//                       reason (a frame Plotly cannot find), "error" with one
+//   ["animate", k]      another script on the page animates the plot to frame k
+// `queue: true` makes Plotly.animate settle on the next display tick, and a
+// newer call reject every unsettled one without a reason and then emit
+// plotly_animationinterrupted, as Plotly's 'immediate' mode does.
+// Prints {shown, relayouts, native, unhandled, listeners, toolbar} as JSON:
+// every frame put on screen with the time it happened, every Plotly.relayout,
+// every button whose own Plotly command ran, every unhandled promise rejection,
+// how many visibilitychange listeners remain, and the toolbar the player drew
+// (null without one).
 "use strict";
 
 const fs = require("fs");
@@ -33,7 +46,10 @@ let rafs = new Map();
 let timers = [];
 const listeners = {};
 const visibilityListeners = [];
-const log = { shown: [], relayouts: [], native: [] };
+const log = { shown: [], relayouts: [], native: [], unhandled: [] };
+process.on("unhandledRejection", (reason) => log.unhandled.push(String(reason)));
+let unsettled = [];
+let failNext = null;
 
 // Just enough of an element for the toolbar the player builds.
 class FakeElement {
@@ -56,8 +72,10 @@ class FakeElement {
   addEventListener(event, fn) {
     (this.listeners[event] = this.listeners[event] || []).push(fn);
   }
-  dispatch(event) {
-    (this.listeners[event] || []).forEach((fn) => fn({ type: event }));
+  dispatch(event, props = {}) {
+    (this.listeners[event] || []).forEach((fn) => fn({
+      type: event, preventDefault() { this.defaultPrevented = true; }, ...props,
+    }));
   }
 }
 const slot = config.slot ? new FakeElement("div") : null;
@@ -94,6 +112,26 @@ function emit(event, data) {
   (listeners[event] || []).forEach((fn) => fn(data));
 }
 
+global.window = {};
+if (config.parent === "cross-origin") {
+  Object.defineProperty(global.window, "parent", {
+    get() {
+      return {
+        get document() {
+          throw new Error("SecurityError: cross-origin frame");
+        },
+      };
+    },
+  });
+} else if (config.parent) {
+  const app = { className: "stApp" };
+  global.window.parent = {
+    document: { querySelector: (sel) => (sel === ".stApp" ? app : null) },
+    getComputedStyle: (el) => ({ colorScheme: el === app ? config.parent.scheme : "" }),
+  };
+} else {
+  global.window.parent = global.window;
+}
 global.performance = { now: () => now };
 global.requestAnimationFrame = (cb) => {
   rafs.set(++rafSeq, cb);
@@ -121,9 +159,19 @@ global.Plotly = {
   // Real Plotly draws the frame and then emits `plotly_animatingframe`.
   animate(target, names) {
     const name = String(names[0]);
+    if (failNext) {
+      const how = failNext;
+      failNext = null;
+      return how === "error" ? Promise.reject(new Error("draw failed")) : Promise.reject();
+    }
+    if (config.queue && unsettled.length) {
+      unsettled.splice(0).forEach((draw) => draw.reject());
+      emit("plotly_animationinterrupted", []);
+    }
     log.shown.push([name, now]);
     emit("plotly_animatingframe", { name });
-    return Promise.resolve();
+    if (!config.queue) return Promise.resolve();
+    return new Promise((resolve, reject) => unsettled.push({ resolve, reject }));
   },
   relayout(target, edit) {
     log.relayouts.push(edit);
@@ -155,6 +203,7 @@ async function runUntil(until) {
       // A display tick runs every callback queued before it, like a browser.
       const due = rafs;
       rafs = new Map();
+      unsettled.splice(0).forEach((draw) => draw.resolve());
       due.forEach((cb) => cb(now));
     }
     await flush();
@@ -193,6 +242,14 @@ function seek(k) {
   range.dispatch("input");
 }
 
+function seekBurst(ks) {
+  const range = toolbarEl().children.find((c) => c.type === "range");
+  for (const k of ks) {
+    range.value = String(k);
+    range.dispatch("input");
+  }
+}
+
 function setHidden(hidden) {
   document.hidden = hidden;
   visibilityListeners.slice().forEach((fn) => fn());
@@ -211,6 +268,10 @@ function setHidden(hidden) {
     else if (op === "detach") gd.isConnected = false;
     else if (op === "toolbar") toolbarButton(arg);
     else if (op === "seek") seek(arg);
+    else if (op === "seek_burst") seekBurst(arg);
+    else if (op === "fail_next") failNext = arg;
+    else if (op === "animate") Plotly.animate(gd, [String(arg)]).catch(() => {});
+    else if (op === "key") toolbarEl().children.find((c) => c.type === "range").dispatch("keydown", arg);
     else throw new Error(`unknown step ${op}`);
     await flush();
   }
@@ -228,7 +289,8 @@ function setHidden(hidden) {
         range: (({ min, max, value, attributes }) => ({ min, max, value, attributes }))(
           bar.children.find((c) => c.type === "range"),
         ),
-        readout: bar.children[bar.children.length - 1].textContent,
+        readout: bar.children.find((c) => c.attributes["aria-hidden"] === "true").textContent,
+        readout_style: bar.children.find((c) => c.attributes["aria-hidden"] === "true").style,
       }
     : null;
   process.stdout.write(JSON.stringify(log));

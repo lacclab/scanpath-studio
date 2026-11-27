@@ -37,6 +37,14 @@ enableWebsocketCompression = true
 # which would hold `streamlit run` until it is answered. The CLI passes the same
 # value as a flag.
 showEmailPrompt = false
+# A budget for the serialized size of what `@st.cache_data` keeps in memory,
+# across functions and sessions (`st.cache_resource` and session state are not
+# counted). It is meant for the hosted demo, which shares one small machine among
+# every visitor while each opened trial caches its figure and replay: past the
+# budget Streamlit drops the least recently used entries, rebuilt on the next
+# visit, so the cache cannot grow without bound. The CLI and the desktop app do
+# not pass it, so a launch from outside this folder has no budget.
+maxCacheDataSize = "1gb"
 
 [client]
 # No Deploy button. "viewer" drops Streamlit's developer-only toolbar

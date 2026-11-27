@@ -193,3 +193,19 @@ def test_app_modules_do_not_import_scipy():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_a_screen_with_one_text_line_is_reported_as_no_correction():
+    """A title screen holds one line: every algorithm leaves it as recorded."""
+    words = pd.DataFrame(
+        {"x": [10.0, 60.0], "y": [10.0, 10.0], "width": [40.0, 40.0]}
+        | {"height": [20.0, 20.0], "text": ["Two", "words"]}
+    )
+    fixations = pd.DataFrame({"x": [12.0, 70.0], "y": [8.0, np.nan]})
+    combined, report = alignment.correction_sensitivity(fixations, words)
+    for method in ("attach", "slice", "consensus"):
+        np.testing.assert_equal(
+            combined[f"y_{method}_correction"].to_numpy(), [0.0, np.nan]
+        )
+    assert report["average_y_correction"].eq(0.0).all()
+    assert report["max_y_correction"].eq(0.0).all()

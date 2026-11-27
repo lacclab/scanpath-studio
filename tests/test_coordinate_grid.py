@@ -17,7 +17,10 @@ from scanpath_studio.export import _plot_config_dict
 
 @pytest.fixture(scope="module")
 def sample():
-    return sps.load_sample_data(names="canonical")
+    """The demo's paragraph screens: one coordinate space per reading, as a
+    comparison of two whole readings needs."""
+    words, fixations = sps.load_sample_data(names="canonical")
+    return tuple(f[f["screen_id"] == "Paragraph"] for f in (words, fixations))
 
 
 def test_ticks_are_zero_anchored_for_full_cropped_negative_and_inverted_ranges():
@@ -250,6 +253,8 @@ def test_bulk_manifest_records_grid_settings():
     assert config["axes"] == {
         "x_field": "x",
         "y_field": "y",
+        "reverse_x": False,
+        "reverse_y": False,
         "coordinate_grid": True,
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,
@@ -332,6 +337,8 @@ def test_saved_config_round_trips_grid():
     assert at.session_state["_saved_axes"] == {
         "x_field": "x",
         "y_field": "y",
+        "reverse_x": False,
+        "reverse_y": False,
         "coordinate_grid": True,
         "coordinate_grid_auto": False,
         "coordinate_grid_spacing": 250.0,

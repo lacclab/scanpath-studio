@@ -1,9 +1,8 @@
 """The rail's settings must reach *all three* render paths.
 
 The scanpath rail is one control set feeding three builders (static figure,
-animation, comparison). ``AGENTS.md`` → *Which viz settings apply in which
-render path* is the map; this file is the executable half of it for the
-settings that reach more than the static figure:
+animation, comparison). ``RENDER_PATHS.md`` is the map; this file is the
+executable half of it for the settings that reach more than the static figure:
 
 - **drift correction** is applied once, above the render-mode split, so the
   two Drift-correction controls move fixations on the animation and the
@@ -205,31 +204,6 @@ class TestDriftCorrectedNoOp:
 
 
 # -----------------------------------------------------------------------------
-# _marked_text_column — the "Mark border" gate
-# -----------------------------------------------------------------------------
-
-
-class TestMarkedTextColumn:
-    """Builders with no border-overlay layer must get ``None`` unless the style
-    is "Mark text" — otherwise "Mark border" silently becomes text marking."""
-
-    @pytest.mark.parametrize(
-        ("style", "expected"),
-        [
-            ("Mark text", "is_in_aspan"),
-            ("Mark border", None),
-            ("None", None),
-        ],
-    )
-    def test_style_gates_the_column(self, style, expected):
-        viz = _viz(critical_span_style=style)
-        assert tabs._marked_text_column(viz) == expected
-
-    def test_no_span_column_selected_stays_none(self):
-        assert tabs._marked_text_column(_viz(highlight_column=None)) is None
-
-
-# -----------------------------------------------------------------------------
 # Animation — the newly wired parameters reach make_scanpath_animation
 # -----------------------------------------------------------------------------
 
@@ -321,9 +295,18 @@ class TestAnimationWiring:
         assert kwargs["fixation_colorbar_tickangle"] == 45
         assert kwargs["fixation_colorbar_tickfont_size"] == 9
 
-    def test_mark_border_does_not_leak_into_the_replay(self, monkeypatch):
-        _, kwargs = _animate(_viz(critical_span_style="Mark border"), monkeypatch)
-        assert kwargs["highlight_column"] is None
+    def test_mark_border_outlines_the_span_in_the_replay(self, monkeypatch):
+        fig, kwargs = _animate(
+            _viz(
+                critical_span_style="Mark border",
+                span_border_color="#22aabb",
+                show_labels=False,
+                show_words=False,
+            ),
+            monkeypatch,
+        )
+        assert kwargs["highlight_column"] == "is_in_aspan"
+        assert any(shape.line.color == "#22aabb" for shape in fig.layout.shapes)
 
     def test_the_span_actually_reaches_the_word_labels(self, monkeypatch):
         """Not just accepted — visible. The two answer-span words take the
@@ -395,6 +378,8 @@ def _compare(viz: dict, monkeypatch, *, fixations=None, layout="overlay", **extr
         return real(words, fix, trial_a, trial_b, **kwargs)
 
     monkeypatch.setattr(tabs, "make_comparison_figure", spy)
+    # A cache hit would never reach the spied builder.
+    tabs._cached_comparison_figure.clear()
     combos = pd.DataFrame(
         {"participant_id": ["A", "B"], "trial_id": ["t1", "t1"], "text_id": ["p", "p"]}
     )
@@ -464,9 +449,18 @@ class TestComparisonWiring:
         assert fig.layout.images[0].opacity == 0.4
         assert fig.layout.images[0].layer == "below"
 
-    def test_mark_border_does_not_leak_into_the_comparison(self, monkeypatch):
-        _, kwargs = _compare(_viz(critical_span_style="Mark border"), monkeypatch)
-        assert kwargs["highlight_column"] is None
+    def test_mark_border_outlines_the_span_in_the_comparison(self, monkeypatch):
+        fig, kwargs = _compare(
+            _viz(
+                critical_span_style="Mark border",
+                span_border_color="#22aabb",
+                show_labels=False,
+                show_words=False,
+            ),
+            monkeypatch,
+        )
+        assert kwargs["highlight_column"] == "is_in_aspan"
+        assert any(shape.line.color == "#22aabb" for shape in fig.layout.shapes)
 
     def test_the_symbol_actually_reaches_both_scanpaths(self, monkeypatch):
         fig, _ = _compare(_viz(fixation_symbol="diamond"), monkeypatch)
@@ -631,7 +625,7 @@ class TestDriftCorrectionReachesEveryPath:
         seen: dict[str, list] = {"static": [], "anim": [], "compare": []}
         real_static = tabs._cached_scanpath_figure
         real_anim = plots.build_scanpath_replay
-        real_compare = plots.make_comparison_figure
+        real_compare = tabs._cached_comparison_figure
 
         def static(words, fixations, settings, raw_gaze, fig_key):
             seen["static"].append((words, fixations))
@@ -647,15 +641,15 @@ class TestDriftCorrectionReachesEveryPath:
             seen["anim"].append((words, fixations, flattened))
             return real_anim(words, fixations, **kwargs)
 
-        def compare(words, fixations, trial_a, trial_b, **kwargs):
-            seen["compare"].append((words, fixations, trial_a, trial_b))
-            return real_compare(words, fixations, trial_a, trial_b, **kwargs)
+        def compare(words, fixations, trials, settings, raw_gaze, fig_key):
+            seen["compare"].append((words, fixations, *trials))
+            return real_compare(words, fixations, trials, settings, raw_gaze, fig_key)
 
         monkeypatch.setattr(tabs, "_cached_scanpath_figure", static)
         monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
         # A view-cache hit would never reach the spied replay cache.
         tabs._cached_replay_view.clear()
-        monkeypatch.setattr(tabs, "make_comparison_figure", compare)
+        monkeypatch.setattr(tabs, "_cached_comparison_figure", compare)
         return seen
 
     @staticmethod
@@ -667,6 +661,10 @@ class TestDriftCorrectionReachesEveryPath:
     def test_static_animation_and_comparison_all_move(self, monkeypatch):
         seen = self._spy(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
+        # The demo's paragraph screens: a correction needs two text lines to
+        # snap between, and a title has one.
+        at.session_state["single_screen_id"] = "Paragraph"
+        at.session_state["single_compare_screen_id"] = "Paragraph"
         at.run(timeout=90)
         assert not at.exception, at.exception
 
@@ -807,3 +805,103 @@ def test_a_styled_co_animation_is_keyed_without_the_unread_global_look():
         ).key
 
     assert key() == key(saccade_width=7.0, fixation_opacity=0.2)
+
+
+@pytest.mark.parametrize(
+    ("layout", "stimulus", "panels"),
+    [
+        ("overlay", "a", []),
+        ("overlay", "b", ["x"]),
+        ("overlay", "both", ["x"]),
+        ("side_by_side", "a", ["x2"]),
+        ("stacked", "both", ["x2"]),
+    ],
+)
+def test_border_chooses_the_readings_actual_stimulus(layout, stimulus, panels):
+    words = _words()
+    words["target"] = (words.participant_id == "B") & (words.word_id == 1)
+    fig = plots.make_comparison_figure(
+        words,
+        _fixations(),
+        ("A", "t1"),
+        ("B", "t1"),
+        layout=layout,
+        compare_stimulus=stimulus,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        highlight_column="target",
+        critical_span_style="Mark border",
+        span_border_color="#b63891",
+        show_words=False,
+        show_word_labels=False,
+    )
+    assert [s.xref for s in fig.layout.shapes if s.line.color == "#b63891"] == panels
+    assert sum(
+        "Highlighted:" in (a.text or "") for a in fig.layout.annotations
+    ) == bool(panels)
+
+
+@pytest.mark.parametrize(
+    ("stimulus", "expected"), [("a", False), ("both", False), ("b", True)]
+)
+def test_co_replay_border_follows_the_single_displayed_page(stimulus, expected):
+    words = _words()
+    words["target"] = (words.participant_id == "B") & (words.word_id == 1)
+    fig = plots.make_scanpath_animation(
+        _trial(words, "A"),
+        _trial(_fixations(), "A"),
+        words_b=_trial(words, "B"),
+        fixations_b=_trial(_fixations(), "B"),
+        compare_stimulus=stimulus,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        highlight_column="target",
+        critical_span_style="Mark border",
+        span_border_color="#b63891",
+        show_words=False,
+        show_word_labels=False,
+    )
+    assert any(s.line.color == "#b63891" for s in fig.layout.shapes) == expected
+    assert fig.frames
+
+
+@pytest.mark.parametrize("view", ["static", "replay", "side_by_side", "overlay"])
+def test_underlines_follow_each_displayed_words_flag(view):
+    words, fix = _words(), _fixations()
+    words["target"] = words.word_id.isin([0, 2]) & (words.participant_id == "A")
+    settings = dict(
+        critical_span_style="Underline",
+        highlight_column="target",
+        text_color="#234567",
+        show_word_labels=True,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+    )
+    if view == "static":
+        fig = plots.make_scanpath_figure(
+            _trial(words, "A"), _trial(fix, "A"), **settings
+        )
+    elif view == "replay":
+        fig = plots.make_scanpath_animation(
+            _trial(words, "A"), _trial(fix, "A"), **settings
+        )
+    else:
+        fig = plots.make_comparison_figure(
+            words, fix, ("A", "t1"), ("B", "t1"), layout=view, **settings
+        )
+    labels = [t for t in fig.data if t.name == "words" and t.mode == "text"]
+    assert tuple(labels[0].textfont.lineposition) == (
+        "under",
+        "none",
+        "under",
+        "none",
+        "none",
+        "none",
+    )
+    assert labels[0].textfont.color == "#234567"
+    for panel in labels[1:]:
+        assert panel.textfont.lineposition is None
+    assert sum("Highlighted:" in a.text for a in fig.layout.annotations) == 1

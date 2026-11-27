@@ -3,7 +3,7 @@
 The front end is drawn as three views, and the pipeline's last stage includes
 corpus-level aggregation.
 
-Run from the repo root:  uv run python paper/paper_fig_architecture.py
+Run from the repo root:  uv run --with matplotlib python paper/paper_fig_architecture.py
 """
 
 from __future__ import annotations

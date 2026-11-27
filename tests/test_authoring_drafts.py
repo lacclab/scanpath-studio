@@ -18,7 +18,6 @@ from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import api, cli
 from scanpath_studio.authoring import (
-    destructive_change,
     layout_text,
     parse_authoring_document,
     stale_target_words,
@@ -39,6 +38,8 @@ def authoring_app():
 
 def _custom_draft() -> AppTest:
     at = AppTest.from_function(authoring_app, default_timeout=30).run()
+    at.text_area(key="author_text").set_value("Read it twice.").run()
+    _button(at, "Reset to one fixation per word").click().run()
     events = at.session_state["_authored_events_frame"].head(2).copy()
     events.loc[0, ["x", "duration_ms"]] = [777.0, 987.0]
     at.session_state["_authored_events_frame"] = events
@@ -95,35 +96,28 @@ def test_putting_the_text_back_resolves_the_flag():
 def test_reset_is_explicit_and_restore_brings_the_draft_back():
     at = _custom_draft()
     before = _fixations(at)
-    assert _button(at, "Restore previous draft").disabled
     _button(at, "Reset to one fixation per word").click().run()
     reset = _fixations(at)
     assert len(reset) > 2 and all(row["duration_ms"] == 220 for row in reset)
-    _button(at, "Restore previous draft").click().run()
+    _button(at, "Undo").click().run()
     assert _fixations(at) == before
-    # …and pressing it again returns to the reset draft.
-    _button(at, "Restore previous draft").click().run()
+    # Redo reapplies the reset.
+    _button(at, "Redo").click().run()
     assert _fixations(at) == reset
 
 
-def test_adding_a_fixation_is_not_a_destructive_edit():
-    events = pd.DataFrame(
-        {
-            "fixation_id": [1],
-            "order_in_trial": [1],
-            "word_id": [None],
-            "x": [10.0],
-            "y": [20.0],
-            "duration_ms": [200],
-        }
-    )
-    added = pd.concat(
-        [events, events.assign(fixation_id=2, order_in_trial=2)], ignore_index=True
-    )
-    assert not destructive_change(events, added)
-    assert destructive_change(added, events)
-    assert destructive_change(events, events.assign(x=11.0))
-    assert not destructive_change(None, events)
+def test_redo_and_undo_restore_target_warnings_with_the_draft():
+    at = _custom_draft()
+    original = at.text_area(key="author_text").value
+    at.text_area(key="author_text").set_value("Different words here").run()
+    warning = next(w.value for w in at.warning if "target word" in w.value)
+    _button(at, "Undo").click().run()
+    assert at.text_area(key="author_text").value == original
+    _button(at, "Redo").click().run()
+    assert any(w.value == warning for w in at.warning)
+    _button(at, "Clear those target words").click().run()
+    _button(at, "Undo").click().run()
+    assert any(w.value == warning for w in at.warning)
 
 
 def test_stale_targets_ignore_punctuation_and_case():

@@ -1,0 +1,11 @@
+participant_id,trial_id,word_id,text,line_idx,x,y,width,height
+reader,passage,1,קראנו,1,600,60,104,46
+reader,passage,2,42,1,530,60,56,46
+reader,passage,3,"מילים,",1,400,60,120,46
+reader,passage,4,גם,1,335,60,56,46
+reader,passage,5,ב־Data,1,185,60,120,46
+reader,passage,6,היום.,1,65,60,92,46
+reader,passage,7,ثم,2,655,138,56,46
+reader,passage,8,قرأنا,2,538,138,104,46
+reader,passage,9,Data,2,430,138,88,46
+reader,passage,10,2025.,2,298,138,104,46

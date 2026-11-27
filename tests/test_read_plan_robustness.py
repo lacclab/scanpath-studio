@@ -190,6 +190,43 @@ class TestWordTextIsReadVerbatim:
         words, _ = api.load_scanpath_data(words=str(path), names="canonical")
         assert words["text"].tolist() == self.WORDS
 
+    def _whole_file(self) -> tuple[str, ReadPlan]:
+        """The table as TSV text with an "NA" in a number column, and the
+        whole-file plan the headless API reads it under."""
+        table = self._table()
+        table["IA_TOP"] = ["NA", *table["IA_TOP"].iloc[1:]]
+        plan = data_module.verbatim_text_plan(list(table.columns))
+        return table.to_csv(sep="\t", index=False), plan
+
+    def _assert_read_as_planned(self, frame: pd.DataFrame) -> None:
+        assert frame["IA_LABEL"].tolist() == self.WORDS
+        # Every other column still reads pandas' own NA spellings as missing.
+        assert frame["IA_TOP"].isna().tolist() == [True] + [False] * 4
+
+    def test_a_whole_zipped_member_keeps_the_words(self, tmp_path):
+        text, plan = self._whole_file()
+        path = tmp_path / "ia.zip"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("ia.tsv", text)
+        self._assert_read_as_planned(read_table(path, plan=plan))
+
+    def test_a_stream_that_cannot_rewind_keeps_the_words(self):
+        class OneWay(io.RawIOBase):
+            def __init__(self, data: bytes):
+                self._inner = io.BytesIO(data)
+
+            def readable(self) -> bool:
+                return True
+
+            def readinto(self, buffer) -> int:
+                chunk = self._inner.read(len(buffer))
+                buffer[: len(chunk)] = chunk
+                return len(chunk)
+
+        text, plan = self._whole_file()
+        stream = io.BufferedReader(OneWay(text.encode()))
+        self._assert_read_as_planned(data_module._read_delimited(stream, "\t", plan))
+
     def test_a_hand_mapped_text_column_is_the_one_kept(self):
         from scanpath_studio.app import upload_read_plan
 
@@ -207,6 +244,47 @@ class TestWordTextIsReadVerbatim:
         words = data_module.normalize_words(table, schema)
         assert words["text"].tolist()[0] == ""
         data_module.harmonize_frames(words, data_module.empty_fixations_frame())
+
+
+class TestTheWorkbookEngine:
+    """Workbooks are read with calamine (`data.EXCEL_ENGINE`), which pandas is
+    moving its own defaults to. It must give the frame the previous engine
+    gave, on the kinds of cell where engines are known to differ."""
+
+    CELLS = {
+        **CORE,
+        "IA_ID": [1, 2, 3],
+        "RECORDING_SESSION_LABEL": ["p1", "p1", "p1"],
+        "paragraph_id": ["t1", "t1", "t1"],
+        # A word "NA", an empty cell, and ordinary text.
+        "IA_LABEL": ["NA", None, "fox"],
+        "IA_LEFT": [10, 60, 120],
+        "IA_RIGHT": [50, 110, 160],
+        "IA_TOP": [100, 100, 100],
+        "IA_BOTTOM": [130, 130, 130],
+        "IA_DWELL_TIME": [212.5, 0.0, 180.25],
+        "IA_SKIP": [True, False, True],
+        "item": ["007", "010", "100"],
+    }
+
+    def test_calamine_reads_a_workbook_as_openpyxl_did(self, tmp_path):
+        pytest.importorskip("openpyxl")
+        path = tmp_path / "words.xlsx"
+        pd.DataFrame(self.CELLS).to_excel(path, index=False)
+        header = read_table_columns(path)
+        plan = _plan(header)
+
+        def read_with(engine: str) -> pd.DataFrame:
+            with pd.ExcelFile(path, engine=engine) as book:
+                return pd.read_excel(book, **data_module._excel_na_kwargs(book, plan))
+
+        before = read_with("openpyxl")
+        pd.testing.assert_frame_equal(before, read_with(data_module.EXCEL_ENGINE))
+        assert data_module.EXCEL_ENGINE == "calamine"
+        assert header == list(self.CELLS)
+        # The app's reader keeps the plan's columns of that same frame.
+        after = read_table(path, plan=plan)
+        pd.testing.assert_frame_equal(before[list(after.columns)], after)
 
 
 class TestFilesTheReadersUsedToRefuse:

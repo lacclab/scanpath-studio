@@ -9,7 +9,7 @@ hide:
 # Redacted text
 
 Show where the text was without showing what it said. Each word is drawn as a
-rounded block over its letters, and the hovers hide the words too.
+rounded block over its letters. Words are also hidden in tooltips.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -19,7 +19,7 @@ print(gallery_figure("redacted-text"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. In :material/article: **Stimulus** ▾ → **Text**, tick **Redact**. The blocks take the text color.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
@@ -28,7 +28,7 @@ print(gallery_figure("redacted-text"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele --screen Paragraph \
       --redact-text --highlight-column '' \
       -o redacted-text.html
     ```

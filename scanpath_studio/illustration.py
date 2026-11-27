@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from .constants import AUTHOR_CHOICE, SYNTHETIC_CHOICE
+from .constants import AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE, SYNTHETIC_CHOICE
 
 #: The reason recorded when *Show* labels a figure nothing was detected on; the
 #: figure draws "Illustration" alone for it.
@@ -42,15 +42,19 @@ def illustration_reasons(
     Raw gaze is never a reason. The samples are drawn as recorded — nothing in
     the app derives fixations (or anything else) from them — so a figure of
     raw gaze alone is the least transformed figure there is."""
+    spatial_static = static and (
+        settings.get("x_field", "x"),
+        settings.get("y_field", "y"),
+    ) == ("x", "y")
     reasons: list[str] = []
     if (
-        static
+        spatial_static
         and settings.get("show_fixations", True)
         and settings.get("fixation_snap_to_line")
     ):
         reasons.append("fixations snapped to lines")
     if (
-        static
+        spatial_static
         and settings.get("show_saccades", True)
         and settings.get("saccade_render_mode") == "Arc"
     ):
@@ -81,7 +85,11 @@ def illustration_reasons(
         reasons.append("fixation subset")
     # The app's own made-up sources only, never a user's dataset whose name
     # happens to contain "synthetic" or "author".
-    if synthetic or data_source in (SYNTHETIC_CHOICE, AUTHOR_CHOICE):
+    if synthetic or data_source in (
+        SYNTHETIC_CHOICE,
+        AUTHOR_CHOICE,
+        MANUAL_SAMPLE_CHOICE,
+    ):
         reasons.append("synthetic data")
     playback_speed = settings.get("playback_speed", 1.0)
     try:

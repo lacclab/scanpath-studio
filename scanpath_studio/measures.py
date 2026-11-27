@@ -1,9 +1,10 @@
 """Compute reading measures from fixations and word bounding boxes.
 
 Definitions follow standard reading-research conventions (Rayner 1998;
-Inhoff & Radach 1998). All measures are per (participant, trial, word). When a
-column already exists on the words dataframe (e.g. pre-aggregated EyeLink IA
-metrics) it is preserved; we only compute values that are not present.
+Inhoff & Radach 1998). All measures are per (participant, trial[, screen],
+word). When a column already exists on the words dataframe (e.g. pre-aggregated
+EyeLink IA metrics) it is preserved; we only compute values that are not
+present.
 
 Canonical output columns added to words:
 - first_fixation_ms           — FFD: duration of the first fixation on this word
@@ -33,14 +34,6 @@ import numpy as np
 import pandas as pd
 
 from .multipart import grouping_columns
-
-# A recorded ``timestamp_ms`` series is trusted as real reading time only when
-# its span covers at least this fraction of the summed fixation durations.
-# Fixations don't overlap, so a genuine recording spans at least its total
-# dwell; the 0,1,2,… row index ``data.normalize_fixations`` synthesises when the
-# source has no timestamps collapses to a few ms and must NOT be read as
-# milliseconds. Shared by the similarity time-curve and the animation clock.
-REAL_TIMESTAMP_DWELL_FRAC = 0.5
 
 
 def _assign_word_ids_single(
@@ -81,7 +74,7 @@ def _assign_word_ids_single(
 #
 # **The boxes are used exactly as the experiment defined them.** Pulling every
 # tiling boundary back half a space, to the middle of the whitespace,
-# reassigns 7.4% of the demo's fixations relative to EyeLink's own
+# reassigns fixations relative to EyeLink's own
 # interest-area assignment, which is the one the corpus' IA_* measures were
 # computed from: a reading measure has to be computed against the interest
 # areas the study reported.
@@ -207,9 +200,7 @@ def word_box_contains(
     Half-open — ``x0 <= x < x1`` and ``y0 <= y < y1`` — so a box ``width`` px
     wide holds exactly ``width`` pixel columns, and a point on the edge two
     tiling boxes share belongs to the box that *starts* there: the word to the
-    right, the line below. That is how EyeLink assigned every such fixation in
-    the bundled demo (30 of them, all integer coordinates on a shared edge),
-    where a closed test would hand each to the earlier box instead.
+    right, the line below.
     Assignment, the out-of-text flag and the word heatmap all test with this,
     so a fixation is counted towards exactly one word.
     """
@@ -321,8 +312,14 @@ def assign_fixations_to_words(
     if "word_id" not in out.columns or overwrite:
         out["word_id"] = np.nan
 
+    from .data import FIX_WORD_ID_MAPPED
+
     need_idx = out["word_id"].isna()
-    if not need_idx.all():
+    if not overwrite and "word_id" in fixations and FIX_WORD_ID_MAPPED in out:
+        need_idx &= ~out[FIX_WORD_ID_MAPPED].fillna(False).astype(bool)
+        if not need_idx.any():
+            return out
+    elif not need_idx.all():
         return out
 
     # Per (participant, trial), do a fast vectorized box-test against that
@@ -541,12 +538,8 @@ def fixation_clock(ordered_fixations: pd.DataFrame) -> tuple[np.ndarray, bool]:
 
     ``ordered_fixations`` must already be in reading order (sorted by
     ``timestamp_ms``); the returned array is aligned to its rows. Uses the
-    recorded ``timestamp_ms`` when they look like real times — their span is at
-    least ``REAL_TIMESTAMP_DWELL_FRAC`` of the summed durations — otherwise lays
-    fixations back-to-back by their durations, so a synthesised 0,1,2,… index
-    doesn't crush the time axis. Fixations normalization numbered because the
-    table had no onset (``data.TIMESTAMP_SYNTHESIZED``) always take the
-    durations — the same estimate the reading summaries use.
+    recorded ``timestamp_ms`` when all onsets are known. Otherwise lays
+    fixations back-to-back by duration, as the reading summaries do.
 
     The flag is ``False`` whenever the onsets were laid end to end: their span
     is then the summed fixation time, not the trial's duration, and nothing
@@ -571,13 +564,7 @@ def fixation_clock(ordered_fixations: pd.DataFrame) -> tuple[np.ndarray, bool]:
         ts = pd.to_numeric(ordered_fixations["timestamp_ms"], errors="coerce").to_numpy(
             dtype=float
         )
-        total_dwell = float(dur.sum()) if len(dur) else 0.0
-        if (
-            len(ts)
-            and not np.isnan(ts).any()
-            and (ts[-1] - ts[0]) >= REAL_TIMESTAMP_DWELL_FRAC * total_dwell
-        ):
-            return ts - ts[0], True
+        return ts - ts[0], True
     return contiguous, False
 
 
@@ -603,10 +590,23 @@ def _in_any_box(fix_chunk: pd.DataFrame, word_chunk: pd.DataFrame) -> np.ndarray
     x0, y0, x1, y1 = word_box_bounds(word_chunk)
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
-    inside = word_box_contains(
-        fx[:, None], fy[:, None], x0[None, :], y0[None, :], x1[None, :], y1[None, :]
-    )
-    return inside.any(axis=1)
+    result = np.zeros(len(fx), dtype=bool)
+    # Bound both dimensions for tall recordings and unusually large word catalogs.
+    box_batch = min(len(x0), 4096) or 1
+    point_batch = max(1, 262_144 // box_batch)
+    for i in range(0, len(fx), point_batch):
+        points = slice(i, i + point_batch)
+        for j in range(0, len(x0), box_batch):
+            boxes = slice(j, j + box_batch)
+            result[points] |= word_box_contains(
+                fx[points, None],
+                fy[points, None],
+                x0[boxes],
+                y0[boxes],
+                x1[boxes],
+                y1[boxes],
+            ).any(axis=1)
+    return result
 
 
 def cluster_word_lines(words: pd.DataFrame, tol_frac: float = 0.5) -> pd.Series:
@@ -1005,7 +1005,7 @@ def compute_per_word_measures(
 
     # A word nobody fixated has no first fixation, first pass or go-past
     # time — but an imported IA report may say `0` rather than leave the cell
-    # empty (the bundled OneStop one does, for every such word), and a 0 wins the
+    # empty, and a 0 wins the
     # precedence above, so every mean would count skipped words as 0-ms
     # fixations.
     # Total time stays 0 on purpose: the word was read past and got no time.

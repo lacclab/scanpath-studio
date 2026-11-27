@@ -284,6 +284,26 @@ class TestUnnamedParticipantsAreNotCounted:
         counts = _measure(words, pd.DataFrame(), key=("stimulus-words-only",))
         assert counts["Participants"] is None
 
+    def test_the_stats_tab_says_unknown_too(self):
+        from scanpath_studio import api, tabs
+
+        loaded = api.load_scanpath_data(self.words, self.fixations, names="canonical")
+        stats = tabs._dataset_statistics(
+            loaded.words, loaded.fixations, pd.DataFrame(), ("stats-no-participants",)
+        )
+        assert stats["n_participants"] is None
+        assert stats["n_trials"] == 2
+        assert "Trials per participant" not in set(stats["stats_df"]["Metric"])
+
+    def test_no_trials_is_zero_participants_not_unknown(self):
+        from scanpath_studio import tabs
+
+        empty = pd.DataFrame(columns=["participant_id", "trial_id"])
+        stats = tabs._dataset_statistics(
+            empty, empty, pd.DataFrame(), ("stats-nothing-selected",)
+        )
+        assert stats["n_participants"] == 0
+
     def test_named_participants_are_still_counted(self):
         fixations = self.fixations.assign(participant_id=["p1", "p2", "p2"])
         fixations = normalize_fixations(fixations, propose_fix_schema(fixations))

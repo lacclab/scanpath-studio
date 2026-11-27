@@ -43,7 +43,7 @@ DATASET_COUNT_FIELDS: tuple[str, ...] = (
 )
 
 #: The four counts the table shows. The other three — Screens, Words and Gaze
-#: points — are in the open dataset's 📊 Stats, under the table.
+#: points — are in the open dataset's Overview, under the table.
 TABLE_COUNT_FIELDS: tuple[str, ...] = ("Participants", "Texts", "Trials", "Fixations")
 
 #: The one count kept on a phone-width screen, beside the name and the actions.

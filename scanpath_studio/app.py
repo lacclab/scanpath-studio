@@ -191,9 +191,8 @@ from scanpath_studio.crash_report import guarded
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
     IDENTITY_SCHEMA_FIELDS,
-    STIMULUS_PARTICIPANT,
+    PLACEHOLDER_PARTICIPANTS,
     STIMULUS_WORDS_FLAG,
-    SYNTHETIC_PARTICIPANT,
     TRIAL_IDENTITY_SAMPLE,
     WORD_OPTIONAL_FIELDS,
     ReadPlan,
@@ -5658,9 +5657,6 @@ def forget_dataset_counts(keep: set | None = None) -> None:
         store.pop(token, None)
 
 
-#: Participant ids the loader assigns when no participant column is mapped.
-_PLACEHOLDER_PARTICIPANTS = frozenset({SYNTHETIC_PARTICIPANT, STIMULUS_PARTICIPANT})
-
 #: Part of every remembered count's key: bump it when :func:`_dataset_counts`
 #: counts differently, so counts remembered in a saved session are recomputed.
 _COUNTS_VERSION = 2
@@ -5728,7 +5724,7 @@ def _dataset_counts(
     return {
         # The ids the loader fills in when a dataset names no participants
         # are not readers: such a dataset's count is unknown, not 1.
-        "Participants": _union_unique("participant_id", _PLACEHOLDER_PARTICIPANTS),
+        "Participants": _union_unique("participant_id", PLACEHOLDER_PARTICIPANTS),
         # From every table that names a text, not the words alone.
         "Texts": len(text_ids(words, fixations, raw_gaze)) or None,
         "Trials": trials,

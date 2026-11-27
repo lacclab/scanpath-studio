@@ -179,6 +179,36 @@ def test_fixations_say_why_they_grey_on_axes_they_lack():
     assert not any("Turn the layer on" in caption for caption in captions)
 
 
+def test_fixation_index_by_word_number_preset():
+    """The preset puts the word each fixation landed on along X and the
+    fixation's place in the reading up Y."""
+    from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.toggle(key="single_animate").set_value(False).run()
+    at.selectbox(key="_plot_axis_preset").set_value(
+        "Fixation index by word number"
+    ).run()
+    assert not at.exception
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "word_id",
+        "order_in_trial",
+    )
+    settings = at.session_state[SNIPPET_STATE_KEY].settings
+    assert (settings["x_field"], settings["y_field"]) == ("word_id", "order_in_trial")
+
+    # The first fixation can sit at the top: the vertical axis runs reversed.
+    reverse = at.checkbox(key="global_reverse_y_axis")
+    assert not reverse.disabled
+    reverse.check().run()
+    assert not at.exception
+    assert at.session_state[SNIPPET_STATE_KEY].settings["reverse_y_axis"]
+
+    # The screen view keeps the stimulus as shown, so the switch greys there.
+    at.selectbox(key="_plot_axis_preset").set_value("Screen X and Y").run()
+    assert at.checkbox(key="global_reverse_y_axis").disabled
+
+
 def test_gaze_over_time_keeps_its_small_onset_markers_in_compare():
     """Each reading draws its own marker size in Compare, so the view sets
     both: a large duration-scaled marker would hide a short fixation's bar."""
@@ -728,9 +758,12 @@ def test_compare_elapsed_axes_keep_each_readings_parent_clock_and_scale(layout):
     assert list(_trace(fig, "Second").x) == pytest.approx(
         [(b.timestamp_ms - first.timestamp_ms.min()) / 500]
     )
-    assert _trace(fig, "Second").xaxis == "x2"
-    assert fig.layout.xaxis.range == fig.layout.xaxis2.range
-    assert fig.layout.yaxis.range == fig.layout.yaxis2.range
+    if layout == "overlay":
+        assert {t.xaxis for t in fig.data} == {"x"}
+    else:
+        assert _trace(fig, "Second").xaxis == "x2"
+        assert fig.layout.xaxis.range == fig.layout.xaxis2.range
+        assert fig.layout.yaxis.range == fig.layout.yaxis2.range
     assert fig.layout.yaxis.range[0] > fig.layout.yaxis.range[1]
     assert len([t for t in fig.data if t.name == "Fixation duration"]) == 2
     assert all(t.marker.symbol != "arrow" for t in fig.data)
@@ -796,7 +829,10 @@ def test_sample_only_comparison_axis_does_not_draw_fixation_keys():
     assert [t.name for t in fig.data] == ["Second · raw gaze"]
     assert list(fig.data[0].x) == [35]
     assert list(fig.data[0].y) == [231]
-    assert sum(a.text == "No data on these axes" for a in fig.layout.annotations) == 1
+    # The default overlay is one panel, so it names the reading drawn without data.
+    assert [a.text for a in fig.layout.annotations if "No data" in str(a.text)] == [
+        "No data for A on these axes"
+    ]
     assert not fig.layout.shapes
 
 

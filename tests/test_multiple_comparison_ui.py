@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from scanpath_studio.similarity import METRICS
 from scanpath_studio.tabs import (
@@ -559,3 +560,492 @@ def test_drawing_the_kept_matches_leaves_them_as_they_were():
     assert at.session_state[data._FRAME_CACHE_KEY]["comparison_matches"][1] is matches
     for reading, frame in before.items():
         pd.testing.assert_frame_equal(matches[reading], frame)
+
+
+# --- The grid on chart axes ---------------------------------------------------
+
+
+def _chart_comparisons_app() -> None:
+    """The look-alike grid with the rail's Axes on fixation order x word id,
+    the matches' scanpaths of different lengths."""
+    import pandas as pd
+
+    from scanpath_studio import tabs
+    from tests.test_mode_parity import _viz
+    from tests.test_multiple_comparison_ui import _lookalike_frames
+
+    words, fixations = _lookalike_frames()
+    fixations["word_id"] = fixations["fixation_id"]
+    longer = fixations[fixations["participant_id"] == "p9"].assign(
+        order_in_trial=lambda f: f["order_in_trial"] + 5, word_id=0
+    )
+    fixations = pd.concat([fixations, longer], ignore_index=True)
+    tabs.render_multiple_comparison_tab(
+        words[words["participant_id"] == "p0"],
+        fixations[fixations["participant_id"] == "p0"],
+        words,
+        fixations,
+        selected_participant="p0",
+        selected_trial="base",
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        font_family="Arial",
+        viz_settings={**_viz(), "x_field": "order_in_trial", "y_field": "word_id"},
+    )
+
+
+def test_the_grid_follows_the_rail_axes_with_one_x_range_per_page(monkeypatch):
+    """With the rail on chart axes every panel is that chart, and the page's
+    panels share one X range, so the longer scanpath reads as longer."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    built = []
+    real_make = tabs.make_scanpath_figure
+
+    def recording_make(words, fix, **kwargs):
+        built.append((kwargs["x_field"], kwargs["y_field"]))
+        return real_make(words, fix, **kwargs)
+
+    shown = []
+    real_render = tabs._render_true_scale_chart
+
+    def recording_render(fig, **kwargs):
+        shown.append(fig.layout.xaxis.range)
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "make_scanpath_figure", recording_make)
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    at = AppTest.from_function(_chart_comparisons_app).run(timeout=60)
+    assert not at.exception, at.exception
+    assert built and set(built) == {("order_in_trial", "word_id")}
+    assert len(shown) == 3
+    assert len({tuple(r) for r in shown}) == 1, shown
+    low, high = shown[0]
+    assert low < 1 and high > 7  # orders 1..2 and the longer reading's 6..7
+
+
+def test_shared_chart_range_pads_and_ignores_frames_without_the_field():
+    from scanpath_studio.tabs import _shared_chart_range
+
+    frames = [
+        pd.DataFrame({"order_in_trial": [1, 2]}),
+        pd.DataFrame({"order_in_trial": [1, 40, np.nan]}),
+        pd.DataFrame({"x": [3.0]}),
+    ]
+    low, high = _shared_chart_range(frames, "order_in_trial")
+    assert low < 1 and high > 40
+    assert _shared_chart_range([pd.DataFrame({"x": [1.0]})], "order_in_trial") is None
+
+
+def test_condition_matches_on_one_trial_are_captioned_by_participant():
+    """Matching on a field every panel shares, when several readers' readings
+    are filed under one trial id, puts every panel on the same trial; each is
+    then named by its reader, not by that trial."""
+    from scanpath_studio.tabs import _panel_captions, _reading_labels
+
+    panels = {
+        (p, "T"): pd.DataFrame(
+            {"participant_id": [p], "trial_id": ["T"], "text_id": ["A"]}
+        )
+        for p in ("r1 · session A", "r1 · session B")
+    }
+    captions = _panel_captions(
+        "source_trial_id", panels, "text_id", _reading_labels(panels)
+    )
+    assert captions == {
+        ("r1 · session A", "T"): "Participant r1 · session A",
+        ("r1 · session B", "T"): "Participant r1 · session B",
+    }
+    # Different trials keep the trial caption.
+    mixed = {
+        ("r1", t): pd.DataFrame({"participant_id": ["r1"], "trial_id": [t]})
+        for t in ("T1", "T2")
+    }
+    assert set(
+        _panel_captions("model", mixed, "text_id", _reading_labels(mixed)).values()
+    ) == {"T1", "T2"}
+
+
+def _wordless_comparisons_app(axes=("order_in_trial", "word_id"), clock=False) -> None:
+    """The look-alike grid with no word boxes at all, as a dataset loaded from
+    its fixations alone has."""
+    from scanpath_studio import tabs
+    from tests.test_mode_parity import _viz
+    from tests.test_multiple_comparison_ui import _lookalike_frames
+
+    words, fixations = _lookalike_frames()
+    fixations["word_id"] = fixations["fixation_id"]
+    fixations[["x", "y"]] = float("nan")
+    if clock:
+        # Two readers recorded far apart on the session clock.
+        fixations["timestamp_ms"] = (
+            fixations["order_in_trial"] * 250.0
+            + (fixations["participant_id"] != "p0") * 3_000_000.0
+        )
+    tabs.render_multiple_comparison_tab(
+        words.iloc[:0],
+        fixations[fixations["participant_id"] == "p0"],
+        words.iloc[:0],
+        fixations,
+        selected_participant="p0",
+        selected_trial="base",
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        font_family="Arial",
+        viz_settings={**_viz(), "x_field": axes[0], "y_field": axes[1]},
+    )
+
+
+@pytest.mark.parametrize("on_chart", [True, False])
+def test_a_reading_chart_grid_needs_no_word_boxes(monkeypatch, on_chart):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    shown = []
+    real_render = tabs._render_true_scale_chart
+
+    def recording_render(fig, **kwargs):
+        shown.append(sum(len(t.x) for t in fig.data if t.mode == "markers"))
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    at = AppTest.from_function(
+        _wordless_comparisons_app,
+        kwargs={"axes": ("order_in_trial", "word_id") if on_chart else ("x", "y")},
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    infos = [i.value for i in at.info]
+    if on_chart:
+        assert shown and all(points > 0 for points in shown), shown
+        assert not any("no word boxes" in i for i in infos)
+    else:
+        assert not shown
+        assert any("no word boxes" in i for i in infos)
+
+
+def _recorded_panels(monkeypatch):
+    from scanpath_studio import tabs
+
+    built, ranges = [], []
+    real_make = tabs.make_scanpath_figure
+    real_render = tabs._render_true_scale_chart
+
+    def recording_make(words, fix, **kwargs):
+        built.append((kwargs["x_field"], kwargs["y_field"]))
+        return real_make(words, fix, **kwargs)
+
+    def recording_render(fig, **kwargs):
+        ranges.append(fig.layout.xaxis.range)
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "make_scanpath_figure", recording_make)
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    return built, ranges
+
+
+def test_a_computed_elapsed_axis_stays_a_chart_in_the_grid(monkeypatch):
+    """Elapsed seconds are computed from the onsets, never a column, and still
+    count as the frame's field."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import chart_axes
+
+    built, _ = _recorded_panels(monkeypatch)
+    at = AppTest.from_function(
+        _wordless_comparisons_app,
+        kwargs={"axes": (chart_axes.ELAPSED, "word_id"), "clock": True},
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    assert built and set(built) == {(chart_axes.ELAPSED, "word_id")}
+
+
+def test_an_absolute_clock_keeps_each_panels_own_range(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    _, ranges = _recorded_panels(monkeypatch)
+    at = AppTest.from_function(
+        _wordless_comparisons_app,
+        kwargs={"axes": ("timestamp_ms", "word_id"), "clock": True},
+    ).run(timeout=60)
+    assert not at.exception, at.exception
+    # Each panel spans its own reading, not the 3,000,000 ms between readers.
+    assert ranges and all(abs(r[1] - r[0]) < 10_000 for r in ranges), ranges
+
+
+@pytest.mark.parametrize(
+    ("state", "drawn"),
+    [
+        ({}, True),
+        ({"global_x_field": "order_in_trial", "global_y_field": "word_id"}, False),
+        ({"global_x_field": "order_in_trial", "global_y_field": "x"}, True),
+        ({"global_x_field": "y", "global_y_field": "word_id"}, True),
+        (
+            {
+                "global_x_field": "order_in_trial",
+                "global_y_field": "word_id",
+                "single_animate": True,
+            },
+            True,
+        ),
+    ],
+)
+def test_the_figure_draws_positions_on_the_screen_a_screen_axis_or_the_replay(
+    state, drawn
+):
+    from scanpath_studio.tabs import _figure_draws_positions
+
+    assert _figure_draws_positions(state) is drawn
+
+
+def _wordless_api_frames():
+    from scanpath_studio import api
+
+    fixations = pd.DataFrame(
+        {
+            "reader": ["r1"] * 3 + ["r2"] * 2,
+            "item": ["t"] * 5,
+            "word": [0, 2, 1, 0, 1],
+            "dur": [200.0, 180.0, 220.0, 150.0, 160.0],
+        }
+    )
+    schema = dict(participant="reader", trial="item", word_id="word", duration="dur")
+    return api.load_scanpath_data(None, fixations, fix_schema=schema, names="canonical")
+
+
+def test_the_api_draws_a_fixations_only_dataset_on_a_reading_chart():
+    from scanpath_studio import api
+
+    words, fixations = _wordless_api_frames()
+    chart = dict(x_field="word_id", y_field="order_in_trial")
+    fig = api.plot_scanpath(words, fixations, "r1", "t", **chart)
+    assert sorted(_points(fig)) == [0, 1, 2]
+    pair = api.compare_scanpaths(words, fixations, ("r1", "t"), ("r2", "t"), **chart)
+    assert sorted(_points(pair)) == [0, 0, 1, 1, 2]
+    # The screen view still needs positions it can't have.
+    with pytest.raises(ValueError, match="no usable coordinates"):
+        api.plot_scanpath(words, fixations, "r1", "t")
+
+
+def _points(fig) -> list:
+    return [
+        value
+        for trace in fig.data
+        if trace.mode == "markers" and trace.x is not None
+        for value in trace.x
+    ]
+
+
+def _figures_shown(monkeypatch) -> list:
+    from scanpath_studio import tabs
+
+    shown = []
+    real_render = tabs._render_true_scale_chart
+
+    def recording_render(fig, **kwargs):
+        shown.append((kwargs["key"], fig))
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    return shown
+
+
+def _overlay_app(app, kwargs=None, **session):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio.session_keys import MULTI_VIEW
+
+    at = AppTest.from_function(app, kwargs=kwargs or {})
+    at.session_state[MULTI_VIEW] = "Overlay"
+    for key, value in session.items():
+        at.session_state[key] = value
+    return at.run(timeout=60)
+
+
+def test_the_overlay_draws_the_selected_trial_and_the_pages_matches_on_one_chart(
+    monkeypatch,
+):
+    from scanpath_studio.plots import overlay_reading_color
+
+    shown = _figures_shown(monkeypatch)
+    at = _overlay_app(_chart_comparisons_app, trial_chip_fields=["participant_id"])
+    assert not at.exception, at.exception
+    # One figure, not a grid of panels.
+    ((key, fig),) = shown
+    assert key == "multi_overlay"
+    named = [t for t in fig.data if t.showlegend]
+    assert named[0].name == "Selected"
+    assert len(named) == 4  # the selected trial and its three matches
+    colors = [overlay_reading_color(i) for i in range(4)]
+    assert [t.marker.color for t in named] == colors
+    # Each reading's own connecting line, in its colour.
+    lines = [t for t in fig.data if t.name == "Fixation sequence"]
+    assert [t.line.color for t in lines] == colors
+    # The chip table names each row in the colour its reading is drawn in.
+    (table,) = _chip_tables(at)
+    assert all(color in table for color in colors)
+
+
+def test_the_overlay_on_the_screen_draws_readings_of_one_text_over_its_words(
+    monkeypatch,
+):
+    shown = _figures_shown(monkeypatch)
+    at = _overlay_app(_lookalike_comparisons_app)
+    assert not at.exception, at.exception
+    ((key, fig),) = shown
+    assert key == "multi_overlay"
+    assert len([t for t in fig.data if t.showlegend]) == 4
+    assert not at.info
+
+
+def _two_texts_app(axes=("x", "y")) -> None:
+    """Readers of two texts who share a condition."""
+    from scanpath_studio import tabs
+    from tests.test_mode_parity import _viz
+    from tests.test_multiple_comparison_ui import _lookalike_frames
+
+    words, fixations = _lookalike_frames()
+    fixations["word_id"] = fixations["fixation_id"]
+    # A condition the selected reader shares with two others, one of whom
+    # read another text.
+    fixations["condition"] = "c"
+    fixations.loc[fixations["participant_id"] == "p1 · t1", "condition"] = "d"
+    fixations.loc[fixations["participant_id"] == "p9", "text_id"] = "other"
+    tabs.render_multiple_comparison_tab(
+        words[words["participant_id"] == "p0"],
+        fixations[fixations["participant_id"] == "p0"],
+        words,
+        fixations,
+        selected_participant="p0",
+        selected_trial="base",
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        font_family="Arial",
+        viz_settings={**_viz(), "x_field": axes[0], "y_field": axes[1]},
+    )
+
+
+def test_a_screen_overlay_of_two_texts_shows_the_grid_and_says_why(monkeypatch):
+    shown = _figures_shown(monkeypatch)
+    at = _overlay_app(_two_texts_app, multi_gen_col="condition")
+    assert not at.exception, at.exception
+    assert any("needs readings of the same text" in i.value for i in at.info)
+    assert shown and all(key != "multi_overlay" for key, _fig in shown)
+
+
+def test_a_word_axis_overlay_of_two_texts_says_what_it_lines_up(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio.session_keys import MULTI_VIEW
+
+    shown = _figures_shown(monkeypatch)
+    at = AppTest.from_function(
+        _two_texts_app, kwargs={"axes": ("order_in_trial", "word_id")}
+    )
+    at.session_state[MULTI_VIEW] = "Overlay"
+    at.session_state["multi_gen_col"] = "condition"
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    assert [key for key, _fig in shown] == ["multi_overlay"]
+    assert any("different texts" in w.value for w in at.warning)
+
+
+def test_the_grid_is_the_default_view(monkeypatch):
+    shown = _figures_shown(monkeypatch)
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_chart_comparisons_app).run(timeout=60)
+    assert not at.exception, at.exception
+    assert len(shown) == 3 and all(key != "multi_overlay" for key, _f in shown)
+
+
+def test_an_overlay_of_more_readings_than_colours_is_refused():
+    from scanpath_studio.plots import OVERLAY_MAX_READINGS, make_readings_overlay_figure
+
+    _words, fix = _lookalike_frames()
+    with pytest.raises(ValueError, match="at most"):
+        make_readings_overlay_figure(
+            _words.iloc[:0],
+            [(str(i), fix) for i in range(OVERLAY_MAX_READINGS + 1)],
+            canvas_width=400,
+            canvas_height=200,
+            base_font_size=14,
+        )
+
+
+def test_the_overlay_times_each_reading_from_its_own_first_fixation(monkeypatch):
+    """Elapsed seconds are computed, never a column: the overlay computes them
+    per reading, as the grid and Compare do."""
+    from scanpath_studio import chart_axes
+
+    shown = _figures_shown(monkeypatch)
+    at = _overlay_app(
+        _wordless_comparisons_app,
+        kwargs={"axes": (chart_axes.ELAPSED, "word_id"), "clock": True},
+    )
+    assert not at.exception, at.exception
+    ((key, fig),) = shown
+    assert key == "multi_overlay"
+    named = [t for t in fig.data if t.showlegend]
+    # Every reading starts at zero, though they were recorded far apart.
+    assert all(min(t.x) == 0 for t in named), [list(t.x) for t in named]
+
+
+def test_the_overlay_on_the_session_clock_shows_the_grid_and_says_why(monkeypatch):
+    shown = _figures_shown(monkeypatch)
+    at = _overlay_app(
+        _wordless_comparisons_app,
+        kwargs={"axes": ("timestamp_ms", "word_id"), "clock": True},
+    )
+    assert not at.exception, at.exception
+    assert any("session clock" in i.value for i in at.info)
+    assert shown and all(key != "multi_overlay" for key, _fig in shown)
+
+
+def _two_readings():
+    _words, fix = _lookalike_frames()
+    first = fix[fix["participant_id"] == "p0"].assign(metric=[0.0, 1.0])
+    second = fix[fix["participant_id"] == "p9"].assign(metric=[200.0, 300.0])
+    return [("Selected", first), ("Other", second)]
+
+
+def test_a_numeric_colour_is_one_scale_across_the_overlay():
+    from scanpath_studio.plots import make_readings_overlay_figure
+
+    fig = make_readings_overlay_figure(
+        pd.DataFrame(),
+        _two_readings(),
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        x_field="order_in_trial",
+        y_field="fixation_id",
+        color_by="metric",
+    )
+    scales = {
+        (t.marker.cmin, t.marker.cmax)
+        for t in fig.data
+        if t.showlegend and t.marker.cmin is not None
+    }
+    assert scales == {(0.0, 300.0)}
+
+
+def test_each_reading_keeps_its_legend_entry_with_fixations_hidden():
+    from scanpath_studio.plots import make_readings_overlay_figure
+
+    fig = make_readings_overlay_figure(
+        pd.DataFrame(),
+        _two_readings(),
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        x_field="order_in_trial",
+        y_field="fixation_id",
+        show_fixations=False,
+    )
+    assert [t.name for t in fig.data if t.showlegend] == ["Selected", "Other"]

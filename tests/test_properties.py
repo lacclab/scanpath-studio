@@ -24,6 +24,7 @@ from hypothesis import strategies as st
 from scanpath_studio import controls, data, measures, plots, url_state
 from scanpath_studio.column_names import encode_field_list
 from scanpath_studio.constants import (
+    GROW_START_BOUNDS,
     LEGEND_ARRANGEMENTS,
     LEGEND_POSITIONS,
     RESERVED_SOURCE_NAMES,
@@ -873,6 +874,71 @@ def test_the_stimuli_table_shows_each_screen_as_each_reader_saw_it(seen, seed):
     assert row.get(STIMULUS_VERSIONS_COLUMN, "") == ", ".join(differing)
 
 
+@given(
+    st.dictionaries(
+        st.sampled_from(["p1", "p2", "p3"]),
+        st.lists(
+            st.tuples(st.sampled_from(["a", "b", "c", ""]), st.booleans()),
+            min_size=1,
+            max_size=5,
+        ),
+        min_size=1,
+    ),
+    st.integers(min_value=0, max_value=2**32 - 1),
+)
+def test_the_stimuli_table_never_folds_words_without_an_id(seen, seed):
+    """A blank word id names no word: every shown word without one is a word of
+    its own, after its line's numbered words, top to bottom and left to right
+    even where ``line_idx`` is one value for every row, as in many IA exports.
+    Readings that saw the same words at the same places share a version. The
+    order of the word rows changes nothing."""
+    import uuid
+
+    from scanpath_studio.tabs import _build_stimuli_table_cached
+
+    words = pd.DataFrame(
+        [
+            {
+                "participant_id": reader,
+                "trial_id": "t1",
+                "text_id": "x",
+                "word_id": position if numbered else np.nan,
+                "line_idx": 0,
+                # Two words to a row of the screen, the next row further down.
+                "x": 10.0 * (position % 2),
+                "y": 30.0 * (position // 2),
+                "text": word,
+            }
+            for reader, own in seen.items()
+            for position, (word, numbered) in enumerate(own, start=1)
+        ]
+    )
+
+    def build(frame: pd.DataFrame) -> pd.DataFrame:
+        # A fresh cache key: the second call must compute, not recall the first.
+        return _build_stimuli_table_cached(frame, cache_key=str(uuid.uuid4()))
+
+    table = build(words)
+    shuffled = words.sample(frac=1, random_state=seed).reset_index(drop=True)
+    pd.testing.assert_frame_equal(table, build(shuffled))
+
+    def passage(own) -> list[str]:
+        numbered = [w for w, has_id in own if w and has_id]
+        return numbered + [w for w, has_id in own if w and not has_id]
+
+    def version(own) -> tuple:
+        ids = tuple((i, w) for i, (w, has_id) in enumerate(own, 1) if w and has_id)
+        return ids, tuple(w for w, has_id in own if w and not has_id)
+
+    versions = {version(own) for own in seen.values()}
+    row = table.iloc[0]
+    if len(versions) == 1:
+        assert row["Text"] == " ".join(passage(next(iter(seen.values()))))
+    for own in seen.values():
+        assert " ".join(passage(own)) in row["Text"]
+    assert row["Text"].count("seen by") == (len(versions) if len(versions) > 1 else 0)
+
+
 # --- ✏️ Edit dataset gives what ➕ Add dataset gives -----------------------------
 
 #: A reader's two fixations tables' worth of columns, and the Words table of a
@@ -1500,3 +1566,96 @@ def test_a_script_link_opens_its_dataset_reading_and_settings(
     for key, value in expected.items():
         assert key in recipient, key
         assert _comparable(recipient[key]) == _comparable(value), key
+
+
+# ---------------------------------------------------------------------------
+# The Comparisons subtab's Match field on a link (`?match=`)
+# ---------------------------------------------------------------------------
+_MATCH_NAME = st.one_of(
+    st.sampled_from(["same_text", "same_participant", "@same_text", "text_id"]),
+    st.text(min_size=1, max_size=12),
+)
+
+
+@settings(max_examples=200)
+@given(
+    columns=st.lists(_MATCH_NAME, max_size=6, unique=True),
+    sentinels=st.booleans(),
+    renamed=st.dictionaries(_MATCH_NAME, _MATCH_NAME, max_size=6),
+    data=st.data(),
+)
+def test_a_match_field_a_link_writes_reads_back_as_itself(
+    columns, sentinels, renamed, data
+):
+    """Whatever the dataset calls its columns — a friendly spelling, a raw
+    ``@…`` choice, another option's name — the spelling Share writes for a
+    Match option reads back as that option, and only a value that names an
+    option is accepted."""
+    from scanpath_studio.column_names import ColumnNames, SourceName
+    from scanpath_studio.tabs import match_from_link, match_link_value
+
+    options = (["@same_text", "@same_participant"] if sentinels else []) + [
+        c for c in columns if c not in ("@same_text", "@same_participant")
+    ]
+    assume(options)
+    names = ColumnNames(
+        {
+            column: SourceName((source,))
+            for column, source in renamed.items()
+            if column in options
+        }
+    )
+    choice = data.draw(st.sampled_from(options))
+    spelled = match_link_value(choice, options, names)
+    assert match_from_link(spelled, options, names) == choice
+    # A column keeps the dataset's own name unless that name is taken.
+    if choice not in ("@same_text", "@same_participant"):
+        assert spelled in (choice, names.display(choice))
+    value = data.draw(_MATCH_NAME)
+    assert match_from_link(value, options, names) in (None, *options)
+
+
+@settings(max_examples=60)
+@given(match=_LINK_TEXT)
+def test_a_script_link_s_match_waits_for_the_comparisons_subtab(match):
+    """`api.app_link(match=…)` carries the value verbatim, and the reader parks
+    it, unread, for the Comparisons subtab to check against its options."""
+    from urllib.parse import urlsplit
+
+    from scanpath_studio import api
+    from scanpath_studio.session_keys import MATCH_LINK_STATE_KEY
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("SCANPATH_STUDIO_STATE_DIR", "/nonexistent/scanpath-studio")
+        url = api.app_link("Pilot", match=match)
+    query = dict(parse_qsl(urlsplit(url).query, keep_blank_values=True))
+    assert query["match"] == match
+    recipient: dict = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", query)
+        url_state._apply_url_preset()
+        url_state._apply_url_preset()
+    assert recipient[MATCH_LINK_STATE_KEY] == {"value": match}
+
+
+@given(
+    onset=st.floats(0, 1e5, allow_nan=False),
+    duration=st.floats(1e-3, 1e4, allow_nan=False),
+    earlier=st.floats(0, 2e4, allow_nan=False),
+    later=st.floats(0, 2e4, allow_nan=False),
+    start=st.floats(*GROW_START_BOUNDS),
+)
+def test_a_growing_fixation_never_shrinks_and_stays_in_its_bounds(
+    onset, duration, earlier, later, start
+):
+    """The replay's current fixation grows monotonically from its start size
+    to its full size, and is full once its duration has passed."""
+    from scanpath_studio import replay_frames
+
+    run = {"times": [onset], "durations": [duration], "grow_start": start}
+    first, second = sorted((earlier, later))
+    a = replay_frames.growth(run, 0, onset + first)
+    b = replay_frames.growth(run, 0, onset + second)
+    assert start <= a <= b <= 1.0
+    assert replay_frames.growth(run, 0, onset + duration) == pytest.approx(1.0)

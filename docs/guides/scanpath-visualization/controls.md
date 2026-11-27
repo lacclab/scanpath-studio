@@ -52,6 +52,7 @@ pencil (:material/edit:), which are in Full.
 | :material/filter_alt: → **With any of these tags** | Keep only trials with any of these tags. |
 | :material/filter_alt: → **Excluding tags** | Hide trials with any of these tags, such as *To exclude*. |
 | :material/filter_alt: → **✕ Clear all filters** | Reset every filter in the panel. |
+| **Filtered:** line under the trial picker | Shown while any filter is on, with a dot on :material/filter_alt:: how many of the dataset's trials the filters keep, which filters they are, and **✕ Clear filters** to reset them all. |
 | :material/edit: → **Show the trial summary above the plot** | Show or hide the row of facts about the trial above the plot. |
 | :material/edit: → field lists | Drag fields between *Shown* and *Available* to choose the trial summary's fields, and drag within *Shown* to reorder them. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
 | :material/edit: → **Field colors** | Give a field a highlight color. Its **✕** puts it back to the default gray. |
@@ -88,6 +89,10 @@ keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Playback
 | --- | --- |
 | **Speed** | How fast the video plays, from ×0.25 to ×8: ×1 is the participant's recorded pace, ×2 twice as fast, ×0.5 half as fast. |
 | **Autoplay** | Start playing the animation as soon as the plot is shown. Otherwise it starts when you click play. |
+| **Current fixation** → **Grow over its duration** | The current fixation starts small and reaches its full size when its duration has passed, so a long fixation visibly takes longer. Link: `anim_grow_fixations=1`; command line: `--grow-fixations`; Python: `grow_fixations=True`. |
+| **Start size** | How small a growing fixation starts, as a share of its full size: 0.15 (the default) starts at 15 %. Link: `anim_grow_start=0.3`; command line: `--grow-start 0.3`; Python: `grow_start=0.3`. |
+| **Earlier fixations** → **Fade** | Draw the fixations before the current one, their numbers and the saccades faded, so the current fixation stands out. Link: `anim_fade_fixations=1`; command line: `--fade-fixations`; Python: `fade_fixations=True`. |
+| **Faded opacity** | How much of its opacity what has faded keeps: 0.3 by default, 0 hides it, 1 leaves it as it is. Link: `anim_fade_opacity=0.5`; command line: `--fade-opacity 0.5`; Python: `fade_opacity=0.5`. |
 | **Duration** | For information only: the trial's reading time, and how long the video runs at this speed. |
 | **Smoothness** | How smooth the video is: **Coarse**, **Standard** or **Fine**. More frames play more smoothly but take longer to build. Moving either slider below makes it **Custom**. |
 | **Frame timing** → **Frame interval** | Reading time between frames, in ms. |
@@ -273,8 +278,8 @@ Choose a chart preset, or set the X and Y fields individually. Open **Coordinate
 
 | Control | What it does |
 | --- | --- |
-| **Axis layout** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the windowed index sequence, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
-| **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates. |
+| **Axis layout** | Plot horizontal or vertical screen position by fixation index or elapsed time, compare fixation index with elapsed time or duration, or plot fixation index by the word each fixation landed on. **Reverse horizontal axis** and **Reverse vertical axis** run a chart axis the other way, for example to put the first fixation at the top; the screen view keeps the stimulus as shown. **Connect fixations in order** joins each reading’s fixations in reading order on any chart, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Static comparisons overlay both readings on one pair of axes, or use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates. |
 | **Grid** → **Show** | Show a grid of screen coordinates, in px. |
 | **Grid spacing and labels** → interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Grid spacing and labels** → label size | Set the grid label (tick label) font size. |
@@ -355,7 +360,8 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | | **Notes** | Write a free-text note on the trial. |
 | :material/article: **Stimulus & context** | :material/settings: **Fields** → **Context fields** | Choose the trial context to show, such as the text's title, a question or an answer. |
 | | :material/settings: **Fields** → **Highlighted spans** | Choose true/false word columns to highlight in the text, each with a summary line. |
-| :material/difference: **Comparisons** | **Match field** | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. |
+| :material/difference: **Comparisons** | **Match field** | Compare with other trials: show the trials that share this trial's value of a field, such as the same text. A Share link copied after opening this tab reopens it on the same field (`match=same_text`, `match=same_participant` or a column name). The panels use the plot's axes; on a reading chart they share one horizontal range. |
+| | **View** | **Grid** draws each match in its own panel. **Overlay** draws the selected trial and the page's matches on one figure, each in its own colour, named in the legend and in the chip table. A Share link copied from Comparisons keeps it (`match_view=overlay`). On screen axes an overlay needs readings of the same text; on a reading chart it warns when a word axis lines up different texts. |
 | | **Columns** | Set how many comparison panels per row, from 1 to 4. |
 | :material/file_export: **Export** | **Download format** | Export (download) the figure on screen as PNG, SVG, PDF or HTML, or the animation as an HTML, GIF or MP4 video. |
 | | **Width**, unit, **DPI** | Set the PNG export size for print: width (mm or in) and resolution (DPI). A blank width writes the figure at three times its screen size. |

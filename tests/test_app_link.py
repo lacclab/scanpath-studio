@@ -100,6 +100,10 @@ def test_the_app_draws_the_figure_the_options_describe(color_by_line, monkeypatc
         "background_image_opacity": state.get("global_stimulus_image_opacity"),
         "anim_grid_step_ms": viz["anim_grid_step_ms"],
         "anim_max_frames": viz["anim_max_frames"],
+        "grow_fixations": viz["anim_grow_fixations"],
+        "fade_fixations": viz["anim_fade_fixations"],
+        "grow_start": viz["anim_grow_start"],
+        "fade_opacity": viz["anim_fade_opacity"],
         "palette": state.get("global_palette"),
     }
     for key, value in options.items():
@@ -222,6 +226,48 @@ def test_the_link_names_the_dataset_reading_and_port():
     assert _query(sps.app_link("Pilot 3")) == {"dataset": "Pilot 3"}
 
 
+def test_the_link_opens_comparisons_on_a_match_field(capsys):
+    """`match=` goes on the link as given; `open --match` writes the same."""
+    url = sps.app_link("Pilot 3", "p7", match="source_trial", show_heatmap=True)
+    assert _query(url)["match"] == "source_trial"
+    assert _query(sps.app_link("Pilot 3", match="same_text"))["match"] == "same_text"
+    assert "match" not in _query(sps.app_link("Pilot 3"))
+    cli.main(
+        ["open", "Pilot 3", "-p", "p7", "--match", "source_trial", "--heatmap"]
+        + ["--print"]
+    )
+    assert capsys.readouterr().out.strip() == url
+
+
+@pytest.mark.parametrize(("match", "error"), [("", ValueError), (3, TypeError)])
+def test_a_match_that_names_no_field_is_refused(match, error):
+    with pytest.raises(error, match="match"):
+        sps.app_link("Pilot 3", match=match)
+
+
+def test_the_link_opens_comparisons_in_its_overlay(capsys):
+    """`match_view=` rides beside `match=`; `open --match-view` writes the same."""
+    url = sps.app_link("Pilot 3", match="source_trial", match_view="Overlay")
+    assert _query(url)["match_view"] == "overlay"
+    cli.main(
+        ["open", "Pilot 3", "--match", "source_trial", "--match-view", "overlay"]
+        + ["--print"]
+    )
+    assert capsys.readouterr().out.strip() == url
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"match_view": "overlay"}, "pass match="),
+        ({"match": "x", "match_view": "pile"}, "one of"),
+    ],
+)
+def test_a_match_view_needs_a_match_and_a_view(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        sps.app_link("Pilot 3", **kwargs)
+
+
 # ---------------------------------------------------------------------------
 # scanpath-studio open
 # ---------------------------------------------------------------------------
@@ -266,6 +312,10 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
     assert set(options) - set(written) <= {
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
         "heatmap_range",
         "highlight_text_color",
         "plot_frame_color",
@@ -273,14 +323,34 @@ def test_open_takes_render_s_figure_flags_as_they_are(capsys):
         "show_raw_gaze",
         "show_saccades",
     }
-    replay = ["--anim-grid-step-ms", "50", "--anim-max-frames", "200"]
+    replay = [
+        "--anim-grid-step-ms",
+        "50",
+        "--anim-max-frames",
+        "200",
+        "--grow-fixations",
+        "--fade-fixations",
+        "--grow-start",
+        "0.4",
+        "--fade-opacity",
+        "0.5",
+    ]
     cli.main(
         ["open", "D", "-p", "p", "-t", "t", "--print", *_render_flags(options), *replay]
     )
     printed = capsys.readouterr().out.strip()
     assert _query(printed) == _query(
         sps.app_link(
-            "D", "p", "t", **written, anim_grid_step_ms=50.0, anim_max_frames=200
+            "D",
+            "p",
+            "t",
+            **written,
+            anim_grid_step_ms=50.0,
+            anim_max_frames=200,
+            grow_fixations=True,
+            fade_fixations=True,
+            grow_start=0.4,
+            fade_opacity=0.5,
         )
     )
 
@@ -465,3 +535,15 @@ def test_the_saved_names_reach_the_link(cache_dir):
 
     assert persistence.stored_dataset_aliases() == {"Bundled demo": "Wolf pilot"}
     assert _query(sps.app_link("Wolf pilot")) == {"source": "demo"}
+
+
+@pytest.mark.parametrize("kind", ["static", "comparison"])
+def test_every_figure_option_is_linked_or_named_unlinkable(kind):
+    """A new figure option a link drops would make `app_link` and `open`
+    refuse it as unknown, though `figure_options` lists it."""
+    missing = (
+        set(sps.figure_options(kind))
+        - script_link.LINKED_OPTIONS
+        - set(script_link.UNLINKABLE_OPTIONS)
+    )
+    assert not missing, sorted(missing)

@@ -203,3 +203,6 @@ uv.lock
 .vscode/
 .idea/
 paper/figures/
+
+# Personal Claude Code instructions, never shared
+CLAUDE.local.md

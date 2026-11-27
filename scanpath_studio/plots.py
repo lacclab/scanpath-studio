@@ -38,12 +38,14 @@ from .constants import (
     DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_DURATION_SIZE_LEGEND,
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
     DEFAULT_FIXATION_OUTLINE_WIDTH,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_GRID_FONT_SIZE,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
@@ -58,12 +60,14 @@ from .constants import (
     DEFAULT_SNAP_POSITION,
     DEFAULT_TITLE_FONT_SIZE,
     DRAWABLE_PX_LIMIT,
+    FADE_OPACITY_BOUNDS,
     FIX_MARKER_OUTLINE,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
+    GROW_START_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
     LEGEND_ARRANGEMENTS,
@@ -122,6 +126,11 @@ class FigureSettings:
     font_family: str = FONT_FAMILY
     x_field: str = "x"
     y_field: str = "y"
+    #: Run a chart axis the other way from its usual direction (left to right,
+    #: bottom to top; screen Y top to bottom). Chart axes only: the screen
+    #: view always draws the stimulus as it was shown.
+    reverse_x_axis: bool = False
+    reverse_y_axis: bool = False
     show_words: bool = True
     #: The word boxes' outline colour at ``word_box_line_opacity``, and their
     #: fill — a colour drawn at ``word_box_fill_opacity``. A comparison outlines
@@ -286,6 +295,16 @@ class FigureSettings:
     #: figure that travels without its caption (`export.annotate_figure`).
     show_credit: bool = False
     playback_speed: float = 1.0
+    #: Replay only: the current fixation's marker grows from small to its full
+    #: duration size over the fixation's own duration.
+    grow_fixations: bool = False
+    #: Replay only: every fixation before the current one, its number and the
+    #: saccades are drawn faded.
+    fade_fixations: bool = False
+    #: The share of its full size a growing fixation starts at.
+    grow_start: float = DEFAULT_GROW_START
+    #: The share of its opacity a faded fixation, number or saccade keeps.
+    fade_opacity: float = DEFAULT_FADE_OPACITY
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
     show_legend: bool = False
@@ -423,12 +442,28 @@ def _order_textposition(position: str) -> str:
     ]
 
 
+#: The replay's share options, with the range each takes.
+_REPLAY_SHARE_BOUNDS = {
+    "grow_start": GROW_START_BOUNDS,
+    "fade_opacity": FADE_OPACITY_BOUNDS,
+}
+
+
 def normalize_option_value(name: str, value: object) -> object:
     """``value`` for the enumerated figure option ``name``, spelt as the
     builders compare it; any other option's value is returned as it is.
 
     Raises ``ValueError`` listing the choices for a value that is none of
     them. ``critical_span_style=None`` is the app's "None" (no marking)."""
+    if value is not None and name in _REPLAY_SHARE_BOUNDS:
+        lo, hi = _REPLAY_SHARE_BOUNDS[name]
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            number = float("nan")
+        if not lo <= number <= hi:
+            raise ValueError(f"{name}: expected {lo:g} to {hi:g}, got {value!r}")
+        return number
     if value is not None and (name in OPACITY_OPTIONS or name == "opacity"):
         try:
             return parse_opacity(value)
@@ -3267,6 +3302,25 @@ _RGB_FUNCTION = re.compile(
 )
 
 
+def replay_saccade_opacity(settings: FigureSettings) -> float:
+    """The replay's saccade line and arrowhead opacity: the figure's, dimmed
+    by ``fade_opacity`` while earlier fixations fade, since one line trace
+    takes one opacity. Every surface that sets the replay's saccade opacity
+    reads it here, so a later stamp never undoes the fade."""
+    fade = settings.fade_fixations and settings.show_fixations
+    return settings.saccade_opacity * (settings.fade_opacity if fade else 1.0)
+
+
+def _faded_and_full(color: str, alpha: float) -> tuple[str, str] | None:
+    """A fixation number's colour at ``alpha`` and at full strength, for a
+    replay that fades earlier fixations; ``None`` for a colour that takes no
+    alpha (a CSS name), whose numbers then stay as they are."""
+    try:
+        return color_with_alpha(color, alpha), color_with_alpha(color, 1.0)
+    except ValueError:
+        return None
+
+
 def color_with_alpha(color: str, alpha: float) -> str:
     """``color`` as ``rgba(r,g,b,alpha)`` — a fill drawn at its own opacity.
 
@@ -3615,6 +3669,14 @@ def _trace_has_points(trace: go.Scatter) -> bool:
         return False
     x, y = (pd.to_numeric(np.asarray(v), errors="coerce") for v in (trace.x, trace.y))
     return bool((np.isfinite(x) & np.isfinite(y)).any())
+
+
+def _chart_axis_reversed(settings: FigureSettings, coordinate: str, field: str) -> bool:
+    """Whether a chart axis runs high to low: screen Y does by default, and
+    the figure's *reverse* switch for that axis flips whichever way it runs."""
+    usual = coordinate == "y" and field == "y"
+    flipped = settings.reverse_x_axis if coordinate == "x" else settings.reverse_y_axis
+    return usual != flipped
 
 
 def _chart_axis_range(traces, coordinate: str, reverse: bool):
@@ -4906,8 +4968,19 @@ def _chart_lines(
     fixation_color,
 ):
     x_field, y_field = fields
-    if chart_axes.position_chart(fields, "order_in_trial") and show_saccades:
-        path = ordered.sort_values("order_in_trial", kind="stable")
+    if show_saccades and len(ordered) > 1:
+        # Reading order: the fixation index where the table has one, else the
+        # onset order the caller already sorted the rows into. A fixation with
+        # no value on an axis is left out, so the line joins its neighbours.
+        path = (
+            ordered.sort_values("order_in_trial", kind="stable")
+            if "order_in_trial" in ordered
+            else ordered
+        )
+        placed = np.isfinite(
+            path[list(fields)].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+        ).all(axis=1)
+        path = path[placed]
         yield go.Scatter(
             x=path[x_field],
             y=path[y_field],
@@ -5412,7 +5485,7 @@ def _render_scanpath_figure(
                 )
             )
 
-    sequence = show_saccades and chart_axes.position_chart(fields, "order_in_trial")
+    sequence = show_saccades and not spatial_axes
     if (show_fixations or sequence) and not fixations.empty:
         # ``render_fix`` == fixations unless Snap to line is on, in which case
         # the markers, order labels and colour-by-line use the snapped y.
@@ -5428,7 +5501,8 @@ def _render_scanpath_figure(
         for line in _chart_lines(
             ordered,
             fields,
-            show_saccades=show_saccades,
+            # The screen scanpath draws its saccades as segments above.
+            show_saccades=sequence,
             show_fixations=show_fixations,
             saccade_color=saccade_color,
             saccade_style=saccade_style,
@@ -5698,11 +5772,13 @@ def _render_scanpath_figure(
                     field, "raw_gaze" if fixations.empty or not show_fixations else None
                 ),
                 range=_chart_axis_range(
-                    fig.data, coordinate, coordinate == "y" and field == "y"
+                    fig.data,
+                    coordinate,
+                    _chart_axis_reversed(settings, coordinate, field),
                 ),
             )
             if (
-                field in {"order_in_trial", "order_in_screen", "fixation_id"}
+                field in {"order_in_trial", "order_in_screen", "fixation_id", "word_id"}
                 and not fixations.empty
             ):
                 span = pd.to_numeric(fixations[field], errors="coerce")
@@ -6705,13 +6781,19 @@ _REPLAY_PLAYER_JS = """(function () {
       }
       return lo;
     }
-    var latestDraw;
+    // An 'immediate' animate drops every frame still queued, rejects each
+    // dropped draw's promise without a reason and then emits
+    // plotly_animationinterrupted. A draw rejected that way after such an
+    // event is expected; any other rejection (an error, or a frame Plotly
+    // could not find) still reaches the page as an unhandled rejection.
+    var interruptions = 0;
+    gd.on('plotly_animationinterrupted', function () { interruptions++; });
+    var pendingSeek = null;
     function animate(frame, options) {
-      var draw = Plotly.animate(gd, frame, options);
-      latestDraw = draw;
-      draw.catch(function (error) {
-        // Plotly rejects a queued frame without a reason when a newer draw replaces it.
-        if (draw === latestDraw || error !== undefined) { throw error; }
+      pendingSeek = null;  // a direct draw supersedes a seek not yet drawn
+      var before = interruptions;
+      Plotly.animate(gd, frame, options).catch(function (error) {
+        if (error !== undefined || interruptions === before) { throw error; }
       });
     }
     function draw(k, options) {
@@ -6745,11 +6827,22 @@ _REPLAY_PLAYER_JS = """(function () {
       t0 = performance.now() - start / speed;
       raf = requestAnimationFrame(tick);
     }
-    function seek(k) {  // Restart, and the toolbar's time slider
+    // Restart, and the toolbar's time slider. Seeks made before the running
+    // script returns (a script sending several input events at once) draw
+    // once, the last of them, rather than queueing frames that only replace
+    // each other.
+    function seek(k) {
       stop();
       exactTime = null; eventIndex = -1;
       shown = k;
-      draw(k, leap);
+      var queued = pendingSeek !== null;
+      pendingSeek = k;
+      if (queued) { return; }
+      Promise.resolve().then(function () {
+        var target = pendingSeek;
+        pendingSeek = null;
+        if (target !== null) { draw(target, leap); }
+      });
     }
     function step(direction) {
       stop();
@@ -7586,6 +7679,10 @@ def _render_scanpath_animation(
     show_saccades = settings.show_saccades
     show_saccade_arrows = settings.show_saccade_arrows
     show_order = show_fixations and settings.show_order
+    # Fading dims what came before the current fixation: the earlier markers
+    # and numbers per frame (`replay_frames`), and the saccades as a whole.
+    fade = settings.fade_fixations and show_fixations
+    saccade_opacity = replay_saccade_opacity(settings)
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
@@ -8068,7 +8165,7 @@ def _render_scanpath_animation(
                     ),
                     # On the base trace only — a frame restates the
                     # line's x/y and style, never its opacity, so it holds.
-                    opacity=settings.saccade_opacity,
+                    opacity=saccade_opacity,
                     meta="saccades",
                     showlegend=label_line,
                     legendgroup=s["label"],
@@ -8106,7 +8203,7 @@ def _render_scanpath_animation(
                         color=s["sac_color"],
                         line=dict(width=0),
                     ),
-                    opacity=settings.saccade_opacity,
+                    opacity=saccade_opacity,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -8325,7 +8422,21 @@ def _render_scanpath_animation(
     if frame_times:
         slots = {idx: slot for slot, idx in enumerate(traces_idx_in_frame)}
         readings = [
-            replay_frames.reading(s, slots, redact=settings.redact_text, comparing=dual)
+            replay_frames.reading(
+                s,
+                slots,
+                redact=settings.redact_text,
+                comparing=dual,
+                grow=settings.grow_fixations and show_fixations,
+                fade=fade,
+                order_colors=(
+                    _faded_and_full(s["text_color"], settings.fade_opacity)
+                    if fade
+                    else None
+                ),
+                grow_start=settings.grow_start,
+                fade_opacity=settings.fade_opacity,
+            )
             for s in specs
         ]
         terminal = dict(
@@ -9297,6 +9408,9 @@ def _make_split_comparison_figure(
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
 
+    On reading-chart axes (anything but screen ``x`` / ``y``) ``orientation``
+    may also be ``"overlay"``: both readings in one panel on the same axes.
+
     Each panel computes its **own** axis ranges from its trial's words +
     fixations, which is what lets the two panels sit in different coordinate
     spaces at all.
@@ -9577,40 +9691,65 @@ def _make_split_comparison_figure(
         )
 
     if fields != ("x", "y"):
-        rows, cols = (2, 1) if is_stacked else (1, 2)
+        overlaid = orientation == "overlay"
+        rows, cols = (1, 1) if overlaid else (2, 1) if is_stacked else (1, 2)
         fig = make_subplots(
             rows=rows,
             cols=cols,
-            subplot_titles=subplot_titles,
+            # One panel names both readings, so it still says which is which
+            # with the legend off; a line each keeps two long names in its width.
+            subplot_titles=["<br>".join(subplot_titles)]
+            if overlaid
+            else subplot_titles,
             horizontal_spacing=0.13,
             vertical_spacing=0.18,
         )
         fig.update_annotations(name=_PANEL_NAME)
+        # Each panel's readings with nothing on these axes, keyed by panel.
+        empty: dict[tuple[int, int], list[str]] = {}
         for idx, spec in enumerate(trial_specs):
-            row, col = (idx + 1, 1) if is_stacked else (1, idx + 1)
+            row, col = (
+                (1, 1) if overlaid else (idx + 1, 1) if is_stacked else (1, idx + 1)
+            )
             first_trace = len(fig.data)
             draw_reading(fig, spec, idx, row, col)
-            if not any(_trace_has_points(t) for t in fig.data[first_trace:]):
-                fig.add_annotation(
-                    text="No data on these axes",
-                    x=0.5,
-                    y=0.5,
-                    xref="x domain",
-                    yref="y domain",
-                    row=row,
-                    col=col,
-                    showarrow=False,
-                )
+            drawn = any(_trace_has_points(t) for t in fig.data[first_trace:])
+            empty.setdefault((row, col), [])
+            if not drawn:
+                empty[(row, col)].append("AB"[idx])
+        for (row, col), sides in empty.items():
+            if not sides:
+                continue
+            # An overlay panel holding one empty reading names it; a panel
+            # with nothing drawn at all says so plainly.
+            partial = overlaid and len(sides) == 1
+            fig.add_annotation(
+                text=(
+                    f"No data for {sides[0]} on these axes"
+                    if partial
+                    else "No data on these axes"
+                ),
+                x=0.5,
+                y=0.5,
+                xref="x domain",
+                yref="y domain",
+                row=row,
+                col=col,
+                showarrow=False,
+            )
         for coord, field, update in zip(
             ("x", "y"), fields, (fig.update_xaxes, fig.update_yaxes), strict=True
         ):
-            limits = _chart_axis_range(fig.data, coord, coord == "y" and field == "y")
+            limits = _chart_axis_range(
+                fig.data, coord, _chart_axis_reversed(settings, coord, field)
+            )
             sample_axis = not any(not spec["trial_fix"].empty for spec in trial_specs)
             tick_options = {}
             if limits and field in {
                 "order_in_trial",
                 "order_in_screen",
                 "fixation_id",
+                "word_id",
                 SAMPLE_INDEX,
             }:
                 tick_options = dict(
@@ -9635,7 +9774,7 @@ def _make_split_comparison_figure(
             font=font_settings,
             plot_bgcolor=background_color,
             paper_bgcolor=background_color,
-            margin=dict(t=62, l=70, r=55, b=70),
+            margin=dict(t=90 if overlaid else 62, l=70, r=55, b=70),
         )
         return fig
 
@@ -10027,13 +10166,15 @@ def _render_comparison_figure(
         settings.x_field,
         settings.y_field,
     ) != ("x", "y"):
+        # Reading charts share the split builder's axis handling; an overlay
+        # there is the same chart with both readings in one panel.
         return _make_split_comparison_figure(
             words,
             fixations,
             trial_a,
             trial_b,
             settings=settings,
-            orientation="stacked" if layout == "stacked" else "side_by_side",
+            orientation=layout if layout in {"stacked", "overlay"} else "side_by_side",
             styles=(style_a, style_b),
             raw_gaze=raw_gaze,
         )
@@ -11533,6 +11674,10 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
         "trial_labels",
         "layout",
         "style_a",
@@ -11567,6 +11712,10 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
         # A comparison reads B's filters off `style_b` instead.
         "fixation_flags_b",
         # Names, not an option: read by `_labelled_columns`.
@@ -11579,6 +11728,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
     {
         "x_field",
         "y_field",
+        "reverse_x_axis",
+        "reverse_y_axis",
         "show_heatmap",
         "heatmap_metric",
         "heatmap_style",
@@ -11817,6 +11968,141 @@ def _require_one_screen_per_reading(
                     "screen first (multipart.extract_part, or "
                     "compare_scanpaths' screen= / screen_b=)."
                 )
+
+
+#: The colour of the selected reading in an overlay of several: the others
+#: take ``_CATEGORY_PALETTE`` in turn, so it stays the one drawn in black.
+OVERLAY_SELECTED_COLOR = "#111111"
+#: The most readings one overlay draws: one colour each, none repeated.
+OVERLAY_MAX_READINGS = 1 + len(_CATEGORY_PALETTE)
+
+
+def overlay_reading_color(idx: int) -> str:
+    """Reading ``idx``'s colour in :func:`make_readings_overlay_figure`."""
+    return OVERLAY_SELECTED_COLOR if idx == 0 else _CATEGORY_PALETTE[idx - 1]
+
+
+def make_readings_overlay_figure(
+    words: pd.DataFrame,
+    readings: Sequence[tuple[str, pd.DataFrame]],
+    *,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
+    **overrides: Any,
+) -> go.Figure:
+    """Several readings on one figure, each in its own colour and named in the
+    legend — the Comparisons subtab's overlay.
+
+    ``readings`` is ``(name, fixations)`` per reading, the selected one first;
+    ``words`` is the selected reading's, drawn once under all of them on screen
+    axes. Each reading's fixations and connecting line take
+    :func:`overlay_reading_color`; on both, every reading is sized on one
+    duration scale, so a size means one duration across the figure. The figure's
+    own layers that belong to one reading (heatmap, raw gaze, colour by line or
+    by a category) are left off: here colour says which reading a fixation is.
+
+    Raises ``ValueError`` for more than :data:`OVERLAY_MAX_READINGS` readings.
+    """
+    if len(readings) > OVERLAY_MAX_READINGS:
+        raise ValueError(
+            f"An overlay draws at most {OVERLAY_MAX_READINGS} readings, one "
+            f"colour each; got {len(readings)}."
+        )
+    resolved = _resolve_figure_settings(settings, overrides)
+    fields = (resolved.x_field, resolved.y_field)
+    # A computed axis (elapsed seconds) becomes a column of each reading, timed
+    # from its own first fixation.
+    readings = [
+        (name, chart_axes.comparison_coordinates(fix, None, fields)[0])
+        for name, fix in readings
+    ]
+    frames = [
+        _finite_for_plotting(fix, fields) for _name, fix in readings if not fix.empty
+    ]
+    pooled = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    # The base draws the words, the axes and their ranges over every reading's
+    # fixations, and none of the readings itself.
+    base = replace(
+        resolved,
+        show_fixations=False,
+        show_saccades=False,
+        show_saccade_arrows=False,
+        show_order=False,
+        show_heatmap=False,
+        show_raw_gaze=False,
+        color_by_line=False,
+        color_by=None,
+    )
+    fig = make_scanpath_figure(words, pooled, settings=base)
+    numeric_color = (
+        resolved.color_by
+        if resolved.color_by not in (None, UNIFORM_COLOR_FIELD, "line")
+        and resolved.color_by in pooled
+        and pd.api.types.is_numeric_dtype(pooled[resolved.color_by])
+        else None
+    )
+    # One colour scale for every reading, so a colour means one value.
+    color_range = resolved.fixation_color_range
+    if numeric_color and color_range is None:
+        values = pd.to_numeric(pooled[numeric_color], errors="coerce")
+        if values.notna().any():
+            color_range = (float(values.min()), float(values.max()))
+    specs = []
+    for idx, (name, fix) in enumerate(readings):
+        color = overlay_reading_color(idx)
+        style = _comparison_scanpath_style(
+            idx,
+            {"fix_color": color, "saccade_color": color},
+            default_marker_size_range=resolved.marker_size_range,
+        )
+        specs.append({"trial_fix": fix, "trial_words": words, "style": style})
+    duration_scale = _comparison_duration_scale(specs, resolved)
+    font_settings = dict(
+        family=resolved.font_family or FONT_FAMILY, size=resolved.base_font_size
+    )
+    with _labelled_columns(resolved.column_labels):
+        for idx, ((name, _fix), spec) in enumerate(zip(readings, specs)):
+            first_trace = len(fig.data)
+            _add_comparison_fixation_trace(
+                fig,
+                _finite_for_plotting(spec["trial_fix"], fields),
+                name,
+                spec["style"],
+                font_settings,
+                fields=fields,
+                show_fixations=resolved.show_fixations,
+                show_saccades=resolved.show_saccades,
+                show_saccade_arrows=resolved.show_saccade_arrows,
+                saccade_opacity=resolved.saccade_opacity,
+                saccade_arrow_size=resolved.saccade_arrow_size,
+                outline_width=resolved.fixation_outline_width,
+                outline_color=resolved.fixation_outline_color,
+                show_order=False,
+                show_legend=True,
+                color_by=numeric_color,
+                colorscale=resolved.fixation_colorscale,
+                color_range=color_range,
+                show_colorbar=bool(numeric_color) and idx == 0,
+                fixation_symbol=resolved.fixation_symbol,
+                fixation_hover_fields=resolved.fixation_hover_fields,
+                trial_words=words,
+                duration_scale=duration_scale,
+            )
+            # With its fixations hidden a reading still has its legend entry,
+            # on its line.
+            added = fig.data[first_trace:]
+            if added and not any(trace.showlegend for trace in added):
+                added[0].update(name=name, showlegend=True)
+    fig.update_layout(showlegend=True)
+    _arrange_colorbars(fig)
+    # Placed as Compare places its A/B legend, clear of the figure's toolbar.
+    apply_legend_layout(
+        fig,
+        resolved.legend_layout,
+        comparing=True,
+        show_colors=False,
+        show_highlight=resolved.show_highlight_legend,
+    )
+    return fig
 
 
 def make_comparison_figure(

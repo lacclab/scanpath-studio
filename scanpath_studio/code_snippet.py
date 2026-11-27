@@ -1607,6 +1607,10 @@ _CLI_EMITTERS: dict[str, Any] = {
     "show_stimulus_image": _flag_when("--show-stimulus-image", True),
     "anim_grid_step_ms": _valued("--anim-grid-step-ms"),
     "anim_max_frames": _int_valued("--anim-max-frames"),
+    "grow_fixations": _flag_when("--grow-fixations", True),
+    "fade_fixations": _flag_when("--fade-fixations", True),
+    "grow_start": _valued("--grow-start"),
+    "fade_opacity": _valued("--fade-opacity"),
     # Each flag below is spelled after its option; `tests/test_code_snippet.py`
     # fails on an option with no row here, so a new one cannot quietly fall
     # back to being "named".
@@ -1628,6 +1632,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "word_hover_measure": _optional_valued("--word-hover-measure"),
     "x_field": _valued("--x-field"),
     "y_field": _valued("--y-field"),
+    "reverse_x_axis": _flag_when("--reverse-x", True),
+    "reverse_y_axis": _flag_when("--reverse-y", True),
     # A flag of its own, not implied by `--canvas`: a figure cropped to its
     # data rather than framed on the full monitor has to say so, or it
     # reproduces framed on the monitor.

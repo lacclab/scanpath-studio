@@ -83,6 +83,9 @@ from .constants import (  # noqa: E402
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
 from .export import annotate_figure, figure_text_style  # noqa: E402
+
+# Re-exported: the experimental EyeLink import (`constants.eyelink_import_enabled`).
+from .eyelink import import_eyelink, load_eyelink  # noqa: E402, F401
 from .file_citation import stamp_file  # noqa: E402
 from .file_lock import file_lock  # noqa: E402
 from .multipart import (  # noqa: E402
@@ -240,6 +243,8 @@ _CANONICAL_OPTION_NAMES = {
     "heatmap_norm",
     "x_field",
     "y_field",
+    "reverse_x_axis",
+    "reverse_y_axis",
     "color_by",
     "heatmap_metric",
     "marker_size_range",
@@ -2194,6 +2199,11 @@ def _value_hint(combos: pd.DataFrame, column: str, wanted, limit: int = 5) -> st
     return hint
 
 
+def _draws_positions(fields: tuple[str, str]) -> bool:
+    """Does a figure on these axes place fixations by screen position?"""
+    return any(field in chart_axes.POSITION_FIELDS for field in fields)
+
+
 def _select_trial(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -2201,12 +2211,19 @@ def _select_trial(
     trial: str | None,
     *,
     raw_gaze: pd.DataFrame | None = None,
+    positions_needed: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
+    """``positions_needed`` is whether the figure places fixations by screen
+    position; a reading chart on other fields draws fixations without any."""
     pid, tid = _resolve_trial(words, fixations, participant, trial, raw_gaze=raw_gaze)
     trial_words, trial_fixations = _data.filter_data(
         words, fixations, {"participants": [pid], "trials": [tid]}
     )
-    if not trial_fixations.empty and trial_fixations["x"].isna().all():
+    if (
+        positions_needed
+        and not trial_fixations.empty
+        and trial_fixations["x"].isna().all()
+    ):
         # AOI-sequence fixations whose coordinates couldn't be reconstructed:
         # either no words table was given, or the word/AoI ids matched no box.
         raise ValueError(
@@ -2228,13 +2245,19 @@ def _select_part(
     raw_gaze: pd.DataFrame | None = None,
     screen_param: str = "screen",
     elapsed_axis: bool = False,
+    positions_needed: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
     """Resolve one logical trial and, for multipart data, exactly one screen.
 
     ``screen_param`` is the keyword the caller took the screen as, so an error
     names the one to fix (``screen_b=`` for a comparison's second trial)."""
     trial_words, trial_fixations, pid, tid = _select_trial(
-        words, fixations, participant, trial, raw_gaze=raw_gaze
+        words,
+        fixations,
+        participant,
+        trial,
+        raw_gaze=raw_gaze,
+        positions_needed=positions_needed,
     )
     if elapsed_axis:
         trial_fixations = chart_axes.with_origin(trial_fixations)
@@ -2782,6 +2805,9 @@ def plot_scanpath(
     through the map they carry. Use ``x_field="@elapsed_seconds"`` with
     ``y_field="x"`` or ``"y"`` to draw fixation durations against time since the
     reading's first recorded onset. Selecting a screen or index window keeps that origin.
+    ``reverse_x_axis=True`` / ``reverse_y_axis=True`` run a chart's axis the other
+    way, such as the first fixation at the top of ``y_field="order_in_trial"``; the
+    screen view (``x`` by ``y``) keeps the stimulus as it was shown.
 
     Args:
         words: A normalized words frame from
@@ -2885,6 +2911,7 @@ def plot_scanpath(
         screen,
         raw_gaze=raw_gaze,
         elapsed_axis=chart_axes.ELAPSED in axes,
+        positions_needed=_draws_positions(axes),
     )
     if raw_gaze is not None:
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
@@ -3711,11 +3738,14 @@ def compare_scanpaths(
     pass in are not modified, and only the trace labels show the prefix.
 
     **Numeric axes.** Set ``x_field`` and ``y_field`` to compare index, position,
-    duration or other numeric fields in panels with matching ranges. An overlay
-    request uses side-by-side panels on these axes. Elapsed seconds start at
+    duration or other numeric fields on matching ranges: both readings in one
+    panel for an overlay, or one panel each. ``reverse_x_axis`` /
+    ``reverse_y_axis`` run either axis the other way. With ``show_saccades`` each
+    reading's fixations are joined in reading order. Elapsed seconds start at
     each full reading's first recorded fixation onset.
 
-    **The overlay gate.** A spatial overlay needs both readings on screens of the same size, or
+    **The overlay gate.** An overlay with a screen-position axis (``x`` or ``y``)
+    needs both readings on screens of the same size, or
     it raises ``ValueError`` (the app falls back to side by side). That holds across
     datasets, and within one when the two screens carry different ``canvas_width`` /
     ``canvas_height`` or ``setup_b`` states another screen. Pass
@@ -3857,8 +3887,6 @@ def compare_scanpaths(
         figure_overrides, names, words=word_side, raw_gaze=sample_side
     )
     fields = figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y")
-    if fields != ("x", "y") and resolved_layout == "overlay":
-        resolved_layout = "side_by_side"
     words, fixations, words_b, fixations_b = (
         _cn.to_canonical_frame(frame)
         for frame in (words, fixations, words_b, fixations_b)
@@ -3895,6 +3923,7 @@ def compare_scanpaths(
         screen,
         raw_gaze=raw_gaze,
         elapsed_axis=chart_axes.ELAPSED in fields,
+        positions_needed=_draws_positions(fields),
     )
     trial_words_b, trial_fix_b, pid_b, tid_b, selected_b = _select_part(
         words_b,
@@ -3905,6 +3934,7 @@ def compare_scanpaths(
         raw_gaze=raw_gaze_b,
         screen_param="screen_b",
         elapsed_axis=chart_axes.ELAPSED in fields,
+        positions_needed=_draws_positions(fields),
     )
     trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, selected_a)
     trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, selected_b)
@@ -3965,7 +3995,7 @@ def compare_scanpaths(
                 resolved_setup_b = replace(
                     setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
                 )
-    if resolved_layout == "overlay" and gate:
+    if resolved_layout == "overlay" and gate and chart_axes.in_screen_pixels(fields):
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
             # The reason says why; this says what happened here and how
@@ -4791,6 +4821,7 @@ def add_dataset(
     description: str | None = None,
     select: bool = True,
     replace: bool = False,
+    _trial_metadata: TrialMetadata | pd.DataFrame | bool | None = None,
 ) -> str:
     """Add a dataset to the app's dataset list from a script.
 
@@ -4875,6 +4906,14 @@ def add_dataset(
             "setup must be an experimental_setup.SetupSnapshot, got "
             f"{type(setup).__name__}."
         )
+    # ``_trial_metadata`` is `add_eyelink_dataset`'s: the dataset's trial
+    # table, a `TrialMetadata` or a frame keyed by ``participant_id`` and
+    # ``trial_id``, stored where the app keeps one attached on the Data page.
+    # ``None`` keeps a replaced dataset's; ``False`` drops it.
+    drop_trial_metadata = _trial_metadata is False
+    trial_payload = (
+        None if drop_trial_metadata else _trial_metadata_payload(_trial_metadata)
+    )
     schemas: dict = {}
     if words is not None or fixations is not None:
         loaded = load_scanpath_data(
@@ -4952,8 +4991,139 @@ def add_dataset(
         select=select,
         replace=replace,
         keep_setup=keep_setup,
+        trial_metadata=trial_payload,
+        drop_trial_metadata=drop_trial_metadata,
     )
     return str(name).strip()
+
+
+def _trial_metadata_payload(trial_metadata) -> dict | None:
+    """``trial_metadata`` as the payload the app saves a trial table under."""
+    from . import metadata as _metadata
+
+    if trial_metadata is None:
+        return None
+    if isinstance(trial_metadata, pd.DataFrame):
+        trial_metadata = load_trial_metadata(
+            trial_metadata, id_column="trial_id", participant_column="participant_id"
+        )
+    if not isinstance(trial_metadata, _metadata.TrialMetadata):
+        raise TypeError(
+            "trial_metadata must be a TrialMetadata or a DataFrame, got "
+            f"{type(trial_metadata).__name__}."
+        )
+    payload = _metadata.trial_to_payload(trial_metadata)
+    if payload is None:
+        raise ValueError("The trial metadata table has no rows.")
+    return {**payload, "columns": list(trial_metadata.frame.columns)}
+
+
+def add_eyelink_dataset(
+    name: str,
+    study_dir: str | Path,
+    *,
+    raw_gaze_participants: Iterable[str] | None = None,
+    description: str | None = None,
+    select: bool = True,
+    replace: bool = False,
+) -> str:
+    """Add an EyeLink study folder to the app's dataset list (experimental).
+
+    Reads the folder [`import_eyelink`][scanpath_studio.api.import_eyelink]
+    wrote and saves it as [`add_dataset`][scanpath_studio.api.add_dataset]
+    does: its fixations and word boxes, each screen's stimulus image, the
+    tracker's display as the screen, and the trials' ``TRIAL_VAR`` values as the
+    dataset's trial metadata table, which the app's trial filters offer.
+
+    The app shows a screen only when both tables have it, so when the study has
+    word boxes, a screen with fixations but no words (a question or a blank
+    screen) is left out, as is one with words but no fixations; the description
+    says how many. A study with no word boxes at all loads its fixations alone.
+    The study folder keeps everything. With ``replace``, a study without
+    ``TRIAL_VAR`` values drops the trial table the saved dataset had.
+
+    Args:
+        name: The name the dataset list shows.
+        study_dir: The study folder.
+        raw_gaze_participants: The participants whose raw gaze the dataset
+            carries; none by default, since raw gaze is large. The study must
+            have been imported with ``raw_gaze=True``. Their samples are kept
+            on the screens kept for the fixations.
+        description: The sentence the 🗂️ **Data** page shows under its name;
+            by default it names the number of sessions and the folder.
+        select: Open the app on this dataset next time it starts.
+        replace: Replace the saved dataset with this name, as ``add_dataset``.
+
+    Returns:
+        The name the dataset was saved under.
+
+    Raises:
+        ValueError: ``SCANPATH_EXPERIMENTAL`` is not set, a named participant
+            has no raw gaze in the study, or as ``add_dataset`` raises.
+        FileNotFoundError: ``study_dir`` is not a study folder.
+    """
+    from . import eyelink as _eyelink
+
+    _eyelink._require_enabled("add_eyelink_dataset")
+    study_dir = Path(study_dir).resolve()
+    wanted = {str(p) for p in raw_gaze_participants or ()}
+    # Raw gaze is large: only the named participants' is read.
+    data = load_eyelink(study_dir, raw_gaze=wanted)
+    sessions, display = len(data.notes), data.display
+    if wanted:
+        have = (
+            set()
+            if data.raw_gaze is None
+            else set(data.raw_gaze["participant_id"].astype(str))
+        )
+        if wanted - have:
+            raise ValueError(
+                f"The study folder {study_dir} has no raw gaze for "
+                f"{', '.join(sorted(wanted - have))}; import it with raw_gaze=True."
+            )
+    kept = _eyelink.shared_screens(
+        data.words, data.fixations, data.raw_gaze if wanted else None
+    )
+    trials = data.trial_metadata
+    # The loaded tables go before the dataset is saved, so a large study (its
+    # unfiltered raw gaze above all) is not held twice.
+    del data
+    words, fixations = kept.words, kept.fixations
+    note = None
+    if kept.screens_left_out:
+        note = (
+            f"{kept.screens_left_out} screens without both words and fixations, "
+            f"with {kept.fixations_left_out} fixations, were left out."
+        )
+    if not words.empty and not fixations.empty:
+        # A reading with no fixation on any screen shown is not offered.
+        readings = pd.MultiIndex.from_arrays(
+            [fixations["participant_id"], fixations["trial_id"]]
+        ).unique()
+        trials = trials[
+            pd.MultiIndex.from_arrays(
+                [trials["participant_id"], trials["trial_id"]]
+            ).isin(readings)
+        ]
+    if description is None:
+        noun = "session" if sessions == 1 else "sessions"
+        description = f"EyeLink import of {sessions} {noun} from {study_dir}"
+    if note:
+        description = f"{description.strip().rstrip('.')}. {note}"
+    # Only the two key columns: the study's trials carry no TRIAL_VARs, and a
+    # replaced dataset's stored trial table is dropped.
+    has_variables = not trials.empty and len(trials.columns) > 2
+    return add_dataset(
+        name,
+        words if not words.empty else None,
+        fixations,
+        raw_gaze=kept.raw_gaze,
+        canvas_size=display,
+        description=description,
+        select=select,
+        replace=replace,
+        _trial_metadata=trials if has_variables else False,
+    )
 
 
 def remove_dataset(name: str, *, missing_ok: bool = False) -> bool:
@@ -5200,6 +5370,8 @@ def app_link(
     screen: str | None = None,
     port: int = 8501,
     animate: bool = False,
+    match: str | None = None,
+    match_view: str | None = None,
     illustration: bool = False,
     **figure_options: Any,
 ) -> str:
@@ -5230,12 +5402,21 @@ def app_link(
         screen: The screen ID of a trial recorded over several screens.
         port: The port the app listens on.
         animate: Open the replay instead of the static figure.
+        match: Open the **Comparisons** subtab with this *Match field*: a
+            column as the dataset names it (one kept with ``add_dataset``'s
+            ``keep_columns``, say), or ``"same_text"`` / ``"same_participant"``
+            for the two choices before the columns. The link opens in Full,
+            the only mode with that subtab. A field the dataset doesn't offer
+            is ignored with a notice.
+        match_view: The Comparisons subtab's *View* for ``match``: ``"grid"``
+            (the default) or ``"overlay"``, every match on one figure.
         illustration: The *Illustration* design, as ``plot_scanpath`` takes it;
             an option given beside it wins.
         **figure_options: Figure options, as ``plot_scanpath`` takes them, with
             its ``fix_index_range`` and ``illustration_label``, plus ``palette``
             and the replay's ``anim_grid_step_ms``, ``anim_max_frames``,
-            ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
+            ``grow_fixations``, ``fade_fixations``, ``grow_start``,
+            ``fade_opacity``, ``playback_speed`` and ``autoplay``. ``None`` leaves the app's own
             value, except where it is a choice of its own (``heatmap_metric``
             counts fixations, ``fixation_flags`` turns them off). A link carries
             no file, so ``background_image`` and its size and origin are
@@ -5247,9 +5428,11 @@ def app_link(
         The link, ``http://localhost:<port>/?…``.
 
     Raises:
-        TypeError: An option a link can't carry, or no figure option at all.
-        ValueError: An empty dataset name, a screen without a trial, a port
-            outside 1–65535, or a value the app would ignore or clamp.
+        TypeError: An option a link can't carry, or no figure option at all. A
+            ``match`` that is not a string.
+        ValueError: An empty dataset name or ``match``, a screen without a
+            trial, a port outside 1–65535, or a value the app would ignore or
+            clamp.
 
     Examples:
         ```python
@@ -5278,6 +5461,8 @@ def app_link(
         trial,
         screen=screen,
         animate=animate,
+        match=match,
+        match_view=match_view,
         options=options,
         share_id=share_id,
         digest=digest,

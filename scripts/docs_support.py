@@ -370,6 +370,8 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "coordinate_grid_font_size",
         "x_field",
         "y_field",
+        "reverse_x_axis",
+        "reverse_y_axis",
     ),
     "Title & labels": (
         "illustration_text",
@@ -391,7 +393,14 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "saccade_type_legend",
         "duration_size_legend",
     ),
-    "Animate": ("anim_grid_step_ms", "anim_max_frames"),
+    "Animate": (
+        "anim_grid_step_ms",
+        "anim_max_frames",
+        "grow_fixations",
+        "fade_fixations",
+        "grow_start",
+        "fade_opacity",
+    ),
     "Compare": (
         "label_a",
         "label_b",

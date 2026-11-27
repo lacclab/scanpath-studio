@@ -39,12 +39,14 @@ from .constants import (
     DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_CROP_MARGIN_PX,
     DEFAULT_DURATION_SIZE_LEGEND,
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
     DEFAULT_FIXATION_OUTLINE_WIDTH,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_GRID_FONT_SIZE,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_HEATMAP_OPACITY,
     DEFAULT_HEATMAP_SIGMA_PX,
@@ -862,6 +864,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # analytical overlays, off by default and one click (or one design preset) away.
     "global_x_field": "x",
     "global_y_field": "y",
+    "global_reverse_x_axis": False,
+    "global_reverse_y_axis": False,
     "global_show_words": False,
     "global_show_labels": True,
     "global_redact_text": False,
@@ -929,6 +933,11 @@ _VIZ_WIDGET_DEFAULTS = {
     # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the replay
     # player starts it at the configured speed (plots.animation_player_post_script).
     "global_anim_autoplay": True,
+    # The replay's current fixation grows over its duration; earlier ones fade.
+    "global_anim_grow_fixations": False,
+    "global_anim_fade_fixations": False,
+    "global_anim_grow_start": DEFAULT_GROW_START,
+    "global_anim_fade_opacity": DEFAULT_FADE_OPACITY,
     # The animation frame grid. Step = smoothness; max frames = the ceiling that
     # keeps a long reading's GIF/MP4 bounded (it coarsens the step, and the popover
     # says so).
@@ -1866,6 +1875,8 @@ _MOUNTED_VIEW_KEYS = frozenset(
         "global_show_raw_gaze",
         "global_x_field",
         "global_y_field",
+        "global_reverse_x_axis",
+        "global_reverse_y_axis",
         SINGLE_ANIMATE,
         SINGLE_COMPARE_TOGGLE,
         "global_preproc_enabled",
@@ -3761,6 +3772,10 @@ def forget_mapping_for_other_table(
         for key in keys:
             st.session_state.pop(key, None)
             st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
+        # The stashed upload header is the other dataset's file too, and
+        # `_mapping_options` offers it ahead of this table's own columns: left
+        # behind, it would blank every pick this table's columns could honour.
+        st.session_state.pop(f"{state_key_prefix}_header", None)
         return
     columns = set(columns_seen)
     for key in keys:
@@ -6376,12 +6391,9 @@ def render_compare_filters(
     ss = st.session_state
     axes = ss.get("global_x_field", "x"), ss.get("global_y_field", "y")
     chart = not animating and axes != ("x", "y")
-    sequence = chart and charts.position_chart(axes, "order_in_trial")
     drawable = not chart or charts.drawable_fixations(axes, compare_fixations)
     markers = bool(ss.get("global_show_fix", True)) and drawable
-    lines = ss.get("global_show_saccades", True) and (
-        not chart or (sequence and drawable)
-    )
+    lines = ss.get("global_show_saccades", True) and drawable
     window_active = (
         markers
         or lines
@@ -6411,7 +6423,7 @@ def render_compare_filters(
                     has_words=words is None or charts.has_word_boxes(words),
                 ),
                 show_markers=markers,
-                disabled=not (markers or ((animating or sequence) and lines)),
+                disabled=not (markers or ((animating or chart) and lines)),
             )
         _cls_dis, _cls_reason = _mode_gate(animating, True, in_animation=False)
         with (
@@ -7119,6 +7131,8 @@ def _collect_viz_settings(
         heatmap_metric=ss.get("global_heatmap_metric") or "duration_ms",
         x_field=ss.get("global_x_field"),
         y_field=ss.get("global_y_field"),
+        reverse_x_axis=bool(ss.get("global_reverse_x_axis", False)),
+        reverse_y_axis=bool(ss.get("global_reverse_y_axis", False)),
         marker_size_range=tuple(ss.get("global_marker_size_range", (8, 24))),
         marker_size_scale=(
             ss.get("global_marker_size_scale") or DEFAULT_MARKER_SIZE_SCALE
@@ -7203,6 +7217,12 @@ def _collect_viz_settings(
         illustration_text=str(ss.get("global_illustration_text") or ""),
         # Autoplay the animated replay on load (default on).
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
+        anim_grow_fixations=bool(ss.get("global_anim_grow_fixations")),
+        anim_fade_fixations=bool(ss.get("global_anim_fade_fixations")),
+        anim_grow_start=float(ss.get("global_anim_grow_start", DEFAULT_GROW_START)),
+        anim_fade_opacity=float(
+            ss.get("global_anim_fade_opacity", DEFAULT_FADE_OPACITY)
+        ),
         # The animation frame grid (smoothness vs. frame count).
         anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
         anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),
@@ -7813,7 +7833,8 @@ def render_plot_controls(
     )
     has_markers = primary_markers or secondary_markers
     has_fixations = has_fixations or (b_fix is not None and not b_fix.empty)
-    sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
+    # On a reading chart the Saccades layer joins the fixations in order.
+    sequence = chart_axes
     screen_help = "Choose screen X and Y to draw this layer."
     # Why Fixations greys when the trial has fixations but none of them can be
     # placed on the chosen axes (a pupil-area chart, say).
@@ -7876,12 +7897,15 @@ def render_plot_controls(
         slug="sac",
         visibility_key="global_show_saccades",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or (chart_axes and not sequence) or last_replay_sac,
+        # On a chart the line joins the markers' points, so it needs them.
+        disabled=not has_fixations
+        or (chart_axes and not has_markers)
+        or last_replay_sac,
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
-            (chart_axes and not sequence, screen_help),
+            (chart_axes and not has_markers, fix_axis_help),
             (last_replay_sac, replay_layer_help),
-            (sequence, "Connect successive fixation indices in reading order."),
+            (sequence, "Join each reading's fixations in reading order."),
         ),
     )
     # A master switch for the section's layers (text, image), matching
@@ -8434,9 +8458,7 @@ def render_plot_controls(
         ),
         _popover_rows("filter_fix"),
     ):
-        line_visible = show_saccades and (
-            not chart_axes or (sequence and primary_markers)
-        )
+        line_visible = show_saccades and (not chart_axes or primary_markers)
         show_markers = show_fix and primary_markers
         window_active = (
             show_markers
@@ -8467,12 +8489,11 @@ def render_plot_controls(
         sac_grp,
         _layer_off(
             f"{ICONS['saccades']} Saccades",
-            off=(chart_axes and not sequence) or not show_saccades or not has_fixations,
-            reason=(
-                "Saccade styles apply to screen X and Y."
-                if chart_axes
-                else no_fixations_note or None
-            ),
+            off=not show_saccades
+            or not has_fixations
+            or (chart_axes and not has_markers),
+            reason=no_fixations_note
+            or (fix_axis_help if chart_axes and not has_markers else None),
         ),
         _popover_rows("sac"),
     ):
@@ -8509,7 +8530,7 @@ def render_plot_controls(
                 _COMPARE_SCANPATH_HELP[0] + " Color, style and width are set "
                 "per scanpath; opacity, shape and direction arrows are shared."
                 if comparing
-                else "The line connects visible fixations in index order."
+                else "The line connects visible fixations in reading order."
                 if sequence
                 else "How saccades are drawn."
             ),
@@ -9451,6 +9472,7 @@ def render_plot_controls(
             "Vertical position by fixation index": ("order_in_trial", "y"),
             "Duration by fixation index": ("order_in_trial", "duration_ms"),
             "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
+            "Fixation index by word number": ("word_id", "order_in_trial"),
         }
         # A tracker can timestamp its samples even when it recorded no
         # fixation onsets. Only the fixation clock supplies elapsed seconds.
@@ -9545,6 +9567,29 @@ def render_plot_controls(
                 persist_state="session",
                 disabled=axis_disabled,
                 help=axis_help if axis_disabled else None,
+            )
+        reverse_reason = (
+            axis_help
+            if axis_disabled
+            else "The screen view keeps the stimulus as it was shown. Choose a chart under **Axis layout** to reverse an axis."
+        )
+        for axis, direction, usual in (
+            ("x", "horizontal", "Run the axis right to left."),
+            (
+                "y",
+                "vertical",
+                "Flip the axis: what runs bottom to top runs top to bottom, and the other way round.",
+            ),
+        ):
+            st.checkbox(
+                f"Reverse {direction} axis",
+                key=f"global_reverse_{axis}_axis",
+                persist_state="session",
+                disabled=axis_disabled or not chart_axes,
+                help=_gated_help(
+                    usual,
+                    "" if chart_axes and not axis_disabled else reverse_reason,
+                ),
             )
         if chart_axes and current is None:
             st.caption(
@@ -10119,6 +10164,65 @@ def clear_trial_filters(prefix: str = "") -> None:
         del st.session_state[key]
     st.session_state.pop(f"{prefix}_trial_filters", None)
     st.session_state.pop(f"{prefix}_trial_filters_raw", None)
+
+
+#: The Scanpath funnel's popover, whose open state releases a held reset.
+FILTER_POPOVER_KEY = "iconpop_filter_trials"
+#: The filter values the browser last showed, recorded by
+#: `clear_trial_filters_from_outside` for `hold_cleared_filters`.
+_CLEARED_FILTER_ECHOES_KEY = "_cleared_filter_echoes"
+
+
+def clear_trial_filters_from_outside(prefix: str = "") -> None:
+    """`clear_trial_filters` for a button drawn outside the filter popover.
+
+    A filter widget the user opened keeps echoing the value it last showed
+    while its popover is closed, so a bare reset would hold for one run and the
+    next rerun would put the filter back. This records those values for
+    `hold_cleared_filters`, which holds each reset once the widgets have
+    re-seeded their defaults. An ``on_click``.
+    """
+    ss = st.session_state
+    ss[_CLEARED_FILTER_ECHOES_KEY] = {
+        key: deepcopy(ss[key]) for key in _own_filter_keys(prefix)
+    }
+    clear_trial_filters(prefix)
+
+
+def hold_cleared_filters() -> None:
+    """Hold a `clear_trial_filters_from_outside` reset against the closed
+    popover's echo (`write_through`).
+
+    Call it after the filter widgets have rendered on the run after the click:
+    only they know their defaults (every value of a condition, for one), so
+    the value to hold is what they seeded. The widgets exist by then, so the
+    hold is recorded without writing their keys again (Streamlit refuses a
+    write to an instantiated widget); `reassert_pending_writes` applies it on
+    the runs that follow.
+    """
+    ss = st.session_state
+    shown = ss.pop(_CLEARED_FILTER_ECHOES_KEY, None)
+    pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
+    for key, old in (shown or {}).items():
+        if key in ss and _write_match_key(ss[key]) != _write_match_key(old):
+            pending[key] = _PendingWidgetWrite(
+                deepcopy(ss[key]),
+                deepcopy(old),
+                fresh=False,
+                popover_key=FILTER_POPOVER_KEY,
+            )
+    if pending:
+        ss[_PENDING_WRITES_KEY] = pending
+
+
+def _echoes_cleared_filter(prefix: str) -> bool:
+    """Whether a filter's change is a closed popover echoing a held reset.
+
+    The echo reaches the filter's ``on_change`` before
+    `reassert_pending_writes` puts the reset back, so a callback that
+    recomputed the filters from it would apply the cleared filter for a run.
+    """
+    return echoes_a_held_write(*_own_filter_keys(prefix))
 
 
 def _own_filter_keys(prefix: str) -> list:
@@ -11727,6 +11831,8 @@ def render_narrow_by(
     Start empty = no narrowing; pick values to narrow."""
 
     def _apply() -> None:
+        if _echoes_cleared_filter(prefix):
+            return
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
             words, fixations, raw_gaze, prefix=prefix
         )
@@ -11823,6 +11929,8 @@ def render_trial_filters(
     from . import metadata as md
 
     def _apply() -> None:
+        if _echoes_cleared_filter(prefix):
+            return
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
             words, fixations, raw_gaze, prefix=prefix
         )

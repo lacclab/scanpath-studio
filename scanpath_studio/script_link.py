@@ -34,6 +34,8 @@ from .session_keys import (
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
+    PARAM_MATCH,
+    PARAM_MATCH_VIEW,
     REPLAY_FIXATIONS_PARAM,
 )
 
@@ -52,6 +54,8 @@ _SAME_VALUE = {
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     "show_coordinate_grid": "global_show_coordinate_grid",
+    "reverse_x_axis": "global_reverse_x_axis",
+    "reverse_y_axis": "global_reverse_y_axis",
     "heatmap_style": "global_heatmap_style",
     "heatmap_norm": "global_heatmap_norm",
     "heatmap_colorscale": "global_heatmap_colorscale",
@@ -115,6 +119,10 @@ _SAME_VALUE = {
     # The replay's player.
     "playback_speed": "single_playback_speed",
     "autoplay": "global_anim_autoplay",
+    "grow_fixations": "global_anim_grow_fixations",
+    "fade_fixations": "global_anim_fade_fixations",
+    "grow_start": "global_anim_grow_start",
+    "fade_opacity": "global_anim_fade_opacity",
     **{name: option.state_key for name, option in FIXATION_LABEL_OPTIONS.items()},
     **{name: option.state_key for name, option in OPACITY_OPTIONS.items()},
     **{
@@ -451,6 +459,8 @@ def link_query(
     *,
     screen: str | None = None,
     animate: bool = False,
+    match: str | None = None,
+    match_view: str | None = None,
     options: Mapping | None = None,
     share_id: str | None = None,
     digest: str | None = None,
@@ -461,7 +471,8 @@ def link_query(
     The params are the ones 🔗 Share → Link writes for the same view: the
     dataset by name (with its share ID and the digest of its tables, when
     given; a dataset the app has itself by its ``?source=``, see
-    `builtin_source_params`), the reading, then the figure settings.
+    `builtin_source_params`), the reading, the Comparisons subtab's *Match
+    field* when ``match`` names one, then the figure settings.
     """
     from .url_state import settings_params
 
@@ -482,6 +493,24 @@ def link_query(
         if trial in (None, ""):
             raise ValueError("A screen belongs to a trial: pass trial= with screen=.")
         params["screen"] = _id_text(screen)
+    if match is not None:
+        if not isinstance(match, str):
+            raise TypeError(f"match is a field name, not {type(match).__name__}.")
+        if not match.strip():
+            raise ValueError("Name the field match= matches on, or leave it out.")
+        params[PARAM_MATCH] = match
+    if match_view is not None:
+        from .session_keys import MATCH_VIEW_LINK_VALUES
+
+        if match is None:
+            raise ValueError("match_view= is the view of a match=: pass match= too.")
+        view = str(match_view).strip().lower()
+        if view not in MATCH_VIEW_LINK_VALUES:
+            raise ValueError(
+                f"match_view is one of {', '.join(MATCH_VIEW_LINK_VALUES)}; "
+                f"got {match_view!r}."
+            )
+        params[PARAM_MATCH_VIEW] = view
     state = options_state(options or {})
     if state:
         # A link with layer switches and no duration scale is read as one

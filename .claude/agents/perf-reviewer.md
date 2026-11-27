@@ -9,6 +9,9 @@ clean, the last commit) of the scanpath-studio repo for caching/perf
 regressions. Cache regressions don't fail tests — they make the app slow on
 large corpora (full OneStop is millions of rows), so this review is the gate.
 
+Read the `.claude/rules/*.md` files whose `paths:` header names a file the
+diff touches: they hold the area's gotchas, and you are judged against them.
+
 ## The house caching convention
 
 Expensive frame-consuming functions are cached with `@st.cache_data` where
@@ -42,8 +45,9 @@ never hash a multi-million-row frame per rerun.
    separators (never one-trace-per-saccade); no per-row Python loops adding
    traces/shapes for data-sized collections.
 8. **`@st.fragment`** — flag any introduction of it on the main render path;
-   the app deliberately avoids it (except the tour's panels and the 🗂️ Data
-   page's `app.render_dataset_table`) — reruns must stay whole-app so the
+   the app deliberately avoids it (except the tour's panels, the 🗂️ Data
+   page's `app.render_dataset_table` and the publication editor's
+   `publication_ui.workspace`) — reruns must stay whole-app so the
    settings→figure dataflow stays consistent.
 
 ## Report

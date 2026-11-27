@@ -62,6 +62,8 @@ NON_DEFAULT = {
     "word_heatmap_title": "Surprisal",
     "x_field": "order_in_trial",
     "y_field": "duration_ms",
+    "reverse_x_axis": True,
+    "reverse_y_axis": True,
     "color_by": "duration_ms",
     "color_by_line": True,
     "fixation_color": "#aa0000",
@@ -157,6 +159,10 @@ NON_DEFAULT = {
     # The replay's own.
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,
+    "grow_fixations": True,
+    "fade_fixations": True,
+    "grow_start": 0.4,
+    "fade_opacity": 0.5,
     # The comparison's (and the co-animation's).
     "show_legend": False,  # on by default
     "compare_stimulus": "b",
@@ -342,6 +348,8 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
         ),
         (["--x-field", "order_in_trial"], "x_field", "order_in_trial"),
         (["--y-field", "duration_ms"], "y_field", "duration_ms"),
+        (["--reverse-x"], "reverse_x_axis", True),
+        (["--reverse-y"], "reverse_y_axis", True),
         (["--no-full-monitor"], "fit_to_monitor", False),
         (["--crop-margin", "30"], "crop_margin", 30.0),
         (["--no-fixation-colorbar"], "show_fixation_colorbar", False),

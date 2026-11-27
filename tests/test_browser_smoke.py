@@ -180,6 +180,36 @@ def _plot_frame(page, key: str):
     pytest.fail(f"no plot iframe holds #truescale-{key}")
 
 
+def _seek_burst(slider) -> None:
+    """Send the replay's time slider several input events in one task, as a
+    script does, ending on frame 0, and wait two animation frames.
+
+    The slider's document records every unhandled promise rejection from then
+    on (read back with `_unhandled_rejections`): `pageerror` can miss a
+    rejection that carries no reason."""
+    slider.evaluate(
+        """slider => {
+            if (!window.__spsRejections) {
+                window.__spsRejections = [];
+                window.addEventListener('unhandledrejection', event => {
+                    window.__spsRejections.push(String(event.reason));
+                });
+            }
+            for (const value of [slider.max, 0, 1, slider.max, 0, 1, 0]) {
+                slider.value = value;
+                slider.dispatchEvent(new Event('input', {bubbles: true}));
+            }
+            const frame = () => new Promise(done => requestAnimationFrame(done));
+            return frame().then(frame);
+        }"""
+    )
+
+
+def _unhandled_rejections(target) -> list[str]:
+    """The rejections recorded since `_seek_burst` in ``target``'s document."""
+    return target.evaluate("() => window.__spsRejections || []")
+
+
 @pytest.mark.parametrize(
     "path", ["data", "corpus-analysis", "help-faq", "help-feedback", "help-tutorials"]
 )
@@ -689,6 +719,30 @@ def test_keyboard_controls_replay_without_changing_trial(simple_page):
     assert page.errors == []
 
 
+def test_a_burst_of_replay_seeks_lands_on_the_last_frame(simple_page):
+    page = simple_page
+    frame = _plot_frame(page, "single_anim")
+    timeline = frame.get_by_role("slider", name="Replay time")
+    last = int(timeline.get_attribute("max"))
+    # Whether the plot shows frame k: every trace the frame sets holds its points.
+    shows = """k => {
+        const gd = document.querySelector('#truescale-single_anim');
+        const f = gd._spsFrameAt(k);
+        const points = v => JSON.stringify(v == null ? null : Array.from(v));
+        return f.traces.every((t, i) => ['x', 'y'].every(
+            axis => points(gd.data[t][axis]) === points(f.data[i][axis])));
+    }"""
+    timeline.focus()
+    page.keyboard.press("End")
+    frame.wait_for_function(shows, arg=last)
+    assert not frame.evaluate(shows, 0)
+    _seek_burst(timeline)
+    sync_api.expect(timeline).to_have_value("0")
+    frame.wait_for_function(shows, arg=0)
+    assert _unhandled_rejections(frame) == []
+    assert page.errors == []
+
+
 def test_keyboard_steps_comparison_b_at_a_boundary(app_url, browser):
     page = _open(browser, f"{app_url}/?ui=full")
     try:
@@ -1076,17 +1130,14 @@ def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
             page.get_by_role("button", name="Previous fixation").click()
             expect_point(225)
             assert "onset 60 ms" in page.get_by_role("status").inner_text()
-            # Several seeks before the next paint replace a queued Plotly frame.
-            page.get_by_role("slider", name="Replay time").evaluate(
-                """slider => {
-                    for (const value of ['1', slider.max, '0']) {
-                        slider.value = value;
-                        slider.dispatchEvent(new Event('input', {bubbles: true}));
-                    }
-                }"""
-            )
+            # A burst of seeks lands on the last one without a rejected promise.
+            _seek_burst(page.get_by_role("slider", name="Replay time"))
             expect_point(fixations.iloc[0]["x"])
+            sync_api.expect(
+                page.get_by_role("slider", name="Replay time")
+            ).to_have_value("0")
             assert registered_frames() == 0
+            assert _unhandled_rejections(page) == []
             assert errors == []
         finally:
             server.shutdown()

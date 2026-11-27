@@ -155,6 +155,18 @@ def multipleye_format_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def eyelink_import_enabled() -> bool:
+    """Whether EyeLink EDF recordings can be imported: ``eyelink.py``'s public
+    entries, their ``api`` re-exports (``import_eyelink``, ``load_eyelink``)
+    and ``api.add_eyelink_dataset``, and the CLI's ``import-eyelink`` command
+    and ``render --eyelink-study``.
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set. Off, the entries raise and the
+    CLI hides its command and flag; the code and its tests stay.
+    """
+    return experimental_features_enabled()
+
+
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the font field accepts any CSS
 # font name or stack if you want the exact experiment font.
@@ -585,6 +597,12 @@ DEFAULT_CAPTION_COLOR = "#555555"
 DEFAULT_PLOT_FRAME_COLOR = "#000000"
 #: The saccades' direction arrowheads, in px.
 DEFAULT_SACCADE_ARROW_SIZE = 12.0
+# The replay's growing fixation starts at this share of its full size, and a
+# faded one keeps this share of its opacity.
+DEFAULT_GROW_START = 0.15
+GROW_START_BOUNDS = (0.05, 1.0)
+DEFAULT_FADE_OPACITY = 0.3
+FADE_OPACITY_BOUNDS = (0.0, 1.0)
 SACCADE_ARROW_SIZE_BOUNDS = (4.0, 40.0)
 #: The outline round a filled fixation marker; a width of 0 draws none. The
 #: colour is `FIX_MARKER_OUTLINE`, spelt out for a colour picker.
@@ -1222,6 +1240,7 @@ ICONS: dict[str, str] = {
     "view_scanpath": ":material/route:",
     "view_corpus": ":material/bar_chart:",
     "view_data": ":material/database:",
+    "data_tables": ":material/table_view:",
     "help": ":material/help:",
     "tutorials": ":material/explore:",
     "faq": ":material/quiz:",

@@ -51,6 +51,21 @@ def test_seed_mode_reads_the_link_then_the_cookie():
     assert ui_mode.seed_mode({}, {}, {}) == "essentials"
 
 
+def test_a_link_to_comparisons_opens_full_unless_it_names_a_mode():
+    """Comparisons is only in Full, so a `match=` link opens there over the
+    cookie's Essentials; the link's own `ui=` and the session's mode still win."""
+    cookies = {sk.UI_MODE_COOKIE: "essentials"}
+    match = {sk.PARAM_MATCH: "same_text"}
+    assert ui_mode.seed_mode({}, match, cookies) == "full"
+    assert ui_mode.seed_mode({}, {**match, sk.PARAM_UI: "junk"}, cookies) == "full"
+    assert (
+        ui_mode.seed_mode({}, {**match, sk.PARAM_UI: "essentials"}, {}) == "essentials"
+    )
+    session = {sk.UI_MODE: "essentials"}
+    assert ui_mode.seed_mode(session, match, {}) == "essentials"
+    assert ui_mode.seed_mode({}, {sk.PARAM_MATCH: ""}, cookies) == "essentials"
+
+
 def test_seed_mode_writes_the_session_key():
     session: dict = {}
     ui_mode.seed_mode(session, {sk.PARAM_UI: "full"}, {})

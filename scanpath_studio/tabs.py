@@ -142,8 +142,10 @@ from scanpath_studio.constants import (
     DATA_RUN_SHEETS_KEY,
     DATASET_EDITOR_OPEN_KEY,
     DEFAULT_DURATION_SIZE_LEGEND,
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
@@ -151,9 +153,12 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_SCALE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FADE_OPACITY_BOUNDS,
+    FIXATION_GLYPH_SYMBOLS,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OPACITY,
     FOCUS_MAPPING_KEY,
+    GROW_START_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
     MANUAL_SAMPLE_CHOICE,
@@ -197,6 +202,7 @@ from scanpath_studio.constants import (
     upload_limit_mb,
 )
 from scanpath_studio.controls import (
+    FILTER_POPOVER_KEY,
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
@@ -213,6 +219,7 @@ from scanpath_studio.controls import (
     active_filter_items,
     chip_field_label,
     clear_trial_filters,
+    clear_trial_filters_from_outside,
     column_mapping_ui,
     compare_b_filters,
     corpus_style_controls,
@@ -221,6 +228,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    hold_cleared_filters,
     leave_animation,
     metadata_readings,
     modes_summary,
@@ -381,6 +389,7 @@ from scanpath_studio.plots import (
     make_metric_convergence_figure,
     make_paired_bars_figure,
     make_progression_figure,
+    make_readings_overlay_figure,
     make_scanpath_figure,
     make_small_multiples_figure,
     make_trend_figure,
@@ -388,9 +397,11 @@ from scanpath_studio.plots import (
     make_word_profile_figure,
     make_word_rate_figure,
     normalize_legend_layout,
+    overlay_reading_color,
     reading_stimulus_image,
     replay_page,
     replay_page_box,
+    replay_saccade_opacity,
     replay_size_key_range,
     set_replay_clock,
     stimulus_image_settings,
@@ -401,6 +412,12 @@ from scanpath_studio.session_keys import (
     EXPORT_FIGURE_DPI,
     EXPORT_FIGURE_WIDTH,
     EXPORT_FIGURE_WIDTH_UNIT,
+    MATCH_LINK_STATE_KEY,
+    MATCH_SHARE_STATE_KEY,
+    MULTI_VIEW,
+    MULTI_VIEW_GRID,
+    MULTI_VIEW_OVERLAY,
+    PARAM_MATCH,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
@@ -1353,7 +1370,9 @@ def _render_true_scale_plot(
     loading.record_plot_size(key, width, iframe_height)
 
 
-def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
+def _different_texts_note(
+    text_a: str | None, text_b: str | None, *, word_axis: bool = False
+) -> str | None:
     """The warning for an **overlay** of readings of two **different texts**.
 
     ``None`` when they match, or when either side's text id is unknown — a
@@ -1369,9 +1388,19 @@ def _different_texts_note(text_a: str | None, text_b: str | None) -> str | None:
     Rendered under the figure (both the static comparison and the animated
     co-replay) rather than inside the rail's popover: a caveat about what the
     figure *means* has to be where the figure is.
+
+    ``word_axis`` is an overlay on a reading chart with a word-id axis, which
+    draws no boxes but puts word *n* of one text on word *n* of the other.
     """
     if not text_a or not text_b or str(text_a) == str(text_b):
         return None
+    if word_axis:
+        return (
+            f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay puts "
+            "both on one word axis, so word *n* of one text sits on word *n* of "
+            "the other. Compare two trials of the same text, or set **View** to "
+            "**Side by side**."
+        )
     return (
         f"**A** reads `{text_a}` and **B** reads `{text_b}`. An overlay draws both "
         "scanpaths over one set of word boxes, so it doesn't show where each "
@@ -2220,6 +2249,8 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         word_hover_fields=viz_settings.get("word_hover_fields"),
         fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
+        reverse_x_axis=bool(viz_settings.get("reverse_x_axis", False)),
+        reverse_y_axis=bool(viz_settings.get("reverse_y_axis", False)),
         # Optional design choices: unset, each is the builder's own default.
         **{
             key: viz_settings[key]
@@ -5642,6 +5673,10 @@ def _plan_replay(
             else "Scanpath B"
         ),
         autoplay=viz_settings.get("anim_autoplay", True),
+        grow_fixations=bool(viz_settings.get("anim_grow_fixations")),
+        fade_fixations=bool(viz_settings.get("anim_fade_fixations")),
+        grow_start=float(viz_settings.get("anim_grow_start", DEFAULT_GROW_START)),
+        fade_opacity=float(viz_settings.get("anim_fade_opacity", DEFAULT_FADE_OPACITY)),
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
         # The co-animation wears the rail's per-scanpath styles, as the static
@@ -5804,7 +5839,7 @@ def _build_and_render_animation(
         )
         # The frames were built at full opacity (`_plan_replay`).
         fig.update_traces(
-            opacity=animation_settings.saccade_opacity,
+            opacity=replay_saccade_opacity(animation_settings),
             selector=dict(meta="saccades"),
         )
         # A co-animation whose two size ranges differ has no one key.
@@ -6507,13 +6542,23 @@ def _render_compare_chip_table(fields, *, a: ChipReading, b: ChipReading) -> Non
     )
 
 
-def _render_matches_chip_table(fields, rows: list[tuple[str, ChipReading]]) -> None:
+def _render_matches_chip_table(
+    fields,
+    rows: list[tuple[str, ChipReading]],
+    colors: list[str] | None = None,
+) -> None:
     """The Comparisons subtab's chip table: the selected trial and each
     match on the page, one row each, named as their panels are, under the
     fields the ✏️ chips menu picked — the table above the plot, one row per
     reading, so the matches compare down each column and a value they all
-    share is written quieter."""
-    sides = [(label, None, reading.entries(fields)) for label, reading in rows]
+    share is written quieter.
+
+    ``colors`` names each row in its reading's colour, as the overlay draws it."""
+    colors = colors or [None] * len(rows)
+    sides = [
+        (label, color, reading.entries(fields))
+        for (label, reading), color in zip(rows, colors)
+    ]
     if any(entries for _label, _color, entries in sides):
         st.markdown(
             _chip_table_html(*sides, order=list(fields or [])),
@@ -6695,18 +6740,27 @@ def render_single_trial_tab(
             cluster and lays out as the cluster's other cells do. In Essentials
             they stay in the page, hidden, with their values, and a ＋ More
             list takes the cell."""
-            pop = ui_mode.advanced_only(host, "trial_filters").popover(
+            funnel = ui_mode.advanced_only(host, "trial_filters")
+            pop = funnel.popover(
                 "Filter the trial list",
                 icon=_FILTER_ICON,
                 width="content",
                 help="Select the whole readings available in the trial list.",
-                key="iconpop_filter_trials",
+                key=FILTER_POPOVER_KEY,
+                # Tracked, so a held *Clear filters* reset lets go the moment
+                # the panel opens and its widgets show the cleared values.
+                on_change="rerun",
             )
             box = pop.container(key="tour_grp_narrow_by")
             box.caption(
                 "Select whole readings. Each selected reading keeps all of its fixations."
             )
             _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
+            # A reset from *Clear filters* under the picker, held now that the
+            # widgets have re-seeded the defaults it resets to.
+            hold_cleared_filters()
+            # After the filters, so the dot reflects this run's edits.
+            funnel.html(_funnel_state_css(has_active_trial_filters()))
             # The chips' menu closes A's cluster (◀ ▶ ⇅ 🔎 ✏️), so the chip
             # table below has the plot's whole width, and hiding it
             # leaves no row behind. Drawn here, before the table reads
@@ -6749,6 +6803,16 @@ def render_single_trial_tab(
                 )
             )
         screen_slot = screen_cells.get("a")
+        # Drawn every run (empty when nothing filters), so turning a filter on
+        # or off keeps the elements below at the same place in the tree and the
+        # figure is not redrawn.
+        _render_filter_scope(
+            st.container(key="trial_filter_scope"),
+            combos,
+            combos_all,
+            words_all,
+            fixations_all,
+        )
         # Slots filled once the selection is resolved (chips need the trial).
         #
         # Creation order *is* screen order, so these reservations are the whole
@@ -6777,7 +6841,13 @@ def render_single_trial_tab(
 
     # A dataset that fails its data checks badly (most fixations at 0 ms, most
     # positions missing) still draws a plausible figure; say so above it.
-    render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
+    render_data_health_notice(
+        plot_notes_slot,
+        words_all,
+        fixations_all,
+        raw_gaze_all,
+        positions_drawn=_figure_draws_positions(st.session_state),
+    )
 
     if not (selected_participant and selected_trial):
         if on_reading_selected is not None:
@@ -7067,6 +7137,74 @@ def render_single_trial_tab(
                     disabled=anim_disabled,
                     help="Start the replay when you open the reading.",
                 )
+                # Both restyle the fixation markers, so they do nothing while
+                # fixations are hidden or drawn as a glyph (♥, a text layer).
+                marks_reason = (
+                    "Turn on **Fixations** to use this."
+                    if not st.session_state.get("global_show_fix", True)
+                    else "A glyph shape (♥) neither grows nor fades."
+                    if st.session_state.get("global_fixation_symbol")
+                    in FIXATION_GLYPH_SYMBOLS
+                    else ""
+                )
+                _check_row(
+                    "Current fixation",
+                    check_label="Grow over its duration",
+                    check_share=0.76,
+                    key="global_anim_grow_fixations",
+                    persist_state="session",
+                    disabled=anim_disabled or bool(marks_reason),
+                    help="The current fixation starts small and reaches its "
+                    "full size when its duration has passed."
+                    + (f" {marks_reason}" if marks_reason else ""),
+                )
+                grow_off = not st.session_state.get("global_anim_grow_fixations")
+                _numeric_slider(
+                    st,
+                    "Start size",
+                    key="global_anim_grow_start",
+                    persist_state="session",
+                    min_value=GROW_START_BOUNDS[0],
+                    max_value=GROW_START_BOUNDS[1],
+                    step=0.05,
+                    slider_format="%.2f",
+                    disabled=anim_disabled or bool(marks_reason) or grow_off,
+                    label_left=True,
+                    help="The share of its full size a fixation starts at: "
+                    "0.15 starts at 15 %."
+                    + (
+                        " Used only with **Grow over its duration** on."
+                        if grow_off
+                        else ""
+                    ),
+                )
+                _check_row(
+                    "Earlier fixations",
+                    check_label="Fade",
+                    check_share=0.76,
+                    key="global_anim_fade_fixations",
+                    persist_state="session",
+                    disabled=anim_disabled or bool(marks_reason),
+                    help="Draw the fixations before the current one, their "
+                    "numbers and the saccades faded, so the current fixation "
+                    "stands out." + (f" {marks_reason}" if marks_reason else ""),
+                )
+                fade_off = not st.session_state.get("global_anim_fade_fixations")
+                _numeric_slider(
+                    st,
+                    "Faded opacity",
+                    key="global_anim_fade_opacity",
+                    persist_state="session",
+                    min_value=FADE_OPACITY_BOUNDS[0],
+                    max_value=FADE_OPACITY_BOUNDS[1],
+                    step=0.05,
+                    slider_format="%.2f",
+                    disabled=anim_disabled or bool(marks_reason) or fade_off,
+                    label_left=True,
+                    help="The share of its opacity what has faded keeps: 0 "
+                    "hides it, 1 leaves it as it is."
+                    + (" Used only with **Fade** on." if fade_off else ""),
+                )
                 # The duration depends on both readings when comparing.
                 anim_timing_slot = st.container() if animate else None
 
@@ -7259,33 +7397,16 @@ def render_single_trial_tab(
                     # Seed so the control shows "Overlay" selected by default
                     # (the body reads this key to resolve compare_layout).
                     st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
-                    chart_layout = not animate and (
+                    chart_fields = (
                         st.session_state.get("global_x_field", "x"),
                         st.session_state.get("global_y_field", "y"),
-                    ) != ("x", "y")
-                    layout_key = SINGLE_COMPARE_LAYOUT
-                    choices = ["Overlay", "Side by side", "Stacked"]
-                    callback = {}
-                    if chart_layout:
-                        choices = choices[1:]
-                        saved = st.session_state[SINGLE_COMPARE_LAYOUT]
-                        layout_key = shadow_widget_key(
-                            "chart_compare_layout",
-                            saved if saved in choices else choices[0],
-                        )
-
-                        def choose_chart_layout():
-                            write_through(
-                                SINGLE_COMPARE_LAYOUT, st.session_state[layout_key]
-                            )
-
-                        callback["on_change"] = choose_chart_layout
-
+                    )
+                    chart_layout = not animate and chart_fields != ("x", "y")
                     _labeled(
                         st,
                         "segmented_control",
                         "Layout",
-                        options=choices,
+                        options=["Overlay", "Side by side", "Stacked"],
                         required=True,
                         format_func=lambda value: (
                             "Top & bottom" if value == "Stacked" else value
@@ -7294,8 +7415,7 @@ def render_single_trial_tab(
                         # column leaves; at the popovers' width they wrap.
                         label_width=0.2,
                         width="stretch",
-                        key=layout_key,
-                        **callback,
+                        key=SINGLE_COMPARE_LAYOUT,
                         persist_state="session",
                         disabled=cmp_disabled or animate,
                         help=_gated_help(
@@ -7314,16 +7434,23 @@ def render_single_trial_tab(
                             "comes back when you turn it off."
                         )
                     # Overlay pools both trials into one axis range, so
-                    # across datasets it is allowed only when both were
-                    # recorded on the same screen size. This note
+                    # across datasets an overlay with a screen-position axis
+                    # is allowed only when both were recorded on the same
+                    # screen size. This note
                     # stays generic. The caption under the
                     # figure has the specific answer, and the resolve happens
                     # there too, *without* rewriting the key, so a
                     # same-dataset pair gets the user's Overlay back.
+                    # A reading chart draws no word boxes, so only a screen
+                    # overlay has a stimulus to choose.
                     overlaid = animate or (
                         stored_layout == "Overlay" and not chart_layout
                     )
-                    if _compare_source_name() is not None and overlaid:
+                    screen_gated = overlaid or (
+                        stored_layout == "Overlay"
+                        and chart_axes.in_screen_pixels(chart_fields)
+                    )
+                    if _compare_source_name() is not None and screen_gated:
                         st.caption(
                             "Across datasets, Overlay needs both to be recorded on "
                             "the same screen size."
@@ -7582,7 +7709,12 @@ def render_single_trial_tab(
     # so switching back to a same-dataset pair restores the user's Overlay.
     compare_layout = requested_layout
     chart_comparison = comparing and not animate and fields != ("x", "y")
-    if compare_layout == "overlay" and (chart_comparison or not compare_comparable):
+    # Screens of different sizes refuse an overlay only where an axis is in
+    # screen pixels; a chart of indices, durations or clocks overlays on any.
+    screen_refused = not compare_comparable and (
+        not chart_comparison or chart_axes.in_screen_pixels(fields)
+    )
+    if compare_layout == "overlay" and screen_refused:
         compare_layout = "side_by_side"
     # Widget label -> the wire/settings vocabulary the builders take.
     compare_stimulus = {"Both": "both", "A": "a", "B": "b"}.get(
@@ -7968,8 +8100,9 @@ def render_single_trial_tab(
                 # B's own screen, from its own navigator (`screen_b=`).
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
+                # Only a screen overlay draws word boxes to choose between.
                 compare_stimulus=str(compare_stimulus)
-                if compare_layout == "overlay"
+                if compare_layout == "overlay" and not chart_comparison
                 else "both",
                 dataset=_dataset_label(compare_meta["dataset"])
                 if compare_meta.get("dataset")
@@ -8202,7 +8335,7 @@ def render_single_trial_tab(
                     # resolve.
                     setup_note=(
                         f"{compare_setup_note} They are shown side by side instead."
-                        if compare_layout != requested_layout and not chart_comparison
+                        if compare_layout != requested_layout
                         else compare_setup_note
                     ),
                     primary_combo_row=primary_combo_row,
@@ -8388,6 +8521,18 @@ def render_single_trial_tab(
         subtab_labels = subtab_labels_for(
             simple, line_assignment=drift_correction_enabled()
         )
+        # A link's `?match=` opens Comparisons until the subtab has read it;
+        # Essentials, which has no Comparisons, says where it is instead.
+        match_link = st.session_state.get(MATCH_LINK_STATE_KEY)
+        match_waiting = bool(match_link) and not match_link.get("done")
+        if match_waiting and not simple:
+            st.session_state["single_subtab"] = SUBTAB_COMPARISONS
+        link_note = st.container()
+        if match_waiting and simple:
+            link_note.info(
+                "This link opens the Comparisons subtab, which only Full shows. "
+                "Switch to Full to see it."
+            )
         # The bar's identity includes its labels, so a mode switch makes it a
         # new widget that would start on its first tab. Writing the selection
         # back before the bar is created carries it over, and a subtab the mode
@@ -8415,6 +8560,12 @@ def render_single_trial_tab(
             on_change="rerun",
         )
         by_label = dict(zip(subtab_labels, _subtabs))
+        # Share → Link carries the Match field only when shared from Comparisons.
+        if st.session_state.get("single_subtab") not in (
+            SUBTAB_COMPARISONS,
+            SUBTAB_SHARE,
+        ):
+            st.session_state.pop(MATCH_SHARE_STATE_KEY, None)
         tab_annot = by_label.get(SUBTAB_ANNOTATIONS)
         tab_stim = by_label.get(SUBTAB_STIMULUS)
         tab_compare = by_label.get(SUBTAB_COMPARISONS)
@@ -9274,9 +9425,9 @@ def _render_comparison_figure(
     canvas_a = (int(settings.canvas_width), int(settings.canvas_height))
     # B's panel is drawn to B's own screen — its selected screen's canvas,
     # else its dataset's (`_build_compare_meta`). Only the split layouts read
-    # it; an overlay of two different screens never gets here (the caller
-    # resolves it to a split layout), and that holds within one dataset as
-    # much as across two.
+    # it; a screen-axis overlay of two different screens never gets here (the
+    # caller resolves it to a split layout), and that holds within one dataset
+    # as much as across two. A reading-chart overlay may, and draws no canvas.
     canvas_b = (compare_meta or {}).get("canvas")
     canvas_b = tuple(int(v) for v in canvas_b) if canvas_b is not None else None
     # Always stated, as `api.compare_scanpaths` states it: with no `canvas_b`
@@ -9375,11 +9526,16 @@ def _render_comparison_figure(
     _render_true_scale_chart(
         fig_compare, key="compare", download_name=download_name, fit_window=True
     )
-    overlaid = layout == "overlay"
     # Only where the figure is misleading (see the note's docstring): a split
-    # layout comparing two texts is a legitimate thing to do.
+    # layout comparing two texts is a legitimate thing to do, and a reading
+    # chart draws no word boxes to stack.
+    fields = (settings.x_field, settings.y_field)
+    word_axis = "word_id" in fields
+    overlaid = layout == "overlay" and (fields == ("x", "y") or word_axis)
     text_note = (
-        _different_texts_note(primary_text_id, compare_text_id) if overlaid else None
+        _different_texts_note(primary_text_id, compare_text_id, word_axis=word_axis)
+        if overlaid
+        else None
     )
     if text_note:
         st.warning(text_note, icon=ICONS["warning"])
@@ -10588,6 +10744,73 @@ def _open_measure_mapping() -> None:
 
     _open_mapping_editor()
     _go_data()
+
+
+def _funnel_state_css(active: bool) -> str:
+    """The Scanpath funnel's *filters on* look: an accent outline and a dot.
+
+    A style-only block, which Streamlit places outside the layout. CSS rather
+    than a different label or key: either would remount the popover while it is
+    open, which is exactly when a filter gets turned on.
+    """
+    if not active:
+        return "<style></style>"
+    button = ".st-key-iconpop_filter_trials button"
+    return (
+        f"<style>{button} {{ position: relative;"
+        " border-color: var(--sps-accent) !important; }"
+        f" {button}::after {{ content: ''; position: absolute; top: 3px;"
+        " right: 3px; width: 7px; height: 7px; border-radius: 50%;"
+        " background: var(--sps-accent); }</style>"
+    )
+
+
+def filter_scope_line(
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+) -> str | None:
+    """The Scanpath view's *what the filters keep* line, or None when none is on.
+
+    The counts are the trial picker's pool against the dataset's, so the slider's
+    ``n/N`` can be read as a share of the whole dataset.
+    """
+    if not has_active_trial_filters():
+        return None
+    described = " · ".join(
+        md_literal(format_filter_item(i))
+        for i in active_filter_items(words_all, fixations_all)
+    )
+    text = f"**Filtered:** {len(combos):,} of {plural(len(combos_all), 'trial')}"
+    return f"{text} · {described}" if described else text
+
+
+def _render_filter_scope(
+    host,
+    combos: pd.DataFrame,
+    combos_all: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
+) -> None:
+    """Draw `filter_scope_line` with a one-click way out, into ``host``.
+
+    Shown in both modes: Essentials hides the funnel, not the filters a link
+    or a Full-mode session set, so this line is the only sign of them there.
+    """
+    text = filter_scope_line(combos, combos_all, words_all, fixations_all)
+    if text is None:
+        return
+    row = host.container(horizontal=True, vertical_alignment="center", gap="small")
+    row.caption(f"{ICONS['trial_filter']} {text}", width="content")
+    row.button(
+        "Clear filters",
+        icon=ICONS["close"],
+        key="trial_filter_scope_clear",
+        type="tertiary",
+        on_click=clear_trial_filters_from_outside,
+        help="Reset every trial filter.",
+    )
 
 
 def _render_pool_filters(
@@ -13437,6 +13660,11 @@ _MATCH_LABELS = {
     _MATCH_SAME_TEXT: "Same text — other participants",
     _MATCH_SAME_PARTICIPANT: "Same participant — other texts",
 }
+#: How a link (``?match=``) spells the two choices above.
+_MATCH_LINK_SPELLINGS = {
+    _MATCH_SAME_TEXT: "same_text",
+    _MATCH_SAME_PARTICIPANT: "same_participant",
+}
 #: Ids and orderings the two choices above cover, or that select one trial:
 #: never offered as a condition field of their own.
 _MATCH_NOT_A_CONDITION = frozenset(
@@ -13474,6 +13702,55 @@ def _match_options(fixations: pd.DataFrame, names: ColumnNames) -> list[str]:
         seen.add(label)
         options.append(column)
     return options
+
+
+def match_from_link(value: str, options: list[str], names: ColumnNames) -> str | None:
+    """The *Match* option a link's ``match=`` value names, or ``None``.
+
+    Tried in order: an option exactly (a column's canonical name, or
+    ``@same_text`` / ``@same_participant``), a column by the dataset's own name,
+    then ``same_text`` / ``same_participant``.
+    """
+    value = str(value)
+    if value in options:
+        return value
+    for option in options:
+        if option not in _MATCH_LINK_SPELLINGS and names.display(option) == value:
+            return option
+    for option, spelled in _MATCH_LINK_SPELLINGS.items():
+        if spelled == value and option in options:
+            return option
+    return None
+
+
+def match_link_value(choice: str, options: list[str], names: ColumnNames) -> str:
+    """How a link spells the *Match* ``choice``, one of ``options``.
+
+    A column by the dataset's own name and the two choices before them as
+    ``same_text`` / ``same_participant``, unless :func:`match_from_link` would
+    read that spelling as another option; then the option itself.
+    """
+    spelled = _MATCH_LINK_SPELLINGS.get(choice) or names.display(choice)
+    return spelled if match_from_link(spelled, options, names) == choice else choice
+
+
+def _check_match_link(options: list[str], names: ColumnNames) -> None:
+    """Apply a link's ``match=`` the first time the options are known, and keep
+    saying so while it named none of them."""
+    link = st.session_state.get(MATCH_LINK_STATE_KEY)
+    if not link:
+        return
+    if not link.get("done"):
+        link["done"] = True
+        choice = match_from_link(link["value"], options, names)
+        if choice is None:
+            link["rejected"] = True
+        else:
+            st.session_state["multi_gen_col"] = choice
+    if link.get("rejected"):
+        from scanpath_studio.url_state import _warn_invalid_link_param
+
+        _warn_invalid_link_param(PARAM_MATCH, link["value"])
 
 
 def _resolve_match(choice: str, fixations: pd.DataFrame) -> tuple[str, str | None]:
@@ -13547,6 +13824,93 @@ def _collect_generations(
             continue
         candidates[reading] = group
     return dict(sorted(candidates.items(), key=lambda item: _reading_order(item[0])))
+
+
+_VIEW_GRID = MULTI_VIEW_GRID
+_VIEW_OVERLAY = MULTI_VIEW_OVERLAY
+#: The Comparisons subtab's *View* choices, the default first.
+_COMPARISON_VIEWS = (_VIEW_GRID, _VIEW_OVERLAY)
+
+
+def _overlay_refusal(axes, trial_fixations, frames, text_col) -> str | None:
+    """Why the Comparisons overlay cannot draw the selected trial with
+    ``frames``, else ``None``. On screen axes every reading is drawn over the
+    selected trial's word boxes, so each must read its text; a reading chart
+    has no boxes. On the session clock readings recorded apart would each take
+    a sliver of one long axis."""
+    if "timestamp_ms" in axes:
+        return (
+            "An overlay on the session clock puts readings recorded at different "
+            "times far apart on one axis. Showing the grid: choose Seconds since "
+            "first fixation onset to overlay them."
+        )
+    if axes == ("x", "y") and not _all_read_the_selected_text(
+        trial_fixations, frames, text_col
+    ):
+        return (
+            "An overlay on the screen draws every reading over the selected "
+            "trial's word boxes, so it needs readings of the same text. Showing "
+            "the grid: match on the text, or choose chart axes such as Fixation "
+            "order by Word ID."
+        )
+    return None
+
+
+def _render_comparison_overlay(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    matches: list[tuple[tuple, pd.DataFrame]],
+    *,
+    captions: dict,
+    nld_by_gen: dict,
+    axes: tuple[str, str],
+    options: dict,
+    text_col: str | None,
+) -> None:
+    """The Comparisons overlay: the selected trial and the page's matches on
+    one figure, each in its own colour (`overlay_reading_color`, the colours
+    the chip table names its rows in) and named in the legend as its panel
+    would be. A reading that cannot be placed on ``axes`` keeps its colour and
+    is said to be missing."""
+    readings = [("Selected", trial_fixations)]
+    missing = []
+    for name, fix in matches:
+        label = captions[name]
+        nld = nld_by_gen.get(name)
+        if nld is not None and pd.notna(nld):
+            label = f"{label} · NLD {nld:.2f}"
+        if chart_axes.drawable_fixations(axes, fix):
+            readings.append((label, fix))
+        else:
+            # An empty frame holds its place, so the colours stay the chips'.
+            readings.append((label, fix.iloc[:0]))
+            missing.append(captions[name])
+    if "word_id" in axes and not _all_read_the_selected_text(
+        trial_fixations, [fix for _name, fix in matches], text_col
+    ):
+        st.warning(
+            "These readings are of different texts. An overlay puts them on one "
+            "word axis, so word *n* of one text sits on word *n* of another. "
+            "Match on the text, or set **View** to **Grid**."
+        )
+    on_chart = axes != ("x", "y")
+    aspect = (
+        0.6 if on_chart else options["canvas_height"] / (options["canvas_width"] or 1)
+    )
+    _render_true_scale_chart(
+        # The overlay draws no raw gaze: its colours name readings.
+        make_readings_overlay_figure(
+            trial_words,
+            readings,
+            **{k: v for k, v in options.items() if k != "raw_gaze"},
+        ),
+        key="multi_overlay",
+        max_height=int(1200 * aspect) + 24,
+    )
+    if missing:
+        st.caption(
+            "Not drawn, without a value on both axes: " + ", ".join(missing) + "."
+        )
 
 
 def _all_read_the_selected_text(trial_fixations, frames, text_col) -> bool:
@@ -13713,6 +14077,27 @@ def _comparison_trial_words(
     )
 
 
+def _shared_chart_range(frames: list[pd.DataFrame], field: str) -> list[float] | None:
+    """One padded ``[min, max]`` of ``field`` over ``frames``, or ``None``.
+
+    ``None`` when no frame has a finite value there, so the caller keeps each
+    panel's own autorange."""
+    values = (
+        pd.concat(
+            [pd.to_numeric(f[field], errors="coerce") for f in frames if field in f],
+            ignore_index=True,
+        )
+        if any(field in f for f in frames)
+        else pd.Series(dtype=float)
+    )
+    values = values[np.isfinite(values)]
+    if values.empty:
+        return None
+    low, high = float(values.min()), float(values.max())
+    pad = max((high - low) * 0.02, 0.5)
+    return [low - pad, high + pad]
+
+
 def _comparison_panel_settings(base_settings: dict) -> dict:
     """Comparable grid settings without hiding the main plot's stimulus text."""
     settings = {
@@ -13746,9 +14131,21 @@ def _panel_captions(choice: str, panels: dict, text_col, reading_labels: dict) -
     """:func:`_match_panel_caption` for each grid panel, made unique: a
     caption two panels share — one participant's two readings of a text, two
     readers' trials of one id — names its reading as well."""
+    # A condition match whose panels are all one trial (several readers'
+    # readings filed under one trial id, matched on a field they share)
+    # would caption every panel with that same trial: name each by its
+    # participant, as *Same text* does, so the panels read apart.
+    trials = {reading[1] for reading in panels}
+    one_trial = choice not in (_MATCH_SAME_TEXT, _MATCH_SAME_PARTICIPANT) and (
+        len(panels) > 1 and len(trials) == 1
+    )
     return _distinct_labels(
         {
-            reading: _match_panel_caption(choice, fix, text_col)
+            reading: (
+                _match_panel_caption(_MATCH_SAME_TEXT, fix, text_col)
+                if one_trial
+                else _match_panel_caption(choice, fix, text_col)
+            )
             for reading, fix in panels.items()
         },
         lambda reading, caption: f"{caption} ({reading_labels[reading]})",
@@ -13788,12 +14185,26 @@ def render_multiple_comparison_tab(
     st.caption(
         "Browse related readings by selecting a field they share with this trial."
     )
-    if trial_words.empty or trial_fixations.empty:
-        st.info("This trial has no word boxes or no fixations. Pick another trial.")
-        return
-
+    # Written again below once a field is chosen, so an early return leaves
+    # Share no field from an earlier reading.
+    st.session_state.pop(MATCH_SHARE_STATE_KEY, None)
     names = active_all(st.session_state)
     match_options = _match_options(fixations_filtered, names)
+    _check_match_link(match_options, names)
+    # A reading chart places fixations by their own fields, so only the screen
+    # view needs the trial's word boxes.
+    axes = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+    on_chart = axes != ("x", "y")
+    if trial_fixations.empty:
+        st.info("This trial has no fixations. Pick another trial.")
+        return
+    if trial_words.empty and not on_chart:
+        st.info(
+            "This trial has no word boxes. Pick another trial, or choose chart "
+            "axes such as Fixation order by Word ID."
+        )
+        return
+
     if not match_options:
         st.info("No field to match trials on.")
         return
@@ -13809,10 +14220,12 @@ def render_multiple_comparison_tab(
     # One `label | field` row whose first label sits in the subtabs' own
     # label column (`PANEL_LABEL_W`); what *Match field* does is its hover help,
     # not a caption beside it repeating the same thing.
-    match_label_col, match_col, cols_label_col, cols_col = st.columns(
-        [PANEL_LABEL_W, 0.44, 0.09, 0.27],
-        gap=LABEL_GAP,
-        vertical_alignment="center",
+    match_label_col, match_col, view_label_col, view_col, cols_label_col, cols_col = (
+        st.columns(
+            [PANEL_LABEL_W, 0.3, 0.06, 0.16, 0.08, 0.2],
+            gap=LABEL_GAP,
+            vertical_alignment="center",
+        )
     )
     match_help = "Shows the other trials that share the selected trial's value here."
     row_label(match_label_col, "Match field", match_help)
@@ -13824,7 +14237,27 @@ def render_multiple_comparison_tab(
         help=match_help,
         label_visibility="collapsed",
     )
-    cols_help = "Panels per row."
+    st.session_state[MATCH_SHARE_STATE_KEY] = match_link_value(
+        choice, match_options, names
+    )
+    view_help = (
+        "Grid draws each match in its own panel. Overlay draws the selected "
+        "trial and the page's matches on one figure, each in its own colour."
+    )
+    row_label(view_label_col, "View", view_help)
+    # A deselected segment (or no choice yet) is the grid.
+    if st.session_state.get(MULTI_VIEW) not in _COMPARISON_VIEWS:
+        st.session_state[MULTI_VIEW] = _VIEW_GRID
+    view_col.segmented_control(
+        "View",
+        options=list(_COMPARISON_VIEWS),
+        key=MULTI_VIEW,
+        help=view_help,
+        label_visibility="collapsed",
+        persist_state="session",
+    )
+    overlay_chosen = st.session_state.get(MULTI_VIEW) == _VIEW_OVERLAY
+    cols_help = "Panels per row, in the grid."
     row_label(cols_label_col, "Columns", cols_help)
     n_cols = cols_col.slider(
         "Columns",
@@ -13862,35 +14295,50 @@ def render_multiple_comparison_tab(
         st.info(f"No other trial in the filters matches **{match_labels[choice]}**.")
         return
 
-    # Reuse the user's viz toggles but force a clean, comparable spatial view: the
-    # grid is inherently spatial, and a generation frame may lack the selected
-    # trial's extra columns, so pin axes to x/y, colour by duration_ms (present in
-    # every frame), and turn off heatmap / raw gaze / by-line / flags (they group
-    # by (participant_id, trial_id) against trial_words and would mis-render).
+    # Reuse the user's viz toggles but force a clean, comparable view: turn off
+    # heatmap / raw gaze / by-line / flags (they group by (participant_id,
+    # trial_id) against trial_words and would mis-render). The axes follow the
+    # rail's, so a chart of fixation order x word id compares readings as the
+    # plot above draws one; a panel whose frame lacks either field falls back
+    # to screen x / y.
     base_settings = _build_figure_settings(viz_settings, False)
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
     base_settings["scale_text_to_boxes"] = scale_text_to_boxes
     panel_settings = _comparison_panel_settings(base_settings)
 
-    def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
-        return _panel_figure(
-            words,
-            fix,
-            {
-                "canvas_width": int(canvas_width),
-                "canvas_height": int(canvas_height),
-                "base_font_size": int(base_font_size),
-                "font_family": font_family,
-                "x_field": "x",
-                "y_field": "y",
-                "column_labels": active_figure_labels(
-                    st.session_state, words=words.columns, fixations=fix.columns
-                ),
-                "color_categories": color_categories,
-                **settings,
-            },
+    def _panel_options(fields: tuple[str, str], settings: dict = panel_settings):
+        return {
+            "canvas_width": int(canvas_width),
+            "canvas_height": int(canvas_height),
+            "base_font_size": int(base_font_size),
+            "font_family": font_family,
+            "x_field": fields[0],
+            "y_field": fields[1],
+            "column_labels": active_figure_labels(
+                st.session_state,
+                words=words_filtered.columns,
+                fixations=fixations_filtered.columns,
+            ),
+            "color_categories": color_categories,
+            **settings,
+        }
+
+    def _make_fig(
+        words: pd.DataFrame,
+        fix: pd.DataFrame,
+        settings: dict,
+        x_range: list[float] | None = None,
+    ):
+        # Computed axes (elapsed seconds) count as present when the frame
+        # has what they are computed from.
+        x_field, y_field = (
+            axes if chart_axes.drawable_fixations(axes, fix) else ("x", "y")
         )
+        fig = _panel_figure(words, fix, _panel_options((x_field, y_field), settings))
+        if x_range is not None and (x_field, y_field) == axes:
+            fig.update_xaxes(range=x_range, autorange=False)
+        return fig
 
     with st.container():
         # Score the matches against the selected scanpath — at most
@@ -13965,6 +14413,19 @@ def render_multiple_comparison_tab(
             name: _comparison_trial_words(words_filtered, candidates[name])
             for name in grid_names
         }
+        refusal = (
+            _overlay_refusal(
+                axes,
+                trial_fixations,
+                [candidates[name] for name in grid_names],
+                text_col,
+            )
+            if overlay_chosen
+            else None
+        )
+        if refusal:
+            st.info(refusal)
+        overlay = overlay_chosen and refusal is None
         # The chips above the plot, for the selected trial and the page's
         # matches — one row each, so they compare down each column.
         chip_fields = st.session_state.get("trial_chip_fields") or []
@@ -13999,14 +14460,42 @@ def render_multiple_comparison_tab(
                         for name in grid_names
                     ),
                 ],
+                colors=(
+                    [overlay_reading_color(i) for i in range(len(grid_names) + 1)]
+                    if overlay
+                    else None
+                ),
             )
+        if overlay:
+            _render_comparison_overlay(
+                trial_words,
+                trial_fixations,
+                [(name, candidates[name]) for name in grid_names],
+                captions=captions,
+                nld_by_gen=nld_by_gen,
+                axes=axes,
+                options=_panel_options(axes),
+                text_col=text_col,
+            )
+        # On chart axes the page's panels share one X range, so a longer
+        # scanpath reads as longer rather than as the same width squeezed. Not
+        # on an absolute clock: readings recorded apart would each fill a sliver.
+        page_x_range = (
+            _shared_chart_range(
+                [candidates[name] for name in grid_names] + [trial_fixations],
+                axes[0],
+            )
+            if on_chart and axes[0] != "timestamp_ms"
+            else None
+        )
         # Estimate a uniform cell height from the figure aspect + column count so
-        # panels line up and don't leave a tall whitespace band below each.
-        aspect = float(canvas_height) / float(canvas_width or 1)
+        # panels line up and don't leave a tall whitespace band below each. A
+        # chart has no screen, so it takes a fixed landscape aspect.
+        aspect = 0.6 if on_chart else float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
-        for start in range(0, len(grid_names), n_cols):
+        for start in range(0, 0 if overlay else len(grid_names), n_cols):
             row_names = grid_names[start : start + n_cols]
             grid_cols = st.columns(n_cols)
             for offset, (cell, name) in enumerate(zip(grid_cols, row_names)):
@@ -14022,7 +14511,7 @@ def render_multiple_comparison_tab(
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
-                        _make_fig(words, fix, panel_settings),
+                        _make_fig(words, fix, panel_settings, page_x_range),
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
@@ -14209,8 +14698,13 @@ _RECORDING_TABLES = {
     ),
 }
 
-# The Texts table's column naming the screens its readers saw differently.
+# The Texts and Stimuli tables' column naming the screens readers saw
+# differently, and the sentence their caption adds when it is there.
 STIMULUS_VERSIONS_COLUMN = "Differs by reader"
+STIMULUS_VERSIONS_NOTE = (
+    "Where readers saw different versions of a text, each version is"
+    " shown with the readers who saw it."
+)
 
 _ENTITY_TABLES = {
     "participant": (
@@ -14410,10 +14904,7 @@ def _render_raw_metadata_tab(
         )
         return
     if STIMULUS_VERSIONS_COLUMN in derived.columns:
-        description += (
-            " Where readers saw different versions of a text, each version is"
-            " shown with the readers who saw it."
-        )
+        description += " " + STIMULUS_VERSIONS_NOTE
     st.caption(description)
     names = active_column_names(st.session_state, "fixations")
     st.dataframe(
@@ -14446,6 +14937,10 @@ def _build_stimuli_table_cached(
     marker — naming the screen's kind when the data has one — with a
     *# Screens* column beside.
 
+    A word whose id is blank is a word of its own, never merged with another
+    blank one (:func:`_blank_id_ranks`); such words follow the numbered words
+    of their line, in the order of their place on the screen.
+
     Readers need not all have seen the same words (:func:`_reader_versions`):
     a screen — or a single-screen text — that two readers saw differently is
     shown once per version, the most-seen first, each marked ``seen by`` its
@@ -14468,6 +14963,8 @@ def _build_stimuli_table_cached(
             "screen_kind",
             "word_id",
             "line_idx",
+            "x",
+            "y",
             "text",
         )
         if c in _words.columns
@@ -14511,6 +15008,8 @@ def _build_stimuli_table_cached(
     word_key = ["text_id", *([SCREEN_ID] if multipart else [])]
     # The word as the passage shows it: a blank cell shows nothing.
     sub["_word"] = sub["text"].astype("string").replace({"": pd.NA, "nan": pd.NA})
+    if "word_id" in sub.columns:
+        sub["_blank_rank"] = _blank_id_ranks(sub, [*word_key, *reading])
     seen_by = None
     if "word_id" in sub.columns and reading:
         sub["_version"], seen_by = _reader_versions(sub, word_key, reading)
@@ -14518,14 +15017,17 @@ def _build_stimuli_table_cached(
         sub["_version"] = 0
     if "word_id" in sub.columns:
         # Of a word id listed twice, keep the first that shows a word — the one
-        # its version was told apart by.
+        # its version was told apart by. Words without an id are told apart by
+        # their rank, so each stays a word of its own.
         shown_first = np.argsort(sub["_word"].isna().to_numpy(), kind="stable")
         sub = sub.iloc[shown_first].drop_duplicates(
-            subset=[*word_key, "_version", "word_id"]
+            subset=[*word_key, "_version", "word_id", "_blank_rank"]
         )
     else:
         sub = sub.drop_duplicates(
-            subset=[c for c in sub.columns if c not in (SCREEN_INDEX, *reading)]
+            subset=[
+                c for c in sub.columns if c not in (SCREEN_INDEX, "x", "y", *reading)
+            ]
         )
     if seen_by is not None and not seen_by.empty:
         sub = sub.merge(seen_by, on=[*word_key, "_version"], how="left")
@@ -14538,7 +15040,7 @@ def _build_stimuli_table_cached(
         ["text_id"]
         + screen_sort
         + ["_version"]
-        + [c for c in ("line_idx", "word_id") if c in sub.columns]
+        + [c for c in ("line_idx", "word_id", "_blank_rank") if c in sub.columns]
     )
     sub = sub.sort_values(sort_cols, kind="stable", na_position="last")
 
@@ -14640,12 +15142,47 @@ def _build_stimuli_table_cached(
     return result[[c for c in ordered if c in result.columns]]
 
 
+def _blank_id_ranks(sub: pd.DataFrame, reading: list[str]) -> np.ndarray:
+    """Each shown word's place among its reading's words that have no id.
+
+    A blank word id stays blank: it names no word, so two words without one
+    are two words, not one listed twice. Each shown word (``_word``) whose id
+    is missing gets its rank within its ``reading`` (the unit and reading
+    columns) by line, then top to bottom, left to right, then word, 0, 1, …;
+    every other row gets -1. ``y`` comes before ``x`` because ``line_idx`` is
+    often one value for every row of an IA export. Without positions the word
+    itself decides, so the order never depends on the order of the rows. The
+    rank tells such words apart where a word id would; a row listed twice
+    (same place, same word) keeps one rank, as a word id listed twice is one
+    word.
+    """
+    rank = np.full(len(sub), -1, dtype=int)
+    blank = (sub["word_id"].isna() & sub["_word"].notna()).to_numpy()
+    if not blank.any():
+        return rank
+    rows = sub.loc[blank, reading].copy()
+    order = [c for c in ("line_idx", "y", "x") if c in sub.columns]
+    for column in order:
+        rows[f"_by_{column}"] = pd.to_numeric(sub.loc[blank, column], errors="coerce")
+    rows["_by_word"] = sub.loc[blank, "_word"]
+    rows["_row"] = np.flatnonzero(blank)
+    by = [*(f"_by_{c}" for c in order), "_by_word"]
+    rows = rows.sort_values(by, kind="stable", na_position="last")
+    new = (~rows.duplicated(subset=[*reading, *by])).astype(int)
+    ranks = (
+        new.groupby([rows[c] for c in reading], sort=False, dropna=False).cumsum() - 1
+    )
+    rank[rows["_row"].to_numpy()] = ranks.to_numpy()
+    return rank
+
+
 def _reader_versions(
     sub: pd.DataFrame, unit: list[str], reading: list[str]
 ) -> tuple[np.ndarray, pd.DataFrame]:
     """Each word row's version of its ``unit`` (a text, or one screen of it).
 
-    A reading's version is the set of its ``(word id, word)`` pairs, taking
+    A reading's version is the set of its ``(word id, word)`` pairs — a word
+    without an id paired with its rank among those (``_blank_rank``) — taking
     the words the passage shows (``_word``: no blank cells, the first word of an
     id listed twice): readings that saw the same words under the same ids share
     one, while an answer order drawn per reader, or feedback on the reader's own
@@ -14661,13 +15198,17 @@ def _reader_versions(
         sub.groupby([*unit, *reading], sort=False, dropna=False).ngroup().to_numpy()
     )
     word_hash = pd.util.hash_pandas_object(
-        sub[["word_id", "_word"]], index=False
+        sub[["word_id", "_blank_rank", "_word"]], index=False
     ).to_numpy()
-    # Each reading's first shown word per word id; the uint64 sum wraps, so it
-    # names the set whatever the row order.
+    # Each reading's first shown word per word id (and rank, for a blank id);
+    # the uint64 sum wraps, so it names the set whatever the row order.
     shown = np.flatnonzero(sub["_word"].notna().to_numpy())
     repeated = pd.DataFrame(
-        {"r": reading_id[shown], "w": sub["word_id"].to_numpy()[shown]}
+        {
+            "r": reading_id[shown],
+            "w": sub["word_id"].to_numpy()[shown],
+            "b": sub["_blank_rank"].to_numpy()[shown],
+        }
     ).duplicated()
     once = np.zeros(len(sub), dtype="uint64")
     once[shown[~repeated.to_numpy()]] = 1
@@ -17502,16 +18043,35 @@ def serious_health_lines(findings) -> list[str]:
     return lines
 
 
-def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
+def _figure_draws_positions(state) -> bool:
+    """Whether the Scanpath figure places fixations by screen position: the
+    replay always does, and a chart does when either axis is screen X or Y."""
+    if state.get("single_animate"):
+        return True
+    return any(
+        state.get(key, axis) in chart_axes.POSITION_FIELDS
+        for key, axis in (("global_x_field", "x"), ("global_y_field", "y"))
+    )
+
+
+def render_data_health_notice(
+    host, words, fixations, raw_gaze, *, positions_drawn: bool = True
+) -> None:
     """A notice on the Scanpath view when the dataset fails a data check badly.
 
     The figure is drawn either way, and looks plausible: a duration mapped to
     a column of words draws every fixation at the smallest size. So when a
     check flags most of a table (`serious_health_lines`), say so above the
     plot and point to 🗂️ Data Management → *Data checks*, where the rows are
-    listed. ``host`` is a slot drawn on every run.
+    listed. ``host`` is a slot drawn on every run. Without ``positions_drawn``
+    (a chart with no screen axis) the checks on screen positions are left out,
+    since that figure draws none.
     """
     findings = _dataset_health_findings(words, fixations, raw_gaze)
+    if not positions_drawn:
+        findings = [
+            f for f in findings if not set(f.columns) & set(chart_axes.POSITION_FIELDS)
+        ]
     lines = serious_health_lines(findings)
     if not lines:
         return
@@ -17799,4 +18359,6 @@ def _render_derived_tables(
                         f"No {label.lower()} table is available for this selection."
                     )
                 else:
+                    if STIMULUS_VERSIONS_COLUMN in table.columns:
+                        st.caption(STIMULUS_VERSIONS_NOTE)
                     _render_raw_table(table)

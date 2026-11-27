@@ -176,6 +176,8 @@ def build_plot_config(
         "axes": {
             "x_field": x_field,
             "y_field": y_field,
+            "reverse_x": bool(state.get("global_reverse_x_axis", False)),
+            "reverse_y": bool(state.get("global_reverse_y_axis", False)),
             "coordinate_grid": bool(figure_settings.get("show_coordinate_grid", False)),
             "coordinate_grid_auto": bool(
                 viz_settings.get("coordinate_grid_auto", True)
@@ -209,6 +211,8 @@ def build_plot_config(
             "full_monitor": figure_settings.get("fit_to_monitor", True),
             # Autoplay the animated replay on load.
             "autoplay": bool(viz_settings.get("anim_autoplay", True)),
+            "grow_fixations": bool(viz_settings.get("anim_grow_fixations", False)),
+            "fade_fixations": bool(viz_settings.get("anim_fade_fixations", False)),
         },
         "illustration": {
             "label_mode": viz_settings.get("illustration_label", "Auto"),

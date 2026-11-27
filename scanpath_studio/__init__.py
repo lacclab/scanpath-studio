@@ -52,7 +52,7 @@ __all__ = [
 # against. `__version__` is the exact build, worked out from it lazily
 # (build_info.py) — "0.35.0" at the release itself,
 # "0.35.0.post3+g8f18219" three commits after it.
-__release__ = "0.49.0"
+__release__ = "0.50.0"
 
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
@@ -70,6 +70,10 @@ _HELD_BACK_EXPORTS = frozenset(
         "trial_summary",
     }
 )
+# The EyeLink import is experimental too (`constants.eyelink_import_enabled`):
+# its entries resolve, and raise without SCANPATH_EXPERIMENTAL=1, but are not
+# listed.
+_HELD_BACK_EXPORTS |= {"add_eyelink_dataset", "import_eyelink", "load_eyelink"}
 # `load_multipleye` is experimental too (`constants.multipleye_format_enabled`):
 # it resolves, and raises without SCANPATH_EXPERIMENTAL=1, but is not listed.
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})

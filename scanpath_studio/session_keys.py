@@ -64,6 +64,12 @@ GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
 GLOBAL_FIXATION_SNAP_TO_LINE = "global_fixation_snap_to_line"
 GLOBAL_FIXATION_SNAP_POSITION = "global_fixation_snap_position"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
+# The replay's current fixation grows over its duration; earlier ones fade.
+GLOBAL_ANIM_GROW_FIXATIONS = "global_anim_grow_fixations"
+GLOBAL_ANIM_FADE_FIXATIONS = "global_anim_fade_fixations"
+# How small a growing fixation starts, and how faint a faded one is.
+GLOBAL_ANIM_GROW_START = "global_anim_grow_start"
+GLOBAL_ANIM_FADE_OPACITY = "global_anim_fade_opacity"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
 # Raw gaze's own style.
@@ -87,6 +93,9 @@ GLOBAL_CRITICAL_SPAN_STYLE = "global_critical_span_style"
 GLOBAL_HIGHLIGHT_COLUMN = "global_highlight_column"
 GLOBAL_X_FIELD = "global_x_field"
 GLOBAL_Y_FIELD = "global_y_field"
+# Run a chart axis the other way (chart axes only).
+GLOBAL_REVERSE_X_AXIS = "global_reverse_x_axis"
+GLOBAL_REVERSE_Y_AXIS = "global_reverse_y_axis"
 GLOBAL_SACCADE_STYLE = "global_saccade_style"
 GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
 # Vertical drift correction.
@@ -230,6 +239,8 @@ DESIGN_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "heatmap_opacity": GLOBAL_HEATMAP_OPACITY,
         "saccade_arrow_size": GLOBAL_SACCADE_ARROW_SIZE,
         "fixation_outline_width": GLOBAL_FIXATION_OUTLINE_WIDTH,
+        "anim_grow_start": GLOBAL_ANIM_GROW_START,
+        "anim_fade_opacity": GLOBAL_ANIM_FADE_OPACITY,
         "fixation_colorbar_length": GLOBAL_FIXATION_COLORBAR_LENGTH,
         "heatmap_colorbar_length": GLOBAL_HEATMAP_COLORBAR_LENGTH,
     }
@@ -287,6 +298,13 @@ SINGLE_ANIMATE = "single_animate"
 #: Show the chips above the plot (default on). Hiding keeps the field
 #: selection (`trial_chip_fields`), so showing them again restores the row.
 SINGLE_SHOW_CHIPS = "single_show_chips"
+#: The Comparisons subtab's view: its matches in a grid of panels, or overlaid
+#: with the selected trial on one figure.
+MULTI_VIEW = "multi_view"
+MULTI_VIEW_GRID = "Grid"
+MULTI_VIEW_OVERLAY = "Overlay"
+#: *View* as a link's ``match_view=`` spells it.
+MATCH_VIEW_LINK_VALUES = {"grid": MULTI_VIEW_GRID, "overlay": MULTI_VIEW_OVERLAY}
 #: The ⚙ Playback replay speed. Mode-local, like `single_animate`, which is
 #: why it is `single_*` rather than `global_*`.
 SINGLE_PLAYBACK_SPEED = "single_playback_speed"
@@ -425,6 +443,12 @@ PARAM_TAB = "tab"
 # preference, so it is read from a link but never written by Share.
 PARAM_UI = "ui"
 PARAM_PREPARE = "prepare"
+# Opens the Comparisons subtab on this *Match field*: a column as the dataset
+# names it, or `same_text` / `same_participant` (`tabs.match_from_link`). Where
+# to look, not a figure setting, so the settings file leaves it out.
+PARAM_MATCH = "match"
+# Beside `match=`: the Comparisons subtab's *View*, `grid` or `overlay`.
+PARAM_MATCH_VIEW = "match_view"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
@@ -544,6 +568,14 @@ REPLAY_FIXATIONS_PARAM = "replay_fixations"
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
 PENDING_COMPARE_STATE_KEY = "_pending_compare"
+#: A link's ``match=``, read once: ``{"value": …}`` until the Comparisons subtab
+#: checks it against the dataset's *Match* options, which marks it ``done`` (and
+#: ``rejected`` when it names none of them).
+MATCH_LINK_STATE_KEY = "_match_link"
+#: How Share → Link spells the *Match field* the Comparisons subtab last showed.
+#: Set while that subtab is drawn and dropped when another one (Share aside)
+#: opens, so a link carries ``match=`` only when shared from Comparisons.
+MATCH_SHARE_STATE_KEY = "_match_share"
 #: B's own screen navigator, seeded by `cmp_screen=` and by a settings file's
 #: `selection.compare.screen_id` (schema 6).
 SINGLE_COMPARE_SCREEN_ID = "single_compare_screen_id"
@@ -576,6 +608,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "snap_fixations": GLOBAL_FIXATION_SNAP_TO_LINE,
         "align_connectors": GLOBAL_ALIGN_CONNECTORS,
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
+        "anim_grow_fixations": GLOBAL_ANIM_GROW_FIXATIONS,
+        "anim_fade_fixations": GLOBAL_ANIM_FADE_FIXATIONS,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
         "show_raw_gaze": GLOBAL_SHOW_RAW_GAZE,
         "show_fixation_colorbar": GLOBAL_SHOW_FIXATION_COLORBAR,
@@ -587,6 +621,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_caption": GLOBAL_SHOW_CAPTION,
         "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
         "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
+        "reverse_x": GLOBAL_REVERSE_X_AXIS,
+        "reverse_y": GLOBAL_REVERSE_Y_AXIS,
         "crop_margin_auto": GLOBAL_CROP_MARGIN_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
@@ -795,6 +831,8 @@ PLOT_CONFIG_LAYER_KEYS: Mapping[str, str] = MappingProxyType(
         "stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
         "full_monitor": GLOBAL_FIT_TO_MONITOR,
         "autoplay": GLOBAL_ANIM_AUTOPLAY,
+        "grow_fixations": GLOBAL_ANIM_GROW_FIXATIONS,
+        "fade_fixations": GLOBAL_ANIM_FADE_FIXATIONS,
     }
 )
 
@@ -835,6 +873,8 @@ URL_SELECTION_PARAMS = frozenset(
         COMPARE_DATASET_ID_PARAM,
         COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
+        PARAM_MATCH,
+        PARAM_MATCH_VIEW,
     }
 )
 
@@ -924,6 +964,8 @@ LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
 URL_OPTIONAL_PARAMS = frozenset(
     {
         PARAM_PREPARE,
+        PARAM_MATCH,
+        PARAM_MATCH_VIEW,
         "word_hover_fields_json",
         "fixation_hover_fields_json",
         *LEGEND_PARAMS,
@@ -1061,6 +1103,8 @@ URL_SEEDED_STATE_KEYS = frozenset(
         DEEPLINK_PARTICIPANT,
         # The one-shot "leave these alone" handoff to the source snap.
         LINK_SETUP_STATE_KEY,
+        # `?match=`, waiting for the Comparisons subtab to check it.
+        MATCH_LINK_STATE_KEY,
     }
 )
 
@@ -1122,6 +1166,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_CROP_MARGIN_AUTO,
         GLOBAL_CROP_MARGIN_PX,
         GLOBAL_ANIM_AUTOPLAY,
+        GLOBAL_ANIM_GROW_FIXATIONS,
+        GLOBAL_ANIM_FADE_FIXATIONS,
         # coloring
         GLOBAL_PALETTE,
         GLOBAL_COLOR_BY,
@@ -1198,6 +1244,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_USE_STIMULUS_FONT_PT,
         GLOBAL_X_FIELD,
         GLOBAL_Y_FIELD,
+        GLOBAL_REVERSE_X_AXIS,
+        GLOBAL_REVERSE_Y_AXIS,
         # text
         GLOBAL_SCALE_TEXT_TO_BOXES,
         GLOBAL_LINE_SPACING,

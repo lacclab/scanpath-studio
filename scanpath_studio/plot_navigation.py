@@ -75,6 +75,7 @@ _DESTINATIONS = {
         None,
         None,
     ),
+    "Reverse or flip a chart axis": ("Axes", None, None),
     "Choose horizontal and vertical axis fields": (
         "Axes",
         None,
@@ -110,6 +111,11 @@ _DESTINATIONS = {
         "plot_detail_legend_layout",
     ),
     "Animation speed, autoplay and smoothness": (None, "plot_menu_animation", None),
+    "Replay: grow the current fixation, fade earlier ones": (
+        None,
+        "plot_menu_animation",
+        None,
+    ),
     "Replay frame timing and frame limit": (
         None,
         "plot_menu_animation",

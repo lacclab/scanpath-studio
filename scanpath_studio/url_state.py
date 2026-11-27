@@ -72,6 +72,7 @@ from .constants import (
     DATA_WORKSPACE_REQUEST,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FADE_OPACITY_BOUNDS,
     FIXATION_DURATION_FLAGS,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
@@ -82,6 +83,7 @@ from .constants import (
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
+    GROW_START_BOUNDS,
     HEATMAP_OPACITY_BOUNDS,
     HEATMAP_SIGMA_BOUNDS,
     ICONS,
@@ -162,10 +164,17 @@ from .session_keys import (
     GLOBAL_SHOW_FIX,
     LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
+    MATCH_LINK_STATE_KEY,
+    MATCH_SHARE_STATE_KEY,
+    MATCH_VIEW_LINK_VALUES,
+    MULTI_VIEW,
+    MULTI_VIEW_OVERLAY,
     PARAM_CORPUS,
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
+    PARAM_MATCH,
+    PARAM_MATCH_VIEW,
     PARAM_PREPARE,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
@@ -524,6 +533,9 @@ _DESIGN_PARAMS = {
     "show_credit": ("global_show_credit", None),
     "plot_frame_color": ("global_plot_frame_color", "color"),
     "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
+    # How small the replay's growing fixation starts, and how faint it fades.
+    "anim_grow_start": ("global_anim_grow_start", GROW_START_BOUNDS),
+    "anim_fade_opacity": ("global_anim_fade_opacity", FADE_OPACITY_BOUNDS),
     "fixation_outline_width": (
         "global_fixation_outline_width",
         FIXATION_OUTLINE_WIDTH_BOUNDS,
@@ -602,6 +614,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "align_connectors": "global_align_connectors",
     # Autoplay the animated replay on load (default on, so always emitted).
     "anim_autoplay": "global_anim_autoplay",
+    # The replay's growing current fixation and fading earlier ones.
+    "anim_grow_fixations": "global_anim_grow_fixations",
+    "anim_fade_fixations": "global_anim_fade_fixations",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     # Each colour scale's bar has its own switch; the one they shared before,
@@ -611,6 +626,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
+    # Run a chart axis the other way.
+    "reverse_x": "global_reverse_x_axis",
+    "reverse_y": "global_reverse_y_axis",
     # Crop to data's margin — automatic, or the px below.
     "crop_margin_auto": "global_crop_margin_auto",
     "hollow_fixations": "global_hollow_fixations",
@@ -1327,6 +1345,9 @@ def _apply_url_preset() -> str | None:
         &cmp_source=corpus&cmp_corpus=potec
                                  → open B from an installed public corpus
         &tab=animation           → select Animation (legacy link)
+        &match=same_text         → open Comparisons on this Match field
+                                   (checked there — see tabs.match_from_link)
+        &match_view=overlay      → … in its Overlay view (only beside match)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -1502,6 +1523,21 @@ def _apply_url_preset() -> str | None:
             st.session_state[_AUTO_REPLAY_FIXATIONS] = True
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
+    # `?match=` waits for the Comparisons subtab, the only place that knows the
+    # dataset's Match options; `setdefault` reads it once, as the link stays in
+    # the address bar for the whole session.
+    if qp.get(PARAM_MATCH) not in (None, ""):
+        st.session_state.setdefault(
+            MATCH_LINK_STATE_KEY, {"value": str(qp[PARAM_MATCH])}
+        )
+        # Its *View*, read only beside it: alone it would open nothing.
+        raw_view = qp.get(PARAM_MATCH_VIEW)
+        if raw_view not in (None, ""):
+            view = MATCH_VIEW_LINK_VALUES.get(str(raw_view).strip().lower())
+            if view is None:
+                _warn_invalid_link_param(PARAM_MATCH_VIEW, raw_view)
+            else:
+                st.session_state.setdefault(MULTI_VIEW, view)
 
     # `?compare=<participant>:<trial>` turns Compare on and parks B's ids for
     # the picker to consume once its candidate list exists (the picker's own
@@ -1901,6 +1937,8 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "stimulus_image": "global_show_stimulus_image",
     "full_monitor": "global_fit_to_monitor",
     "autoplay": "global_anim_autoplay",
+    "grow_fixations": "global_anim_grow_fixations",
+    "fade_fixations": "global_anim_fade_fixations",
 }
 
 
@@ -3491,6 +3529,11 @@ def _restore_plot_config(
             val = axes.get(cfg_key)
             if val is not None:
                 put_valid(val in numeric, state_key, val, label)
+    # Additive: a file saved without them leaves the axes running as they do.
+    if "reverse_x" in axes:
+        put("global_reverse_x_axis", bool(axes["reverse_x"]))
+    if "reverse_y" in axes:
+        put("global_reverse_y_axis", bool(axes["reverse_y"]))
     if "coordinate_grid" in axes:
         put("global_show_coordinate_grid", bool(axes["coordinate_grid"]))
     if "coordinate_grid_auto" in axes:
@@ -4385,6 +4428,11 @@ def _build_share_query(
         )
     if st.session_state.get("share_prepare_figure"):
         params[PARAM_PREPARE] = "1"
+    # Shared from Comparisons, the link reopens it on the same Match field.
+    if st.session_state.get(MATCH_SHARE_STATE_KEY):
+        params[PARAM_MATCH] = str(st.session_state[MATCH_SHARE_STATE_KEY])
+        if st.session_state.get(MULTI_VIEW) == MULTI_VIEW_OVERLAY:
+            params[PARAM_MATCH_VIEW] = "overlay"
     return urlencode(params), caveats
 
 

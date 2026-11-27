@@ -37,19 +37,23 @@ from .code_snippet import (
     source_canvas,
 )
 from .constants import (
+    DEFAULT_FADE_OPACITY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
+    DEFAULT_GROW_START,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FADE_OPACITY_BOUNDS,
     FIXATION_FLAG_CATEGORIES,
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
     FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
+    GROW_START_BOUNDS,
     OPACITY_OPTIONS,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
@@ -59,6 +63,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    eyelink_import_enabled,
     multipleye_format_enabled,
     palette_settings,
     parse_opacity,
@@ -659,6 +664,18 @@ def _render_parser() -> argparse.ArgumentParser:
         )
     else:
         src.set_defaults(multipleye=None)
+    # Experimental, hidden like --multipleye.
+    if eyelink_import_enabled():
+        src.add_argument(
+            "--eyelink-study",
+            metavar="DIR",
+            help="Render from a study folder `scanpath-studio import-eyelink` "
+            "wrote. A participant is a recording, a trial one reading, and "
+            "--screen picks one of its screens by screen ID. The screen is the "
+            "tracker's own display.",
+        )
+    else:
+        src.set_defaults(eyelink_study=None)
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
@@ -1182,6 +1199,11 @@ def _render_parser() -> argparse.ArgumentParser:
             if multipleye_format_enabled()
             else ""
         )
+        + (
+            "the tracker's display for --eyelink-study, "
+            if eyelink_import_enabled()
+            else ""
+        )
         + "otherwise estimated from the data).",
     )
     viz.add_argument(
@@ -1388,6 +1410,20 @@ def _render_parser() -> argparse.ArgumentParser:
         "--y-field",
         metavar="FIELD",
         help="Vertical axis of the static chart (default: y). Takes the same fields as --x-field.",
+    )
+    viz.add_argument(
+        "--reverse-x",
+        dest="reverse_x_axis",
+        action="store_true",
+        help="Run the static chart's horizontal axis right to left (charts only; "
+        "the screen view keeps the stimulus as shown).",
+    )
+    viz.add_argument(
+        "--reverse-y",
+        dest="reverse_y_axis",
+        action="store_true",
+        help="Flip the static chart's vertical axis, so the end at the bottom goes "
+        "to the top (charts only; screen Y already runs top to bottom).",
     )
     viz.add_argument(
         "--crop-to-data",
@@ -1709,6 +1745,34 @@ def _render_parser() -> argparse.ArgumentParser:
         "file starts playing when it opens.",
     )
     viz.add_argument(
+        "--grow-fixations",
+        action="store_true",
+        help="With --animate: the current fixation starts small and reaches "
+        "its full size when its duration has passed.",
+    )
+    viz.add_argument(
+        "--fade-fixations",
+        action="store_true",
+        help="With --animate: draw the fixations before the current one, their "
+        "numbers and the saccades faded.",
+    )
+    viz.add_argument(
+        "--grow-start",
+        type=float,
+        metavar="SHARE",
+        help="With --grow-fixations: the share of its full size a fixation "
+        f"starts at, {GROW_START_BOUNDS[0]:g}–{GROW_START_BOUNDS[1]:g} "
+        f"(default: {DEFAULT_GROW_START:g}).",
+    )
+    viz.add_argument(
+        "--fade-opacity",
+        type=float,
+        metavar="SHARE",
+        help="With --fade-fixations: the share of its opacity what has faded "
+        f"keeps, {FADE_OPACITY_BOUNDS[0]:g}–{FADE_OPACITY_BOUNDS[1]:g} "
+        f"(default: {DEFAULT_FADE_OPACITY:g}).",
+    )
+    viz.add_argument(
         "--anim-grid-step-ms",
         type=float,
         default=None,
@@ -1783,7 +1847,8 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
         help="How A and B are arranged (default: overlay). Across two datasets, "
-        "overlay needs canvases of the same size. Different canvases are "
+        "an overlay with a screen-position axis (x or y) needs canvases of the "
+        "same size; other --x-field/--y-field charts overlay on any. On those axes, different canvases are "
         "refused, so use side-by-side or stacked for them. Matching canvases "
         "that a dataset did not record still overlay, with a warning.",
     )
@@ -1990,6 +2055,27 @@ _NONE_WHEN_EMPTY = frozenset(
     {"word_hover_measure", "word_heatmap_col", "word_heatmap_title"}
 )
 
+#: The replay-only switches, handed to `animate_scanpath` beside the overrides
+#: (`plot_scanpath` takes neither) and only when set.
+ANIMATION_SWITCHES = ("grow_fixations", "fade_fixations")
+#: …and its valued options, handed over the same way when given.
+ANIMATION_VALUES = ("grow_start", "fade_opacity")
+
+
+def _animation_only(args: argparse.Namespace) -> dict:
+    """The replay-only options a command line sets, as `animate_scanpath`
+    keywords."""
+    options = {name: True for name in ANIMATION_SWITCHES if getattr(args, name)}
+    options.update(
+        {
+            name: getattr(args, name)
+            for name in ANIMATION_VALUES
+            if getattr(args, name) is not None
+        }
+    )
+    return options
+
+
 #: …and the switches, as ``option → the value the flag sets``. Passed only when
 #: flipped, so a bare `render` keeps handing the builder its own defaults.
 _SWITCH_OPTION_FLAGS = {
@@ -2003,6 +2089,8 @@ _SWITCH_OPTION_FLAGS = {
     "show_stimulus_image": True,
     "show_plot_frame": False,
     "show_credit": True,
+    "reverse_x_axis": True,
+    "reverse_y_axis": True,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.
@@ -2607,6 +2695,11 @@ def _snippet_data_source(args) -> SnippetSource:
                 "parts": list(args.onestop_part or ["Paragraph"]),
             },
         )
+    if getattr(args, "eyelink_study", None):
+        raise SystemExit(
+            "--print-code does not cover --eyelink-study: its tables are read "
+            "with `load_eyelink(study_dir)`, which no printed figure code reads."
+        )
     if args.multipleye:
         return cs.SnippetSource(
             kind=cs.SOURCE_MULTIPLEYE,
@@ -2678,6 +2771,7 @@ def _print_reproduction_code(
         ):
             if value is not None:
                 settings[name] = value
+        settings.update(_animation_only(args))
         # The co-animation's B-side keywords ride `anim_kwargs`, not
         # `overrides`, for the same reason — without this a printed recipe for
         # `--animate --compare-with … --label-a …` would lose its labels and
@@ -2850,6 +2944,35 @@ def _load_multipleye_render(root: str, participant: str | None):
         root, sessions=[session] if session else None, names="canonical"
     )
     return data, session
+
+
+def _load_eyelink_render(
+    study_dir: str, participant: str | None, trial: str | None = None
+):
+    """`render --eyelink-study`: one participant's tables from the study
+    folder -- the one named, else the study's first (with ``trial``, the first
+    that has it) -- normalized like a dataset added to the app.
+
+    A screen only one table has (a question screen with fixations and no word
+    boxes) is left out, as `api.add_eyelink_dataset` leaves it out. Returns
+    ``(words, fixations, display)``."""
+    from . import api
+    from .eyelink import load_eyelink, shared_screens, study_participants
+
+    if participant is None:
+        # One reading is drawn, so one participant is loaded: the first, or
+        # with -t the first whose fixations have that trial.
+        participant = next(iter(study_participants(study_dir, trial=trial)), None)
+    data = load_eyelink(
+        study_dir, participants=None if participant is None else [participant]
+    )
+    kept = shared_screens(data.words, data.fixations)
+    display = data.display
+    del data
+    words, fixations = api.load_scanpath_data(
+        kept.words, kept.fixations, names="canonical"
+    )
+    return words, fixations, display
 
 
 def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
@@ -3135,6 +3258,7 @@ def render(argv: list[str]) -> None:
         bool(args.potec),
         bool(args.onestop),
         bool(args.multipleye),
+        bool(args.eyelink_study),
     ]
     # Your own tables are words and/or fixations — or raw gaze alone, for a
     # dataset recorded as samples only. Beside any other input, --raw-gaze is
@@ -3149,6 +3273,7 @@ def render(argv: list[str]) -> None:
             "--potec DIR",
             "--onestop DIR",
             *(["--multipleye DIR"] if multipleye_format_enabled() else []),
+            *(["--eyelink-study DIR"] if eyelink_import_enabled() else []),
         ]
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
@@ -3269,19 +3394,26 @@ def render(argv: list[str]) -> None:
         raise SystemExit(
             "--label-a and --label-b go together: name both scanpaths, or neither."
         )
-    # Each panel of a split layout draws its own reading's stimulus, so there is
-    # no shared set of word boxes to pick from — the builder ignores the choice
-    # there. Say so, rather than quietly drawing both.
+    # Each panel of a split layout draws its own reading's stimulus, and a
+    # reading chart draws none, so there is no shared set of word boxes to pick
+    # from — the builder ignores the choice there. Say so, rather than quietly
+    # drawing both.
+    reading_chart = (args.x_field or "x", args.y_field or "y") != ("x", "y")
     if (
         args.compare_with is not None
         and not args.animate
-        and args.compare_layout != "overlay"
+        and (args.compare_layout != "overlay" or reading_chart)
         and args.compare_stimulus != "both"
     ):
         print(
             f"Warning: --compare-stimulus {args.compare_stimulus} only applies to "
-            f"--compare-layout overlay; each {args.compare_layout} panel draws its "
-            "own trial's stimulus. Ignoring it.",
+            + (
+                "a screen overlay; a --x-field/--y-field chart draws no word boxes. "
+                if reading_chart
+                else f"--compare-layout overlay; each {args.compare_layout} panel "
+                "draws its own trial's stimulus. "
+            )
+            + "Ignoring it.",
             file=sys.stderr,
         )
     if args.label_a is not None and args.compare_with is None:
@@ -3398,6 +3530,15 @@ def render(argv: list[str]) -> None:
         # Each fixation carries the session set's monitor (`canvas_width`), so
         # the screen is read off the data.
         canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
+    elif args.eyelink_study:
+        try:
+            words, fixations, display = _load_eyelink_render(
+                args.eyelink_study, args.participant, args.trial
+            )
+        except (ValueError, ImportError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        column_names = {}
+        canvas = canvas or display or api._recorded_screen(words, fixations)
     else:
         manifest = _trial_parts_manifest(args.trial_parts_manifest)
         # Guarded like every other input branch: otherwise a missing file or an
@@ -3698,6 +3839,7 @@ def render(argv: list[str]) -> None:
                 illustration_label=args.illustration_label,
                 anim_grid_step_ms=args.anim_grid_step_ms,
                 anim_max_frames=args.anim_max_frames,
+                **_animation_only(args),
                 **anim_kwargs,
                 **common,
             )
@@ -4378,6 +4520,139 @@ def add(argv: list[str]) -> None:
     )
 
 
+def _import_eyelink_parser() -> argparse.ArgumentParser:
+    """The `import-eyelink` parser (see `_analyze_parser`)."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio import-eyelink",
+        description="Experimental. Read EyeLink recordings (.edf, or .asc already "
+        "converted) into a study folder: fixations, word boxes, stimulus screens "
+        "and trial variables, one session per participant. Needs the optional "
+        "`edf` extra and SR Research's edf2asc. A session unchanged since it was "
+        "read is skipped, so a re-run redoes only what changed. Same as "
+        "api.import_eyelink.",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="+",
+        metavar="PATH",
+        help="An .edf / .asc file, or a folder searched for them.",
+    )
+    parser.add_argument(
+        "--study-dir",
+        required=True,
+        metavar="DIR",
+        help="The study folder to write (and to re-run into).",
+    )
+    parser.add_argument(
+        "--session-dir",
+        metavar="DIR",
+        help="The experiment's session folder, for a single recording.",
+    )
+    parser.add_argument(
+        "--experiment-dir",
+        metavar="DIR",
+        help="The experiment folder; each recording's session folder is found "
+        "in results/<participant>/.",
+    )
+    parser.add_argument(
+        "--raw-gaze", action="store_true", help="Also keep the recorded gaze samples."
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        metavar="N",
+        help="Sessions read at once (default: one fewer than the CPUs, and at "
+        "most 2 with --raw-gaze; 1 reads them in this process).",
+    )
+    parser.add_argument(
+        "--rebuild", action="store_true", help="Read every session again."
+    )
+    parser.add_argument(
+        "--keep-asc",
+        action="store_true",
+        help="Keep the ASC files converted from the EDFs.",
+    )
+    parser.add_argument(
+        "--add",
+        metavar="NAME",
+        help="Then add the study to the app's dataset list under NAME, as `add` "
+        "does. The study is added even when some sessions failed (without them), "
+        "and the command still exits 1.",
+    )
+    parser.add_argument(
+        "--raw-gaze-participants",
+        nargs="+",
+        metavar="P",
+        help="With --add: the participants whose raw gaze the dataset carries.",
+    )
+    return parser
+
+
+def import_eyelink(argv: list[str]) -> None:
+    """Import EyeLink recordings into a study folder (`api.import_eyelink`)."""
+    parser = _import_eyelink_parser()
+    args = parser.parse_args(argv)
+    if args.raw_gaze_participants and not args.add:
+        parser.error("--raw-gaze-participants goes with --add NAME.")
+    from . import api
+
+    def _progress(done: int, total: int, pid: str) -> None:
+        print(f"[{done}/{total}] {pid}", file=sys.stderr)
+
+    if args.raw_gaze and args.workers is None:
+        from .eyelink import default_workers
+
+        workers = default_workers(raw_gaze=True)
+        print(
+            f"Reading {workers} session{'s' if workers != 1 else ''} at a time, "
+            "since raw gaze takes much memory; --workers N changes it.",
+            file=sys.stderr,
+        )
+    try:
+        report = api.import_eyelink(
+            args.paths,
+            args.study_dir,
+            session_dir=args.session_dir,
+            experiment_dir=args.experiment_dir,
+            raw_gaze=args.raw_gaze,
+            workers=args.workers,
+            rebuild=args.rebuild,
+            keep_asc=args.keep_asc,
+            progress=_progress,
+        )
+    except (ValueError, ImportError, FileNotFoundError) as exc:
+        parser.error(str(exc))
+    except (RuntimeError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+    lines = [(pid, "ok") for pid in report.imported]
+    lines += [(pid, "skipped") for pid in report.skipped]
+    lines += [(pid, f"failed: {why}") for pid, why in report.failed.items()]
+    for number, (pid, status) in enumerate(lines, 1):
+        print(f"[{number}/{len(lines)}] {pid} {status}")
+    print(
+        f"Imported {len(report.imported)}, skipped {len(report.skipped)}, "
+        f"failed {len(report.failed)} \u2192 {report.study_dir}"
+    )
+    for pid, notes in report.notes.items():
+        for note in notes:
+            print(f"  {pid}: {note}")
+    if args.add:
+        try:
+            name = api.add_eyelink_dataset(
+                args.add,
+                report.study_dir,
+                raw_gaze_participants=args.raw_gaze_participants,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            parser.error(str(exc))
+        except (RuntimeError, OSError) as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"Added {name!r}.")
+        print("Run `scanpath-studio` to open the app on it.")
+    if report.failed:
+        raise SystemExit(1)
+
+
 def _remove_parser() -> argparse.ArgumentParser:
     """The `remove` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4488,6 +4763,18 @@ def _open_parser() -> argparse.ArgumentParser:
         "--animate", action="store_true", help="Open the replay of the reading."
     )
     parser.add_argument(
+        "--match",
+        metavar="FIELD",
+        help="Open the Comparisons subtab with this Match field: a column as the "
+        "dataset names it, or same_text / same_participant. Opens in Full.",
+    )
+    parser.add_argument(
+        "--match-view",
+        choices=("grid", "overlay"),
+        help="The Comparisons subtab's View for --match: one panel per match "
+        "(grid, the default) or every match on one figure (overlay).",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=8501,
@@ -4583,6 +4870,7 @@ def open_link(argv: list[str]) -> None:
     for key in ("anim_grid_step_ms", "anim_max_frames"):
         if getattr(args, key) is not None:
             options[key] = getattr(args, key)
+    options.update(_animation_only(args))
     if args.fix_index_range:
         options["fix_index_range"] = _parse_fix_index_range(args.fix_index_range)
     if args.illustration_label != "auto":
@@ -4599,6 +4887,8 @@ def open_link(argv: list[str]) -> None:
             screen=args.screen,
             port=args.port,
             animate=args.animate,
+            match=args.match,
+            match_view=args.match_view,
             **options,
         )
     except (TypeError, ValueError) as exc:
@@ -5195,6 +5485,7 @@ _COMMANDS = (
     "publication",
     "check",
     "add",
+    "import-eyelink",
     "remove",
     "annotations",
     "open",
@@ -5209,21 +5500,32 @@ def _commands() -> tuple[str, ...]:
     computed measures (`constants.computed_measures_enabled`)."""
     from .constants import computed_measures_enabled
 
-    if computed_measures_enabled():
-        return _COMMANDS
-    return tuple(c for c in _COMMANDS if c != "analyze")
+    return tuple(
+        c
+        for c in _COMMANDS
+        if (c != "analyze" or computed_measures_enabled())
+        and (c != "import-eyelink" or eyelink_import_enabled())
+    )
 
 
 def _help_text() -> str:
     from .constants import computed_measures_enabled
 
-    if not computed_measures_enabled():
-        return _HELP
-    return _HELP.replace(
-        "  scanpath-studio corpus …",
-        "  scanpath-studio analyze …        export preprocessing + the full measure "
-        "family\n  scanpath-studio corpus …",
-    )
+    text = _HELP
+    if computed_measures_enabled():
+        text = text.replace(
+            "  scanpath-studio corpus …",
+            "  scanpath-studio analyze …        export preprocessing + the full "
+            "measure family\n  scanpath-studio corpus …",
+        )
+    if eyelink_import_enabled():
+        text = text.replace(
+            "  scanpath-studio remove NAME",
+            "  scanpath-studio import-eyelink PATH… --study-dir DIR\n"
+            "                                   read EyeLink recordings into a study "
+            "folder\n  scanpath-studio remove NAME",
+        )
+    return text
 
 
 def _refuse_unknown_command(word: str) -> None:
@@ -5332,6 +5634,15 @@ def main(argv: list[str] | None = None) -> None:
         check(argv[1:])
     elif argv[0] == "add":
         add(argv[1:])
+    elif argv[0] == "import-eyelink":
+        from . import eyelink
+
+        try:
+            eyelink._require_enabled("`import-eyelink`")
+        except ValueError as exc:
+            print(f"scanpath-studio: {exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        import_eyelink(argv[1:])
     elif argv[0] == "remove":
         remove(argv[1:])
     elif argv[0] == "annotations":

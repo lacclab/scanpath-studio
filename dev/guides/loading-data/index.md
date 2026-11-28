@@ -158,7 +158,7 @@ The table has one row per reading: `participant_id`, `trial_id`, `screen_id` for
 
 ## Manage datasets
 
-**Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
+**Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. If your data has no participant column, the participant count reads **Unknown** and the per-participant average is left out. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
 
 Click a table name to jump to its rows. **Tables** shows fixations, words, raw gaze samples, participants, trials and texts on one page. When you attach a participant, trial or text metadata file, that table shows the complete file.
 

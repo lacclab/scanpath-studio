@@ -243,6 +243,27 @@ def test_nested_manifest_maps_arbitrary_source_selectors():
     assert attached["screen_index"].tolist() == [1, 2]
 
 
+def test_a_screen_with_no_fixations_loads_and_draws_its_word_boxes_alone():
+    """A screen the recording missed stays in the trial: it is listed, and it
+    plots its word boxes over an empty fixation layer."""
+    from scanpath_studio.multipart import ScreensWithoutFixationsWarning
+
+    words, fixations = make_multipart_synthetic_data()
+    fixations = fixations[fixations[SCREEN_ID] != "question"]
+    with pytest.warns(ScreensWithoutFixationsWarning, match="multipart_demo/question"):
+        words, fixations = api.load_scanpath_data(words, fixations, names="canonical")
+
+    parts = api.list_parts(words, fixations)
+    assert parts[SCREEN_ID].tolist() == ["intro", "question"]
+    figure = api.plot_scanpath(
+        words, fixations, "synthetic", "multipart_demo", screen="question"
+    )
+    assert figure.layout.width == 800  # the question screen's own canvas
+    # The words, and no fixation or saccade layer.
+    assert [trace.name for trace in figure.data] == ["words"]
+    assert len(figure.data[0].x) == 2
+
+
 def test_parent_render_records_user_selected_transition_timing():
     words, fixations = make_multipart_synthetic_data()
     figures = api.render_parent_trial(

@@ -9,6 +9,7 @@ and export can share the exact same boundary rules without importing Streamlit.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from graphlib import CycleError, TopologicalSorter
 from itertools import pairwise
@@ -305,29 +306,78 @@ def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
     )
 
 
-def validate_matching_parts(words: pd.DataFrame, fixations: pd.DataFrame) -> None:
-    """Reject orphan screens when both normalized reports carry part identity."""
+class ScreensWithoutFixationsWarning(UserWarning):
+    """Some screens have word boxes but no fixations.
+
+    A screen the eye tracker did not record — or one the reader never looked
+    at — is a gap in the data, not a mapping mistake: the screen loads with its
+    word boxes and an empty fixation layer, as a trial only the Words table has
+    does. A ``UserWarning``, so the API and the CLI see it; its own class so
+    the add-dataset wizard and ✏️ Edit dataset can show it on the page."""
+
+
+def _parts(frame: pd.DataFrame) -> set:
+    return set(map(tuple, frame[list(PART_KEY)].drop_duplicates().to_numpy()))
+
+
+def _matching_parts(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[list, list] | None:
+    """``(screens with no words, screens with no fixations)``, or ``None`` when
+    the pair carries no screen identity to compare."""
     if words.empty or fixations.empty:
-        return
+        return None
     if not has_screen_identity(words) and not has_screen_identity(fixations):
-        return
+        return None
     if has_screen_identity(words) != has_screen_identity(fixations):
         raise ValueError(
             "Screen ID is set in only one table; set it in both or neither."
         )
-    word_parts = set(map(tuple, words[list(PART_KEY)].drop_duplicates().to_numpy()))
-    fixation_parts = set(
-        map(tuple, fixations[list(PART_KEY)].drop_duplicates().to_numpy())
+    word_parts = _parts(words)
+    fixation_parts = _parts(fixations)
+    return sorted(fixation_parts - word_parts), sorted(word_parts - fixation_parts)
+
+
+def screens_without_fixations(words: pd.DataFrame, fixations: pd.DataFrame) -> list:
+    """The ``(participant, trial, screen)`` keys only the Words table has."""
+    found = _matching_parts(words, fixations)
+    return found[1] if found else []
+
+
+def screens_without_fixations_notice(parts: list) -> str:
+    """What the load says about screens with word boxes but no fixations."""
+    more = f" and {len(parts) - 3} more" if len(parts) > 3 else ""
+    noun = "screen has" if len(parts) == 1 else "screens have"
+    return (
+        f"{len(parts)} {noun} word boxes but no fixations "
+        f"({_screens(parts)}{more}). They load with their word boxes and no "
+        "fixations. If those screens were recorded, check that **Screen ID** "
+        "names the same screens in both tables."
     )
-    if word_parts != fixation_parts:
-        missing_words = sorted(fixation_parts - word_parts)
-        missing_fix = sorted(word_parts - fixation_parts)
-        details = []
-        if missing_words:
-            details.append(f"no words for {_screens(missing_words)}")
+
+
+def validate_matching_parts(words: pd.DataFrame, fixations: pd.DataFrame) -> None:
+    """Reject fixations on a screen the Words table has no boxes for.
+
+    Such fixations have no stimulus to land on, so they mean the two tables'
+    Screen IDs do not line up. A screen with boxes but no fixations is a gap in
+    the recording instead: it loads, with a
+    :class:`ScreensWithoutFixationsWarning`."""
+    found = _matching_parts(words, fixations)
+    if found is None:
+        return
+    missing_words, missing_fix = found
+    if missing_words:
+        details = [f"no words for {_screens(missing_words)}"]
         if missing_fix:
             details.append(f"no fixations for {_screens(missing_fix)}")
         raise ValueError("Some screens are in one table only: " + "; ".join(details))
+    if missing_fix:
+        warnings.warn(
+            screens_without_fixations_notice(missing_fix),
+            ScreensWithoutFixationsWarning,
+            stacklevel=3,
+        )
 
 
 def extract_part(

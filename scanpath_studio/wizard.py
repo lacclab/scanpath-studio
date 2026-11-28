@@ -141,6 +141,7 @@ from .metadata_editor import (
     render_text_metadata_section,
     render_trial_metadata_section,
 )
+from .multipart import screens_without_fixations, screens_without_fixations_notice
 from .persistence import is_loopback_url, persistence_enabled
 from .reruns import rerun
 from .styles import mapping_menu_css
@@ -912,6 +913,18 @@ def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> boo
 
     key = (frame_fingerprint(words), frame_fingerprint(fixations))
     return frame_cache("wizard_readers_line_up", key, check)
+
+
+def _screens_without_fixations(words: pd.DataFrame, fixations: pd.DataFrame) -> list:
+    """`multipart.screens_without_fixations` for the normalized pair, read once
+    per pair — the load's own warning fires only on a cache miss, and reaches
+    only the terminal."""
+    key = (frame_fingerprint(words), frame_fingerprint(fixations))
+    return frame_cache(
+        "wizard_screens_without_fixations",
+        key,
+        lambda: screens_without_fixations(words, fixations),
+    )
 
 
 def _text_word_id_issues(words: pd.DataFrame, fixations: pd.DataFrame) -> list[str]:
@@ -5356,6 +5369,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         if has_words and has_fix:
             for line in _text_word_id_issues(words_norm, fixations_norm):
                 s6.warning(f"{ICONS['warning']} {line}")
+            # A screen with word boxes but no fixations loads (a gap in the
+            # recording), so it is said here rather than blocking ✅ Add dataset.
+            if missing := _screens_without_fixations(words_norm, fixations_norm):
+                s6.warning(
+                    f"{ICONS['warning']} {screens_without_fixations_notice(missing)}"
+                )
 
     # A Words table with no Participant ID is shared by the readings
     # of its texts, so say which key attached it — the trial ID or the Text

@@ -253,6 +253,7 @@ from scanpath_studio.controls import (
 from scanpath_studio.data import (
     AOI_TRIAL_ID,
     IDENTITY_SCHEMA_FIELDS,
+    PLACEHOLDER_PARTICIPANTS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
     TEXT_ID_MAPPED,
@@ -15392,9 +15393,15 @@ def _dataset_statistics(
     frames = {"fixations": _fixations, "words": _words, "raw_gaze": _raw_gaze}
     keys = {table: trial_keys(frame) for table, frame in frames.items()}
     trials = set.union(*keys.values())
-    per_reader = pd.Series(Counter(pid for pid, _ in trials), dtype=int)
+    # A dataset that names no participants has only the loader's placeholder
+    # reader: its participant count is unknown (None), and trials per
+    # participant would describe no actual reader.
+    per_reader = pd.Series(
+        Counter(pid for pid, _ in trials if pid not in PLACEHOLDER_PARTICIPANTS),
+        dtype=int,
+    )
     spread = []
-    if trials:
+    if not per_reader.empty:
         spread.append({"Metric": "Trials per participant", **safe_summary(per_reader)})
     for table, label in (
         ("fixations", "Fixations per trial"),
@@ -15410,7 +15417,7 @@ def _dataset_statistics(
     return {
         "parts": parts,
         "screen_error": screen_error,
-        "n_participants": len(per_reader),
+        "n_participants": None if trials and per_reader.empty else len(per_reader),
         "n_trials": len(trials),
         "n_texts": len(text_ids(_words, _fixations, _raw_gaze)),
         "recordings": {k: (len(frame), len(keys[k])) for k, frame in frames.items()},
@@ -17937,6 +17944,12 @@ def _inspect_recording_table(table: str) -> None:
     st.session_state[DATA_INSPECTION_KEY] = "Tables"
 
 
+#: The Participants card's hover text when the data names no participants.
+_UNNAMED_PARTICIPANTS_HELP = (
+    "The data has no participant column, so its readers can't be told apart."
+)
+
+
 def render_dataset_summary(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -17961,7 +17974,14 @@ def render_dataset_summary(
             ("Trials", "n_trials", "trials"),
             ("Texts", "n_texts", "texts"),
         ):
-            size.metric(label, f"{stats[field]:,}", icon=ICONS[icon], border=True)
+            value = stats[field]
+            size.metric(
+                label,
+                "Unknown" if value is None else f"{value:,}",
+                icon=ICONS[icon],
+                border=True,
+                help=_UNNAMED_PARTICIPANTS_HELP if value is None else None,
+            )
     _render_spread_cards(stats["stats_df"])
     with st.container(key="data_recording_tables"):
         st.markdown("#### Eye-tracking data")

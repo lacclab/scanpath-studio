@@ -5415,6 +5415,10 @@ STIMULUS_WORDS_FLAG = "_stimulus_words"
 # and the UI hides the participant selector when there's only this one value.
 SYNTHETIC_PARTICIPANT = "(all)"
 
+#: The participant ids the loader assigns when no participant column is mapped.
+#: They stand for no actual reader, so a participant count leaves them out.
+PLACEHOLDER_PARTICIPANTS = frozenset({SYNTHETIC_PARTICIPANT, STIMULUS_PARTICIPANT})
+
 #: The two keys a stimulus-level Words table can attach to a reading through,
 #: as the wizard names them.
 STIMULUS_JOIN_LABELS = {"trial_id": "Trial ID", "text_id": "Text ID"}

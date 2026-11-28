@@ -272,7 +272,8 @@ shows the new annotations once its browser tab is reloaded. See
 
 **Current dataset** opens on **Overview**. It shows how many participants, trials
 and texts are in your selection and the average number of trials per participant.
-Fixation and word averages count trials that contain those rows. **Eye-tracking
+If your data has no participant column, the participant count reads **Unknown** and
+the per-participant average is left out. Fixation and word averages count trials that contain those rows. **Eye-tracking
 data** shows the row and trial counts for each table. Scanpath trial filters
 apply to these counts.
 
